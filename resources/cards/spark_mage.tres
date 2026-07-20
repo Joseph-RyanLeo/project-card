@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"spark_mage"
+display_name = "星火法师"
+card_type = 0
+action_type = 2
+base_value = 7
+cooldown_seconds = 4.0
+max_health = 12
+armor = 0
+target_priority = 3
+runes = Array[int]([0, 3, 4])
+effect_text = "行动时对随机目标造成法术伤害。火光暗组合用于测试混合牌型。"

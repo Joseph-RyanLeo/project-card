@@ -1,0 +1,20 @@
+# Godot 4 editor cache and imported build artifacts
+.godot/
+
+# Godot export configuration (may contain machine-specific settings)
+export.cfg
+export_presets.cfg
+
+# C# / Mono-generated files, if C# support is added later
+.mono/
+data_*/
+mono_crash.*.json
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*~

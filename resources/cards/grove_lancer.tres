@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"grove_lancer"
+display_name = "林地枪兵"
+card_type = 0
+action_type = 0
+base_value = 5
+cooldown_seconds = 3.1
+max_health = 19
+armor = 2
+target_priority = 4
+runes = Array[int]([2, 0, 2])
+effect_text = "行动时造成近战伤害。木火木组合用于后续测试对子。"

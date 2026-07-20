@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://dxmoj6kyrxhdv"]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"ember_squire"
+display_name = "余烬侍从"
+card_type = 0
+action_type = 0
+base_value = 6
+cooldown_seconds = 3.0
+max_health = 18
+armor = 2
+target_priority = 4
+runes = Array[int]([0, 0, 1])
+effect_text = "行动时造成近战伤害。demo 测试卡，用来验证随从卡数据结构。"

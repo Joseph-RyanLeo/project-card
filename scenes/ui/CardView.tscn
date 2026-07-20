@@ -1,0 +1,156 @@
+[gd_scene format=3 uid="uid://4ofy40fs6f5g"]
+
+[ext_resource type="Script" uid="uid://cx3rcjwjai7ag" path="res://scripts/ui/card_view.gd" id="1_card_view"]
+[ext_resource type="Texture2D" path="res://assets/actions/action_melee.png" id="2_action_melee"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+content_margin_left = 10.0
+content_margin_top = 10.0
+content_margin_right = 10.0
+content_margin_bottom = 10.0
+bg_color = Color(0.18, 0.16, 0.12, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.85, 0.72, 0.42, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_art"]
+bg_color = Color(0.12, 0.2, 0.24, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.06, 0.08, 0.1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bottom"]
+content_margin_left = 2.0
+content_margin_top = 1.0
+content_margin_right = 2.0
+content_margin_bottom = 1.0
+bg_color = Color(0.09, 0.08, 0.07, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.36, 0.3, 0.18, 1)
+
+[node name="CardView" type="Panel" unique_id=693465731]
+custom_minimum_size = Vector2(99, 136)
+offset_right = 99.0
+offset_bottom = 136.0
+texture_filter = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+script = ExtResource("1_card_view")
+
+[node name="TopRow" type="HBoxContainer" parent="." unique_id=1517504255]
+unique_name_in_owner = true
+z_index = 10
+layout_mode = 0
+offset_left = 8.0
+offset_top = 4.0
+offset_right = 91.0
+offset_bottom = 18.0
+theme_override_constants/separation = 2
+
+[node name="ActionIcon" type="TextureRect" parent="TopRow" unique_id=633356944]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(14, 14)
+layout_mode = 2
+texture = ExtResource("2_action_melee")
+
+[node name="NameLabel" type="Label" parent="TopRow" unique_id=1264126970]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 8
+text = "余烬侍从"
+text_overrun_behavior = 3
+
+[node name="ValueLabel" type="Label" parent="TopRow" unique_id=1447209711]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(10, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 9
+text = "6"
+horizontal_alignment = 2
+
+[node name="ArtPanel" type="PanelContainer" parent="." unique_id=1176165577]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 10.0
+offset_top = 18.0
+offset_right = 89.0
+offset_bottom = 113.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_art")
+
+[node name="ArtLabel" type="Label" parent="ArtPanel" unique_id=1583902405]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 8
+text = "插画"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="StatsRow" type="HBoxContainer" parent="." unique_id=1715038163]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 10.0
+offset_top = 101.0
+offset_right = 89.0
+offset_bottom = 113.0
+theme_override_constants/separation = 2
+
+[node name="HealthLabel" type="Label" parent="StatsRow" unique_id=488129659]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 7
+text = "HP 18"
+
+[node name="ArmorLabel" type="Label" parent="StatsRow" unique_id=1921884453]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 7
+text = "AR 2"
+horizontal_alignment = 1
+
+[node name="PriorityLabel" type="Label" parent="StatsRow" unique_id=556386469]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 7
+text = "P 4"
+horizontal_alignment = 2
+
+[node name="BottomPanel" type="PanelContainer" parent="." unique_id=222941276]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 10.0
+offset_top = 115.0
+offset_right = 89.0
+offset_bottom = 132.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_bottom")
+
+[node name="BottomStack" type="VBoxContainer" parent="BottomPanel" unique_id=695318422]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="RuneRow" type="HBoxContainer" parent="BottomPanel/BottomStack" unique_id=1926824887]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="EffectTextLabel" type="Label" parent="BottomPanel/BottomStack" unique_id=207339904]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_font_sizes/font_size = 7
+text = "行动时造成近战伤害。"
+autowrap_mode = 2

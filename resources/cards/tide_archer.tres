@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"tide_archer"
+display_name = "潮汐射手"
+card_type = 0
+action_type = 1
+base_value = 5
+cooldown_seconds = 3.4
+max_health = 14
+armor = 1
+target_priority = 2
+runes = Array[int]([1, 1, 2])
+effect_text = "行动时造成射击伤害。双水符文用于测试对子和扩散方向。"

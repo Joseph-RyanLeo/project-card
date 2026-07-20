@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"shadow_slinger"
+display_name = "影弦游击手"
+card_type = 0
+action_type = 1
+base_value = 4
+cooldown_seconds = 2.8
+max_health = 13
+armor = 0
+target_priority = 2
+runes = Array[int]([4, 4, 0])
+effect_text = "行动时造成射击伤害。双暗符文用于后续测试对子。"

@@ -1,0 +1,127 @@
+[gd_scene format=3 uid="uid://dludejv386xnm"]
+
+[ext_resource type="Script" uid="uid://yylgsewq26jh" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Resource" path="res://resources/cards/ember_squire.tres" id="2_ember_squire"]
+[ext_resource type="PackedScene" path="res://scenes/ui/CardView.tscn" id="3_card_view"]
+[ext_resource type="Resource" path="res://resources/cards/tide_archer.tres" id="4_tide_archer"]
+[ext_resource type="Resource" path="res://resources/cards/spark_mage.tres" id="5_spark_mage"]
+[ext_resource type="Resource" path="res://resources/cards/dusk_mender.tres" id="6_dusk_mender"]
+[ext_resource type="Resource" path="res://resources/cards/thorn_guard.tres" id="7_thorn_guard"]
+[ext_resource type="Resource" path="res://resources/cards/shadow_slinger.tres" id="8_shadow_slinger"]
+[ext_resource type="Resource" path="res://resources/cards/grove_lancer.tres" id="9_grove_lancer"]
+[ext_resource type="Resource" path="res://resources/cards/sunlit_bastion.tres" id="10_sunlit_bastion"]
+
+[node name="Main" type="Control" unique_id=1758301838]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_main")
+hand_cards = Array[Resource]([ExtResource("2_ember_squire"), ExtResource("4_tide_archer"), ExtResource("5_spark_mage"), ExtResource("6_dusk_mender"), ExtResource("7_thorn_guard"), ExtResource("8_shadow_slinger"), ExtResource("9_grove_lancer"), ExtResource("10_sunlit_bastion")])
+
+[node name="Background" type="ColorRect" parent="." unique_id=1019710822]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.09, 0.11, 1)
+
+[node name="RootMargin" type="MarginContainer" parent="." unique_id=1069735687]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 24
+
+[node name="Layout" type="VBoxContainer" parent="RootMargin" unique_id=780024334]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Header" type="HBoxContainer" parent="RootMargin/Layout" unique_id=666439549]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="RootMargin/Layout/Header" unique_id=1718406506]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 28
+text = "Project Card Demo"
+
+[node name="PhaseLabel" type="Label" parent="RootMargin/Layout/Header" unique_id=1905091903]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "准备阶段"
+
+[node name="PlayArea" type="PanelContainer" parent="RootMargin/Layout" unique_id=1972597147]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlayAreaContent" type="VBoxContainer" parent="RootMargin/Layout/PlayArea" unique_id=334271643]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="PlayAreaLabel" type="Label" parent="RootMargin/Layout/PlayArea/PlayAreaContent" unique_id=622357534]
+unique_name_in_owner = true
+layout_mode = 2
+text = "当前选中卡牌预览"
+horizontal_alignment = 1
+
+[node name="CardCenter" type="CenterContainer" parent="RootMargin/Layout/PlayArea/PlayAreaContent" unique_id=168396425]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CardPreviewFrame" type="Control" parent="RootMargin/Layout/PlayArea/PlayAreaContent/CardCenter"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(297, 408)
+layout_mode = 2
+
+[node name="SelectedCardView" parent="RootMargin/Layout/PlayArea/PlayAreaContent/CardCenter/CardPreviewFrame" unique_id=1439731162 instance=ExtResource("3_card_view")]
+unique_name_in_owner = true
+layout_mode = 0
+
+[node name="HandPanel" type="PanelContainer" parent="RootMargin/Layout"]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+
+[node name="HandContent" type="VBoxContainer" parent="RootMargin/Layout/HandPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HandTitleLabel" type="Label" parent="RootMargin/Layout/HandPanel/HandContent"]
+layout_mode = 2
+text = "手牌 / 收藏区"
+horizontal_alignment = 1
+
+[node name="HandScroll" type="ScrollContainer" parent="RootMargin/Layout/HandPanel/HandContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+follow_focus = true
+
+[node name="HandCardRow" type="HBoxContainer" parent="RootMargin/Layout/HandPanel/HandContent/HandScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Footer" type="HBoxContainer" parent="RootMargin/Layout" unique_id=1913714339]
+layout_mode = 2
+
+[node name="HintLabel" type="Label" parent="RootMargin/Layout/Footer" unique_id=774725168]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Demo v0.1：先做随从卡、叠卡、牌型和自动战斗"
+
+[node name="StartBattleButton" type="Button" parent="RootMargin/Layout/Footer" unique_id=1326232291]
+unique_name_in_owner = true
+layout_mode = 2
+text = "开始战斗"
