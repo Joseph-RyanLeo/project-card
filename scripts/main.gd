@@ -21,8 +21,8 @@ var selected_board_slot: BoardSlot
 @onready var play_area_label: Label = %PlayAreaLabel
 @onready var card_preview_frame: Control = %CardPreviewFrame
 @onready var selected_card_view: CardView = %SelectedCardView
-@onready var back_row: BattlefieldRow = %BackRow
 @onready var front_row: BattlefieldRow = %FrontRow
+@onready var back_row: BattlefieldRow = %BackRow
 @onready var hand_card_row: HBoxContainer = %HandCardRow
 @onready var return_to_hand_button: Button = %ReturnToHandButton
 @onready var start_battle_button: Button = %StartBattleButton
@@ -65,7 +65,7 @@ func _update_phase_label() -> void:
 
 
 func _connect_board_rows() -> void:
-	for row: BattlefieldRow in [back_row, front_row]:
+	for row: BattlefieldRow in [front_row, back_row]:
 		row.placement_requested.connect(_on_board_placement_requested)
 		row.board_slot_clicked.connect(_on_board_slot_clicked)
 
@@ -166,7 +166,7 @@ func _on_return_to_hand_button_pressed() -> void:
 
 func _refresh_placement_targets() -> void:
 	var can_place := current_phase == GamePhase.PREPARE and selected_card != null
-	for row: BattlefieldRow in [back_row, front_row]:
+	for row: BattlefieldRow in [front_row, back_row]:
 		var moving_within_row := selected_board_row == row and selected_board_slot != null
 		row.set_placement_enabled(can_place and (row.has_capacity_for_single_card() or moving_within_row))
 
