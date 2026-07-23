@@ -4,7 +4,7 @@ extends PanelContainer
 signal slot_clicked(slot: BoardSlot)
 
 const CARD_SIZE := Vector2(99, 136)
-const COMPACT_EMPTY_SIZE := Vector2(22, 136)
+const COMPACT_EMPTY_SIZE := Vector2(18, 136)
 
 var _card_data: CardData
 var _compact_empty: bool = false
