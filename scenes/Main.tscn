@@ -10,6 +10,7 @@
 [ext_resource type="Resource" path="res://resources/cards/shadow_slinger.tres" id="8_shadow_slinger"]
 [ext_resource type="Resource" path="res://resources/cards/grove_lancer.tres" id="9_grove_lancer"]
 [ext_resource type="Resource" path="res://resources/cards/sunlit_bastion.tres" id="10_sunlit_bastion"]
+[ext_resource type="PackedScene" path="res://scenes/ui/BattlefieldRow.tscn" id="11_battlefield_row"]
 
 [node name="Main" type="Control" unique_id=1758301838]
 layout_mode = 3
@@ -65,29 +66,66 @@ text = "准备阶段"
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="PlayAreaContent" type="VBoxContainer" parent="RootMargin/Layout/PlayArea" unique_id=334271643]
+[node name="PlayAreaContent" type="HBoxContainer" parent="RootMargin/Layout/PlayArea" unique_id=334271643]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 24
 alignment = 1
 
-[node name="PlayAreaLabel" type="Label" parent="RootMargin/Layout/PlayArea/PlayAreaContent" unique_id=622357534]
+[node name="PreviewColumn" type="VBoxContainer" parent="RootMargin/Layout/PlayArea/PlayAreaContent"]
+custom_minimum_size = Vector2(360, 0)
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="PlayAreaLabel" type="Label" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PreviewColumn" unique_id=622357534]
 unique_name_in_owner = true
 layout_mode = 2
 text = "当前选中卡牌预览"
 horizontal_alignment = 1
+autowrap_mode = 2
 
-[node name="CardCenter" type="CenterContainer" parent="RootMargin/Layout/PlayArea/PlayAreaContent" unique_id=168396425]
+[node name="CardCenter" type="CenterContainer" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PreviewColumn" unique_id=168396425]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="CardPreviewFrame" type="Control" parent="RootMargin/Layout/PlayArea/PlayAreaContent/CardCenter"]
+[node name="CardPreviewFrame" type="Control" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PreviewColumn/CardCenter"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(297, 408)
 layout_mode = 2
 
-[node name="SelectedCardView" parent="RootMargin/Layout/PlayArea/PlayAreaContent/CardCenter/CardPreviewFrame" unique_id=1439731162 instance=ExtResource("3_card_view")]
+[node name="SelectedCardView" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PreviewColumn/CardCenter/CardPreviewFrame" unique_id=1439731162 instance=ExtResource("3_card_view")]
 unique_name_in_owner = true
 layout_mode = 0
+
+[node name="ReturnToHandButton" type="Button" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PreviewColumn"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 34)
+layout_mode = 2
+size_flags_horizontal = 4
+disabled = true
+text = "收回手牌"
+
+[node name="PlayerBoardSection" type="VBoxContainer" parent="RootMargin/Layout/PlayArea/PlayAreaContent"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="BoardTitleLabel" type="Label" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PlayerBoardSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "玩家棋盘"
+horizontal_alignment = 1
+
+[node name="BackRow" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PlayerBoardSection" instance=ExtResource("11_battlefield_row")]
+unique_name_in_owner = true
+layout_mode = 2
+row_title = "后排"
+
+[node name="FrontRow" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PlayerBoardSection" instance=ExtResource("11_battlefield_row")]
+unique_name_in_owner = true
+layout_mode = 2
+row_title = "前排"
 
 [node name="HandPanel" type="PanelContainer" parent="RootMargin/Layout"]
 custom_minimum_size = Vector2(0, 200)
