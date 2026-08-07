@@ -3,39 +3,16 @@
 [ext_resource type="Script" uid="uid://b3035ae3jd5ej" path="res://scripts/ui/board_slot.gd" id="1_board_slot"]
 [ext_resource type="PackedScene" uid="uid://4ofy40fs6f5g" path="res://scenes/ui/CardView.tscn" id="2_card_view"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_empty"]
-content_margin_left = 0.0
-content_margin_top = 0.0
-content_margin_right = 0.0
-content_margin_bottom = 0.0
-bg_color = Color(0.08, 0.105, 0.115, 0.82)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.42, 0.58, 0.57, 0.9)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
-
 [node name="BoardSlot" type="PanelContainer" unique_id=1635154848]
 custom_minimum_size = Vector2(99, 136)
 mouse_default_cursor_shape = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_empty")
 script = ExtResource("1_board_slot")
 
-[node name="EmptyStateLabel" type="Label" parent="." unique_id=1527070544]
-unique_name_in_owner = true
+[node name="CardVisualLayer" type="Control" parent="."]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.55, 0.72, 0.7, 1)
-theme_override_font_sizes/font_size = 14
-text = "点击放置"
-horizontal_alignment = 1
-vertical_alignment = 1
-autowrap_mode = 2
+mouse_filter = 2
 
-[node name="CardView" parent="." unique_id=675047782 instance=ExtResource("2_card_view")]
+[node name="CardView" parent="CardVisualLayer" unique_id=675047782 instance=ExtResource("2_card_view")]
 unique_name_in_owner = true
 visible = false
-layout_mode = 2
+layout_mode = 0

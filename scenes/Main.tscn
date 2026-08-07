@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://dludejv386xnm"]
+[gd_scene load_steps=14 format=3 uid="uid://dludejv386xnm"]
 
 [ext_resource type="Script" uid="uid://yylgsewq26jh" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Resource" path="res://resources/cards/ember_squire.tres" id="2_ember_squire"]
@@ -11,6 +11,8 @@
 [ext_resource type="Resource" path="res://resources/cards/grove_lancer.tres" id="9_grove_lancer"]
 [ext_resource type="Resource" path="res://resources/cards/sunlit_bastion.tres" id="10_sunlit_bastion"]
 [ext_resource type="PackedScene" path="res://scenes/ui/BattlefieldRow.tscn" id="11_battlefield_row"]
+[ext_resource type="Script" path="res://scripts/ui/hand_drop_zone.gd" id="12_hand_drop_zone"]
+[ext_resource type="Texture2D" path="res://assets/backgrounds/pixel_wood_table_irregular_detailed_2k_2560x1440.png" id="13_background"]
 
 [node name="Main" type="Control" unique_id=1758301838]
 layout_mode = 3
@@ -22,14 +24,18 @@ grow_vertical = 2
 script = ExtResource("1_main")
 hand_cards = Array[Resource]([ExtResource("2_ember_squire"), ExtResource("4_tide_archer"), ExtResource("5_spark_mage"), ExtResource("6_dusk_mender"), ExtResource("7_thorn_guard"), ExtResource("8_shadow_slinger"), ExtResource("9_grove_lancer"), ExtResource("10_sunlit_bastion")])
 
-[node name="Background" type="ColorRect" parent="." unique_id=1019710822]
+[node name="Background" type="TextureRect" parent="." unique_id=1019710822]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.08, 0.09, 0.11, 1)
+mouse_filter = 2
+texture_filter = 1
+texture = ExtResource("13_background")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="RootMargin" type="MarginContainer" parent="." unique_id=1069735687]
 layout_mode = 1
@@ -38,14 +44,14 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 32
-theme_override_constants/margin_top = 24
-theme_override_constants/margin_right = 32
-theme_override_constants/margin_bottom = 24
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
 
 [node name="Layout" type="VBoxContainer" parent="RootMargin" unique_id=780024334]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 8
 
 [node name="Header" type="HBoxContainer" parent="RootMargin/Layout" unique_id=666439549]
 layout_mode = 2
@@ -53,13 +59,13 @@ layout_mode = 2
 [node name="TitleLabel" type="Label" parent="RootMargin/Layout/Header" unique_id=1718406506]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 20
 text = "Project Card Demo"
 
 [node name="PhaseLabel" type="Label" parent="RootMargin/Layout/Header" unique_id=1905091903]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 16
 text = "准备阶段"
 
 [node name="PlayArea" type="PanelContainer" parent="RootMargin/Layout" unique_id=1972597147]
@@ -68,13 +74,13 @@ size_flags_vertical = 3
 
 [node name="PlayAreaContent" type="HBoxContainer" parent="RootMargin/Layout/PlayArea" unique_id=334271643]
 layout_mode = 2
-theme_override_constants/separation = 24
+theme_override_constants/separation = 8
 alignment = 1
 
 [node name="PreviewColumn" type="VBoxContainer" parent="RootMargin/Layout/PlayArea/PlayAreaContent"]
 custom_minimum_size = Vector2(360, 0)
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 4
 alignment = 1
 
 [node name="PlayAreaLabel" type="Label" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PreviewColumn" unique_id=622357534]
@@ -90,24 +96,17 @@ size_flags_horizontal = 3
 
 [node name="CardPreviewFrame" type="Control" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PreviewColumn/CardCenter"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(297, 408)
+custom_minimum_size = Vector2(198, 272)
 layout_mode = 2
 
 [node name="SelectedCardView" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PreviewColumn/CardCenter/CardPreviewFrame" unique_id=1439731162 instance=ExtResource("3_card_view")]
 unique_name_in_owner = true
 layout_mode = 0
 
-[node name="ReturnToHandButton" type="Button" parent="RootMargin/Layout/PlayArea/PlayAreaContent/PreviewColumn"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 34)
+[node name="PlayerBoardSection" type="VBoxContainer" parent="RootMargin/Layout/PlayArea/PlayAreaContent"]
+custom_minimum_size = Vector2(832, 0)
 layout_mode = 2
 size_flags_horizontal = 4
-disabled = true
-text = "收回手牌"
-
-[node name="PlayerBoardSection" type="VBoxContainer" parent="RootMargin/Layout/PlayArea/PlayAreaContent"]
-layout_mode = 2
-size_flags_horizontal = 3
 theme_override_constants/separation = 10
 alignment = 1
 
@@ -128,7 +127,7 @@ layout_mode = 2
 row_title = "后排"
 
 [node name="HandPanel" type="PanelContainer" parent="RootMargin/Layout"]
-custom_minimum_size = Vector2(0, 200)
+custom_minimum_size = Vector2(0, 190)
 layout_mode = 2
 
 [node name="HandContent" type="VBoxContainer" parent="RootMargin/Layout/HandPanel"]
@@ -151,6 +150,13 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 12
 
+[node name="HandDropZone" type="Control" parent="RootMargin/Layout/HandPanel"]
+unique_name_in_owner = true
+z_index = 20
+layout_mode = 2
+mouse_filter = 2
+script = ExtResource("12_hand_drop_zone")
+
 [node name="Footer" type="HBoxContainer" parent="RootMargin/Layout" unique_id=1913714339]
 layout_mode = 2
 
@@ -158,6 +164,11 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Demo v0.1：先做随从卡、叠卡、牌型和自动战斗"
+
+[node name="CardArtTunerButton" type="Button" parent="RootMargin/Layout/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "卡面调整器"
 
 [node name="StartBattleButton" type="Button" parent="RootMargin/Layout/Footer" unique_id=1326232291]
 unique_name_in_owner = true
