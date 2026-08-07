@@ -8,16 +8,7 @@ content_margin_left = 10.0
 content_margin_top = 10.0
 content_margin_right = 10.0
 content_margin_bottom = 10.0
-bg_color = Color(0.18, 0.16, 0.12, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.85, 0.72, 0.42, 1)
-corner_radius_top_left = 3
-corner_radius_top_right = 3
-corner_radius_bottom_right = 3
-corner_radius_bottom_left = 3
+bg_color = Color(0, 0, 0, 0)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_art"]
 bg_color = Color(0.12, 0.2, 0.24, 1)
@@ -28,16 +19,11 @@ border_width_bottom = 1
 border_color = Color(0.06, 0.08, 0.1, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bottom"]
-content_margin_left = 2.0
-content_margin_top = 1.0
-content_margin_right = 2.0
-content_margin_bottom = 1.0
-bg_color = Color(0.09, 0.08, 0.07, 1)
-border_width_left = 1
-border_width_top = 1
-border_width_right = 1
-border_width_bottom = 1
-border_color = Color(0.36, 0.3, 0.18, 1)
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0, 0, 0, 0)
 
 [node name="CardView" type="Panel" unique_id=693465731]
 custom_minimum_size = Vector2(99, 136)
@@ -47,7 +33,7 @@ texture_filter = 1
 theme_override_styles/panel = SubResource("StyleBoxFlat_card")
 script = ExtResource("1_card_view")
 
-[node name="TopRow" type="HBoxContainer" parent="." unique_id=1517504255]
+[node name="TopRow" type="Control" parent="." unique_id=1517504255]
 unique_name_in_owner = true
 z_index = 10
 layout_mode = 0
@@ -55,75 +41,182 @@ offset_left = 8.0
 offset_top = 4.0
 offset_right = 91.0
 offset_bottom = 18.0
-theme_override_constants/separation = 2
 
 [node name="ActionIcon" type="TextureRect" parent="TopRow" unique_id=633356944]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(14, 14)
-layout_mode = 2
+custom_minimum_size = Vector2(25, 25)
+layout_mode = 0
+offset_left = -4.0
+offset_top = -4.0
+offset_right = 21.0
+offset_bottom = 21.0
 texture = ExtResource("2_action_melee")
 
-[node name="NameLabel" type="Label" parent="TopRow" unique_id=1264126970]
+[node name="NameClip" type="Control" parent="TopRow"]
 unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 8
+layout_mode = 0
+offset_left = 21.0
+offset_top = 4.0
+offset_right = 82.0
+offset_bottom = 14.0
+mouse_filter = 2
+clip_contents = true
+
+[node name="NameLabel" type="Label" parent="TopRow/NameClip" unique_id=1264126970]
+unique_name_in_owner = true
+layout_mode = 0
+offset_top = -2.0
+offset_right = 61.0
+offset_bottom = 13.0
+theme_override_colors/font_color = Color(0.207843, 0.145098, 0.109804, 1)
+theme_override_font_sizes/font_size = 7
 text = "余烬侍从"
+vertical_alignment = 1
+clip_text = true
 text_overrun_behavior = 3
 
 [node name="ValueLabel" type="Label" parent="TopRow" unique_id=1447209711]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(10, 0)
-layout_mode = 2
+layout_mode = 0
+offset_left = -5.0
+offset_top = 9.0
+offset_right = 13.0
+offset_bottom = 21.0
 theme_override_font_sizes/font_size = 9
 text = "6"
-horizontal_alignment = 2
+horizontal_alignment = 1
+vertical_alignment = 1
 
-[node name="ArtPanel" type="PanelContainer" parent="." unique_id=1176165577]
+[node name="ArtPanel" type="Panel" parent="." unique_id=1176165577]
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 10.0
-offset_top = 18.0
+offset_top = 5.0
 offset_right = 89.0
-offset_bottom = 113.0
+offset_bottom = 100.0
+clip_contents = true
 theme_override_styles/panel = SubResource("StyleBoxFlat_art")
 
-[node name="ArtLabel" type="Label" parent="ArtPanel" unique_id=1583902405]
+[node name="ArtContent" type="Control" parent="ArtPanel"]
 unique_name_in_owner = true
-layout_mode = 2
+layout_mode = 0
+offset_right = 79.0
+offset_bottom = 95.0
+mouse_filter = 2
+
+[node name="ArtBackground" type="TextureRect" parent="ArtPanel/ArtContent"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_right = 79.0
+offset_bottom = 95.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 0
+
+[node name="ArtTexture" type="TextureRect" parent="ArtPanel/ArtContent"]
+unique_name_in_owner = true
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 2
+
+[node name="ArtLabel" type="Label" parent="ArtPanel/ArtContent" unique_id=1583902405]
+unique_name_in_owner = true
+layout_mode = 0
+offset_right = 79.0
+offset_bottom = 95.0
 theme_override_font_sizes/font_size = 8
 text = "插画"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="StatsRow" type="HBoxContainer" parent="." unique_id=1715038163]
+[node name="CardFrame" type="TextureRect" parent="."]
+unique_name_in_owner = true
+z_index = 5
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 0
+
+[node name="CardNameFrame" type="TextureRect" parent="."]
+unique_name_in_owner = true
+z_index = 8
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 0
+
+[node name="RaceIcon" type="TextureRect" parent="."]
+unique_name_in_owner = true
+z_index = 15
+layout_mode = 0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="StatsRow" type="Control" parent="." unique_id=1715038163]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 10.0
-offset_top = 101.0
-offset_right = 89.0
-offset_bottom = 113.0
-theme_override_constants/separation = 2
+offset_right = 99.0
+offset_bottom = 136.0
+
+[node name="HealthIcon" type="TextureRect" parent="StatsRow"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 84.0
+offset_top = 87.0
+offset_right = 104.0
+offset_bottom = 104.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
 
 [node name="HealthLabel" type="Label" parent="StatsRow" unique_id=488129659]
 unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 7
-text = "HP 18"
+z_index = 1
+layout_mode = 0
+offset_left = 84.0
+offset_top = 87.0
+offset_right = 104.0
+offset_bottom = 104.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 8
+text = "18"
+horizontal_alignment = 1
+vertical_alignment = 1
+clip_text = true
+
+[node name="ArmorIcon" type="TextureRect" parent="StatsRow"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 88.0
+offset_top = 74.0
+offset_right = 100.0
+offset_bottom = 86.0
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
 
 [node name="ArmorLabel" type="Label" parent="StatsRow" unique_id=1921884453]
 unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 7
-text = "AR 2"
+z_index = 1
+layout_mode = 0
+offset_left = 88.0
+offset_top = 74.0
+offset_right = 100.0
+offset_bottom = 86.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 8
+text = "2"
 horizontal_alignment = 1
+vertical_alignment = 1
+clip_text = true
 
 [node name="PriorityLabel" type="Label" parent="StatsRow" unique_id=556386469]
 unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
+visible = false
+layout_mode = 0
 theme_override_font_sizes/font_size = 7
 text = "P 4"
 horizontal_alignment = 2
@@ -131,10 +224,10 @@ horizontal_alignment = 2
 [node name="BottomPanel" type="PanelContainer" parent="." unique_id=222941276]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 10.0
-offset_top = 115.0
-offset_right = 89.0
-offset_bottom = 132.0
+offset_left = 8.0
+offset_top = 108.0
+offset_right = 91.0
+offset_bottom = 131.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_bottom")
 
 [node name="BottomStack" type="VBoxContainer" parent="BottomPanel" unique_id=695318422]
@@ -144,7 +237,7 @@ theme_override_constants/separation = 0
 [node name="RuneRow" type="HBoxContainer" parent="BottomPanel/BottomStack" unique_id=1926824887]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 4
+theme_override_constants/separation = 7
 alignment = 1
 
 [node name="EffectTextLabel" type="Label" parent="BottomPanel/BottomStack" unique_id=207339904]

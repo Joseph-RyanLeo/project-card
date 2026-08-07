@@ -1,17 +1,20 @@
 [gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/arcane_mage.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
 id = &"dusk_mender"
 display_name = "暮光医师"
-card_type = 0
 action_type = 3
 base_value = 4
 cooldown_seconds = 3.8
 max_health = 16
 armor = 1
-target_priority = 1
 runes = Array[int]([3, 4, 1])
+race_type = 1
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(8, 32)
 effect_text = "行动时治疗损失生命最多的友方。光暗水组合用于测试混合符文。"

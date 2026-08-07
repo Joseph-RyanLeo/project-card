@@ -1,12 +1,12 @@
 [gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/agile_fighter.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
 id = &"thorn_guard"
 display_name = "荆棘守卫"
-card_type = 0
 action_type = 4
 base_value = 3
 cooldown_seconds = 3.2
@@ -14,4 +14,8 @@ max_health = 22
 armor = 4
 target_priority = 5
 runes = Array[int]([2, 2, 3])
+race_type = 8
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-1, 26)
 effect_text = "行动时获得护甲，并反击下一次伤害来源。双木符文用于测试对子。"

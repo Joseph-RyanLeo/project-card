@@ -23,6 +23,26 @@ enum ElementType {
 	DARK,
 }
 
+enum RaceType {
+	HUMAN,
+	ELF,
+	DWARF,
+	CONSTRUCT,
+	ELEMENTAL,
+	UNDEAD,
+	DEMON,
+	BEAST,
+	PLANT,
+}
+
+enum Rarity {
+	I,
+	II,
+	III,
+	IV,
+	V,
+}
+
 @export var id: StringName = &""
 @export var display_name: String = ""
 @export var card_type: CardType = CardType.MINION
@@ -33,6 +53,11 @@ enum ElementType {
 @export var armor: int = 0
 @export var target_priority: int = 1
 @export var runes: Array[ElementType] = []
+@export var race_type: RaceType = RaceType.HUMAN
+@export var rarity: Rarity = Rarity.I
+@export var background_texture: Texture2D
+@export var art_texture: Texture2D
+@export var art_offset: Vector2i = Vector2i.ZERO
 @export_multiline var effect_text: String = ""
 
 
@@ -75,3 +100,39 @@ func get_element_type_name(element_type: ElementType) -> String:
 			return "暗"
 		_:
 			return "未知"
+
+
+func get_race_asset_key() -> String:
+	return [
+		"human",
+		"elf",
+		"dwarf",
+		"construct",
+		"elemental",
+		"undead",
+		"demon",
+		"beast",
+		"plant",
+	][race_type]
+
+
+func get_rarity_asset_key() -> String:
+	return ["i", "ii", "iii", "iv", "v"][rarity]
+
+
+func get_race_name() -> String:
+	return [
+		"人类",
+		"精灵",
+		"矮人",
+		"造物",
+		"元素",
+		"亡灵",
+		"魔族",
+		"野兽",
+		"植物",
+	][race_type]
+
+
+func get_rarity_name() -> String:
+	return ["I", "II", "III", "IV", "V"][rarity]

@@ -1,6 +1,9 @@
 extends Control
 
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
+# 手牌放大到最大交互比例时，也要容纳左侧 8px、顶部 4px、
+# 右侧 5px 的越界图标，避免 ScrollContainer 把它们裁掉。
+const HAND_CARD_SAFE_PADDING := Vector2(14, 11) # 手牌槽四周预留空间，避免放大和越界图标被裁切
 
 enum GamePhase {
 	PREPARE,
@@ -12,10 +15,15 @@ var current_phase: GamePhase = GamePhase.PREPARE
 var selected_card: CardData
 var selected_board_row: BattlefieldRow
 var selected_board_slot: BoardSlot
+var _hand_preview_slot: Control
+var _hand_preview_insert_index: int = -1
+var _click_carry_data: Dictionary = {}
+var _click_carry_preview: Control
+var _hand_layout_animation_revision: int = 0
 
-@export var hand_cards: Array[CardData] = []
-@export var card_preview_scale: float = 3.0
-@export var hand_card_scale: float = 1.2
+@export var hand_cards: Array[CardData] = [] # 初始真实手牌及其排列顺序
+@export var card_preview_scale: float = 2.0 # 左侧选中卡牌大预览的缩放倍率
+@export var hand_card_scale: float = 1.0 # 手牌区域中卡牌的基础缩放倍率
 
 @onready var phase_label: Label = %PhaseLabel
 @onready var play_area_label: Label = %PlayAreaLabel
@@ -24,22 +32,61 @@ var selected_board_slot: BoardSlot
 @onready var front_row: BattlefieldRow = %FrontRow
 @onready var back_row: BattlefieldRow = %BackRow
 @onready var hand_card_row: HBoxContainer = %HandCardRow
-@onready var return_to_hand_button: Button = %ReturnToHandButton
+@onready var hand_drop_zone: Control = %HandDropZone
 @onready var start_battle_button: Button = %StartBattleButton
+@onready var card_art_tuner_button: Button = %CardArtTunerButton
 
 
 func _ready() -> void:
 	start_battle_button.pressed.connect(_on_start_battle_button_pressed)
-	return_to_hand_button.pressed.connect(_on_return_to_hand_button_pressed)
+	card_art_tuner_button.pressed.connect(_on_card_art_tuner_button_pressed)
+	hand_drop_zone.connect("card_dropped", _on_hand_card_dropped)
+	hand_drop_zone.connect("card_drag_hovered", _on_hand_card_drag_hovered)
+	hand_drop_zone.connect("card_drag_exited", _clear_hand_drop_preview)
 	_connect_board_rows()
 	_apply_card_preview_scale()
 	_build_hand_cards()
 	_select_first_hand_card()
 	_update_phase_label()
-	_refresh_placement_targets()
+
+
+func _on_card_art_tuner_button_pressed() -> void:
+	_cancel_click_carry()
+	get_tree().change_scene_to_file("res://scenes/tools/CardArtTuner.tscn")
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_DRAG_END and is_node_ready():
+		_clear_hand_drop_preview()
+
+
+func _input(event: InputEvent) -> void:
+	if _click_carry_data.is_empty():
+		return
+
+	if event is InputEventMouseMotion:
+		var motion_event := event as InputEventMouseMotion
+		_update_click_carry(motion_event.position)
+	elif event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_LEFT:
+			_commit_click_carry(mouse_event.position)
+			get_viewport().set_input_as_handled()
+		elif (
+			mouse_event.pressed
+			and mouse_event.button_index == MOUSE_BUTTON_RIGHT
+		):
+			_cancel_click_carry()
+			get_viewport().set_input_as_handled()
+	elif event is InputEventKey:
+		var key_event := event as InputEventKey
+		if key_event.pressed and key_event.keycode == KEY_ESCAPE:
+			_cancel_click_carry()
+			get_viewport().set_input_as_handled()
 
 
 func _on_start_battle_button_pressed() -> void:
+	_cancel_click_carry()
 	match current_phase:
 		GamePhase.PREPARE:
 			current_phase = GamePhase.BATTLE
@@ -61,13 +108,16 @@ func _update_phase_label() -> void:
 		GamePhase.RESULT:
 			phase_label.text = "结算阶段"
 			start_battle_button.text = "回到准备"
-	_refresh_placement_targets()
+	_refresh_drag_availability()
 
 
 func _connect_board_rows() -> void:
 	for row: BattlefieldRow in [front_row, back_row]:
-		row.placement_requested.connect(_on_board_placement_requested)
 		row.board_slot_clicked.connect(_on_board_slot_clicked)
+		row.card_dropped.connect(_on_board_card_dropped)
+		row.card_click_carry_requested.connect(
+			_on_click_carry_requested
+		)
 
 
 func _apply_card_preview_scale() -> void:
@@ -78,23 +128,71 @@ func _apply_card_preview_scale() -> void:
 	selected_card_view.scale = Vector2(card_preview_scale, card_preview_scale)
 
 
-func _build_hand_cards() -> void:
+func _build_hand_cards(
+	entering_card: CardData = null,
+	entry_global_position: Variant = null
+) -> void:
+	# 使重建前仍在等待下一帧的旧布局回调立即失效。
+	_hand_layout_animation_revision += 1
+	_hand_preview_slot = null
+	_hand_preview_insert_index = -1
 	for child: Node in hand_card_row.get_children():
+		hand_card_row.remove_child(child)
 		child.queue_free()
 
 	for hand_card: CardData in hand_cards:
-		var slot := Control.new()
-		slot.custom_minimum_size = selected_card_view.card_size * hand_card_scale
-		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-		var card_view := CARD_VIEW_SCENE.instantiate() as CardView
-		card_view.position = Vector2.ZERO
-		card_view.scale = Vector2(hand_card_scale, hand_card_scale)
-		card_view.set_card_data(hand_card)
-		card_view.card_clicked.connect(_on_hand_card_clicked)
-
-		slot.add_child(card_view)
+		var slot := _create_hand_card_slot(hand_card)
+		var card_view := slot.get_child(0) as CardView
 		hand_card_row.add_child(slot)
+		if hand_card == entering_card and entry_global_position is Vector2:
+			_animate_hand_card_entry.call_deferred(
+				card_view,
+				entry_global_position as Vector2
+			)
+
+
+func _create_hand_card_slot(
+	card_data: CardData,
+	is_preview: bool = false
+) -> Control:
+	var slot := Control.new()
+	slot.custom_minimum_size = (
+		selected_card_view.card_size * hand_card_scale
+		+ HAND_CARD_SAFE_PADDING * 2.0
+	)
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot.set_meta("is_hand_preview", is_preview)
+
+	var card_view := CARD_VIEW_SCENE.instantiate() as CardView
+	card_view.position = (
+		HAND_CARD_SAFE_PADDING
+		+ selected_card_view.card_size
+		* (hand_card_scale - 1.0)
+		* 0.5
+	)
+	card_view.scale = Vector2(hand_card_scale, hand_card_scale)
+	card_view.set_card_data(card_data)
+	if is_preview:
+		card_view.modulate.a = 0.4
+		card_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card_view.configure_drag_source(false)
+	else:
+		card_view.card_clicked.connect(_on_hand_card_clicked)
+		card_view.click_carry_requested.connect(
+			_on_click_carry_requested
+		)
+		card_view.hand_source_visibility_changing.connect(
+			_on_hand_source_visibility_changing
+		)
+		card_view.configure_drag_source(
+			current_phase == GamePhase.PREPARE,
+			&"hand",
+			null,
+			slot
+		)
+
+	slot.add_child(card_view)
+	return slot
 
 
 func _select_first_hand_card() -> void:
@@ -109,68 +207,580 @@ func _on_hand_card_clicked(card_data: CardData) -> void:
 	selected_board_row = null
 	selected_board_slot = null
 	_select_card(card_data)
-	_refresh_placement_targets()
+	_refresh_drag_availability()
 
 
 func _on_board_slot_clicked(row: BattlefieldRow, slot: BoardSlot) -> void:
 	selected_board_row = row
 	selected_board_slot = slot
 	_select_card(slot.get_card_data())
-	play_area_label.text = "已选择场上卡牌：%s。点击插入位置可以调整顺序或换排" % selected_card.display_name
-	_refresh_placement_targets()
+	play_area_label.text = "已选择场上卡牌：%s。准备阶段可拖动换序、换排或收回手牌" % selected_card.display_name
+	_refresh_drag_availability()
 
 
-func _on_board_placement_requested(target_row: BattlefieldRow, insert_index: int) -> void:
-	if current_phase != GamePhase.PREPARE or selected_card == null:
+func _on_click_carry_requested(
+	drag_data: Dictionary,
+	pointer_global_position: Vector2
+) -> void:
+	if (
+		current_phase != GamePhase.PREPARE
+		or not _click_carry_data.is_empty()
+		or not _is_card_drag_data(drag_data)
+	):
 		return
 
-	var moving_card := selected_card
-	if selected_board_slot != null:
-		if selected_board_row != target_row and not target_row.has_capacity_for_single_card():
-			return
+	_click_carry_data = drag_data.duplicate()
+	_click_carry_preview = _create_click_carry_preview(
+		_click_carry_data,
+		pointer_global_position
+	)
+	_click_carry_data["drag_visual"] = _click_carry_preview
+	_hide_click_carry_source()
+	_update_click_carry(pointer_global_position)
 
-		var source_index := selected_board_row.get_slot_index(selected_board_slot)
-		if selected_board_row == target_row and insert_index > source_index:
-			insert_index -= 1
-		selected_board_row.remove_card_slot(selected_board_slot)
+
+func _create_click_carry_preview(
+	drag_data: Dictionary,
+	pointer_global_position: Vector2
+) -> Control:
+	var preview_root := CardView.create_drag_visual(drag_data)
+	add_child(preview_root)
+	preview_root.global_position = pointer_global_position
+	return preview_root
+
+
+func _hide_click_carry_source() -> void:
+	var source_type := _click_carry_data.get("source_type") as StringName
+	if source_type == &"hand":
+		var source_slot := _click_carry_data.get("source_slot") as Control
+		if (
+			is_instance_valid(source_slot)
+			and source_slot.get_parent() == hand_card_row
+		):
+			var previous_positions := _capture_hand_card_positions()
+			source_slot.visible = false
+			_animate_hand_layout_next_frame(previous_positions)
+	elif source_type == &"board":
+		var source_row := (
+			_click_carry_data.get("source_row") as BattlefieldRow
+		)
+		if is_instance_valid(source_row):
+			source_row._begin_card_drag(_click_carry_data)
+
+
+func _update_click_carry(pointer_global_position: Vector2) -> void:
+	if _click_carry_data.is_empty():
+		return
+
+	if is_instance_valid(_click_carry_preview):
+		_click_carry_preview.global_position = pointer_global_position
+
+	var target_row := _find_board_row_at(pointer_global_position)
+	if target_row != null:
+		for row: BattlefieldRow in [front_row, back_row]:
+			if row != target_row:
+				row.clear_drop_preview()
+		hand_drop_zone.clear_drop_preview()
+		target_row.preview_card_drop(
+			_to_row_drop_position(target_row, pointer_global_position),
+			_click_carry_data
+		)
+	elif hand_drop_zone.get_global_rect().has_point(pointer_global_position):
+		front_row.clear_drop_preview()
+		back_row.clear_drop_preview()
+		hand_drop_zone.preview_card_drop(
+			pointer_global_position,
+			_click_carry_data
+		)
 	else:
-		var hand_index := hand_cards.find(moving_card)
-		if hand_index < 0 or not target_row.has_capacity_for_single_card():
-			return
-		hand_cards.remove_at(hand_index)
-		_build_hand_cards()
-
-	selected_board_slot = target_row.add_card(moving_card, insert_index)
-	selected_board_row = target_row
-	_select_card(moving_card)
-	play_area_label.text = "已将 %s 放入%s，可继续点击插入位置调整" % [moving_card.display_name, target_row.row_title]
-	_refresh_placement_targets()
+		_clear_click_drop_feedback()
 
 
-func _on_return_to_hand_button_pressed() -> void:
-	if current_phase != GamePhase.PREPARE or selected_board_row == null or selected_board_slot == null:
+func _commit_click_carry(pointer_global_position: Vector2) -> void:
+	if _click_carry_data.is_empty():
 		return
 
-	var returned_card := selected_board_row.remove_card_slot(selected_board_slot)
-	if returned_card == null:
+	_update_click_carry(pointer_global_position)
+	var committed := false
+	var target_row := _find_board_row_at(pointer_global_position)
+	if target_row != null:
+		var row_position := _to_row_drop_position(
+			target_row,
+			pointer_global_position
+		)
+		if target_row.preview_card_drop(row_position, _click_carry_data):
+			target_row.commit_card_drop(row_position, _click_carry_data)
+			committed = true
+	elif hand_drop_zone.get_global_rect().has_point(pointer_global_position):
+		if hand_drop_zone.preview_card_drop(
+			pointer_global_position,
+			_click_carry_data
+		):
+			hand_drop_zone.commit_card_drop(
+				pointer_global_position,
+				_click_carry_data
+			)
+			committed = true
+
+	_finish_click_carry(committed)
+
+
+func _cancel_click_carry() -> void:
+	if not _click_carry_data.is_empty():
+		_finish_click_carry(false)
+
+
+func _finish_click_carry(committed: bool) -> void:
+	var drag_data := _click_carry_data
+	_click_carry_data = {}
+	var return_global_position: Variant = null
+	if (
+		not committed
+		and is_instance_valid(_click_carry_preview)
+	):
+		var drag_visual := _click_carry_preview as CardDragPreview
+		if drag_visual != null:
+			return_global_position = drag_visual.get_card_global_position()
+	_clear_click_drop_feedback()
+
+	if is_instance_valid(_click_carry_preview):
+		_click_carry_preview.queue_free()
+	_click_carry_preview = null
+
+	var source_type := drag_data.get("source_type") as StringName
+	if source_type == &"hand":
+		var source_slot := drag_data.get("source_slot") as Control
+		if (
+			is_instance_valid(source_slot)
+			and source_slot.get_parent() == hand_card_row
+			and not source_slot.visible
+		):
+			var previous_positions := _capture_hand_card_positions()
+			source_slot.visible = true
+			_animate_hand_layout_next_frame(previous_positions)
+			if (
+				not committed
+				and return_global_position is Vector2
+				and source_slot.get_child_count() > 0
+			):
+				_animate_hand_card_entry.call_deferred(
+					source_slot.get_child(0) as CardView,
+					return_global_position as Vector2
+				)
+	elif source_type == &"board":
+		var source_row := drag_data.get("source_row") as BattlefieldRow
+		if is_instance_valid(source_row):
+			source_row._finish_card_drag(return_global_position)
+
+
+func _clear_click_drop_feedback() -> void:
+	for row: BattlefieldRow in [front_row, back_row]:
+		row.clear_drop_preview()
+	hand_drop_zone.clear_drop_preview()
+
+
+func _find_board_row_at(
+	pointer_global_position: Vector2
+) -> BattlefieldRow:
+	for row: BattlefieldRow in [front_row, back_row]:
+		var local_position := _to_row_drop_position(
+			row,
+			pointer_global_position
+		)
+		if Rect2(Vector2.ZERO, row.placement_overlay.size).has_point(
+			local_position
+		):
+			return row
+	return null
+
+
+func _to_row_drop_position(
+	row: BattlefieldRow,
+	pointer_global_position: Vector2
+) -> Vector2:
+	return (
+		row.placement_overlay
+		.get_global_transform_with_canvas()
+		.affine_inverse()
+		* pointer_global_position
+	)
+
+
+func _on_board_card_dropped(
+	target_row: BattlefieldRow,
+	insert_index: int,
+	drag_data: Dictionary,
+	card_global_position: Vector2
+) -> void:
+	_transfer_card(
+		drag_data,
+		&"board",
+		target_row,
+		insert_index,
+		card_global_position
+	)
+
+
+func _on_hand_card_dropped(
+	drag_data: Dictionary,
+	card_global_position: Vector2
+) -> void:
+	if drag_data.get("source_type") == &"hand":
+		_commit_hand_reorder(drag_data, card_global_position)
 		return
 
-	hand_cards.append(returned_card)
+	var insert_index := clampi(
+		_hand_preview_insert_index,
+		0,
+		hand_cards.size()
+	)
+	_clear_hand_drop_preview()
+	_transfer_card(
+		drag_data,
+		&"hand",
+		null,
+		insert_index,
+		card_global_position
+	)
+
+
+func _on_hand_card_drag_hovered(
+	pointer_global_position: Vector2,
+	drag_data: Dictionary
+) -> void:
+	if current_phase != GamePhase.PREPARE or not _is_card_drag_data(drag_data):
+		_clear_hand_drop_preview()
+		return
+
+	var visible_slots := _get_visible_hand_card_slots()
+	var insert_index := visible_slots.size()
+	for index: int in visible_slots.size():
+		var slot := visible_slots[index]
+		if pointer_global_position.x < slot.get_global_rect().get_center().x:
+			insert_index = index
+			break
+
+	if (
+		_hand_preview_slot != null
+		and _hand_preview_insert_index == insert_index
+	):
+		return
+
+	var previous_positions := _capture_hand_card_positions()
+	if _hand_preview_slot == null:
+		_hand_preview_slot = _create_hand_card_slot(
+			drag_data["card_data"] as CardData,
+			true
+		)
+		hand_card_row.add_child(_hand_preview_slot)
+
+	_hand_preview_insert_index = insert_index
+	_move_hand_preview_slot(insert_index)
+	_animate_hand_layout_next_frame(previous_positions)
+
+
+func _commit_hand_reorder(
+	drag_data: Dictionary,
+	card_global_position: Variant = null
+) -> void:
+	if _hand_preview_insert_index < 0:
+		return
+
+	var source_slot := drag_data.get("source_slot") as Control
+	var real_slots := _get_hand_card_slots()
+	var source_index := real_slots.find(source_slot)
+	var card_data := drag_data.get("card_data") as CardData
+	if (
+		source_index < 0
+		or card_data == null
+		or source_index >= hand_cards.size()
+		or hand_cards[source_index] != card_data
+	):
+		_clear_hand_drop_preview()
+		return
+
+	var insert_index := clampi(
+		_hand_preview_insert_index,
+		0,
+		hand_cards.size() - 1
+	)
+	_clear_hand_drop_preview()
+	hand_cards.remove_at(source_index)
+	hand_cards.insert(insert_index, card_data)
+	_move_hand_card_slot(source_slot, insert_index)
+	if card_global_position is Vector2 and source_slot.get_child_count() > 0:
+		_animate_hand_card_entry.call_deferred(
+			source_slot.get_child(0) as CardView,
+			card_global_position as Vector2
+		)
 	selected_board_row = null
 	selected_board_slot = null
-	_build_hand_cards()
-	_select_card(returned_card)
-	play_area_label.text = "已将 %s 收回手牌，可重新选择位置放置" % returned_card.display_name
-	_refresh_placement_targets()
+	_select_card(card_data)
+	play_area_label.text = "已调整 %s 在手牌中的顺序" % card_data.display_name
 
 
-func _refresh_placement_targets() -> void:
-	var can_place := current_phase == GamePhase.PREPARE and selected_card != null
+func _clear_hand_drop_preview() -> void:
+	if _hand_preview_slot == null:
+		return
+
+	var previous_positions := _capture_hand_card_positions()
+	hand_card_row.remove_child(_hand_preview_slot)
+	_hand_preview_slot.queue_free()
+	_hand_preview_slot = null
+	_hand_preview_insert_index = -1
+	_animate_hand_layout_next_frame(previous_positions)
+
+
+func _move_hand_preview_slot(insert_index: int) -> void:
+	var visible_slots := _get_visible_hand_card_slots()
+	if insert_index >= visible_slots.size():
+		hand_card_row.move_child(
+			_hand_preview_slot,
+			hand_card_row.get_child_count() - 1
+		)
+	else:
+		_move_hand_child_before(
+			_hand_preview_slot,
+			visible_slots[insert_index]
+		)
+
+
+func _move_hand_card_slot(slot: Control, insert_index: int) -> void:
+	var remaining_slots := _get_hand_card_slots()
+	remaining_slots.erase(slot)
+	var clamped_index := clampi(insert_index, 0, remaining_slots.size())
+	if clamped_index == remaining_slots.size():
+		hand_card_row.move_child(slot, hand_card_row.get_child_count() - 1)
+	else:
+		_move_hand_child_before(slot, remaining_slots[clamped_index])
+
+
+func _move_hand_child_before(child: Control, target: Control) -> void:
+	var target_index := target.get_index()
+	if child.get_index() < target_index:
+		target_index -= 1
+	hand_card_row.move_child(child, target_index)
+
+
+func _get_hand_card_slots() -> Array[Control]:
+	var slots: Array[Control] = []
+	for child: Node in hand_card_row.get_children():
+		var slot := child as Control
+		if (
+			slot != null
+			and not slot.is_queued_for_deletion()
+			and not bool(slot.get_meta("is_hand_preview", false))
+		):
+			slots.append(slot)
+	return slots
+
+
+func _get_visible_hand_card_slots() -> Array[Control]:
+	var slots: Array[Control] = []
+	for slot: Control in _get_hand_card_slots():
+		if slot.visible:
+			slots.append(slot)
+	return slots
+
+
+func _transfer_card(
+	drag_data: Dictionary,
+	target_type: StringName,
+	target_row: BattlefieldRow = null,
+	insert_index: int = 0,
+	entry_global_position: Variant = null
+) -> bool:
+	if current_phase != GamePhase.PREPARE or not _is_card_drag_data(drag_data):
+		return false
+
+	var card_data := drag_data["card_data"] as CardData
+	var source_type := drag_data["source_type"] as StringName
+	if target_type == &"board" and target_row == null:
+		return false
+
+	if source_type == &"hand":
+		if target_type != &"board" or not target_row.has_capacity_for_single_card():
+			return false
+
+		var hand_index := hand_cards.find(card_data)
+		if hand_index < 0:
+			return false
+
+		hand_cards.remove_at(hand_index)
+		selected_board_slot = target_row.add_card(card_data, insert_index)
+		selected_board_row = target_row
+		_build_hand_cards()
+		if entry_global_position is Vector2:
+			_animate_board_card_entry.call_deferred(
+				selected_board_slot,
+				entry_global_position as Vector2
+			)
+	elif source_type == &"board":
+		var source_row := drag_data.get("source_row") as BattlefieldRow
+		var source_slot := drag_data.get("source_slot") as BoardSlot
+		if (
+			not is_instance_valid(source_row)
+			or not is_instance_valid(source_slot)
+			or source_row.get_slot_index(source_slot) < 0
+			or source_slot.get_card_data() != card_data
+		):
+			return false
+
+		if target_type == &"hand":
+			var returned_card := source_row.remove_card_slot(source_slot)
+			if returned_card == null:
+				return false
+
+			var hand_insert_index := clampi(
+				insert_index,
+				0,
+				hand_cards.size()
+			)
+			hand_cards.insert(hand_insert_index, returned_card)
+			selected_board_row = null
+			selected_board_slot = null
+			_build_hand_cards(returned_card, entry_global_position)
+		elif target_type == &"board":
+			if source_row == target_row:
+				if target_row.get_slot_index(source_slot) != insert_index:
+					target_row.move_card_slot(source_slot, insert_index)
+				selected_board_row = target_row
+				selected_board_slot = source_slot
+				if entry_global_position is Vector2:
+					_animate_board_card_entry.call_deferred(
+						selected_board_slot,
+						entry_global_position as Vector2
+					)
+			else:
+				if not target_row.has_capacity_for_single_card():
+					return false
+
+				var moved_card := source_row.remove_card_slot(source_slot)
+				if moved_card == null:
+					return false
+
+				selected_board_slot = target_row.add_card(moved_card, insert_index)
+				selected_board_row = target_row
+				if entry_global_position is Vector2:
+					_animate_board_card_entry.call_deferred(
+						selected_board_slot,
+						entry_global_position as Vector2
+					)
+		else:
+			return false
+	else:
+		return false
+
+	_select_card(card_data)
+	if target_type == &"hand":
+		play_area_label.text = "已将 %s 收回手牌；可再次拖到前排或后排" % card_data.display_name
+	else:
+		play_area_label.text = "已将 %s 放入%s" % [card_data.display_name, target_row.row_title]
+	_refresh_drag_availability()
+	return true
+
+
+func _is_card_drag_data(data: Variant) -> bool:
+	if not data is Dictionary:
+		return false
+
+	var drag_data := data as Dictionary
+	return (
+		drag_data.get("kind") == &"card"
+		and drag_data.get("card_data") is CardData
+		and drag_data.get("source_type") in [&"hand", &"board"]
+	)
+
+
+func _refresh_drag_availability() -> void:
+	var drag_enabled := current_phase == GamePhase.PREPARE
 	for row: BattlefieldRow in [front_row, back_row]:
-		var moving_within_row := selected_board_row == row and selected_board_slot != null
-		row.set_placement_enabled(can_place and (row.has_capacity_for_single_card() or moving_within_row))
+		row.set_drag_enabled(drag_enabled)
 
-	return_to_hand_button.disabled = current_phase != GamePhase.PREPARE or selected_board_slot == null
+	for hand_slot: Control in _get_hand_card_slots():
+		for child: Node in hand_slot.get_children():
+			var card_view := child as CardView
+			if card_view != null:
+				card_view.configure_drag_source(
+					drag_enabled,
+					&"hand",
+					null,
+					hand_slot
+				)
+
+	hand_drop_zone.set("drop_enabled", drag_enabled)
+
+
+func _on_hand_source_visibility_changing() -> void:
+	_animate_hand_layout_next_frame(_capture_hand_card_positions())
+
+
+func _capture_hand_card_positions() -> Dictionary:
+	var positions := {}
+	for hand_slot: Control in _get_visible_hand_card_slots():
+		if hand_slot.get_child_count() == 0:
+			continue
+
+		var card_view := hand_slot.get_child(0) as CardView
+		if card_view != null and not card_view.is_queued_for_deletion():
+			positions[card_view] = card_view.global_position
+	return positions
+
+
+func _animate_hand_layout_next_frame(previous_positions: Dictionary) -> void:
+	_hand_layout_animation_revision += 1
+	var animation_revision := _hand_layout_animation_revision
+	if previous_positions.is_empty():
+		return
+
+	await get_tree().process_frame
+	# 快速拖动可能在一帧内请求多次重排，只执行最后一次请求。
+	if animation_revision != _hand_layout_animation_revision:
+		return
+
+	for card_view_value: Variant in previous_positions:
+		if not is_instance_valid(card_view_value):
+			continue
+
+		var card_view := card_view_value as CardView
+		if (
+			card_view != null
+			and not card_view.is_queued_for_deletion()
+			and card_view.is_visible_in_tree()
+		):
+			card_view.animate_from_global_position(
+				previous_positions[card_view_value]
+			)
+
+
+func _animate_hand_card_entry(
+	card_view_value: Variant,
+	entry_global_position: Vector2
+) -> void:
+	await get_tree().process_frame
+	if not is_instance_valid(card_view_value):
+		return
+
+	var card_view := card_view_value as CardView
+	if card_view != null and not card_view.is_queued_for_deletion():
+		card_view.animate_from_global_position(entry_global_position)
+
+
+func _animate_board_card_entry(
+	slot_value: Variant,
+	entry_global_position: Vector2
+) -> void:
+	await get_tree().process_frame
+	if not is_instance_valid(slot_value):
+		return
+
+	var slot := slot_value as BoardSlot
+	if (
+		slot != null
+		and not slot.is_queued_for_deletion()
+		and slot.get_parent() != null
+	):
+		slot.animate_from_global_position(entry_global_position)
 
 
 func _select_card(card_data: CardData) -> void:
@@ -181,5 +791,5 @@ func _select_card(card_data: CardData) -> void:
 		selected_card_view.set_card_data(null)
 		return
 
-	play_area_label.text = "当前选中：%s。点击棋盘插入位置进行放置" % selected_card.display_name
+	play_area_label.text = "当前选中：%s。准备阶段可按住卡牌拖动放置" % selected_card.display_name
 	selected_card_view.set_card_data(selected_card)

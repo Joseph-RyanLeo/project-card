@@ -1,0 +1,250 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/tools/card_art_tuner.gd" id="1_tuner"]
+[ext_resource type="PackedScene" path="res://scenes/ui/CardView.tscn" id="2_card_view"]
+[ext_resource type="Resource" path="res://resources/cards/ember_squire.tres" id="3_default_card"]
+
+[node name="CardArtTuner" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_tuner")
+card_data = ExtResource("3_default_card")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0.075, 0.085, 0.105, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Workspace" type="Control" parent="CenterContainer"]
+custom_minimum_size = Vector2(1280, 720)
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 24.0
+offset_top = 20.0
+offset_right = 194.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 16
+text = "← 返回主界面"
+
+[node name="Title" type="Label" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 250.0
+offset_top = 18.0
+offset_right = 1030.0
+offset_bottom = 52.0
+theme_override_font_sizes/font_size = 24
+text = "卡牌人物取景实时预览"
+horizontal_alignment = 1
+
+[node name="Instructions" type="Label" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 250.0
+offset_top = 58.0
+offset_right = 1030.0
+offset_bottom = 102.0
+theme_override_font_sizes/font_size = 16
+text = "选择测试卡后，用 X / Y 或方向按钮调整人物取景。\n所有移动都是整数像素；只有点击保存才会写入卡牌资源。"
+horizontal_alignment = 1
+
+[node name="PreviewCaption" type="Label" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 70.0
+offset_top = 110.0
+offset_right = 540.0
+offset_bottom = 138.0
+theme_override_font_sizes/font_size = 18
+text = "4× 像素预览"
+horizontal_alignment = 1
+
+[node name="PreviewCard" parent="CenterContainer/Workspace" instance=ExtResource("2_card_view")]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 107.0
+offset_top = 150.0
+offset_right = 206.0
+offset_bottom = 286.0
+mouse_filter = 2
+scale = Vector2(4, 4)
+
+[node name="ControlPanel" type="Panel" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 620.0
+offset_top = 120.0
+offset_right = 1220.0
+offset_bottom = 650.0
+mouse_filter = 2
+
+[node name="CardLabel" type="Label" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 660.0
+offset_top = 150.0
+offset_right = 1180.0
+offset_bottom = 178.0
+theme_override_font_sizes/font_size = 18
+text = "测试卡牌"
+
+[node name="CardSelector" type="OptionButton" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 660.0
+offset_top = 185.0
+offset_right = 1180.0
+offset_bottom = 228.0
+theme_override_font_sizes/font_size = 18
+
+[node name="OffsetTitle" type="Label" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 660.0
+offset_top = 258.0
+offset_right = 1180.0
+offset_bottom = 286.0
+theme_override_font_sizes/font_size = 18
+text = "人物偏移（单位：像素）"
+
+[node name="OffsetXLabel" type="Label" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 660.0
+offset_top = 300.0
+offset_right = 695.0
+offset_bottom = 342.0
+theme_override_font_sizes/font_size = 18
+text = "X"
+vertical_alignment = 1
+
+[node name="OffsetXSpinBox" type="SpinBox" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 700.0
+offset_top = 300.0
+offset_right = 850.0
+offset_bottom = 342.0
+theme_override_font_sizes/font_size = 18
+min_value = -200.0
+max_value = 200.0
+allow_greater = true
+allow_lesser = true
+
+[node name="OffsetYLabel" type="Label" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 970.0
+offset_top = 300.0
+offset_right = 1005.0
+offset_bottom = 342.0
+theme_override_font_sizes/font_size = 18
+text = "Y"
+vertical_alignment = 1
+
+[node name="OffsetYSpinBox" type="SpinBox" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 1010.0
+offset_top = 300.0
+offset_right = 1160.0
+offset_bottom = 342.0
+theme_override_font_sizes/font_size = 18
+min_value = -200.0
+max_value = 200.0
+allow_greater = true
+allow_lesser = true
+
+[node name="NudgeUpButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 860.0
+offset_top = 365.0
+offset_right = 980.0
+offset_bottom = 407.0
+theme_override_font_sizes/font_size = 16
+text = "↑ 1px"
+
+[node name="NudgeLeftButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 720.0
+offset_top = 415.0
+offset_right = 840.0
+offset_bottom = 457.0
+theme_override_font_sizes/font_size = 16
+text = "← 1px"
+
+[node name="NudgeRightButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 1000.0
+offset_top = 415.0
+offset_right = 1120.0
+offset_bottom = 457.0
+theme_override_font_sizes/font_size = 16
+text = "1px →"
+
+[node name="NudgeDownButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 860.0
+offset_top = 465.0
+offset_right = 980.0
+offset_bottom = 507.0
+theme_override_font_sizes/font_size = 16
+text = "↓ 1px"
+
+[node name="SaveButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 660.0
+offset_top = 535.0
+offset_right = 1180.0
+offset_bottom = 578.0
+theme_override_font_sizes/font_size = 18
+text = "保存到卡牌资源"
+
+[node name="ReloadButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 660.0
+offset_top = 590.0
+offset_right = 900.0
+offset_bottom = 630.0
+theme_override_font_sizes/font_size = 16
+text = "重新载入"
+
+[node name="ResetButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 940.0
+offset_top = 590.0
+offset_right = 1180.0
+offset_bottom = 630.0
+theme_override_font_sizes/font_size = 16
+text = "预览归零"
+
+[node name="StatusLabel" type="Label" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 80.0
+offset_top = 670.0
+offset_right = 1200.0
+offset_bottom = 705.0
+theme_override_font_sizes/font_size = 16
+text = "等待预览……"
+horizontal_alignment = 1
+vertical_alignment = 1

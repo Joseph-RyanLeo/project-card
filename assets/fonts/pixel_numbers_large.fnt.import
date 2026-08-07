@@ -1,0 +1,17 @@
+[remap]
+
+importer="font_data_bmfont"
+type="FontFile"
+uid="uid://mmyb0cn0d8rc"
+path="res://.godot/imported/pixel_numbers_large.fnt-c0b925bc726531c9108670f70da45c20.fontdata"
+
+[deps]
+
+source_file="res://assets/fonts/pixel_numbers_large.fnt"
+dest_files=["res://.godot/imported/pixel_numbers_large.fnt-c0b925bc726531c9108670f70da45c20.fontdata"]
+
+[params]
+
+fallbacks=[]
+compress=true
+scaling_mode=2
