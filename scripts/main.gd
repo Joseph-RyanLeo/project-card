@@ -20,6 +20,7 @@ var _hand_preview_insert_index: int = -1
 var _click_carry_data: Dictionary = {}
 var _click_carry_preview: Control
 var _hand_layout_animation_revision: int = 0
+var _active_hand_entry_animations: int = 0
 
 @export var hand_cards: Array[CardData] = [] # 初始真实手牌及其排列顺序
 @export var card_preview_scale: float = 2.0 # 左侧选中卡牌大预览的缩放倍率
@@ -31,15 +32,20 @@ var _hand_layout_animation_revision: int = 0
 @onready var selected_card_view: CardView = %SelectedCardView
 @onready var front_row: BattlefieldRow = %FrontRow
 @onready var back_row: BattlefieldRow = %BackRow
+@onready var hand_scroll: ScrollContainer = (
+	$RootMargin/Layout/HandPanel/HandContent/HandScroll
+)
 @onready var hand_card_row: HBoxContainer = %HandCardRow
 @onready var hand_drop_zone: Control = %HandDropZone
 @onready var start_battle_button: Button = %StartBattleButton
 @onready var card_art_tuner_button: Button = %CardArtTunerButton
+@onready var drag_mode_button: Button = %DragModeButton
 
 
 func _ready() -> void:
 	start_battle_button.pressed.connect(_on_start_battle_button_pressed)
 	card_art_tuner_button.pressed.connect(_on_card_art_tuner_button_pressed)
+	drag_mode_button.toggled.connect(_on_drag_mode_toggled)
 	hand_drop_zone.connect("card_dropped", _on_hand_card_dropped)
 	hand_drop_zone.connect("card_drag_hovered", _on_hand_card_drag_hovered)
 	hand_drop_zone.connect("card_drag_exited", _clear_hand_drop_preview)
@@ -48,6 +54,15 @@ func _ready() -> void:
 	_build_hand_cards()
 	_select_first_hand_card()
 	_update_phase_label()
+	_on_drag_mode_toggled(drag_mode_button.button_pressed)
+
+
+func _on_drag_mode_toggled(prefer_minion: bool) -> void:
+	drag_mode_button.text = (
+		"拖拽：优先随从" if prefer_minion else "拖拽：优先小队"
+	)
+	for row: BattlefieldRow in [front_row, back_row]:
+		row.set_prefer_minion(prefer_minion)
 
 
 func _on_card_art_tuner_button_pressed() -> void:
@@ -213,7 +228,7 @@ func _on_hand_card_clicked(card_data: CardData) -> void:
 func _on_board_slot_clicked(row: BattlefieldRow, slot: BoardSlot) -> void:
 	selected_board_row = row
 	selected_board_slot = slot
-	_select_card(slot.get_card_data())
+	_select_card(slot.get_last_clicked_card())
 	play_area_label.text = "已选择场上卡牌：%s。准备阶段可拖动换序、换排或收回手牌" % selected_card.display_name
 	_refresh_drag_availability()
 
@@ -229,6 +244,10 @@ func _on_click_carry_requested(
 	):
 		return
 
+	# 点击携带不会触发 Godot 的原生 DRAG_BEGIN；在这里主动完成与
+	# 原生拖拽相同的战场悬停清理，避免上一张卡保持鼠标指向状态。
+	for row: BattlefieldRow in [front_row, back_row]:
+		row.reset_all_hover_feedback()
 	_click_carry_data = drag_data.duplicate()
 	_click_carry_preview = _create_click_carry_preview(
 		_click_carry_data,
@@ -274,26 +293,31 @@ func _update_click_carry(pointer_global_position: Vector2) -> void:
 
 	if is_instance_valid(_click_carry_preview):
 		_click_carry_preview.global_position = pointer_global_position
+	for row: BattlefieldRow in [front_row, back_row]:
+		row.update_stack_target_feedback_global(
+			pointer_global_position,
+			_click_carry_data
+		)
 
 	var target_row := _find_board_row_at(pointer_global_position)
 	if target_row != null:
 		for row: BattlefieldRow in [front_row, back_row]:
 			if row != target_row:
-				row.clear_drop_preview()
+				row.clear_drop_preview(false)
 		hand_drop_zone.clear_drop_preview()
 		target_row.preview_card_drop(
 			_to_row_drop_position(target_row, pointer_global_position),
 			_click_carry_data
 		)
 	elif hand_drop_zone.get_global_rect().has_point(pointer_global_position):
-		front_row.clear_drop_preview()
-		back_row.clear_drop_preview()
+		front_row.clear_drop_preview(false)
+		back_row.clear_drop_preview(false)
 		hand_drop_zone.preview_card_drop(
 			pointer_global_position,
 			_click_carry_data
 		)
 	else:
-		_clear_click_drop_feedback()
+		_clear_click_drop_feedback(false)
 
 
 func _commit_click_carry(pointer_global_position: Vector2) -> void:
@@ -308,7 +332,10 @@ func _commit_click_carry(pointer_global_position: Vector2) -> void:
 			target_row,
 			pointer_global_position
 		)
-		if target_row.preview_card_drop(row_position, _click_carry_data):
+		if (
+			target_row.has_active_drop_preview()
+			or target_row.preview_card_drop(row_position, _click_carry_data)
+		):
 			target_row.commit_card_drop(row_position, _click_carry_data)
 			committed = true
 	elif hand_drop_zone.get_global_rect().has_point(pointer_global_position):
@@ -342,6 +369,8 @@ func _finish_click_carry(committed: bool) -> void:
 		if drag_visual != null:
 			return_global_position = drag_visual.get_card_global_position()
 	_clear_click_drop_feedback()
+	for row: BattlefieldRow in [front_row, back_row]:
+		row.stop_stack_target_feedback()
 
 	if is_instance_valid(_click_carry_preview):
 		_click_carry_preview.queue_free()
@@ -373,9 +402,9 @@ func _finish_click_carry(committed: bool) -> void:
 			source_row._finish_card_drag(return_global_position)
 
 
-func _clear_click_drop_feedback() -> void:
+func _clear_click_drop_feedback(clear_stack_feedback: bool = true) -> void:
 	for row: BattlefieldRow in [front_row, back_row]:
-		row.clear_drop_preview()
+		row.clear_drop_preview(clear_stack_feedback)
 	hand_drop_zone.clear_drop_preview()
 
 
@@ -412,6 +441,13 @@ func _on_board_card_dropped(
 	drag_data: Dictionary,
 	card_global_position: Vector2
 ) -> void:
+	if drag_data.has("drop_intent"):
+		_transfer_drop_intent(
+			drag_data,
+			target_row,
+			card_global_position
+		)
+		return
 	_transfer_card(
 		drag_data,
 		&"board",
@@ -425,6 +461,10 @@ func _on_hand_card_dropped(
 	drag_data: Dictionary,
 	card_global_position: Vector2
 ) -> void:
+	if drag_data.get("kind") == &"squad":
+		_clear_hand_drop_preview()
+		_transfer_squad_to_hand(drag_data, card_global_position)
+		return
 	if drag_data.get("source_type") == &"hand":
 		_commit_hand_reorder(drag_data, card_global_position)
 		return
@@ -449,6 +489,9 @@ func _on_hand_card_drag_hovered(
 	drag_data: Dictionary
 ) -> void:
 	if current_phase != GamePhase.PREPARE or not _is_card_drag_data(drag_data):
+		_clear_hand_drop_preview()
+		return
+	if drag_data.get("kind") == &"squad":
 		_clear_hand_drop_preview()
 		return
 
@@ -622,14 +665,14 @@ func _transfer_card(
 			not is_instance_valid(source_row)
 			or not is_instance_valid(source_slot)
 			or source_row.get_slot_index(source_slot) < 0
-			or source_slot.get_card_data() != card_data
+			or not source_slot.get_squad_data().contains(card_data)
 		):
 			return false
 
 		if target_type == &"hand":
-			var returned_card := source_row.remove_card_slot(source_slot)
-			if returned_card == null:
+			if not source_row.remove_card_from_squad(source_slot, card_data):
 				return false
+			var returned_card := card_data
 
 			var hand_insert_index := clampi(
 				insert_index,
@@ -642,10 +685,14 @@ func _transfer_card(
 			_build_hand_cards(returned_card, entry_global_position)
 		elif target_type == &"board":
 			if source_row == target_row:
-				if target_row.get_slot_index(source_slot) != insert_index:
-					target_row.move_card_slot(source_slot, insert_index)
+				if source_slot.get_squad_data().get_card_count() > 1:
+					source_row.remove_card_from_squad(source_slot, card_data)
+					selected_board_slot = target_row.add_card(card_data, insert_index)
+				else:
+					if target_row.get_slot_index(source_slot) != insert_index:
+						target_row.move_card_slot(source_slot, insert_index)
+					selected_board_slot = source_slot
 				selected_board_row = target_row
-				selected_board_slot = source_slot
 				if entry_global_position is Vector2:
 					_animate_board_card_entry.call_deferred(
 						selected_board_slot,
@@ -655,11 +702,10 @@ func _transfer_card(
 				if not target_row.has_capacity_for_single_card():
 					return false
 
-				var moved_card := source_row.remove_card_slot(source_slot)
-				if moved_card == null:
+				if not source_row.remove_card_from_squad(source_slot, card_data):
 					return false
 
-				selected_board_slot = target_row.add_card(moved_card, insert_index)
+				selected_board_slot = target_row.add_card(card_data, insert_index)
 				selected_board_row = target_row
 				if entry_global_position is Vector2:
 					_animate_board_card_entry.call_deferred(
@@ -680,16 +726,189 @@ func _transfer_card(
 	return true
 
 
+func _transfer_drop_intent(
+	drag_data: Dictionary,
+	target_row: BattlefieldRow,
+	entry_global_position: Variant = null
+) -> bool:
+	if current_phase != GamePhase.PREPARE or target_row == null:
+		return false
+	var intent := drag_data.get("drop_intent") as Dictionary
+	if intent == null or intent.is_empty():
+		return false
+	var kind := drag_data.get("kind") as StringName
+	if kind == &"squad":
+		return _transfer_whole_squad(
+			drag_data,
+			target_row,
+			int(intent.get("squad_index", 0)),
+			entry_global_position
+		)
+	if kind != &"card":
+		return false
+
+	var card_data := drag_data.get("card_data") as CardData
+	var source_type := drag_data.get("source_type") as StringName
+	var source_row := drag_data.get("source_row") as BattlefieldRow
+	var source_slot := drag_data.get("source_slot") as BoardSlot
+	var target_slot := intent.get("target_slot") as BoardSlot
+	var result_squad := intent.get("result_squad") as SquadData
+	if card_data == null or result_squad == null or not result_squad.is_valid():
+		return false
+	var operation := intent.get("operation") as StringName
+	if operation not in [&"new_squad", &"merge_card"]:
+		return false
+	if operation == &"merge_card" and (
+		not is_instance_valid(target_slot)
+		or target_row.get_slot_index(target_slot) < 0
+	):
+		return false
+	if (
+		operation == &"merge_card"
+		and target_slot != source_slot
+		and not target_slot.get_squad_data().can_accept_external_card_at(
+			int(intent.get("card_index", 0))
+		)
+	):
+		return false
+
+	if source_type == &"hand":
+		var hand_index := hand_cards.find(card_data)
+		if hand_index < 0:
+			return false
+		hand_cards.remove_at(hand_index)
+	elif source_type == &"board":
+		if (
+			not is_instance_valid(source_row)
+			or not is_instance_valid(source_slot)
+			or source_row.get_slot_index(source_slot) < 0
+			or not source_slot.get_squad_data().contains(card_data)
+		):
+			return false
+	else:
+		return false
+
+	if operation == &"new_squad":
+		if (
+			source_type == &"board"
+			and source_row == target_row
+			and source_slot.get_squad_data().get_card_count() == 1
+		):
+			source_slot.get_squad_data().bring_card_to_top(card_data)
+			target_row.move_squad_slot(
+				source_slot,
+				int(intent.get("squad_index", 0)),
+				is_instance_valid(drag_data.get("drag_visual"))
+			)
+			selected_board_slot = source_slot
+		elif source_type == &"board":
+			source_row.remove_card_from_squad(source_slot, card_data)
+			selected_board_slot = target_row.add_squad(
+				result_squad,
+				int(intent.get("squad_index", 0))
+			)
+		else:
+			selected_board_slot = target_row.add_squad(
+				result_squad,
+				int(intent.get("squad_index", 0))
+			)
+	elif operation == &"merge_card":
+		if source_type == &"board" and source_slot != target_slot:
+			source_row.remove_card_from_squad(source_slot, card_data)
+		target_slot.set_squad_data(result_squad)
+		target_slot.configure_drag_source(true, target_row)
+		selected_board_slot = target_slot
+	else:
+		return false
+
+	if source_type == &"hand":
+		_build_hand_cards()
+	selected_board_row = target_row
+	_select_card(card_data)
+	if entry_global_position is Vector2 and is_instance_valid(selected_board_slot):
+		_animate_board_card_entry.call_deferred(
+			selected_board_slot,
+			entry_global_position as Vector2
+		)
+	play_area_label.text = "已将 %s 放入%s的小队" % [card_data.display_name, target_row.row_title]
+	_refresh_drag_availability()
+	return true
+
+
+func _transfer_whole_squad(
+	drag_data: Dictionary,
+	target_row: BattlefieldRow,
+	insert_index: int,
+	entry_global_position: Variant = null
+) -> bool:
+	var source_row := drag_data.get("source_row") as BattlefieldRow
+	var source_slot := drag_data.get("source_slot") as BoardSlot
+	var squad_data := drag_data.get("squad_data") as SquadData
+	if (
+		not is_instance_valid(source_row)
+		or not is_instance_valid(source_slot)
+		or source_row.get_slot_index(source_slot) < 0
+		or source_slot.get_squad_data() != squad_data
+	):
+		return false
+	if source_row == target_row:
+		target_row.move_squad_slot(source_slot, insert_index)
+		selected_board_slot = source_slot
+	else:
+		if not target_row.has_capacity_for_squad(squad_data):
+			return false
+		source_row.remove_squad_slot(source_slot)
+		selected_board_slot = target_row.add_squad(squad_data, insert_index)
+	selected_board_row = target_row
+	_select_card(squad_data.get_effect_source())
+	if entry_global_position is Vector2 and is_instance_valid(selected_board_slot):
+		_animate_board_card_entry.call_deferred(selected_board_slot, entry_global_position)
+	play_area_label.text = "已整体移动小队到%s" % target_row.row_title
+	_refresh_drag_availability()
+	return true
+
+
+func _transfer_squad_to_hand(
+	drag_data: Dictionary,
+	entry_global_position: Variant = null
+) -> bool:
+	if current_phase != GamePhase.PREPARE:
+		return false
+	var source_row := drag_data.get("source_row") as BattlefieldRow
+	var source_slot := drag_data.get("source_slot") as BoardSlot
+	if (
+		not is_instance_valid(source_row)
+		or not is_instance_valid(source_slot)
+		or source_row.get_slot_index(source_slot) < 0
+	):
+		return false
+	var squad_data := source_row.remove_squad_slot(source_slot)
+	if squad_data == null:
+		return false
+	for card_data: CardData in squad_data.horizontal_cards:
+		hand_cards.append(card_data)
+	selected_board_row = null
+	selected_board_slot = null
+	var entering_card := squad_data.horizontal_cards[0]
+	_build_hand_cards(entering_card, entry_global_position)
+	_select_card(entering_card)
+	play_area_label.text = "已按水平顺序拆开小队并追加回手牌"
+	_refresh_drag_availability()
+	return true
+
+
 func _is_card_drag_data(data: Variant) -> bool:
 	if not data is Dictionary:
 		return false
 
 	var drag_data := data as Dictionary
-	return (
-		drag_data.get("kind") == &"card"
-		and drag_data.get("card_data") is CardData
-		and drag_data.get("source_type") in [&"hand", &"board"]
-	)
+	if drag_data.get("source_type") not in [&"hand", &"board"]:
+		return false
+	if drag_data.get("kind") == &"card":
+		return drag_data.get("card_data") is CardData
+	if drag_data.get("kind") == &"squad":
+		return drag_data.get("squad_data") is SquadData
+	return false
 
 
 func _refresh_drag_availability() -> void:
@@ -762,8 +981,23 @@ func _animate_hand_card_entry(
 		return
 
 	var card_view := card_view_value as CardView
-	if card_view != null and not card_view.is_queued_for_deletion():
-		card_view.animate_from_global_position(entry_global_position)
+	if card_view == null or card_view.is_queued_for_deletion():
+		return
+
+	# 飞回手牌的卡仍属于 HandScroll；动画期间临时解除滚动区裁切并
+	# 提到拖拽层，既能在手牌区外完整显示，也不会从其他手牌中间穿过。
+	var resting_z_index := card_view.z_index
+	_active_hand_entry_animations += 1
+	hand_scroll.clip_contents = false
+	card_view.set_resting_z_index(CardDragPreview.DRAG_PREVIEW_Z_INDEX)
+	card_view.animate_from_global_position(entry_global_position)
+	await get_tree().create_timer(CardView.LAYOUT_TWEEN_DURATION).timeout
+
+	if is_instance_valid(card_view) and not card_view.is_queued_for_deletion():
+		card_view.set_resting_z_index(resting_z_index)
+	_active_hand_entry_animations = maxi(_active_hand_entry_animations - 1, 0)
+	if _active_hand_entry_animations == 0 and is_instance_valid(hand_scroll):
+		hand_scroll.clip_contents = true
 
 
 func _animate_board_card_entry(

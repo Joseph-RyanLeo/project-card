@@ -1,7 +1,7 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene format=3 uid="uid://ctox4lqgsre4u"]
 
-[ext_resource type="Script" path="res://scripts/ui/battlefield_row.gd" id="1_battlefield_row"]
-[ext_resource type="Script" path="res://scripts/ui/battlefield_drop_zone.gd" id="2_drop_zone"]
+[ext_resource type="Script" uid="uid://brx1hd5xdoxpa" path="res://scripts/ui/battlefield_row.gd" id="1_battlefield_row"]
+[ext_resource type="Script" uid="uid://cmh67lqrj01je" path="res://scripts/ui/battlefield_drop_zone.gd" id="2_drop_zone"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_row"]
 content_margin_left = 15.5
@@ -19,34 +19,34 @@ corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
-[node name="BattlefieldRow" type="PanelContainer"]
+[node name="BattlefieldRow" type="PanelContainer" unique_id=2028158787]
 custom_minimum_size = Vector2(832, 184)
 theme_override_styles/panel = SubResource("StyleBoxFlat_row")
 script = ExtResource("1_battlefield_row")
 
-[node name="RowLayout" type="VBoxContainer" parent="."]
+[node name="RowLayout" type="VBoxContainer" parent="." unique_id=1816105786]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="RowTitleLabel" type="Label" parent="RowLayout"]
+[node name="RowTitleLabel" type="Label" parent="RowLayout" unique_id=985093793]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(0.72, 0.84, 0.82, 1)
 theme_override_font_sizes/font_size = 16
 text = "前排"
 
-[node name="SquadCenter" type="CenterContainer" parent="RowLayout"]
+[node name="SquadCenter" type="CenterContainer" parent="RowLayout" unique_id=207243791]
 custom_minimum_size = Vector2(0, 136)
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
 
-[node name="RowDisplayArea" type="Control" parent="RowLayout/SquadCenter"]
+[node name="RowDisplayArea" type="Control" parent="RowLayout/SquadCenter" unique_id=1986310482]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(801, 136)
 layout_mode = 2
 
-[node name="SquadRow" type="HBoxContainer" parent="RowLayout/SquadCenter/RowDisplayArea"]
+[node name="SquadRow" type="HBoxContainer" parent="RowLayout/SquadCenter/RowDisplayArea" unique_id=1936703269]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -57,7 +57,7 @@ grow_vertical = 2
 theme_override_constants/separation = 18
 alignment = 1
 
-[node name="PlacementOverlay" type="Control" parent="RowLayout/SquadCenter/RowDisplayArea"]
+[node name="PlacementOverlay" type="Control" parent="RowLayout/SquadCenter/RowDisplayArea" unique_id=575659541]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15

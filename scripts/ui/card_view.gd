@@ -35,6 +35,7 @@ const HOVER_PUNCH_DURATION: float = 0.16 # 悬停单方向轻晃并复位的总�
 const RESTING_SHADOW_OFFSET := Vector2(3.0, 4.0) # 悬停状态下阴影相对卡牌的偏移
 const PRESSED_SHADOW_OFFSET := Vector2(6.0, 8.0) # 按住状态下阴影相对卡牌的偏移
 const INTERACTION_SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.28) # 悬停和按压阴影的颜色及透明度
+const CARD_LAYER_Z_STEP: int = 100 # 小队相邻整卡之间的层级间隔，必须大于卡牌内部所有子图层与悬停增量
 @export_group("Card Pixel Layout")
 @export var card_size: Vector2 = Vector2(99, 136) # 裸卡的基准像素尺寸
 @export var title_area_position: Vector2 = Vector2(21, 4) # 卡牌名字文字区域的左上角坐标
@@ -88,6 +89,8 @@ var _layout_resting_position: Vector2 = Vector2.ZERO
 var _mouse_hovered: bool = false
 var _snapshot_mode: bool = false
 var _interaction_shadow: Panel
+var _external_lift: float = 0.0
+var _resting_z_index: int = 0
 
 @onready var name_clip: Control = %NameClip
 @onready var name_label: Label = %NameLabel
@@ -131,6 +134,12 @@ func _gui_input(event: InputEvent) -> void:
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
 				_left_button_pressed = true
+				if (
+					_drag_enabled
+					and is_instance_valid(_drag_source_slot)
+					and _drag_source_slot.has_method("lock_drag_subject")
+				):
+					_drag_source_slot.lock_drag_subject(card_data)
 				if _drag_enabled:
 					_set_interaction_shadow_visible(true)
 					_animate_shadow_offset(PRESSED_SHADOW_OFFSET)
@@ -164,6 +173,15 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 
 
+func _has_point(point: Vector2) -> bool:
+	# 卡牌向上抽出后，命中区域仍覆盖抽出前的完整卡面；否则鼠标从
+	# 下边缘进入时，卡牌上移会把鼠标瞬间甩出自身并打断 mouse_entered。
+	return Rect2(
+		Vector2.ZERO,
+		Vector2(size.x, size.y + _external_lift)
+	).has_point(point)
+
+
 func _get_drag_data(at_position: Vector2) -> Variant:
 	if not _drag_enabled or card_data == null:
 		return null
@@ -181,7 +199,7 @@ func _build_drag_data(at_position: Vector2) -> Dictionary:
 	var drag_source_scale := (
 		_base_visual_scale if _drag_enabled else scale
 	)
-	return {
+	var drag_data := {
 		"kind": &"card",
 		"card_data": card_data,
 		"source_type": _drag_source_type,
@@ -192,11 +210,44 @@ func _build_drag_data(at_position: Vector2) -> Dictionary:
 		"preview_scale": drag_source_scale,
 		"showing_effect": showing_effect,
 	}
+	if (
+		is_instance_valid(_drag_source_slot)
+		and _drag_source_slot.has_method("enrich_drag_data")
+	):
+		return _drag_source_slot.enrich_drag_data(drag_data, card_data)
+	return drag_data
 
 
 static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 	var preview_root := CardDragPreview.new()
 	var card_view_scene := load("res://scenes/ui/CardView.tscn") as PackedScene
+	if drag_data.get("kind") == &"squad":
+		var squad_visual := Control.new()
+		var squad_size: Vector2 = drag_data.get("squad_size", Vector2(99, 136))
+		squad_visual.size = squad_size
+		squad_visual.custom_minimum_size = squad_size
+		var cards: Array = drag_data.get("squad_cards", [])
+		var x_positions: Array = drag_data.get("squad_x_positions", [])
+		var layers: Array = drag_data.get("squad_layer_cards", [])
+		for index: int in cards.size():
+			var squad_card := card_view_scene.instantiate() as CardView
+			squad_card.position = Vector2(float(x_positions[index]), 0.0)
+			# CardView 会在 _ready() 记录静止位置，因此整队快照也要先放好 X 再入树。
+			squad_visual.add_child(squad_card)
+			squad_card.set_card_data(cards[index] as CardData)
+			squad_card.configure_drag_source(false)
+			squad_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			squad_card.set_resting_z_index(
+				(cards.size() - layers.find(cards[index]))
+				* CARD_LAYER_Z_STEP
+			)
+		preview_root.configure(
+			squad_visual,
+			drag_data.get("grab_local_position", Vector2.ZERO),
+			drag_data.get("preview_scale", Vector2.ONE),
+			squad_size
+		)
+		return preview_root
 	var preview_card := card_view_scene.instantiate() as CardView
 	preview_card.modulate.a = 0.9
 	preview_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -303,12 +354,17 @@ func set_snapshot_mode(value: bool) -> void:
 
 
 func _on_mouse_entered() -> void:
+	show_pointer_hover_feedback(true)
+
+
+func show_pointer_hover_feedback(play_rotation_punch: bool = false) -> void:
 	_mouse_hovered = true
 	if _drag_enabled and not _left_button_pressed and not _snapshot_mode:
 		_set_interaction_shadow_visible(true)
 		_animate_shadow_offset(RESTING_SHADOW_OFFSET)
 		_animate_interaction_scale(HOVER_SCALE_MULTIPLIER)
-		_play_hover_rotation_punch()
+		if play_rotation_punch:
+			_play_hover_rotation_punch()
 
 
 func _on_mouse_exited() -> void:
@@ -316,6 +372,14 @@ func _on_mouse_exited() -> void:
 	if _drag_enabled and not _left_button_pressed:
 		_animate_interaction_scale(1.0)
 		_set_interaction_shadow_visible(false)
+
+
+func clear_pointer_hover_feedback() -> void:
+	# Godot 开始另一次拖拽或点击携带时不一定会补发旧卡的 mouse_exited。
+	# 这里提供显式兜底，避免旧卡继续保持放大、阴影或悬停旋转状态。
+	_mouse_hovered = false
+	if not _left_button_pressed:
+		_reset_interaction_visual()
 
 
 func _animate_interaction_scale(
@@ -326,7 +390,7 @@ func _animate_interaction_scale(
 		_interaction_tween.kill()
 
 	var target_scale := _base_visual_scale * multiplier
-	z_index = 20 if multiplier > 1.0 else 0
+	z_index = _resting_z_index + 20 if multiplier > 1.0 else _resting_z_index
 	if immediate:
 		scale = target_scale
 		return
@@ -441,9 +505,47 @@ func animate_from_global_position(previous_global_position: Vector2) -> void:
 	_layout_tween.tween_property(
 		self,
 		"position",
-		_layout_resting_position,
+		_layout_resting_position + Vector2(0.0, -_external_lift),
 		LAYOUT_TWEEN_DURATION
 	)
+
+
+func set_external_lift(pixels: float) -> void:
+	_external_lift = maxf(pixels, 0.0)
+	if _layout_tween != null and _layout_tween.is_valid():
+		_layout_tween.kill()
+	position = _layout_resting_position + Vector2(0.0, -_external_lift)
+
+
+func set_layout_position(value: Vector2) -> void:
+	# 小队水平顺序变化时只更新长期存在的 CardView 静止坐标，
+	# 不销毁节点；这样原生 mouse_entered / mouse_exited 状态不会中断。
+	_layout_resting_position = value
+	if _layout_tween != null and _layout_tween.is_valid():
+		_layout_tween.kill()
+	position = _layout_resting_position + Vector2(0.0, -_external_lift)
+
+
+func set_resting_z_index(value: int) -> void:
+	_resting_z_index = value
+	z_index = _resting_z_index
+
+
+func set_attribute_source_state(
+	action_active: bool,
+	vitals_active: bool,
+	effect_active: bool,
+	inactive_alpha: float
+) -> void:
+	var action_alpha := 1.0 if action_active else inactive_alpha
+	var vitals_alpha := 1.0 if vitals_active else inactive_alpha
+	action_icon.modulate.a = action_alpha
+	value_label.modulate.a = action_alpha
+	health_icon.modulate.a = vitals_alpha
+	health_label.modulate.a = vitals_alpha
+	armor_icon.modulate.a = vitals_alpha
+	armor_label.modulate.a = vitals_alpha
+	effect_text_label.modulate.a = 1.0 if effect_active else inactive_alpha
 
 
 func is_layout_animating() -> bool:

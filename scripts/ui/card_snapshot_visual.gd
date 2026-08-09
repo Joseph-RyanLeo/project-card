@@ -13,7 +13,11 @@ var _texture_rect: TextureRect
 var _capture_size: Vector2 = Vector2.ZERO
 
 
-func configure(source_card_view: Variant, card_size: Vector2) -> void:
+func configure(
+	source_card_view: Variant,
+	card_size: Vector2,
+	output_texture_filter: CanvasItem.TextureFilter = CanvasItem.TEXTURE_FILTER_LINEAR
+) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_source_card_view = source_card_view
 	_capture_size = (
@@ -35,8 +39,10 @@ func configure(source_card_view: Variant, card_size: Vector2) -> void:
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(_viewport)
 
-	_source_card_view.configure_drag_source(false)
-	_source_card_view.set_snapshot_mode(true)
+	if _source_card_view.has_method("configure_drag_source"):
+		_source_card_view.configure_drag_source(false)
+	if _source_card_view.has_method("set_snapshot_mode"):
+		_source_card_view.set_snapshot_mode(true)
 	# set_snapshot_mode() 会先清理交互缩放，因此整数放大必须在它之后设置。
 	_source_card_view.position = (
 		CAPTURE_PADDING_TOP_LEFT * SUPERSAMPLE_FACTOR
@@ -48,7 +54,7 @@ func configure(source_card_view: Variant, card_size: Vector2) -> void:
 	_texture_rect = TextureRect.new()
 	_texture_rect.name = "FlattenedCardTexture"
 	_texture_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_texture_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_texture_rect.texture_filter = output_texture_filter
 	_texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_texture_rect.stretch_mode = TextureRect.STRETCH_SCALE
 	_texture_rect.texture = _viewport.get_texture()
