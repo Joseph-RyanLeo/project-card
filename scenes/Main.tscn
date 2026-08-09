@@ -170,6 +170,13 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "卡面调整器"
 
+[node name="DragModeButton" type="Button" parent="RootMargin/Layout/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+toggle_mode = true
+button_pressed = true
+text = "拖拽：优先随从"
+
 [node name="StartBattleButton" type="Button" parent="RootMargin/Layout/Footer" unique_id=1326232291]
 unique_name_in_owner = true
 layout_mode = 2

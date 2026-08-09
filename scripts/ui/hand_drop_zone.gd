@@ -88,11 +88,13 @@ func _is_card_drag(data: Variant) -> bool:
 		return false
 
 	var drag_data := data as Dictionary
-	return (
-		drag_data.get("kind") == &"card"
-		and drag_data.get("source_type") in [&"hand", &"board"]
-		and drag_data.get("card_data") is CardData
-	)
+	if drag_data.get("source_type") not in [&"hand", &"board"]:
+		return false
+	if drag_data.get("kind") == &"card":
+		return drag_data.get("card_data") is CardData
+	if drag_data.get("kind") == &"squad":
+		return drag_data.get("squad_data") is SquadData
+	return false
 
 
 func _set_highlighted(value: bool) -> void:

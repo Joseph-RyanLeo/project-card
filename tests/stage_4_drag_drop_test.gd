@@ -543,12 +543,10 @@ func _test_balatro_drag_preview_feel() -> void:
 	var moving_distance: float = transformed_grab_position.distance_to(
 		drag_visual.global_position
 	)
-	var moving_rotation := absf(preview_card.rotation_degrees)
 	_expect(moving_distance > 1.0, "快速移动时卡牌视觉会轻微滞后")
-	_expect(moving_rotation > 0.1, "横向移动时卡牌会按速度倾斜")
 	_expect(
-		moving_rotation <= CardDragPreview.MAX_ROTATION_DEGREES,
-		"拖拽倾斜不会超过安全最大角度"
+		is_zero_approx(preview_card.rotation_degrees),
+		"活动卡移动时保持水平，越界属性不会因旋转半径上下漂移"
 	)
 
 	for frame_index: int in 20:
@@ -565,10 +563,7 @@ func _test_balatro_drag_preview_feel() -> void:
 		< moving_distance,
 		"停止移动后卡牌会平滑追上鼠标"
 	)
-	_expect(
-		absf(preview_card.rotation_degrees) < moving_rotation,
-		"停止移动后卡牌倾斜会回正"
-	)
+	_expect(is_zero_approx(preview_card.rotation_degrees), "停止移动后活动卡仍保持水平")
 
 	drag_visual.queue_free()
 	await _dispose_main(main)
@@ -618,7 +613,7 @@ func _test_native_hand_drag_callbacks() -> void:
 	_expect(second_hand_card.is_layout_animating(), "取消拖动时其余手牌平滑让回位置")
 	_expect(hand_card.is_layout_animating(), "取消原生拖动时卡牌从鼠标位置飞回手牌")
 	_expect(main.hand_cards.size() == initial_hand_count, "取消手牌拖动不修改真实数据")
-	await create_timer(0.2).timeout
+	await create_timer(CardView.LAYOUT_TWEEN_DURATION + 0.05).timeout
 
 	hand_card_rect = hand_card.get_global_rect()
 	source_position = (
@@ -712,6 +707,21 @@ func _test_native_hand_drag_callbacks() -> void:
 		_hand_card_view(main, returned_insert_index).is_layout_animating(),
 		"拖入手牌的新卡从松手位置移动到插入位置"
 	)
+	var returned_hand_view := _hand_card_view(main, returned_insert_index)
+	var hand_scroll := main.get_node(
+		"RootMargin/Layout/HandPanel/HandContent/HandScroll"
+	) as ScrollContainer
+	_expect(
+		not hand_scroll.clip_contents,
+		"场上卡飞回手牌期间临时解除滚动区裁切"
+	)
+	_expect(
+		returned_hand_view.z_index == CardDragPreview.DRAG_PREVIEW_Z_INDEX,
+		"场上卡飞回手牌期间位于其他手牌上层"
+	)
+	await create_timer(CardView.LAYOUT_TWEEN_DURATION + 0.02).timeout
+	_expect(hand_scroll.clip_contents, "回手动画结束后恢复手牌滚动区裁切")
+	_expect(returned_hand_view.z_index == 0, "回手动画结束后恢复普通手牌层级")
 
 	var cards: Array[CardData] = main.hand_cards.duplicate()
 	main._transfer_card(_hand_drag(cards[0]), &"board", front_row, 0)
@@ -1440,6 +1450,10 @@ func _preview_slot(row: BattlefieldRow) -> BoardSlot:
 		var slot := child as BoardSlot
 		if slot != null and slot.is_preview():
 			return slot
+		for nested_child: Node in child.get_children():
+			var nested_slot := nested_child as BoardSlot
+			if nested_slot != null and nested_slot.is_preview():
+				return nested_slot
 	return null
 
 
@@ -1447,7 +1461,13 @@ func _preview_index(row: BattlefieldRow) -> int:
 	var visual_index: int = 0
 	for child: Node in row.get_squad_container().get_children():
 		var slot := child as BoardSlot
-		if slot == null or not slot.visible:
+		if slot == null:
+			for nested_child: Node in child.get_children():
+				var nested_slot := nested_child as BoardSlot
+				if nested_slot != null and nested_slot.is_preview():
+					return visual_index
+			continue
+		if not slot.visible:
 			continue
 		if slot.is_preview():
 			return visual_index

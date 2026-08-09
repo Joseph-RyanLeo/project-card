@@ -33,4 +33,6 @@ func _notification(what: int) -> void:
 
 func _on_mouse_exited() -> void:
 	if battlefield_row != null:
-		battlefield_row.clear_drop_preview()
+		# 单卡开始移动后，两排都会持续显示附近合法目标；离开其中一排时
+		# 只清理该排的放置虚影，目标颤动统一在拖拽结束时关闭。
+		battlefield_row.clear_drop_preview(false)

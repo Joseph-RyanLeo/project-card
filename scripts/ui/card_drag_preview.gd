@@ -6,16 +6,15 @@ const CARD_SNAPSHOT_VISUAL_SCRIPT: Script = preload(
 )
 const FOLLOW_SPEED: float = 18.0 # 拖拽卡牌追赶鼠标的速度；越大越快贴近鼠标
 const LAG_RATIO: float = 0.42 # 鼠标移动时卡牌保留的滞后比例；越大拖尾感越强
-const ROTATION_RESPONSE_SPEED: float = 14.0 # 卡牌倾斜追随移动方向及回正的速度
-const ROTATION_PER_PIXEL: float = 0.65 # 水平移动量转换为倾斜角度的灵敏度
-const MAX_ROTATION_DEGREES: float = 10.0 # 拖拽移动倾斜允许达到的最大绝对角度
 const DRAG_SCALE_MULTIPLIER: float = 1.06 # 拿起卡牌后相对来源显示比例的额外放大倍率
 const SHADOW_OFFSET := Vector2(6.0, 8.0) # 拖拽卡牌阴影相对卡牌的偏移
 const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.32) # 拖拽卡牌阴影的颜色及透明度
+const DRAG_PREVIEW_Z_INDEX: int = 3000 # 拖拽整卡/整队始终高于战场真实小队和目标虚影的全局层级
 
 var _card_visual: Control
 var _shadow: Panel
 var _snapshot_visual: Variant
+var _card_size: Vector2 = Vector2.ZERO
 var _rest_position: Vector2 = Vector2.ZERO
 var _shadow_rest_position: Vector2 = Vector2.ZERO
 var _visual_lag: Vector2 = Vector2.ZERO
@@ -30,7 +29,11 @@ func configure(
 	card_size: Vector2
 ) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	z_index = 100
+	z_index = DRAG_PREVIEW_Z_INDEX
+	# 先更新快照的追赶位置，再让战场行读取四角做反馈与吸附判定，
+	# 避免同一帧仍使用上一帧的视觉位置。
+	process_priority = -10
+	_card_size = card_size
 	_snapshot_visual = CARD_SNAPSHOT_VISUAL_SCRIPT.new()
 	_snapshot_visual.name = "CardSnapshotVisual"
 	_snapshot_visual.configure(card_visual, card_size)
@@ -62,7 +65,7 @@ func configure(
 	_card_visual.position = _rest_position
 	_card_visual.pivot_offset = grab_local_position + card_origin
 	_card_visual.scale = preview_scale * DRAG_SCALE_MULTIPLIER
-	_update_visual_transform(0.0)
+	_update_visual_transform()
 
 
 func _process(delta: float) -> void:
@@ -80,18 +83,7 @@ func _process(delta: float) -> void:
 	var follow_weight := 1.0 - exp(-FOLLOW_SPEED * delta)
 	_visual_lag = _visual_lag.lerp(Vector2.ZERO, follow_weight)
 
-	var desired_rotation := clampf(
-		root_movement.x * ROTATION_PER_PIXEL,
-		-MAX_ROTATION_DEGREES,
-		MAX_ROTATION_DEGREES
-	)
-	var rotation_weight := 1.0 - exp(-ROTATION_RESPONSE_SPEED * delta)
-	var next_rotation := lerpf(
-		_card_visual.rotation_degrees,
-		desired_rotation,
-		rotation_weight
-	)
-	_update_visual_transform(next_rotation)
+	_update_visual_transform()
 
 
 func get_card_global_position() -> Vector2:
@@ -106,6 +98,25 @@ func get_card_global_position() -> Vector2:
 	return global_position
 
 
+func get_card_global_corners() -> PackedVector2Array:
+	var corners := PackedVector2Array()
+	if (
+		not is_instance_valid(_card_visual)
+		or not is_instance_valid(_snapshot_visual)
+	):
+		return corners
+	var card_origin: Vector2 = _snapshot_visual.get_card_origin_in_texture()
+	var visual_transform := _card_visual.get_global_transform_with_canvas()
+	for local_corner: Vector2 in [
+		card_origin,
+		card_origin + Vector2(_card_size.x, 0.0),
+		card_origin + _card_size,
+		card_origin + Vector2(0.0, _card_size.y),
+	]:
+		corners.append(visual_transform * local_corner)
+	return corners
+
+
 func get_card_visual() -> Control:
 	return _card_visual
 
@@ -116,17 +127,16 @@ func get_source_card_view() -> Variant:
 	return null
 
 
-func _update_visual_transform(rotation_degrees_value: float) -> void:
+func _update_visual_transform() -> void:
 	if not is_instance_valid(_card_visual):
 		return
 
 	_card_visual.position = _rest_position + _visual_lag
-	_card_visual.rotation_degrees = rotation_degrees_value
+	# 活动卡保持水平，避免左上、右上越界属性随旋转半径产生明显位移。
+	# 叠卡提示所需的旋转颤动由目标 SquadView 独立负责。
+	_card_visual.rotation_degrees = 0.0
 	if is_instance_valid(_shadow):
-		var shadow_offset := SHADOW_OFFSET.rotated(
-			deg_to_rad(rotation_degrees_value)
-		)
 		_shadow.position = (
-			_shadow_rest_position + _visual_lag + shadow_offset
+			_shadow_rest_position + _visual_lag + SHADOW_OFFSET
 		)
-		_shadow.rotation_degrees = rotation_degrees_value
+		_shadow.rotation_degrees = 0.0
