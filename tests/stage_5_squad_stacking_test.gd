@@ -40,13 +40,23 @@ func _test_squad_data_layout_and_orders() -> void:
 		_typed_cards([cards[0], cards[1]]),
 		SquadData.TwoCardLayout.COMPACT
 	)
-	_expect_layout(compact, 4, 129, [0.0, 30.0], [1, 3], "紧密双卡")
+	_expect_layout(compact, 4, 129, [0.0, 30.0], [3, 1], "紧密双卡")
+	compact.bring_card_to_top(cards[1])
+	_expect(
+		compact.get_visible_rune_counts() == [1, 3],
+		"紧密双卡的 3+1 / 1+3 显示随层级最上卡方向变化"
+	)
 
 	var expanded := SquadData.from_cards(
 		_typed_cards([cards[0], cards[1]]),
 		SquadData.TwoCardLayout.EXPANDED
 	)
-	_expect_layout(expanded, 5, 159, [0.0, 60.0], [2, 3], "展开双卡")
+	_expect_layout(expanded, 5, 159, [0.0, 60.0], [3, 2], "展开双卡")
+	expanded.bring_card_to_top(cards[1])
+	_expect(
+		expanded.get_visible_rune_counts() == [2, 3],
+		"展开双卡的 3+2 / 2+3 显示随层级最上卡方向变化"
+	)
 
 	var triple := SquadData.from_cards(_typed_cards([cards[0], cards[1], cards[2]]))
 	_expect_layout(triple, 5, 159, [0.0, 30.0, 60.0], [3, 1, 1], "三卡")
@@ -90,10 +100,27 @@ func _test_squad_data_layout_and_orders() -> void:
 	_expect(
 		triple.get_unit_count() == 5
 		and triple.two_card_layout == SquadData.TwoCardLayout.EXPANDED,
-		"三卡移出一张后默认成为仍占 5 单元的展开双卡"
+		"三卡移出中卡后保留两侧 60px 间距，成为 5 单元展开双卡"
 	)
 	triple.remove_card(cards[0])
 	_expect(triple.get_unit_count() == 3, "双卡再移出一张后成为 3 单元单卡")
+
+	var remove_left := SquadData.from_cards(_typed_cards([cards[0], cards[1], cards[2]]))
+	remove_left.remove_card(cards[0])
+	_expect(
+		remove_left.two_card_layout == SquadData.TwoCardLayout.COMPACT
+		and remove_left.get_unit_count() == 4
+		and remove_left.get_card_x_positions() == [0.0, 30.0],
+		"三卡移出水平第一张后收为 30px 紧密双卡"
+	)
+	var remove_right := SquadData.from_cards(_typed_cards([cards[0], cards[1], cards[2]]))
+	remove_right.remove_card(cards[2])
+	_expect(
+		remove_right.two_card_layout == SquadData.TwoCardLayout.COMPACT
+		and remove_right.get_unit_count() == 4
+		and remove_right.get_card_x_positions() == [0.0, 30.0],
+		"三卡移出水平第三张后同样收为 30px 紧密双卡"
+	)
 
 
 func _test_squad_view_sources_and_row_width() -> void:
@@ -556,26 +583,11 @@ func _test_card_transactions() -> void:
 	_expect(
 		front_row.get_squad_count() == 2
 		and target.get_squad_data().get_card_count() == 2
-		and target.get_squad_data().get_unit_count() == 5,
-		"抽出后来源收为展开双卡，新卡成为独立小队"
+		and target.get_squad_data().get_unit_count() == 4,
+		"抽出水平第一张后来源收为紧密双卡，新卡成为独立小队"
 	)
 
 	var extracted_slot := front_row.get_squads()[1]
-	var capped_cross_result := target.get_squad_data().duplicate_squad()
-	capped_cross_result.insert_card(original_cards[2], 2)
-	_expect(
-		not main._transfer_drop_intent(
-			_board_card_drag(front_row, extracted_slot, original_cards[2], {
-				"operation": &"merge_card",
-				"squad_index": 0,
-				"card_index": 2,
-				"target_slot": target,
-				"result_squad": capped_cross_result,
-			}),
-			front_row
-		),
-		"从三卡小队留下的展开双卡仍拒绝从侧边形成 2+3+0"
-	)
 	var removed_for_space := original_cards[1]
 	front_row.remove_card_from_squad(target, removed_for_space)
 	main.hand_cards.append(removed_for_space)

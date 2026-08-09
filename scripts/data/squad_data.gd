@@ -119,11 +119,13 @@ func get_visible_rune_counts() -> Array[int]:
 		1:
 			counts.assign([3])
 		2:
-			counts.assign(
-				[1, 3]
-				if two_card_layout == TwoCardLayout.COMPACT
-				else [2, 3]
+			var covered_card_runes := (
+				1 if two_card_layout == TwoCardLayout.COMPACT else 2
 			)
+			counts.assign([covered_card_runes, covered_card_runes])
+			var top_index := horizontal_cards.find(get_effect_source())
+			if top_index >= 0:
+				counts[top_index] = 3
 		3:
 			# 三卡固定 X=[0,30,60]，最上层卡露出完整三个符文，
 			# 另外两张各露一个；因此可见数量会随层级最上卡的位置变化。
@@ -190,10 +192,15 @@ func remove_card(card_data: CardData) -> bool:
 		return false
 
 	var old_count := horizontal_cards.size()
+	var removed_horizontal_index := horizontal_cards.find(card_data)
 	horizontal_cards.erase(card_data)
 	layer_cards.erase(card_data)
 	if old_count == 3 and horizontal_cards.size() == 2:
-		two_card_layout = TwoCardLayout.EXPANDED
+		two_card_layout = (
+			TwoCardLayout.EXPANDED
+			if removed_horizontal_index == 1
+			else TwoCardLayout.COMPACT
+		)
 	_normalize()
 	return true
 
