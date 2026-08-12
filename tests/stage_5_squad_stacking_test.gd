@@ -14,6 +14,7 @@ func _run() -> void:
 	await _test_squad_data_layout_and_orders()
 	await _test_squad_view_sources_and_row_width()
 	await _test_card_transactions()
+	await _test_external_merge_preview_anchors_to_target_boundary()
 	await _test_geometry_targeting_and_distance_feedback()
 	await _test_whole_squad_transactions()
 	await _test_capacity_rules_and_cancel_restore()
@@ -670,6 +671,102 @@ func _test_card_transactions() -> void:
 		and main.hand_cards.has(non_left_card),
 		"非最左卡回手后来源小队正确收拢"
 	)
+	await _dispose_main(main)
+
+
+func _test_external_merge_preview_anchors_to_target_boundary() -> void:
+	var main: Variant = await _create_main()
+	var front_row := main.get_node("%FrontRow") as BattlefieldRow
+	var back_row := main.get_node("%BackRow") as BattlefieldRow
+	var cards: Array[CardData] = main.hand_cards.duplicate()
+	_expect(
+		main._transfer_card(_hand_drag(cards[0]), &"board", front_row, 0),
+		"建立外部来源虚影边界测试目标"
+	)
+	_expect(
+		main._transfer_card(_hand_drag(cards[1]), &"board", back_row, 0),
+		"建立跨排虚影边界测试来源"
+	)
+	var target := front_row.get_squads()[0]
+	await process_frame
+	await process_frame
+
+	var hand_drag := _hand_drag(cards[2])
+	hand_drag["grab_local_position"] = Vector2(50.0, 68.0)
+	hand_drag["preview_scale"] = Vector2.ONE
+	var hand_pointer := Vector2(
+		_pointer_for_stack_overlap(front_row, target, hand_drag, 60.0, false),
+		68.0
+	)
+	var target_anchor_before_hand := (
+		target.get_card_view(cards[0]).get_global_transform_with_canvas()
+		* Vector2.ZERO
+	)
+	_expect(
+		front_row.preview_card_drop(hand_pointer, hand_drag),
+		"手牌从左侧直接覆盖目标时建立叠卡虚影"
+	)
+	await process_frame
+	var hand_preview := front_row.get("_preview_slot") as BoardSlot
+	var target_anchor_in_hand_preview := (
+		hand_preview.get_card_view(cards[0]).get_global_transform_with_canvas()
+		* Vector2.ZERO
+	)
+	_expect(
+		(front_row.get("_preview_intent") as Dictionary).get("operation")
+		== &"merge_card"
+		and int(
+			(front_row.get("_preview_intent") as Dictionary).get("card_index")
+		) == 0
+		and target_anchor_in_hand_preview.distance_to(
+			target_anchor_before_hand
+		) < 0.1,
+		"手牌叠卡虚影以目标原卡边界为锚点，不把原卡向右推移"
+	)
+	front_row.clear_drop_preview()
+	await process_frame
+	await process_frame
+
+	var source := back_row.get_squads()[0]
+	var cross_row_drag := _board_card_drag(back_row, source, cards[1])
+	cross_row_drag["grab_local_position"] = Vector2(50.0, 68.0)
+	cross_row_drag["preview_scale"] = Vector2.ONE
+	var cross_row_pointer := Vector2(
+		_pointer_for_stack_overlap(
+			front_row,
+			target,
+			cross_row_drag,
+			60.0,
+			false
+		),
+		68.0
+	)
+	var target_anchor_before_cross_row := (
+		target.get_card_view(cards[0]).get_global_transform_with_canvas()
+		* Vector2.ZERO
+	)
+	_expect(
+		front_row.preview_card_drop(cross_row_pointer, cross_row_drag),
+		"跨排卡从左侧直接覆盖目标时建立叠卡虚影"
+	)
+	await process_frame
+	var cross_row_preview := front_row.get("_preview_slot") as BoardSlot
+	var target_anchor_in_cross_row_preview := (
+		cross_row_preview.get_card_view(cards[0]).get_global_transform_with_canvas()
+		* Vector2.ZERO
+	)
+	_expect(
+		(front_row.get("_preview_intent") as Dictionary).get("operation")
+		== &"merge_card"
+		and int(
+			(front_row.get("_preview_intent") as Dictionary).get("card_index")
+		) == 0
+		and target_anchor_in_cross_row_preview.distance_to(
+			target_anchor_before_cross_row
+		) < 0.1,
+		"跨排叠卡虚影同样以目标原卡边界为锚点"
+	)
+	front_row.clear_drop_preview()
 	await _dispose_main(main)
 
 
@@ -1371,8 +1468,9 @@ func _test_drag_mode_feedback_and_phase_lock() -> void:
 	_expect(slot.get_active_drag_kind() == &"card" and first_view.position.y < 0.0, "优先随从时即时抽出鼠标下单卡")
 	await create_timer(0.12).timeout
 	_expect(
-		first_view.scale.x > slot.get_card_view(cards[1]).scale.x,
-		"单卡反馈期间只有鼠标下的卡牌保持悬停放大"
+		first_view.scale == slot.get_card_view(cards[1]).scale
+		and first_view.position.y == -SquadView.CARD_LIFT_OFFSET,
+		"单卡反馈只抽出鼠标下的卡牌，不再缩放像素卡面"
 	)
 	slot._on_mode_switch_timeout()
 	_expect(
@@ -1633,7 +1731,7 @@ func _test_hand_carry_clears_stale_board_hover() -> void:
 		and not interaction_shadow.visible
 		and not squad_shadow.visible
 		and target_view.position.y == 0.0,
-		"从手牌开始点击携带时清除旧战场卡的放大、阴影和小队悬停反馈"
+		"从手牌开始点击携带时清除旧战场卡的抽出、阴影和小队悬停反馈"
 	)
 	main._cancel_click_carry()
 	await _dispose_main(main)

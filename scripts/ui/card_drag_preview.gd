@@ -127,6 +127,20 @@ func get_source_card_view() -> Variant:
 	return null
 
 
+func set_preview_rune_highlights(rune_indices: Array[int]) -> void:
+	var source_card := get_source_card_view() as CardView
+	if source_card == null:
+		return
+	if (
+		source_card.is_rune_highlight_preview()
+		and source_card.get_highlighted_rune_indices() == rune_indices
+	):
+		return
+	var previous_state := source_card.get_preview_glow_state()
+	source_card.set_rune_pattern_highlights(rune_indices, true)
+	source_card.apply_preview_glow_transition(previous_state)
+
+
 func _update_visual_transform() -> void:
 	if not is_instance_valid(_card_visual):
 		return

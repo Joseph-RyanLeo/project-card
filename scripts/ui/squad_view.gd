@@ -21,6 +21,10 @@ const STACK_TARGET_ROTATION_CYCLES_PER_SECOND: float = 4.0 # 合法叠卡目标�
 const SQUAD_SHADOW_OFFSET := Vector2(5.0, 7.0) # 小队整体阴影相对小队的偏移
 const SQUAD_SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.34) # 小队整体反馈阴影的颜色与透明度
 const LAYOUT_TWEEN_DURATION: float = 0.15 # 小队随行布局让位、恢复和飞入的动画时长（秒）
+const PATTERN_LABEL_SIZE := Vector2(64.0, 14.0) # 小队牌型名称标签的固定显示尺寸
+const PATTERN_LABEL_TOP: float = 132.0 # 牌型标签顶边相对卡牌顶边的像素位置
+const REAL_PATTERN_COLOR := Color(1.0, 0.91, 0.58, 1.0) # 真实牌型名称使用的文字颜色
+const PREVIEW_PATTERN_COLOR := Color(0.58, 0.9, 1.0, 0.9) # 假设牌型名称使用的文字颜色与透明度
 
 var squad_data: SquadData
 var _preview_squad_data: SquadData
@@ -43,10 +47,12 @@ var _stack_target_feedback_strength: float = 0.0
 var _stack_target_rotation_phase: float = 0.0
 var _stack_target_snapshot_layer: Control
 var _squad_feedback_active: bool = false
+var _displayed_pattern_result: RunePatternResult
 
 @onready var stack_feedback_layer: Control = %StackFeedbackLayer
 @onready var squad_lift_layer: Control = %SquadLiftLayer
 @onready var card_visual_layer: Control = %CardVisualLayer
+@onready var pattern_label: Label = %PatternLabel
 
 
 func _ready() -> void:
@@ -107,6 +113,10 @@ func get_display_data() -> SquadData:
 	return _preview_squad_data if is_preview() else squad_data
 
 
+func get_displayed_pattern_result() -> RunePatternResult:
+	return _displayed_pattern_result
+
+
 func _get_current_visual_squad_data() -> SquadData:
 	var data := get_display_data()
 	if data == null or _drag_hidden_card == null or is_preview():
@@ -129,6 +139,28 @@ func get_last_clicked_card() -> CardData:
 
 func get_card_view(card_data: CardData) -> CardView:
 	return _card_views.get(card_data) as CardView
+
+
+func fade_card_preview_glow(
+	card_data: CardData,
+	glow_state: Dictionary
+) -> void:
+	var live_card := get_card_view(card_data)
+	if live_card != null:
+		live_card.fade_preview_glow_state(glow_state)
+	if not has_stack_target_snapshots():
+		return
+	var data := _get_current_visual_squad_data()
+	var horizontal_index := (
+		data.horizontal_cards.find(card_data) if data != null else -1
+	)
+	var snapshot := _stack_target_snapshot_layer.get_node_or_null(
+		"CardSnapshot_%d" % horizontal_index
+	) as CardSnapshotVisual
+	if snapshot != null:
+		var snapshot_card := snapshot.get_source_card_view() as CardView
+		if snapshot_card != null:
+			snapshot_card.fade_preview_glow_state(glow_state)
 
 
 func get_primary_card_view() -> CardView:
@@ -306,6 +338,8 @@ func _refresh() -> void:
 	var data := get_display_data()
 	if data == null or not data.is_valid():
 		_clear_card_views()
+		_displayed_pattern_result = null
+		pattern_label.visible = false
 		custom_minimum_size = CARD_SIZE
 		size = CARD_SIZE
 		visible = false
@@ -320,6 +354,11 @@ func _refresh() -> void:
 		return
 	visible = true
 	var display_width := float(display_data.get_display_width())
+	_refresh_pattern_label(data, display_width)
+	var highlighted_runes_by_card := _get_highlighted_runes_by_card(
+		data,
+		_displayed_pattern_result
+	)
 	custom_minimum_size = Vector2(display_width, CARD_SIZE.y)
 	size = custom_minimum_size
 	card_visual_layer.custom_minimum_size = custom_minimum_size
@@ -342,6 +381,10 @@ func _refresh() -> void:
 			Vector2(x_positions[horizontal_index], 0.0)
 		)
 		card_view.set_card_data(card_data)
+		card_view.set_rune_pattern_highlights(
+			_get_card_highlight_indices(highlighted_runes_by_card, card_data),
+			is_preview()
+		)
 		card_view.set_attribute_source_state(
 			card_data == display_data.get_action_source(),
 			card_data == display_data.get_vitals_source(),
@@ -376,6 +419,52 @@ func _refresh() -> void:
 			draw_child_index += 1
 	if _stack_target_feedback_strength > 0.0:
 		_ensure_stack_target_snapshots()
+
+
+func _refresh_pattern_label(data: SquadData, display_width: float) -> void:
+	_displayed_pattern_result = data.get_rune_pattern_result()
+	pattern_label.text = (
+		"预览·%s" % _displayed_pattern_result.get_pattern_name()
+		if is_preview()
+		else _displayed_pattern_result.get_pattern_name()
+	)
+	pattern_label.modulate = (
+		PREVIEW_PATTERN_COLOR if is_preview() else REAL_PATTERN_COLOR
+	)
+	pattern_label.custom_minimum_size = PATTERN_LABEL_SIZE
+	pattern_label.size = PATTERN_LABEL_SIZE
+	pattern_label.position = Vector2(
+		floorf((display_width - PATTERN_LABEL_SIZE.x) * 0.5),
+		PATTERN_LABEL_TOP
+	)
+	pattern_label.visible = true
+
+
+func _get_highlighted_runes_by_card(
+	data: SquadData, result: RunePatternResult
+) -> Dictionary:
+	var highlighted_by_card: Dictionary = {}
+	if data == null or result == null:
+		return highlighted_by_card
+	var visible_slots := data.get_visible_rune_slots()
+	for visible_index: int in result.participating_indices:
+		if visible_index < 0 or visible_index >= visible_slots.size():
+			continue
+		var slot := visible_slots[visible_index]
+		var card := slot["card"] as CardData
+		if not highlighted_by_card.has(card):
+			highlighted_by_card[card] = []
+		var card_indices := highlighted_by_card[card] as Array
+		card_indices.append(int(slot["rune_index"]))
+	return highlighted_by_card
+
+
+func _get_card_highlight_indices(
+	highlighted_by_card: Dictionary, card_data: CardData
+) -> Array[int]:
+	var indices: Array[int] = []
+	indices.assign(highlighted_by_card.get(card_data, []))
+	return indices
 
 
 func _sync_card_views(data: SquadData) -> void:
@@ -434,6 +523,11 @@ func _ensure_stack_target_snapshots() -> void:
 	var data := _get_current_visual_squad_data()
 	if data == null or not data.is_valid():
 		return
+	var snapshot_result := data.get_rune_pattern_result()
+	var highlighted_runes_by_card := _get_highlighted_runes_by_card(
+		data,
+		snapshot_result
+	)
 
 	_stack_target_snapshot_layer = Control.new()
 	_stack_target_snapshot_layer.name = "StackTargetSnapshotLayer"
@@ -449,7 +543,11 @@ func _ensure_stack_target_snapshots() -> void:
 		var live_card := get_card_view(card_data)
 		if live_card != null:
 			snapshot_card.showing_effect = live_card.showing_effect
-		snapshot_card.set_card_data(card_data)
+			snapshot_card.set_card_data(card_data)
+		snapshot_card.set_rune_pattern_highlights(
+			_get_card_highlight_indices(highlighted_runes_by_card, card_data),
+			is_preview()
+		)
 
 		var snapshot := CARD_SNAPSHOT_VISUAL_SCRIPT.new() as CardSnapshotVisual
 		snapshot.name = "CardSnapshot_%d" % horizontal_index

@@ -443,24 +443,13 @@ func _test_balatro_drag_preview_feel() -> void:
 	) as Panel
 	_expect(
 		interaction_shadow.visible
-		and absf(hand_card.rotation_degrees) > 0.1,
-		"悬停时会显示阴影并播放一次短促旋转颤动"
-	)
-	_expect(
-		hand_card._get_hover_punch_direction(10.0) < 0.0,
-		"鼠标从卡牌左侧进入时只向左轻晃"
-	)
-	_expect(
-		hand_card._get_hover_punch_direction(90.0) > 0.0,
-		"鼠标从卡牌右侧进入时只向右轻晃"
+		and is_zero_approx(hand_card.rotation_degrees),
+		"悬停时显示提起阴影，但不再旋转像素卡面"
 	)
 	await create_timer(0.12).timeout
 	_expect(
-		absf(
-			hand_card.scale.x / resting_scale.x
-			- CardView.HOVER_SCALE_MULTIPLIER
-		) < 0.01,
-		"准备阶段鼠标指向卡牌时会轻微放大"
+		hand_card.scale.distance_to(resting_scale) < 0.01,
+		"准备阶段鼠标指向卡牌时保持原始比例，避免符文像素模糊"
 	)
 	_expect(hand_card.z_index == 20, "悬停卡牌会提高层级避免被邻卡遮挡")
 	hand_card._on_mouse_exited()

@@ -9,6 +9,7 @@ signal card_dropped(
 	card_global_position: Vector2
 )
 signal card_click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
+signal squads_changed
 
 const BOARD_SLOT_SCENE: PackedScene = preload("res://scenes/ui/BoardSlot.tscn")
 const BATTLEFIELD_UNIT_COUNT: int = 21 # 单排可使用的战场单元总容量
@@ -47,6 +48,10 @@ var _hidden_source_slot: BoardSlot
 var _active_drag_preview_offset: Vector2 = Vector2.ZERO
 var _active_drag_visual: CardDragPreview
 var _active_stack_feedback_drag_data: Dictionary = {}
+var _merge_preview_anchor_card: CardData
+var _merge_preview_anchor_canvas_position: Vector2 = Vector2.ZERO
+var _merge_preview_alignment_revision: int = 0
+var _preview_drag_visual: CardDragPreview
 
 
 func _ready() -> void:
@@ -138,6 +143,7 @@ func add_squad(squad_data: SquadData, insert_index: int) -> BoardSlot:
 	slot.set_squad_data(squad_data)
 	_connect_slot(slot)
 	_place_card_slot(slot, insert_index)
+	squads_changed.emit()
 	return slot
 
 
@@ -149,6 +155,7 @@ func remove_squad_slot(slot: BoardSlot) -> SquadData:
 	squad_row.remove_child(slot)
 	slot.queue_free()
 	_animate_layout_next_frame(previous_positions)
+	squads_changed.emit()
 	return squad_data
 
 
@@ -164,6 +171,7 @@ func remove_card_from_squad(slot: BoardSlot, card_data: CardData) -> bool:
 		squad.remove_card(card_data)
 		slot.set_squad_data(squad)
 		slot.configure_drag_source(_drag_enabled, self)
+		squads_changed.emit()
 	return true
 
 
@@ -239,7 +247,7 @@ func preview_card_drop(at_position: Vector2, data: Variant) -> bool:
 		)
 		_ensure_drop_reservation(at_position.x, drag_data)
 		if initial_intent_valid:
-			_show_intent_preview(initial_intent)
+			_show_intent_preview(initial_intent, drag_data)
 			_preview_pointer_x = at_position.x
 			return true
 	_ensure_drop_reservation(at_position.x, drag_data)
@@ -276,7 +284,7 @@ func preview_card_drop(at_position: Vector2, data: Variant) -> bool:
 		if is_instance_valid(_preview_replaced_slot):
 			_preview_replaced_slot.visible = false
 		return true
-	_show_intent_preview(intent)
+	_show_intent_preview(intent, drag_data)
 	_preview_pointer_x = at_position.x
 	return true
 
@@ -293,6 +301,13 @@ func commit_card_drop(at_position: Vector2, data: Variant) -> void:
 	var insert_index := int(intent.get("squad_index", 0))
 	var drag_data := (data as Dictionary).duplicate()
 	drag_data["drop_intent"] = intent
+	if is_instance_valid(_preview_slot):
+		var preview_glow_states: Dictionary = {}
+		for preview_card_view: CardView in _preview_slot.get_card_views():
+			var glow_state := preview_card_view.get_preview_glow_state()
+			if not glow_state.is_empty():
+				preview_glow_states[preview_card_view.card_data] = glow_state
+		drag_data["preview_glow_states"] = preview_glow_states
 	var preview_offset: Vector2 = drag_data.get("preview_offset", Vector2.ZERO)
 	var drag_visual := drag_data.get("drag_visual") as CardDragPreview
 	# 拖动反馈继续使用带追赶延迟的快照；成功松手后的飞入起点改用
@@ -334,7 +349,37 @@ func clear_drop_preview(clear_stack_feedback: bool = true) -> void:
 		_clear_stack_target_feedback()
 
 
-func _clear_intent_preview() -> void:
+func _clear_intent_preview(
+	next_preview_squad: SquadData = null
+) -> Dictionary:
+	var carried_glow_states: Dictionary = {}
+	var dragged_card: CardData
+	if is_instance_valid(_preview_drag_visual):
+		var dragged_source := (
+			_preview_drag_visual.get_source_card_view() as CardView
+		)
+		if dragged_source != null:
+			dragged_card = dragged_source.card_data
+		_preview_drag_visual.set_preview_rune_highlights([])
+	_preview_drag_visual = null
+	if is_instance_valid(_preview_slot):
+		for card_view: CardView in _preview_slot.get_card_views():
+			var glow_state := card_view.get_preview_glow_state()
+			if glow_state.is_empty():
+				continue
+			if (
+				next_preview_squad != null
+				and next_preview_squad.contains(card_view.card_data)
+			):
+				carried_glow_states[card_view.card_data] = glow_state
+			elif card_view.card_data != dragged_card:
+				_fade_real_card_preview_glow(
+					card_view.card_data,
+					glow_state
+				)
+	_merge_preview_alignment_revision += 1
+	_merge_preview_anchor_card = null
+	_merge_preview_anchor_canvas_position = Vector2.ZERO
 	if _preview_slot != null:
 		var preview_parent := _preview_slot.get_parent()
 		if preview_parent != null:
@@ -349,6 +394,17 @@ func _clear_intent_preview() -> void:
 	_preview_pointer_x = INF
 	if has_drop_reservation():
 		_set_drop_reservation_empty_width(_reservation_width)
+	return carried_glow_states
+
+
+func _fade_real_card_preview_glow(
+	card_data: CardData,
+	glow_state: Dictionary
+) -> void:
+	for slot: BoardSlot in _get_real_slots():
+		if slot.get_squad_data().contains(card_data):
+			slot.fade_card_preview_glow(card_data, glow_state)
+			return
 
 
 func _ensure_drop_reservation(pointer_x: float, data: Dictionary) -> void:
@@ -612,9 +668,12 @@ func _intent_fits_capacity(intent: Dictionary, data: Dictionary) -> bool:
 	return used_units <= BATTLEFIELD_UNIT_COUNT
 
 
-func _show_intent_preview(intent: Dictionary) -> void:
+func _show_intent_preview(
+	intent: Dictionary, drag_data: Dictionary = {}
+) -> void:
 	var previous_positions := _capture_visible_slot_positions()
-	_clear_intent_preview()
+	var preview_squad := intent.get("result_squad") as SquadData
+	var carried_glow_states := _clear_intent_preview(preview_squad)
 	_preview_intent = intent
 	_preview_insert_index = int(intent.get("squad_index", 0))
 	var operation := intent.get("operation") as StringName
@@ -628,6 +687,22 @@ func _show_intent_preview(intent: Dictionary) -> void:
 		_reservation_insert_index = _preview_insert_index
 		_move_drop_reservation(_reservation_insert_index)
 	_preview_replaced_slot = intent.get("target_slot") as BoardSlot
+	if (
+		operation == &"merge_card"
+		and is_instance_valid(_preview_replaced_slot)
+		and drag_data.get("source_row") != self
+	):
+		var target_squad := _preview_replaced_slot.get_squad_data()
+		if target_squad != null and not target_squad.horizontal_cards.is_empty():
+			_merge_preview_anchor_card = target_squad.horizontal_cards[0]
+			var anchor_view := _preview_replaced_slot.get_card_view(
+				_merge_preview_anchor_card
+			)
+			if anchor_view != null:
+				_merge_preview_anchor_canvas_position = (
+					anchor_view.get_global_transform_with_canvas()
+					* Vector2.ZERO
+				)
 	if is_instance_valid(_preview_replaced_slot):
 		_preview_replaced_slot.visible = false
 	_preview_slot = BOARD_SLOT_SCENE.instantiate() as BoardSlot
@@ -636,7 +711,6 @@ func _show_intent_preview(intent: Dictionary) -> void:
 	else:
 		squad_row.add_child(_preview_slot)
 	_preview_slot.z_index = DROP_PREVIEW_Z_INDEX
-	var preview_squad := intent.get("result_squad") as SquadData
 	# 单卡预览只让待加入卡半透明；整队移动则保持整队虚影。
 	_preview_slot.set_preview_squad(
 		preview_squad,
@@ -644,6 +718,11 @@ func _show_intent_preview(intent: Dictionary) -> void:
 		if operation in [&"new_squad", &"merge_card"]
 		else null
 	)
+	for card_view: CardView in _preview_slot.get_card_views():
+		card_view.apply_preview_glow_transition(
+			carried_glow_states.get(card_view.card_data, {}) as Dictionary
+		)
+	_sync_dragged_card_preview_highlights(drag_data)
 	if is_instance_valid(_preview_replaced_slot):
 		_preview_slot.set_stack_target_feedback(
 			_preview_replaced_slot.get_stack_target_feedback_strength()
@@ -672,7 +751,75 @@ func _show_intent_preview(intent: Dictionary) -> void:
 			(_reservation_slot.size.x - _preview_slot.size.x) * 0.5,
 			0.0
 		)
+	if _merge_preview_anchor_card != null:
+		var alignment_revision := _merge_preview_alignment_revision
+		_align_merge_preview_to_target_anchor()
+		_align_merge_preview_to_target_anchor.call_deferred()
+		_align_merge_preview_after_layout(alignment_revision)
 	_animate_layout_next_frame(previous_positions)
+
+
+func _sync_dragged_card_preview_highlights(drag_data: Dictionary) -> void:
+	var drag_visual := drag_data.get("drag_visual") as CardDragPreview
+	var dragged_card := drag_data.get("card_data") as CardData
+	if (
+		not is_instance_valid(drag_visual)
+		or dragged_card == null
+		or not is_instance_valid(_preview_slot)
+	):
+		return
+	var preview_card_view := _preview_slot.get_card_view(dragged_card)
+	var highlighted_indices: Array[int] = []
+	if preview_card_view != null:
+		highlighted_indices.assign(
+			preview_card_view.get_highlighted_rune_indices()
+		)
+	_preview_drag_visual = drag_visual
+	_preview_drag_visual.set_preview_rune_highlights(highlighted_indices)
+
+
+func _align_merge_preview_after_layout(revision: int) -> void:
+	await get_tree().process_frame
+	if revision == _merge_preview_alignment_revision:
+		_align_merge_preview_to_target_anchor()
+
+
+func _align_merge_preview_to_target_anchor() -> void:
+	if (
+		_merge_preview_anchor_card == null
+		or not is_instance_valid(_preview_slot)
+	):
+		return
+	var preview_anchor_view := _preview_slot.get_card_view(
+		_merge_preview_anchor_card
+	)
+	if preview_anchor_view == null:
+		return
+	var preview_canvas_position := (
+		preview_anchor_view.get_global_transform_with_canvas()
+		* Vector2.ZERO
+	)
+	var canvas_delta := (
+		_merge_preview_anchor_canvas_position - preview_canvas_position
+	)
+	var visual_parent := _preview_slot.card_visual_layer.get_parent() as Control
+	var visual_parent_inverse := (
+		visual_parent.get_global_transform_with_canvas().affine_inverse()
+	)
+	var visual_local_delta := (
+		visual_parent_inverse * _merge_preview_anchor_canvas_position
+		- visual_parent_inverse * preview_canvas_position
+	)
+	_preview_slot.card_visual_layer.position += visual_local_delta
+	var label_parent := _preview_slot.pattern_label.get_parent() as Control
+	var label_parent_inverse := (
+		label_parent.get_global_transform_with_canvas().affine_inverse()
+	)
+	var label_local_delta := (
+		label_parent_inverse * (preview_canvas_position + canvas_delta)
+		- label_parent_inverse * preview_canvas_position
+	)
+	_preview_slot.pattern_label.position += label_local_delta
 
 
 func _same_intent(left: Dictionary, right: Dictionary) -> bool:

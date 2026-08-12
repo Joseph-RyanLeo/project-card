@@ -1,6 +1,22 @@
-[gd_scene format=3 uid="uid://h8d2kcrlgbxx"]
+[gd_scene load_steps=3 format=3 uid="uid://h8d2kcrlgbxx"]
 
 [ext_resource type="Script" uid="uid://b3035ae3jd5ej" path="res://scripts/ui/board_slot.gd" id="1_board_slot"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pattern"]
+content_margin_left = 3.0
+content_margin_top = 1.0
+content_margin_right = 3.0
+content_margin_bottom = 1.0
+bg_color = Color(0.047, 0.059, 0.071, 0.88)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.82, 0.68, 0.31, 0.92)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
 
 [node name="BoardSlot" type="PanelContainer" unique_id=1635154848]
 custom_minimum_size = Vector2(99, 136)
@@ -31,3 +47,20 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+
+[node name="PatternLabel" type="Label" parent="StackFeedbackLayer"]
+unique_name_in_owner = true
+z_index = 4090
+custom_minimum_size = Vector2(64, 14)
+layout_mode = 0
+offset_right = 64.0
+offset_bottom = 14.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.91, 0.58, 1)
+theme_override_colors/font_outline_color = Color(0.02, 0.025, 0.03, 1)
+theme_override_constants/outline_size = 1
+theme_override_font_sizes/font_size = 9
+theme_override_styles/normal = SubResource("StyleBoxFlat_pattern")
+text = "混乱"
+horizontal_alignment = 1
+vertical_alignment = 1

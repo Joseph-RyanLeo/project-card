@@ -21,6 +21,7 @@ var _click_carry_data: Dictionary = {}
 var _click_carry_preview: Control
 var _hand_layout_animation_revision: int = 0
 var _active_hand_entry_animations: int = 0
+var _battlefield_clock_check_queued: bool = false
 
 @export var hand_cards: Array[CardData] = [] # 初始真实手牌及其排列顺序
 @export var card_preview_scale: float = 2.0 # 左侧选中卡牌大预览的缩放倍率
@@ -43,6 +44,8 @@ var _active_hand_entry_animations: int = 0
 
 
 func _ready() -> void:
+	if not _battlefield_has_active_rune_effects():
+		CardView.reset_active_rune_flow()
 	start_battle_button.pressed.connect(_on_start_battle_button_pressed)
 	card_art_tuner_button.pressed.connect(_on_card_art_tuner_button_pressed)
 	drag_mode_button.toggled.connect(_on_drag_mode_toggled)
@@ -130,9 +133,33 @@ func _connect_board_rows() -> void:
 	for row: BattlefieldRow in [front_row, back_row]:
 		row.board_slot_clicked.connect(_on_board_slot_clicked)
 		row.card_dropped.connect(_on_board_card_dropped)
+		row.squads_changed.connect(_on_battlefield_squads_changed)
 		row.card_click_carry_requested.connect(
 			_on_click_carry_requested
 		)
+
+
+func _on_battlefield_squads_changed() -> void:
+	if _battlefield_clock_check_queued:
+		return
+	_battlefield_clock_check_queued = true
+	_reset_rune_flow_if_no_battlefield_effects.call_deferred()
+
+
+func _reset_rune_flow_if_no_battlefield_effects() -> void:
+	_battlefield_clock_check_queued = false
+	# 跨排移动会先移除后加入；延迟到事务结束再检查，避免中途误重置。
+	if not _battlefield_has_active_rune_effects():
+		CardView.reset_active_rune_flow()
+
+
+func _battlefield_has_active_rune_effects() -> bool:
+	for row: BattlefieldRow in [front_row, back_row]:
+		for slot: BoardSlot in row.get_squads():
+			for card_view: CardView in slot.get_card_views():
+				if not card_view.get_highlighted_rune_indices().is_empty():
+					return true
+	return false
 
 
 func _apply_card_preview_scale() -> void:
@@ -723,6 +750,7 @@ func _transfer_card(
 	else:
 		play_area_label.text = "已将 %s 放入%s" % [card_data.display_name, target_row.row_title]
 	_refresh_drag_availability()
+	_on_battlefield_squads_changed()
 	return true
 
 
@@ -825,6 +853,16 @@ func _transfer_drop_intent(
 		_build_hand_cards()
 	selected_board_row = target_row
 	_select_card(card_data)
+	var preview_glow_states := drag_data.get(
+		"preview_glow_states", {}
+	) as Dictionary
+	if not preview_glow_states.is_empty() and is_instance_valid(selected_board_slot):
+		for preview_card: CardData in preview_glow_states.keys():
+			var dropped_card_view := selected_board_slot.get_card_view(preview_card)
+			if dropped_card_view != null:
+				dropped_card_view.fade_preview_glow_state(
+					preview_glow_states[preview_card] as Dictionary
+				)
 	if entry_global_position is Vector2 and is_instance_valid(selected_board_slot):
 		_animate_board_card_entry.call_deferred(
 			selected_board_slot,
@@ -832,6 +870,7 @@ func _transfer_drop_intent(
 		)
 	play_area_label.text = "已将 %s 放入%s的小队" % [card_data.display_name, target_row.row_title]
 	_refresh_drag_availability()
+	_on_battlefield_squads_changed()
 	return true
 
 
@@ -865,6 +904,7 @@ func _transfer_whole_squad(
 		_animate_board_card_entry.call_deferred(selected_board_slot, entry_global_position)
 	play_area_label.text = "已整体移动小队到%s" % target_row.row_title
 	_refresh_drag_availability()
+	_on_battlefield_squads_changed()
 	return true
 
 
@@ -894,6 +934,7 @@ func _transfer_squad_to_hand(
 	_select_card(entering_card)
 	play_area_label.text = "已按水平顺序拆开小队并追加回手牌"
 	_refresh_drag_availability()
+	_on_battlefield_squads_changed()
 	return true
 
 

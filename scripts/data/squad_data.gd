@@ -12,6 +12,7 @@ const COMPACT_DOUBLE_UNIT_COUNT: int = 4 # 紧密双卡小队占用的战场单�
 const EXPANDED_DOUBLE_UNIT_COUNT: int = 5 # 展开双卡小队占用的战场单元数
 const TRIPLE_UNIT_COUNT: int = 5 # 三卡小队占用的战场单元数
 const CARD_WIDTH: int = 99 # 每张完整随从卡保持的固定裸卡宽度
+const RUNE_SLOT_CENTER_X: Array[float] = [19.5, 49.5, 79.5] # 三个符文槽相对裸卡左边缘的中心 X
 
 @export var horizontal_cards: Array[CardData] = [] # 小队从左到右的卡牌顺序
 @export var layer_cards: Array[CardData] = [] # 从最上层到最下层保存，第一项提供卡牌效果
@@ -115,25 +116,76 @@ func get_card_x_positions() -> Array[float]:
 
 func get_visible_rune_counts() -> Array[int]:
 	var counts: Array[int] = []
-	match horizontal_cards.size():
-		1:
-			counts.assign([3])
-		2:
-			var covered_card_runes := (
-				1 if two_card_layout == TwoCardLayout.COMPACT else 2
-			)
-			counts.assign([covered_card_runes, covered_card_runes])
-			var top_index := horizontal_cards.find(get_effect_source())
-			if top_index >= 0:
-				counts[top_index] = 3
-		3:
-			# 三卡固定 X=[0,30,60]，最上层卡露出完整三个符文，
-			# 另外两张各露一个；因此可见数量会随层级最上卡的位置变化。
-			counts.assign([1, 1, 1])
-			var top_index := horizontal_cards.find(get_effect_source())
-			if top_index >= 0:
-				counts[top_index] = 3
+	counts.resize(horizontal_cards.size())
+	counts.fill(0)
+	for slot: Dictionary in get_visible_rune_slots():
+		var card_index := int(slot["card_index"])
+		counts[card_index] += 1
 	return counts
+
+
+func get_visible_rune_slots() -> Array[Dictionary]:
+	var visible_slots: Array[Dictionary] = []
+	var x_positions := get_card_x_positions()
+	for card_index: int in horizontal_cards.size():
+		var card_data := horizontal_cards[card_index]
+		var card_layer_index := layer_cards.find(card_data)
+		if card_layer_index < 0:
+			continue
+		var rune_count := mini(card_data.runes.size(), RUNE_SLOT_CENTER_X.size())
+		for rune_index: int in rune_count:
+			var world_center_x := (
+				x_positions[card_index] + RUNE_SLOT_CENTER_X[rune_index]
+			)
+			if _is_rune_center_covered(world_center_x, card_layer_index, x_positions):
+				continue
+			visible_slots.append({
+				"card": card_data,
+				"card_index": card_index,
+				"rune_index": rune_index,
+				"element": card_data.runes[rune_index],
+				"world_center_x": world_center_x,
+			})
+
+	# 水平顺序只能确定卡牌的左、中、右位置；这里再按每个真实可见
+	# 槽位的画面中心排序，才得到玩家实际看到的从左到右符文序列。
+	visible_slots.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+		return float(left["world_center_x"]) < float(right["world_center_x"])
+	)
+	return visible_slots
+
+
+func get_visible_runes() -> Array[CardData.ElementType]:
+	var visible_runes: Array[CardData.ElementType] = []
+	for slot: Dictionary in get_visible_rune_slots():
+		visible_runes.append(slot["element"] as CardData.ElementType)
+	return visible_runes
+
+
+func get_rune_pattern_result() -> RunePatternResult:
+	return RunePatternRules.identify(get_visible_runes())
+
+
+func _is_rune_center_covered(
+	world_center_x: float,
+	card_layer_index: int,
+	x_positions: Array[float]
+) -> bool:
+	# layer_cards 从最上层到最下层保存，所以当前卡之前的每一张卡
+	# 都可能遮住它。符文中心落入上层完整卡面的水平范围时，该槽位
+	# 在画面中不可见，也就不能进入牌型。
+	for upper_layer_index: int in card_layer_index:
+		var upper_card := layer_cards[upper_layer_index]
+		var upper_horizontal_index := horizontal_cards.find(upper_card)
+		if upper_horizontal_index < 0:
+			continue
+		var upper_left_x := x_positions[upper_horizontal_index]
+		if (
+			world_center_x > upper_left_x
+			and world_center_x < upper_left_x + CARD_WIDTH
+		):
+			return true
+	return false
 
 
 func can_accept_external_card_at(horizontal_index: int) -> bool:
