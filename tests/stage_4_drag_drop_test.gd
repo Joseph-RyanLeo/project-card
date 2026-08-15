@@ -1,5 +1,10 @@
 extends SceneTree
 
+## 阶段 4 的无窗口集成回归脚本。
+##
+## 每个用例都会实例化真实 Main 场景，模拟输入或直接调用公开事务入口，
+## 再检查像素布局、手牌顺序、拖拽视觉和阶段锁定。失败数最终作为进程退出码。
+
 const MAIN_SCENE: PackedScene = preload("res://scenes/Main.tscn")
 const CARD_ART_TUNER_SCENE: PackedScene = preload(
 	"res://scenes/tools/CardArtTuner.tscn"
@@ -37,6 +42,7 @@ func _run() -> void:
 	quit(_failure_count)
 
 
+# --- 画布、卡面像素与调节工具 ---
 func _test_virtual_canvas_settings() -> void:
 	_expect(
 		ProjectSettings.get_setting("display/window/size/viewport_width") == 1280
@@ -354,10 +360,6 @@ func _test_card_pixel_layout() -> void:
 
 	var hand_card := _hand_card_view(main, 0)
 	var hand_slot := hand_card.get_parent() as Control
-	hand_card._animate_interaction_scale(
-		CardView.PRESSED_SCALE_MULTIPLIER,
-		true
-	)
 	var safe_slot_rect := hand_slot.get_global_rect().grow(0.1)
 	var card_transform := hand_card.get_global_transform_with_canvas()
 	var visual_is_inside_slot := true
@@ -372,7 +374,7 @@ func _test_card_pixel_layout() -> void:
 			break
 	_expect(
 		visual_is_inside_slot,
-		"手牌槽为按下放大和越界图标预留安全边，不会裁掉卡牌内容"
+		"手牌槽为抬起阴影和越界图标预留安全边，不会裁掉卡牌内容"
 	)
 	var hand_scroll := main.get_node(
 		"RootMargin/Layout/HandPanel/HandContent/HandScroll"
@@ -382,7 +384,7 @@ func _test_card_pixel_layout() -> void:
 	_expect(
 		hand_slot_rect.position.y >= hand_scroll_rect.position.y
 		and hand_slot_rect.end.y <= hand_scroll_rect.end.y,
-		"手牌滚动区高度包含放大安全边"
+		"手牌滚动区高度包含抬起安全边"
 	)
 	hand_card._reset_interaction_visual()
 
@@ -432,10 +434,12 @@ func _test_card_art_tuner_preview() -> void:
 	await process_frame
 
 
+# --- 拖拽输入、点击携带和手牌让位 ---
 func _test_balatro_drag_preview_feel() -> void:
 	var main: Variant = await _create_main()
 	var hand_card := _hand_card_view(main, 0)
 	var resting_scale := hand_card.scale
+	var resting_position := hand_card.position
 	hand_card._on_mouse_entered()
 	await create_timer(0.04).timeout
 	var interaction_shadow := hand_card.get_node(
@@ -443,20 +447,36 @@ func _test_balatro_drag_preview_feel() -> void:
 	) as Panel
 	_expect(
 		interaction_shadow.visible
-		and is_zero_approx(hand_card.rotation_degrees),
-		"悬停时显示提起阴影，但不再旋转像素卡面"
+		and absf(hand_card.rotation_degrees) > 0.1,
+		"手牌鼠标进入时显示阴影并播放一次短促方向轻晃"
 	)
-	await create_timer(0.12).timeout
+	_expect(
+		hand_card._get_hover_punch_direction(10.0) < 0.0
+		and hand_card._get_hover_punch_direction(90.0) > 0.0,
+		"鼠标从卡牌左/右半边进入时分别向同方向倾斜"
+	)
+	await create_timer(CardView.HOVER_PUNCH_DURATION + 0.05).timeout
 	_expect(
 		hand_card.scale.distance_to(resting_scale) < 0.01,
-		"准备阶段鼠标指向卡牌时保持原始比例，避免符文像素模糊"
+		"悬停轻晃不恢复放大效果，卡牌始终保持原始比例"
 	)
+	_expect(absf(hand_card.rotation_degrees) < 0.1, "手牌单次轻晃结束后自动回正")
 	_expect(hand_card.z_index == 20, "悬停卡牌会提高层级避免被邻卡遮挡")
+	_expect(
+		hand_card.position.is_equal_approx(
+			resting_position + Vector2(0.0, -CardView.HAND_HOVER_LIFT_OFFSET)
+		),
+		"手牌悬停时会像抽牌一样向上移出"
+	)
 	hand_card._on_mouse_exited()
 	await create_timer(0.12).timeout
 	_expect(
 		hand_card.scale.distance_to(resting_scale) < 0.01,
 		"鼠标离开后卡牌恢复原有显示比例"
+	)
+	_expect(
+		hand_card.position.is_equal_approx(resting_position),
+		"鼠标离开后手牌会回到原位"
 	)
 	_expect(not interaction_shadow.visible, "鼠标离开后悬停阴影隐藏")
 
@@ -498,15 +518,17 @@ func _test_balatro_drag_preview_feel() -> void:
 		== Vector2.ONE * CARD_SNAPSHOT_VISUAL_SCRIPT.SUPERSAMPLE_FACTOR
 		and preview_card.texture_filter
 		== CanvasItem.TEXTURE_FILTER_LINEAR,
-		"活动卡先按整数倍率渲染，再作为单张纹理执行平滑变换"
+		"活动卡先按整数倍率渲染，再作为完整纹理执行平滑变换"
+	)
+	_expect(
+		snapshot_card.pivot_offset == Vector2.ZERO,
+		"拖拽快照使用左上角缩放支点，不会把卡面推出捕获区域（实际：%s）"
+		% snapshot_card.pivot_offset
 	)
 	var source_scale: Vector2 = drag_data["preview_scale"]
 	_expect(
-		absf(
-			preview_card.scale.x / source_scale.x
-			- CardDragPreview.DRAG_SCALE_MULTIPLIER
-		) < 0.01,
-		"按下并拖动时会进一步放大以强化拿起反馈"
+		preview_card.scale.distance_to(source_scale) < 0.01,
+		"鼠标拖动中的实体卡保持原始尺寸，不再放大像素"
 	)
 	var transformed_grab_position: Vector2 = (
 		preview_card.get_global_transform_with_canvas()
@@ -517,7 +539,7 @@ func _test_balatro_drag_preview_feel() -> void:
 	)
 	_expect(
 		transformed_grab_position.distance_to(drag_visual.global_position) < 1.0,
-		"拖拽缩放仍以实际鼠标按下位置为支点"
+		"拖拽实体仍以实际鼠标按下位置为支点"
 	)
 
 	drag_visual.global_position += Vector2(80.0, 0.0)
@@ -989,6 +1011,10 @@ func _test_hand_reorder_and_effect_drag() -> void:
 			is_equal_approx(preview_card.modulate.a, 0.4),
 			"手牌插入虚影透明度为 40%"
 		)
+		_expect(
+			preview_card.position.is_equal_approx(source_card.position),
+			"手牌插入虚影保持槽内原位，不跟随实体卡悬停上移"
+		)
 
 	var other_hand_card_is_moving := false
 	for hand_slot: Control in main._get_visible_hand_card_slots():
@@ -1153,6 +1179,7 @@ func _test_hand_placement_and_preview_positions() -> void:
 	await _dispose_main(main)
 
 
+# --- 战场往返、满排容量与非准备阶段锁定 ---
 func _test_board_move_return_and_cancel() -> void:
 	var main: Variant = await _create_main()
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
@@ -1189,7 +1216,6 @@ func _test_board_move_return_and_cancel() -> void:
 		not same_row_started_extra_animation,
 		"同排松手时真实卡直接替换虚影，不再额外从左向右滑动"
 	)
-
 	var cross_source := _real_slots(front_row)[1]
 	var cross_data := _board_drag(front_row, cross_source)
 	front_row._begin_card_drag(cross_data)
@@ -1391,6 +1417,7 @@ func _test_phase_click_and_button_regressions() -> void:
 	await _dispose_main(main)
 
 
+# --- 场景夹具、拖拽数据与输入事件辅助函数 ---
 func _create_main() -> Variant:
 	var main := MAIN_SCENE.instantiate()
 	root.add_child(main)

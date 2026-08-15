@@ -2,6 +2,12 @@
 class_name CardView
 extends Panel
 
+## 单张卡牌的像素级显示与输入组件。
+##
+## CardData 是内容来源；本脚本负责把它渲染为固定 99×136 卡面，并生成统一拖拽数据。
+## 小队内的水平位置、层级和牌型不在这里判断，而由 SquadView / SquadData 决定。
+## `@tool` 让美术调节场景在编辑器中也能实时看到导出参数的效果。
+
 signal card_clicked(card_data: CardData)
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 signal hand_source_visibility_changing
@@ -30,9 +36,11 @@ const CARD_NAME_FRAME_TEXTURE: Texture2D = preload(
 const LARGE_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_large.fnt")
 const SMALL_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_small.fnt")
 const LAYOUT_TWEEN_DURATION: float = 0.15 # 卡牌让位、归位和飞入目标位置的动画时长（秒）
-const INTERACTION_TWEEN_DURATION: float = 0.10 # 悬停、按压缩放和阴影移动的动画时长（秒）
-const PRESSED_SCALE_MULTIPLIER: float = 1.06 # 鼠标按住卡牌时的缩放倍率
-const RESTING_SHADOW_OFFSET := Vector2(3.0, 4.0) # 悬停状态下阴影相对卡牌的偏移
+const INTERACTION_TWEEN_DURATION: float = 0.10 # 悬停、按压时阴影移动的动画时长（秒）
+const HOVER_PUNCH_ANGLE: float = 5.0 # 鼠标进入实体卡左/右半边时，同方向轻晃的最大角度
+const HOVER_PUNCH_DURATION: float = 0.16 # 悬停单方向轻晃并复位的总时长（秒）
+const HAND_HOVER_LIFT_OFFSET: float = 7.0 # 手牌悬停时向上抽出的像素距离
+const RESTING_SHADOW_OFFSET := Vector2(6.0, 7.0) # 悬停状态下阴影相对卡牌的偏移
 const PRESSED_SHADOW_OFFSET := Vector2(6.0, 8.0) # 按住状态下阴影相对卡牌的偏移
 const INTERACTION_SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.28) # 悬停和按压阴影的颜色及透明度
 const CARD_LAYER_Z_STEP: int = 100 # 小队相邻整卡之间的层级间隔，必须大于卡牌内部所有子图层与悬停增量
@@ -45,10 +53,6 @@ const ACTIVE_RUNE_FRAME_SECONDS: Array[float] = [
 const PREVIEW_ACTIVE_RUNE_ALPHA: float = 0.62 # 假设牌型中流光符文相对真实结果的透明度
 const ACTIVE_RUNE_CYCLE_SECONDS: float = 2.0 # 一轮完整流光动画的总时长（秒）
 const ACTIVE_RUNE_START_PHASE_SECONDS: float = 1.4 # 新一轮真实流光首次出现时使用的精灵表时间相位（秒）
-const RUNE_GLOW_SIZE := Vector2(33.0, 33.0) # 参与牌型的元素色光晕覆盖尺寸
-const PREVIEW_RUNE_GLOW_ALPHA: float = 1.0 # 牌型预览常亮光晕的目标透明度
-const PREVIEW_RUNE_GLOW_FADE_IN_SECONDS: float = 0.2 # 新预览高亮从透明到常亮的渐显时长（秒）
-const PREVIEW_RUNE_GLOW_FADE_OUT_SECONDS: float = 0.5 # 取消、切换或确认预览时旧高亮残影的渐隐时长（秒）
 @export_group("Card Pixel Layout")
 @export var card_size: Vector2 = Vector2(99, 136) # 裸卡的基准像素尺寸
 @export var title_area_position: Vector2 = Vector2(21, 4) # 卡牌名字文字区域的左上角坐标
@@ -85,6 +89,7 @@ const PREVIEW_RUNE_GLOW_FADE_OUT_SECONDS: float = 0.5 # 取消、切换或确认
 
 var _card_data: CardData
 var showing_effect: bool = false
+# 拖拽来源信息由手牌或 SquadView 注入，CardView 不直接修改来源容器。
 var _drag_enabled: bool = false
 var _drag_source_type: StringName
 var _drag_source_row: Node
@@ -94,23 +99,23 @@ var _left_button_pressed: bool = false
 var _active_drag_preview_offset: Vector2 = Vector2.ZERO
 var _active_drag_visual: CardDragPreview
 var _layout_tween: Tween
-var _interaction_tween: Tween
+var _hover_punch_tween: Tween
 var _shadow_tween: Tween
-var _base_visual_scale: Vector2 = Vector2.ONE
 var _layout_resting_position: Vector2 = Vector2.ZERO
 var _mouse_hovered: bool = false
 var _snapshot_mode: bool = false
 var _interaction_shadow: Panel
 var _external_lift: float = 0.0
 var _resting_z_index: int = 0
+# 高亮索引描述当前牌型参与的三个槽位；流光节点本身按需创建并等待全局周期。
 var _highlighted_rune_indices: Array[int] = []
 var _rune_highlight_is_preview: bool = false
+var _dim_preview_active_runes: bool = true
 var _active_rune_icons: Dictionary = {}
 var _active_rune_join_cycles: Dictionary = {}
-var _preview_rune_glows: Dictionary = {}
-var _preview_glow_tweens: Dictionary = {}
 var _active_rune_frame: int = -1
 
+# 所有真实卡共享一条静态时间轴；新加入的符文等到下一轮再同步开始。
 static var _active_rune_flow_epoch_msec: int = -1
 static var _active_rune_flow_cached_process_frame: int = -1
 static var _active_rune_flow_cached_elapsed_seconds: float = 0.0
@@ -135,14 +140,17 @@ static var _active_rune_flow_initial_process_frame: int = -1
 @onready var armor_icon: TextureRect = %ArmorIcon
 @onready var armor_label: Label = %ArmorLabel
 @onready var priority_label: Label = %PriorityLabel
-@onready var rune_glow_layer: Control = %RuneGlowLayer
 @onready var bottom_panel: PanelContainer = %BottomPanel
 @onready var rune_row: HBoxContainer = %RuneRow
 @onready var effect_text_label: Label = %EffectTextLabel
 
 
+# --- 生命周期、鼠标输入与拖拽数据 ---
 func _ready() -> void:
 	_layout_resting_position = position
+	# 普通实体卡围绕中心轻晃；尚未入树就被配置成快照的卡必须保持
+	# 左上角支点，避免稍后进入 SceneTree 时重新覆盖快照捕获变换。
+	pivot_offset = Vector2.ZERO if _snapshot_mode else card_size * 0.5
 	_create_interaction_shadow()
 	_apply_pixel_layout()
 	_ignore_mouse_on_children(self)
@@ -173,12 +181,9 @@ func _gui_input(event: InputEvent) -> void:
 					and _drag_source_slot.has_method("lock_drag_subject")
 				):
 					_drag_source_slot.lock_drag_subject(card_data)
-				if _drag_enabled:
-					_set_interaction_shadow_visible(true)
-					_animate_shadow_offset(PRESSED_SHADOW_OFFSET)
-					_animate_interaction_scale(
-						PRESSED_SCALE_MULTIPLIER
-					)
+					if _drag_enabled:
+						_set_interaction_shadow_visible(true)
+						_animate_shadow_offset(PRESSED_SHADOW_OFFSET)
 				card_clicked.emit(card_data)
 			elif _left_button_pressed:
 				_left_button_pressed = false
@@ -229,9 +234,7 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 
 
 func _build_drag_data(at_position: Vector2) -> Dictionary:
-	var drag_source_scale := (
-		_base_visual_scale if _drag_enabled else scale
-	)
+	var drag_source_scale := scale
 	var drag_data := {
 		"kind": &"card",
 		"card_data": card_data,
@@ -354,22 +357,18 @@ func _animate_cancelled_drag_return(
 		animate_from_global_position(return_global_position)
 
 
+# --- 拖拽来源配置、悬停反馈与卡牌布局动画 ---
 func configure_drag_source(
 	enabled: bool,
 	source_type: StringName = &"",
 	source_row: Node = null,
 	source_slot: Control = null
 ) -> void:
-	var was_drag_enabled := _drag_enabled
 	_drag_enabled = enabled
 	_drag_source_type = source_type
 	_drag_source_row = source_row
 	_drag_source_slot = source_slot
-	if _drag_enabled and not was_drag_enabled:
-		_base_visual_scale = scale
-		pivot_offset = card_size * 0.5
-		_animate_interaction_scale(1.0, true)
-	elif not _drag_enabled and was_drag_enabled:
+	if not _drag_enabled:
 		_reset_interaction_visual()
 	mouse_default_cursor_shape = (
 		Control.CURSOR_DRAG if _drag_enabled else Control.CURSOR_ARROW
@@ -378,21 +377,25 @@ func configure_drag_source(
 
 func set_snapshot_mode(value: bool) -> void:
 	_snapshot_mode = value
+	pivot_offset = Vector2.ZERO if _snapshot_mode else card_size * 0.5
 	if _snapshot_mode:
 		_reset_interaction_visual()
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 func _on_mouse_entered() -> void:
-	show_pointer_hover_feedback()
+	show_pointer_hover_feedback(true)
 
 
-func show_pointer_hover_feedback() -> void:
+func show_pointer_hover_feedback(play_rotation_punch: bool = false) -> void:
 	_mouse_hovered = true
 	if _drag_enabled and not _left_button_pressed and not _snapshot_mode:
 		z_index = _resting_z_index + 20
 		_set_interaction_shadow_visible(true)
 		_animate_shadow_offset(RESTING_SHADOW_OFFSET)
+		_set_hand_hover_lift(true)
+		if play_rotation_punch:
+			_play_hover_rotation_punch()
 
 
 func _on_mouse_exited() -> void:
@@ -400,43 +403,33 @@ func _on_mouse_exited() -> void:
 	if _drag_enabled and not _left_button_pressed:
 		z_index = _resting_z_index
 		_set_interaction_shadow_visible(false)
+		_set_hand_hover_lift(false)
 
 
 func clear_pointer_hover_feedback() -> void:
 	# Godot 开始另一次拖拽或点击携带时不一定会补发旧卡的 mouse_exited。
-	# 这里提供显式兜底，避免旧卡继续保留悬停阴影。
+	# 这里只清理持续反馈；已经开始的单次轻晃会自然回正，避免小队模式
+	# 在同一帧切换反馈对象时把战场卡的入场轻晃截断。
 	_mouse_hovered = false
 	if not _left_button_pressed:
-		_reset_interaction_visual()
-
-
-func _animate_interaction_scale(
-	multiplier: float,
-	immediate: bool = false
-) -> void:
-	if _interaction_tween != null and _interaction_tween.is_valid():
-		_interaction_tween.kill()
-
-	var target_scale := _base_visual_scale * multiplier
-	z_index = _resting_z_index + 20 if multiplier > 1.0 else _resting_z_index
-	if immediate:
-		scale = target_scale
-		return
-
-	_interaction_tween = create_tween()
-	_interaction_tween.set_trans(Tween.TRANS_QUAD)
-	_interaction_tween.set_ease(Tween.EASE_OUT)
-	_interaction_tween.tween_property(
-		self,
-		"scale",
-		target_scale,
-		INTERACTION_TWEEN_DURATION
-	)
+		z_index = _resting_z_index
+		_set_interaction_shadow_visible(false)
+		_set_hand_hover_lift(false)
 
 
 func _reset_interaction_visual() -> void:
-	_animate_interaction_scale(1.0, true)
+	z_index = _resting_z_index
+	if _hover_punch_tween != null and _hover_punch_tween.is_valid():
+		_hover_punch_tween.kill()
+	rotation_degrees = 0.0
 	_set_interaction_shadow_visible(false)
+	set_external_lift(0.0)
+
+
+func _set_hand_hover_lift(value: bool) -> void:
+	# 战场卡的抽出距离由 SquadView 决定；CardView 只直接控制手牌。
+	if _drag_source_type == &"hand":
+		set_external_lift(HAND_HOVER_LIFT_OFFSET if value else 0.0)
 
 
 func _create_interaction_shadow() -> void:
@@ -482,6 +475,36 @@ func _animate_shadow_offset(target_offset: Vector2) -> void:
 	)
 
 
+func _play_hover_rotation_punch() -> void:
+	if _snapshot_mode:
+		return
+	if _hover_punch_tween != null and _hover_punch_tween.is_valid():
+		_hover_punch_tween.kill()
+	rotation_degrees = 0.0
+	var punch_direction := _get_hover_punch_direction(
+		get_local_mouse_position().x
+	)
+	_hover_punch_tween = create_tween()
+	_hover_punch_tween.set_trans(Tween.TRANS_SINE)
+	_hover_punch_tween.set_ease(Tween.EASE_OUT)
+	_hover_punch_tween.tween_property(
+		self,
+		"rotation_degrees",
+		HOVER_PUNCH_ANGLE * punch_direction,
+		HOVER_PUNCH_DURATION * 0.45
+	)
+	_hover_punch_tween.tween_property(
+		self,
+		"rotation_degrees",
+		0.0,
+		HOVER_PUNCH_DURATION * 0.55
+	)
+
+
+func _get_hover_punch_direction(pointer_local_x: float) -> float:
+	return -1.0 if pointer_local_x < card_size.x * 0.5 else 1.0
+
+
 func animate_from_global_position(previous_global_position: Vector2) -> void:
 	if not visible:
 		return
@@ -507,6 +530,10 @@ func animate_from_global_position(previous_global_position: Vector2) -> void:
 
 func set_external_lift(pixels: float) -> void:
 	_external_lift = maxf(pixels, 0.0)
+	# 入树前尚未记录真实静止坐标，此时只保存状态；否则 configure_drag_source(false)
+	# 会把手牌虚影预先设置好的安全边距位置误写成 (0, 0)。
+	if not is_node_ready():
+		return
 	if _layout_tween != null and _layout_tween.is_valid():
 		_layout_tween.kill()
 	position = _layout_resting_position + Vector2(0.0, -_external_lift)
@@ -551,6 +578,7 @@ func is_layout_animating() -> bool:
 	)
 
 
+# --- 卡牌数据与牌型流光公开接口 ---
 func set_card_data(value: CardData) -> void:
 	_card_data = value
 
@@ -559,17 +587,21 @@ func set_card_data(value: CardData) -> void:
 
 
 func set_rune_pattern_highlights(
-	rune_indices: Array[int], is_preview_highlight: bool = false
+	rune_indices: Array[int],
+	is_preview_highlight: bool = false,
+	dim_preview_active_runes: bool = true
 ) -> void:
 	if not is_preview_highlight and not rune_indices.is_empty():
 		_start_active_rune_flow_if_needed()
 	if (
 		_highlighted_rune_indices == rune_indices
 		and _rune_highlight_is_preview == is_preview_highlight
+		and _dim_preview_active_runes == dim_preview_active_runes
 	):
 		return
 	_highlighted_rune_indices.assign(rune_indices)
 	_rune_highlight_is_preview = is_preview_highlight
+	_dim_preview_active_runes = dim_preview_active_runes
 	if is_node_ready() and not showing_effect:
 		_refresh_runes()
 
@@ -584,86 +616,6 @@ func is_rune_highlight_preview() -> bool:
 
 func get_active_rune_animation_count() -> int:
 	return _active_rune_icons.size()
-
-
-func get_rune_glow_count() -> int:
-	return rune_glow_layer.get_child_count() if is_node_ready() else 0
-
-
-func get_preview_glow_state() -> Dictionary:
-	var state: Dictionary = {}
-	if not is_node_ready():
-		return state
-	for child: Node in rune_glow_layer.get_children():
-		var glow := child as Control
-		if glow == null or not glow.has_meta(&"rune_slot_index"):
-			continue
-		var slot_index := int(glow.get_meta(&"rune_slot_index"))
-		state[slot_index] = maxf(
-			float(state.get(slot_index, 0.0)),
-			glow.modulate.a
-		)
-	return state
-
-
-func apply_preview_glow_transition(previous_state: Dictionary = {}) -> void:
-	if not _rune_highlight_is_preview or card_data == null:
-		return
-	for slot_value: Variant in _preview_rune_glows.keys():
-		var slot_index := int(slot_value)
-		var glow := _preview_rune_glows[slot_index] as Control
-		if glow == null:
-			continue
-		glow.modulate.a = float(previous_state.get(slot_index, 0.0))
-		_start_preview_glow_tween(
-			glow,
-			PREVIEW_RUNE_GLOW_ALPHA,
-			PREVIEW_RUNE_GLOW_FADE_IN_SECONDS
-		)
-	for slot_value: Variant in previous_state.keys():
-		var slot_index := int(slot_value)
-		if _preview_rune_glows.has(slot_index):
-			continue
-		if slot_index < 0 or slot_index >= card_data.runes.size():
-			continue
-		var old_glow := _create_rune_glow(
-			card_data.runes[slot_index],
-			slot_index
-		)
-		old_glow.name = "PreviewRuneGlowFade_%d" % slot_index
-		rune_glow_layer.add_child(old_glow)
-		old_glow.visible = true
-		old_glow.modulate.a = float(previous_state[slot_index])
-		_start_preview_glow_tween(
-			old_glow,
-			0.0,
-			PREVIEW_RUNE_GLOW_FADE_OUT_SECONDS,
-			true
-		)
-
-
-func fade_preview_glow_state(previous_state: Dictionary) -> void:
-	if not is_node_ready() or card_data == null or previous_state.is_empty():
-		return
-	_clear_preview_glow_tweens()
-	_preview_rune_glows.clear()
-	for child: Node in rune_glow_layer.get_children():
-		rune_glow_layer.remove_child(child)
-		child.queue_free()
-	for slot_value: Variant in previous_state.keys():
-		var slot_index := int(slot_value)
-		if slot_index < 0 or slot_index >= card_data.runes.size():
-			continue
-		var glow := _create_rune_glow(card_data.runes[slot_index], slot_index)
-		glow.name = "PreviewRuneGlowFade_%d" % slot_index
-		rune_glow_layer.add_child(glow)
-		glow.modulate.a = float(previous_state[slot_index])
-		_start_preview_glow_tween(
-			glow,
-			0.0,
-			PREVIEW_RUNE_GLOW_FADE_OUT_SECONDS,
-			true
-		)
 
 
 func get_active_rune_animation_frame() -> int:
@@ -701,6 +653,7 @@ func is_rune_waiting_for_next_flow(slot_index: int) -> bool:
 	)
 
 
+# --- 卡面内容刷新 ---
 func _refresh() -> void:
 	if card_data == null:
 		_show_empty_card()
@@ -726,22 +679,18 @@ func _refresh_bottom_text() -> void:
 
 	if showing_effect:
 		rune_row.visible = false
-		rune_glow_layer.visible = false
 		set_process(false)
 		effect_text_label.visible = true
 		effect_text_label.text = card_data.effect_text
 	else:
 		effect_text_label.visible = false
 		rune_row.visible = true
-		rune_glow_layer.visible = true
 		_refresh_runes()
 
 
 func _show_empty_card() -> void:
-	_clear_preview_glow_tweens()
 	_active_rune_icons.clear()
 	_active_rune_join_cycles.clear()
-	_preview_rune_glows.clear()
 	set_process(false)
 	_set_card_name("空卡牌")
 	action_icon.texture = null
@@ -762,7 +711,6 @@ func _show_empty_card() -> void:
 	effect_text_label.visible = true
 	effect_text_label.text = "没有绑定 CardData"
 	rune_row.visible = false
-	rune_glow_layer.visible = false
 
 
 func _refresh_art() -> void:
@@ -871,18 +819,12 @@ func _refresh_race_icon() -> void:
 
 func _refresh_runes() -> void:
 	var previous_join_cycles := _active_rune_join_cycles.duplicate()
-	_clear_preview_glow_tweens()
 	_active_rune_icons.clear()
 	_active_rune_join_cycles.clear()
-	_preview_rune_glows.clear()
 	_active_rune_frame = -1
 	for child: Node in rune_row.get_children():
 		rune_row.remove_child(child)
 		child.queue_free()
-	for child: Node in rune_glow_layer.get_children():
-		rune_glow_layer.remove_child(child)
-		child.queue_free()
-
 	var current_cycle := _get_global_flow_cycle()
 	var joins_initial_cycle := (
 		has_active_rune_flow_started()
@@ -905,22 +847,16 @@ func _refresh_runes() -> void:
 					))
 				)
 				_active_rune_join_cycles[slot_index] = join_cycle
-			if is_active and _rune_highlight_is_preview:
-				var rune_glow := _create_rune_glow(rune, slot_index)
-				rune_glow.name = "RuneGlow_%d" % slot_index
-				rune_glow_layer.add_child(rune_glow)
-				_preview_rune_glows[slot_index] = rune_glow
 			var show_active_frame := is_active and current_cycle >= join_cycle
 			var rune_icon := _create_rune_icon(rune, show_active_frame)
 			rune_slot.add_child(rune_icon)
 			if is_active:
 				_active_rune_icons[slot_index] = rune_icon
 	_update_active_rune_frames()
-	if _rune_highlight_is_preview:
-		apply_preview_glow_transition()
 	set_process(not _active_rune_icons.is_empty())
 
 
+# --- 符文纹理与全局流光时间轴 ---
 func _create_rune_slot() -> Control:
 	var slot := Control.new()
 	slot.custom_minimum_size = rune_slot_size
@@ -945,79 +881,15 @@ func _create_rune_icon(
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.modulate.a = (
 		PREVIEW_ACTIVE_RUNE_ALPHA
-		if use_active_animation and _rune_highlight_is_preview
+		if (
+			use_active_animation
+			and _rune_highlight_is_preview
+			and _dim_preview_active_runes
+		)
 		else 1.0
 	)
 	icon.tooltip_text = card_data.get_element_type_name(rune)
 	return icon
-
-
-func _create_rune_glow(
-	rune: CardData.ElementType, slot_index: int
-) -> Control:
-	var glow := Control.new()
-	glow.position = _get_rune_glow_position(slot_index)
-	glow.custom_minimum_size = RUNE_GLOW_SIZE
-	glow.size = RUNE_GLOW_SIZE
-	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var glow_color := _get_rune_glow_color(rune)
-	var outer_diameter := minf(RUNE_GLOW_SIZE.x, RUNE_GLOW_SIZE.y)
-	_add_rune_glow_disc(glow, glow_color, outer_diameter, 0.10)
-	_add_rune_glow_disc(glow, glow_color, maxf(outer_diameter - 4.0, 1.0), 0.16)
-	_add_rune_glow_disc(glow, glow_color, maxf(outer_diameter - 8.0, 1.0), 0.22)
-	glow.set_meta(&"rune_slot_index", slot_index)
-	glow.modulate.a = 0.0
-	glow.visible = true
-	return glow
-
-
-func _get_rune_glow_position(slot_index: int) -> Vector2:
-	var row_width := rune_slot_size.x * 3.0 + float(rune_spacing * 2)
-	var centered_row_x := (bottom_area_size.x - row_width) * 0.5
-	var slot_position := Vector2(
-		centered_row_x + float(slot_index) * (rune_slot_size.x + rune_spacing),
-		(bottom_area_size.y - rune_slot_size.y) * 0.5
-	)
-	return slot_position + (rune_slot_size - RUNE_GLOW_SIZE) * 0.5
-
-
-func _add_rune_glow_disc(
-	glow: Control, glow_color: Color, diameter: float, alpha: float
-) -> void:
-	var disc := Panel.new()
-	disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	disc.position = (RUNE_GLOW_SIZE - Vector2(diameter, diameter)) * 0.5
-	disc.size = Vector2(diameter, diameter)
-	var disc_style := StyleBoxFlat.new()
-	disc_style.bg_color = Color(
-		glow_color.r,
-		glow_color.g,
-		glow_color.b,
-		alpha
-	)
-	var radius := roundi(diameter * 0.5)
-	disc_style.corner_radius_top_left = radius
-	disc_style.corner_radius_top_right = radius
-	disc_style.corner_radius_bottom_left = radius
-	disc_style.corner_radius_bottom_right = radius
-	disc.add_theme_stylebox_override("panel", disc_style)
-	glow.add_child(disc)
-
-
-func _get_rune_glow_color(rune: CardData.ElementType) -> Color:
-	match rune:
-		CardData.ElementType.FIRE:
-			return Color(1.0, 0.18, 0.06, 1.0)
-		CardData.ElementType.WATER:
-			return Color(0.0, 0.65, 1.0, 1.0)
-		CardData.ElementType.WOOD:
-			return Color(0.2, 1.0, 0.3, 1.0)
-		CardData.ElementType.LIGHT:
-			return Color(1.0, 0.86, 0.12, 1.0)
-		CardData.ElementType.DARK:
-			return Color(0.64, 0.2, 1.0, 1.0)
-		_:
-			return Color.WHITE
 
 
 func _create_active_rune_atlas(
@@ -1121,46 +993,6 @@ func _get_active_rune_start_phase_seconds() -> float:
 	)
 
 
-func _start_preview_glow_tween(
-	glow: Control,
-	target_alpha: float,
-	duration: float,
-	free_after: bool = false
-) -> void:
-	_stop_preview_glow_tween(glow)
-	var tween := create_tween()
-	_preview_glow_tweens[glow] = tween
-	tween.tween_property(glow, "modulate:a", target_alpha, duration)
-	tween.finished.connect(
-		_on_preview_glow_tween_finished.bind(glow, free_after),
-		CONNECT_ONE_SHOT
-	)
-
-
-func _stop_preview_glow_tween(glow: Control) -> void:
-	var tween := _preview_glow_tweens.get(glow) as Tween
-	if tween != null and tween.is_valid():
-		tween.kill()
-	_preview_glow_tweens.erase(glow)
-
-
-func _clear_preview_glow_tweens() -> void:
-	for tween_value: Variant in _preview_glow_tweens.values():
-		var tween := tween_value as Tween
-		if tween != null and tween.is_valid():
-			tween.kill()
-	_preview_glow_tweens.clear()
-
-
-func _on_preview_glow_tween_finished(
-	glow: Control,
-	free_after: bool
-) -> void:
-	_preview_glow_tweens.erase(glow)
-	if free_after and is_instance_valid(glow):
-		glow.queue_free()
-
-
 func _get_flow_frame_at_time(cycle_time: float) -> int:
 	var source_cycle_seconds: float = 0.0
 	for frame_seconds: float in ACTIVE_RUNE_FRAME_SECONDS:
@@ -1210,6 +1042,7 @@ func _get_action_texture(action_type: CardData.ActionType) -> Texture2D:
 			return ACTION_MELEE_TEXTURE
 
 
+# --- 固定像素布局；集中设置 Rect 可避免场景与脚本各维护一份坐标 ---
 func _apply_pixel_layout() -> void:
 	# 行动、生命和护甲图标会越过 99×136 裸卡边界，根节点不能裁切。
 	# 效果文字只由 BottomPanel 自己裁切，避免再次出现黑色长条。
@@ -1280,15 +1113,12 @@ func _apply_pixel_layout() -> void:
 		armor_badge_size
 	)
 	priority_label.visible = false
-	_set_control_rect(rune_glow_layer, bottom_area_position, bottom_area_size)
-	rune_glow_layer.clip_contents = false
 	_set_control_rect(bottom_panel, bottom_area_position, bottom_area_size)
 	bottom_panel.clip_contents = true
 
 	art_panel.z_index = 0
 	card_frame.z_index = 5
 	card_name_frame.z_index = 8
-	rune_glow_layer.z_index = 9
 	top_row.z_index = 10
 	bottom_panel.z_index = 10
 	stats_row.z_index = 20

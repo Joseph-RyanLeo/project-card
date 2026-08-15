@@ -1,6 +1,12 @@
 class_name SquadView
 extends PanelContainer
 
+## 一个小队的显示与交互组件，BoardSlot 直接继承它作为真实战场槽。
+##
+## SquadData 决定卡牌水平顺序、覆盖层级、双卡布局和牌型输入；
+## SquadView 只把真实数据或假设副本渲染出来，并管理随从/整队两种拖拽对象。
+## `_preview_squad_data` 永远是显示副本，成功放置前不得写回真实 squad_data。
+
 signal squad_clicked(squad_view: SquadView, card_data: CardData)
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 
@@ -22,11 +28,12 @@ const SQUAD_SHADOW_OFFSET := Vector2(5.0, 7.0) # 小队整体阴影相对小队�
 const SQUAD_SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.34) # 小队整体反馈阴影的颜色与透明度
 const LAYOUT_TWEEN_DURATION: float = 0.15 # 小队随行布局让位、恢复和飞入的动画时长（秒）
 const PATTERN_LABEL_SIZE := Vector2(64.0, 14.0) # 小队牌型名称标签的固定显示尺寸
-const PATTERN_LABEL_TOP: float = 132.0 # 牌型标签顶边相对卡牌顶边的像素位置
+const PATTERN_LABEL_TOP: float = 136.0 # 牌型标签顶边相对卡牌顶边的像素位置
 const REAL_PATTERN_COLOR := Color(1.0, 0.91, 0.58, 1.0) # 真实牌型名称使用的文字颜色
 const PREVIEW_PATTERN_COLOR := Color(0.58, 0.9, 1.0, 0.9) # 假设牌型名称使用的文字颜色与透明度
 
 var squad_data: SquadData
+# 真实模式和预览模式互斥；ghost_card 标识预览中唯一需要半透明的待加入卡。
 var _preview_squad_data: SquadData
 var _preview_ghost_card: CardData # 预览中唯一半透明的卡；为空时整队都是虚影
 var _card_views: Dictionary = {}
@@ -55,6 +62,7 @@ var _displayed_pattern_result: RunePatternResult
 @onready var pattern_label: Label = %PatternLabel
 
 
+# --- 生命周期与真实/预览显示源 ---
 func _ready() -> void:
 	_create_mode_timer()
 	_create_squad_shadow()
@@ -117,7 +125,7 @@ func get_displayed_pattern_result() -> RunePatternResult:
 	return _displayed_pattern_result
 
 
-func _get_current_visual_squad_data() -> SquadData:
+func get_current_visual_squad_data() -> SquadData:
 	var data := get_display_data()
 	if data == null or _drag_hidden_card == null or is_preview():
 		return data
@@ -141,32 +149,11 @@ func get_card_view(card_data: CardData) -> CardView:
 	return _card_views.get(card_data) as CardView
 
 
-func fade_card_preview_glow(
-	card_data: CardData,
-	glow_state: Dictionary
-) -> void:
-	var live_card := get_card_view(card_data)
-	if live_card != null:
-		live_card.fade_preview_glow_state(glow_state)
-	if not has_stack_target_snapshots():
-		return
-	var data := _get_current_visual_squad_data()
-	var horizontal_index := (
-		data.horizontal_cards.find(card_data) if data != null else -1
-	)
-	var snapshot := _stack_target_snapshot_layer.get_node_or_null(
-		"CardSnapshot_%d" % horizontal_index
-	) as CardSnapshotVisual
-	if snapshot != null:
-		var snapshot_card := snapshot.get_source_card_view() as CardView
-		if snapshot_card != null:
-			snapshot_card.fade_preview_glow_state(glow_state)
-
-
 func get_primary_card_view() -> CardView:
 	return get_card_view(get_card_data())
 
 
+# --- 合法堆叠目标的颤动快照反馈 ---
 func set_stack_target_feedback(strength: float) -> void:
 	var next_strength := clampf(strength, 0.0, 1.0)
 	if next_strength <= 0.0:
@@ -219,6 +206,7 @@ func get_card_views() -> Array[CardView]:
 	return views
 
 
+# --- 拖拽对象选择、来源数据与临时隐藏 ---
 func configure_drag_source(enabled: bool, source_row: Node = null) -> void:
 	_drag_enabled = enabled and not is_preview()
 	_source_row = source_row
@@ -330,6 +318,7 @@ func reset_hover_feedback() -> void:
 		card_view.clear_pointer_hover_feedback()
 
 
+# --- 从 SquadData 重建卡牌、布局、属性来源和牌型显示 ---
 func _refresh() -> void:
 	if not is_node_ready():
 		return
@@ -346,7 +335,7 @@ func _refresh() -> void:
 		return
 	_sync_card_views(data)
 
-	var display_data := _get_current_visual_squad_data()
+	var display_data := get_current_visual_squad_data()
 	if display_data.horizontal_cards.is_empty():
 		for card_view: CardView in _card_views.values():
 			card_view.visible = false
@@ -383,7 +372,8 @@ func _refresh() -> void:
 		card_view.set_card_data(card_data)
 		card_view.set_rune_pattern_highlights(
 			_get_card_highlight_indices(highlighted_runes_by_card, card_data),
-			is_preview()
+			is_preview(),
+			_get_card_preview_alpha(card_data) < 1.0
 		)
 		card_view.set_attribute_source_state(
 			card_data == display_data.get_action_source(),
@@ -517,10 +507,11 @@ func _clear_card_views() -> void:
 	_card_views.clear()
 
 
+# --- 目标颤动快照：仅用于反馈，绝不参与真实卡牌边界判定 ---
 func _ensure_stack_target_snapshots() -> void:
 	if has_stack_target_snapshots() or not is_node_ready():
 		return
-	var data := _get_current_visual_squad_data()
+	var data := get_current_visual_squad_data()
 	if data == null or not data.is_valid():
 		return
 	var snapshot_result := data.get_rune_pattern_result()
@@ -546,7 +537,8 @@ func _ensure_stack_target_snapshots() -> void:
 			snapshot_card.set_card_data(card_data)
 		snapshot_card.set_rune_pattern_highlights(
 			_get_card_highlight_indices(highlighted_runes_by_card, card_data),
-			is_preview()
+			is_preview(),
+			_get_card_preview_alpha(card_data) < 1.0
 		)
 
 		var snapshot := CARD_SNAPSHOT_VISUAL_SCRIPT.new() as CardSnapshotVisual
@@ -603,6 +595,7 @@ func _remove_stack_target_snapshots() -> void:
 		card_visual_layer.visible = true
 
 
+# --- 随从/整队悬停模式与整体抬起反馈 ---
 func _create_mode_timer() -> void:
 	_mode_timer = Timer.new()
 	_mode_timer.name = "ModeSwitchTimer"

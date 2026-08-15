@@ -1,5 +1,10 @@
 extends SceneTree
 
+## 阶段 6 的可见符文、牌型和同步流光集成回归脚本。
+##
+## 前半使用纯数据验证遮挡槽位与规则优先级，后半实例化 Main 验证显示、
+## 真实事务刷新、预览取消不污染数据，以及所有真实卡共享流光时间轴。
+
 const MAIN_SCENE: PackedScene = preload("res://scenes/Main.tscn")
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
 
@@ -21,7 +26,7 @@ func _run() -> void:
 	await _test_pattern_display_and_dimensions()
 	await _test_updates_after_real_transactions()
 	await _test_preview_cancel_invalid_and_phase_lock()
-	await _test_preview_glow_transitions()
+	await _test_preview_flow_without_glow()
 
 	if _failure_count == 0:
 		print("Stage 6 integration checks passed.")
@@ -30,6 +35,7 @@ func _run() -> void:
 	quit(_failure_count)
 
 
+# --- 可见符文几何与纯牌型规则 ---
 func _test_single_and_double_visible_runes() -> void:
 	var cards := _make_geometry_cards()
 	var left := cards[0]
@@ -286,6 +292,7 @@ func _test_straight_rotations_and_reversals() -> void:
 	)
 
 
+# --- 真实场景中的牌型显示、流光与事务刷新 ---
 func _test_pattern_display_and_dimensions() -> void:
 	var main: Variant = await _create_main()
 	var first_hand_slot: Node = main.get_node("%HandCardRow").get_child(0)
@@ -439,18 +446,9 @@ func _test_global_flow_synchronization() -> void:
 		"已有牌型符文在同一全局帧开始并保持同步"
 	)
 	_expect(
-		first_view.get_rune_glow_count() == 0
-		and second_view.get_rune_glow_count() == 0,
-		"真实牌型只播放流光，不再创建持续生效的呼吸光晕"
-	)
-	var glow_layer := first_view.get_node("%RuneGlowLayer") as Control
-	_expect(
-		not glow_layer.clip_contents,
-		"光晕使用独立的不裁切覆盖层，边缘符文仍显示完整圆形"
-	)
-	_expect(
-		glow_layer.z_index < first_view.bottom_panel.z_index,
-		"独立光晕层位于符文图标下方，不会覆盖流光符文本体"
+		first_view.get_node_or_null("%RuneGlowLayer") == null
+		and second_view.get_node_or_null("%RuneGlowLayer") == null,
+		"真实牌型保留流光，但不再创建任何符文光晕覆盖层"
 	)
 	_expect(
 		first_view._get_flow_frame_at_time(0.0) == 0
@@ -616,6 +614,7 @@ func _test_updates_after_real_transactions() -> void:
 	await _dispose_main(main)
 
 
+# --- 假设预览、取消恢复与阶段锁定 ---
 func _test_preview_cancel_invalid_and_phase_lock() -> void:
 	var main: Variant = await _create_main()
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
@@ -720,20 +719,20 @@ func _test_preview_cancel_invalid_and_phase_lock() -> void:
 	await _dispose_main(main)
 
 
-func _test_preview_glow_transitions() -> void:
+func _test_preview_flow_without_glow() -> void:
 	var main: Variant = await _create_main()
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
 	var target := CardData.new()
-	target.id = &"preview_glow_target"
-	target.display_name = "预览光晕目标"
+	target.id = &"preview_flow_target"
+	target.display_name = "预览流光目标"
 	target.runes.assign(_runes([
 		CardData.ElementType.LIGHT,
 		CardData.ElementType.FIRE,
 		CardData.ElementType.WATER,
 	]))
 	var dragged := CardData.new()
-	dragged.id = &"preview_glow_dragged"
-	dragged.display_name = "预览光晕拖动卡"
+	dragged.id = &"preview_flow_dragged"
+	dragged.display_name = "预览流光拖动卡"
 	dragged.runes.assign(_runes([
 		CardData.ElementType.FIRE,
 		CardData.ElementType.DARK,
@@ -753,35 +752,52 @@ func _test_preview_glow_transitions() -> void:
 	drag_data["drag_visual"] = drag_visual
 	front_row._show_intent_preview(merge_preview, drag_data)
 	var preview_slot := front_row.get("_preview_slot") as BoardSlot
+	var target_view := preview_slot.get_card_view(target)
 	var dragged_view := preview_slot.get_card_view(dragged)
 	var carried_view := drag_visual.get_source_card_view() as CardView
-	var initial_state := dragged_view.get_preview_glow_state()
+	var target_active_icon := (
+		(target_view.get("_active_rune_icons") as Dictionary)[1]
+		as TextureRect
+	)
+	var ghost_active_icon := (
+		(dragged_view.get("_active_rune_icons") as Dictionary)[0]
+		as TextureRect
+	)
+	var carried_active_icon := (
+		(carried_view.get("_active_rune_icons") as Dictionary)[0]
+		as TextureRect
+	)
 	_expect(
-		initial_state.has(0)
-		and float(initial_state[0]) < CardView.PREVIEW_RUNE_GLOW_ALPHA,
-		"新预览的参与符文高亮从透明状态开始渐显"
+		target_view.get_highlighted_rune_indices() == [1]
+		and target_view.is_rune_using_active_animation(1)
+		and is_equal_approx(target_active_icon.modulate.a, 1.0),
+		"场上原有目标卡即使由预览节点绘制，流光也保持完整颜色"
+	)
+	_expect(
+		dragged_view.get_highlighted_rune_indices() == [0]
+		and dragged_view.get_active_rune_animation_count() == 1
+		and dragged_view.is_rune_using_active_animation(0)
+		and dragged_view.is_rune_highlight_preview()
+		and is_equal_approx(
+			ghost_active_icon.modulate.a,
+			CardView.PREVIEW_ACTIVE_RUNE_ALPHA
+		),
+		"新增的结果虚影卡继续以预览透明度播放参与槽位流光"
 	)
 	_expect(
 		carried_view != null
 		and carried_view.get_highlighted_rune_indices() == [0]
-		and carried_view.get_preview_glow_state().has(0),
-		"手中拖拽实体卡同步高亮它在假设牌型中参与的符文槽位"
-	)
-	await create_timer(CardView.PREVIEW_RUNE_GLOW_FADE_IN_SECONDS + 0.03).timeout
-	var full_state := dragged_view.get_preview_glow_state()
-	_expect(
-		is_equal_approx(
-			float(full_state.get(0, 0.0)),
-			CardView.PREVIEW_RUNE_GLOW_ALPHA
-		),
-		"预览渐显结束后保持常亮且不再乘低透明度倍率"
+		and carried_view.get_active_rune_animation_count() == 1
+		and carried_view.is_rune_using_active_animation(0)
+		and carried_view.is_rune_highlight_preview()
+		and is_equal_approx(carried_active_icon.modulate.a, 1.0),
+		"手中拖拽实体卡同步参与槽位，但流光保持完整颜色"
 	)
 	_expect(
-		is_equal_approx(
-			float(carried_view.get_preview_glow_state().get(0, 0.0)),
-			CardView.PREVIEW_RUNE_GLOW_ALPHA
-		),
-		"手中实体卡与目标虚影使用相同的常亮目标和渐显时间"
+		target_view.get_node_or_null("%RuneGlowLayer") == null
+		and dragged_view.get_node_or_null("%RuneGlowLayer") == null
+		and carried_view.get_node_or_null("%RuneGlowLayer") == null,
+		"场上实体卡、预览虚影与手中实体卡都不再包含光晕覆盖层"
 	)
 
 	var standalone_preview := {
@@ -793,69 +809,43 @@ func _test_preview_glow_transitions() -> void:
 	front_row._show_intent_preview(standalone_preview, drag_data)
 	preview_slot = front_row.get("_preview_slot") as BoardSlot
 	dragged_view = preview_slot.get_card_view(dragged)
-	var target_real_view := target_slot.get_card_view(target)
 	_expect(
-		dragged_view.get_preview_glow_state().has(0)
-		and target_real_view.get_preview_glow_state().has(1)
+		dragged_view.get_highlighted_rune_indices().is_empty()
+		and dragged_view.get_active_rune_animation_count() == 0
 		and carried_view.get_highlighted_rune_indices().is_empty()
-		and carried_view.get_preview_glow_state().has(0),
-		"切换到无牌型预览时，目标残影回到真实卡，手中卡残影继续跟随拖动"
-	)
-	await create_timer(CardView.PREVIEW_RUNE_GLOW_FADE_OUT_SECONDS + 0.03).timeout
-	_expect(
-		dragged_view.get_rune_glow_count() == 0
-		and target_real_view.get_rune_glow_count() == 0
-		and carried_view.get_rune_glow_count() == 0,
-		"新虚影、真实目标卡和手中卡的残影会在渐隐时长后清理"
+		and carried_view.get_active_rune_animation_count() == 0,
+		"切换到无牌型的单独放置预览时，虚影与手中卡立即恢复静态符文"
 	)
 
-	target_slot.set_stack_target_feedback(1.0)
-	await process_frame
-	var target_snapshot := target_slot.get_node(
-		"StackFeedbackLayer/SquadLiftLayer/StackTargetSnapshotLayer/CardSnapshot_0"
-	) as CardSnapshotVisual
-	var target_snapshot_view := target_snapshot.get_source_card_view() as CardView
 	front_row._show_intent_preview(merge_preview, drag_data)
-	await create_timer(CardView.PREVIEW_RUNE_GLOW_FADE_IN_SECONDS + 0.03).timeout
-	# 真实鼠标移出战场接收层时先保留附近目标反馈，残影必须在当前
-	# 显示的快照上可见；拖拽彻底结束后才统一清除目标反馈。
-	front_row.clear_drop_preview(false)
+	front_row.clear_drop_preview()
 	_expect(
-		target_real_view.get_preview_glow_state().has(1)
-		and target_snapshot_view.get_preview_glow_state().has(1)
-		and carried_view.get_preview_glow_state().has(0),
-		"移出预堆叠时目标真实卡和当前显示快照都播放附着式渐隐"
+		carried_view.get_highlighted_rune_indices().is_empty()
+		and carried_view.get_active_rune_animation_count() == 0,
+		"取消预览后手中实体卡立即清除预览流光"
 	)
-	await create_timer(CardView.PREVIEW_RUNE_GLOW_FADE_OUT_SECONDS + 0.03).timeout
-	_expect(
-		target_real_view.get_rune_glow_count() == 0
-		and target_snapshot_view.get_rune_glow_count() == 0
-		and carried_view.get_rune_glow_count() == 0,
-		"取消预览后卡牌附属高亮完全淡出且不会残留节点"
-	)
-	target_slot.set_stack_target_feedback(0.0)
+
 	main.hand_cards.append(dragged)
 	var committed_drag := _hand_drag(dragged, merge_preview)
-	committed_drag["preview_glow_states"] = {
-		target: {1: CardView.PREVIEW_RUNE_GLOW_ALPHA},
-		dragged: {0: CardView.PREVIEW_RUNE_GLOW_ALPHA},
-	}
 	_expect(
 		main._transfer_drop_intent(committed_drag, front_row),
-		"确认放置时提交包含预览残影状态的真实事务"
+		"删除光晕状态迁移后仍可正常确认牌型放置"
 	)
 	var final_target_view := target_slot.get_card_view(target)
 	var final_dragged_view := target_slot.get_card_view(dragged)
 	_expect(
-		final_target_view.get_preview_glow_state().has(1)
-		and final_dragged_view.get_preview_glow_state().has(0)
-		and final_target_view.rune_glow_layer.get_parent() == final_target_view
-		and final_dragged_view.rune_glow_layer.get_parent() == final_dragged_view,
-		"确认后的残影附着最终真实卡牌节点，会跟随卡牌入场与布局移动"
+		final_target_view.get_highlighted_rune_indices() == [1]
+		and final_dragged_view.get_highlighted_rune_indices() == [0]
+		and final_target_view.get_active_rune_animation_count() == 1
+		and final_dragged_view.get_active_rune_animation_count() == 1
+		and not final_target_view.is_rune_highlight_preview()
+		and not final_dragged_view.is_rune_highlight_preview(),
+		"确认放置后参与槽位继续切换为真实流光"
 	)
 	await _dispose_main(main)
 
 
+# --- 断言、测试数据与拖拽字典辅助函数 ---
 func _expect_slots(squad: SquadData, expected: Array, message: String) -> void:
 	var actual: Array[String] = []
 	for slot: Dictionary in squad.get_visible_rune_slots():
@@ -899,8 +889,7 @@ func _expect_highlights_match_result(
 			and card_view.get_active_rune_animation_count()
 			== expected_indices.size()
 			and card_view.is_rune_highlight_preview() == expected_preview
-			and card_view.get_rune_glow_count()
-			== (expected_indices.size() if expected_preview else 0)
+			and card_view.get_node_or_null("%RuneGlowLayer") == null
 		)
 		for slot_index: int in card.runes.size():
 			matches = (

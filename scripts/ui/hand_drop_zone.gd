@@ -1,5 +1,8 @@
 extends Control
 
+## 手牌区域的拖放接收层。
+## 它验证是否为卡牌/小队拖拽并发出信号，真实的手牌重排或回收事务由 Main 提交。
+
 signal card_dropped(data: Dictionary, card_global_position: Vector2)
 signal card_drag_hovered(pointer_global_position: Vector2, data: Dictionary)
 signal card_drag_exited
@@ -37,6 +40,7 @@ func preview_card_drop(
 	return can_drop
 
 
+# 先复用 preview_card_drop 做同一套合法性检查，再把实体卡当前视觉位置交给 Main 做飞入动画。
 func commit_card_drop(
 	pointer_global_position: Vector2,
 	data: Variant
@@ -63,6 +67,7 @@ func clear_drop_preview() -> void:
 
 
 func _notification(what: int) -> void:
+	# 拖拽开始时才启用鼠标拦截，平时不遮挡下方手牌。
 	if what == NOTIFICATION_DRAG_BEGIN:
 		var drag_data: Variant = get_viewport().gui_get_drag_data()
 		_accepting_current_drag = _is_card_drag(drag_data)

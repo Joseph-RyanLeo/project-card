@@ -1,6 +1,12 @@
 class_name BattlefieldRow
 extends PanelContainer
 
+## 单条战场行的布局、容量和拖放规则中心。
+##
+## 真实顺序只来自 SquadRow 中的非预览 BoardSlot；预留位与目标虚影都是临时节点。
+## 拖动期间先构建 intent，再用 SquadData 副本展示；commit_card_drop 只发送事务信号，
+## Main 才会真正移动数据。所有堆叠边界必须来自玩家看到的实体卡/实体小队。
+
 signal board_slot_clicked(row: BattlefieldRow, slot: BoardSlot)
 signal card_dropped(
 	row: BattlefieldRow,
@@ -13,7 +19,6 @@ signal squads_changed
 
 const BOARD_SLOT_SCENE: PackedScene = preload("res://scenes/ui/BoardSlot.tscn")
 const BATTLEFIELD_UNIT_COUNT: int = 21 # 单排可使用的战场单元总容量
-const BATTLEFIELD_UNIT_WIDTH: int = 33 # 一个战场单元对应的像素宽度
 const SINGLE_CARD_UNIT_COUNT: int = 3 # 单卡小队占用的战场单元数
 const SINGLE_CARD_WIDTH: int = 99 # 单张裸卡保持的固定显示宽度
 const SQUAD_GAP: int = 18 # 同一排相邻小队之间的固定间距
@@ -23,9 +28,9 @@ const STACK_TARGET_FEEDBACK_RADIUS: float = 400.0 # 拖动单卡时，附近合�
 const STACK_OVERLAP_MIN: float = 10.0 # 两张卡相向边界至少覆盖该距离才进入叠卡吸附带
 const STACK_SINGLE_RUNE_OVERLAP_MAX: float = 40.0 # 覆盖 10～40px 时按盖住一个符文处理
 const STACK_OVERLAP_MAX: float = 70.0 # 覆盖 41～70px 时按盖住两个符文处理，超过后退出吸附带
-const NEW_SQUAD_INSERT_RADIUS: float = 16.0 # 有容量时，拖动卡中心距相邻小队间隙中心多近会优先新建小队
+const NEW_SQUAD_CENTER_RADIUS: float = 2.0 # 卡牌中心距真实间隙中心多近时明确选择独立放置
 const STACKED_RUNE_STEP_WIDTH: float = 30.0 # 预留位中一个可堆叠符文对应的横向像素宽度
-const STACKED_CARD_BORDER_WIDTH: float = 1.0 # 剩余不足三单元时额外保留的卡牌边框宽度
+const RESERVATION_SWAP_HYSTERESIS: float = 0.5 # 留空换边时过滤亚像素抖动；实体越过中线 1px 即会触发交换
 
 @export var row_title: String = "前排" # 显示在该战场行左上角的名称
 
@@ -36,6 +41,7 @@ const STACKED_CARD_BORDER_WIDTH: float = 1.0 # 剩余不足三单元时额外保
 
 var _drag_enabled: bool = false
 var _prefer_minion: bool = true
+# 目标虚影描述放下结果；reservation 则是唯一一块随拖动位置换位的空间预算。
 var _preview_slot: BoardSlot
 var _preview_insert_index: int = -1
 var _preview_intent: Dictionary = {}
@@ -44,16 +50,18 @@ var _preview_replaced_slot: BoardSlot
 var _reservation_slot: Control
 var _reservation_insert_index: int = -1
 var _reservation_width: float = 0.0
+var _reservation_empty_width: float = 0.0
+# 来源槽仅在拖动视觉中隐藏，真实 SquadData 在成功 drop 前保持不变。
 var _hidden_source_slot: BoardSlot
 var _active_drag_preview_offset: Vector2 = Vector2.ZERO
 var _active_drag_visual: CardDragPreview
 var _active_stack_feedback_drag_data: Dictionary = {}
 var _merge_preview_anchor_card: CardData
-var _merge_preview_anchor_canvas_position: Vector2 = Vector2.ZERO
 var _merge_preview_alignment_revision: int = 0
 var _preview_drag_visual: CardDragPreview
 
 
+# --- 生命周期、行内容查询与真实槽增删 ---
 func _ready() -> void:
 	row_title_label.text = row_title
 	row_display_area.custom_minimum_size.x = FULL_ROW_DISPLAY_WIDTH
@@ -66,16 +74,22 @@ func _process(_delta: float) -> void:
 	if _active_stack_feedback_drag_data.is_empty():
 		set_process(false)
 		return
+	if has_active_drop_preview() and is_finite(_preview_pointer_x):
+		# 鼠标停下后拖拽实体仍会继续追赶；每帧沿用最后一个逻辑坐标，
+		# 重新读取实体卡边界，避免虚影停在反向移动前的旧堆叠方向。
+		preview_card_drop(
+			Vector2(_preview_pointer_x, SquadView.CARD_SIZE.y * 0.5),
+			_active_stack_feedback_drag_data,
+			true
+		)
+		return
 	var local_position := (
 		placement_overlay
 		.get_global_transform_with_canvas()
 		.affine_inverse()
 		* get_viewport().get_mouse_position()
 	)
-	_update_stack_target_feedback(
-		local_position.x,
-		_active_stack_feedback_drag_data
-	)
+	_update_stack_target_feedback(local_position.x, _active_stack_feedback_drag_data)
 
 
 func get_squad_container() -> HBoxContainer:
@@ -222,69 +236,54 @@ func set_prefer_minion(value: bool) -> void:
 		slot.set_prefer_minion(value)
 
 
+# --- 放置预览与提交入口 ---
 func can_receive_card_drag(data: Variant) -> bool:
 	return _drag_enabled and _is_drag_data(data)
 
 
-func preview_card_drop(at_position: Vector2, data: Variant) -> bool:
+func preview_card_drop(
+	at_position: Vector2,
+	data: Variant,
+	force_recalculate: bool = false
+) -> bool:
 	if not can_receive_card_drag(data):
 		clear_drop_preview()
 		return false
-	# 合并预览会暂时隐藏真实目标。每次移动时先让它参与命中测试，
-	# 才能在同一张目标卡上持续切换 30px / 60px 两个双卡吸附点。
-	if is_instance_valid(_preview_replaced_slot):
-		_preview_replaced_slot.visible = true
+	reset_all_hover_feedback()
 	var drag_data := data as Dictionary
-	# 第一次进入本行时必须先按玩家当前看见的卡牌位置锁定意图，再创建
-	# 会推动整排的预留位；否则预留位先移动目标，刚命中的卡边吸附带会
-	# 被系统自己的布局变化立刻破坏。
-	if not has_drop_reservation():
-		_update_stack_target_feedback(at_position.x, drag_data)
-		var initial_intent := _build_drop_intent(at_position, drag_data)
-		var initial_intent_valid := (
-			not initial_intent.is_empty()
-			and _intent_fits_capacity(initial_intent, drag_data)
-		)
-		_ensure_drop_reservation(at_position.x, drag_data)
-		if initial_intent_valid:
-			_show_intent_preview(initial_intent, drag_data)
-			_preview_pointer_x = at_position.x
-			return true
-	_ensure_drop_reservation(at_position.x, drag_data)
 	_update_stack_target_feedback(at_position.x, drag_data)
-	# Godot 会在鼠标松开时用同一个坐标再次询问 _can_drop_data。
-	# 此时拖拽快照可能仍在追赶鼠标；不能因为快照位置变化，就把玩家
-	# 已经看到的叠卡虚影临时改判为新建小队。
+	# Godot 松手前会用同一坐标再查询一次。鼠标没有移动时必须沿用玩家
+	# 已看到的席位和虚影；拖拽快照的追赶只由 force_recalculate 帧更新处理。
 	if (
-		not _preview_intent.is_empty()
+		not force_recalculate
+		and not _preview_intent.is_empty()
 		and is_instance_valid(_preview_slot)
 		and is_equal_approx(at_position.x, _preview_pointer_x)
 	):
-		if is_instance_valid(_preview_replaced_slot):
-			_preview_replaced_slot.visible = false
 		return true
-	# 新建小队虚影出现后，完整虚影区域是稳定的释放区；但玩家继续
-	# 移到相邻卡边的 10～70px 覆盖带时，必须允许切换为叠卡。
-	if (
-		_preview_intent.get("operation") == &"new_squad"
-		and is_instance_valid(_preview_slot)
-		and _reservation_contains_row_x(
-			_get_drag_card_center_x(at_position.x, drag_data)
-		)
-		and _find_card_stack_target(at_position.x, drag_data) == null
-	):
-		_preview_pointer_x = at_position.x
-		return true
-	var intent := _build_drop_intent(at_position, drag_data)
+	# 唯一席位是拖动卡的临时位置，必须先于堆叠/独立意图建立和换位。
+	# 意图随后只读取已经让位后的实体边界，不再反向决定席位放在哪边。
+	var had_reservation := has_drop_reservation()
+	var reservation_moved := _ensure_drop_reservation(
+		at_position.x,
+		drag_data
+	)
+	var reservation_created := not had_reservation and has_drop_reservation()
+	var intent := _build_drop_intent(
+		at_position,
+		drag_data,
+		reservation_created
+	)
 	if intent.is_empty() or not _intent_fits_capacity(intent, data as Dictionary):
 		_clear_intent_preview()
+		_update_drop_reservation_width({})
 		return false
-	if _same_intent(intent, _preview_intent):
+	if _same_intent(intent, _preview_intent) and not reservation_moved:
+		_update_drop_reservation_width(intent)
 		_preview_pointer_x = at_position.x
-		if is_instance_valid(_preview_replaced_slot):
-			_preview_replaced_slot.visible = false
 		return true
-	_show_intent_preview(intent, drag_data)
+	_show_intent_preview(intent, drag_data, reservation_moved)
+	_update_drop_reservation_width(intent)
 	_preview_pointer_x = at_position.x
 	return true
 
@@ -294,20 +293,13 @@ func commit_card_drop(at_position: Vector2, data: Variant) -> void:
 		clear_drop_preview()
 		return
 	# 鼠标移动阶段已经持续重算吸附点；松手时直接提交最后一次预览，
-	# 避免目标因虚影临时隐藏而被再次误判为空位。
+	# 避免覆盖层与拖动快照的帧间变化改写玩家已经看到的意图。
 	if _preview_intent.is_empty() and not preview_card_drop(at_position, data):
 		return
 	var intent := _preview_intent.duplicate()
 	var insert_index := int(intent.get("squad_index", 0))
 	var drag_data := (data as Dictionary).duplicate()
 	drag_data["drop_intent"] = intent
-	if is_instance_valid(_preview_slot):
-		var preview_glow_states: Dictionary = {}
-		for preview_card_view: CardView in _preview_slot.get_card_views():
-			var glow_state := preview_card_view.get_preview_glow_state()
-			if not glow_state.is_empty():
-				preview_glow_states[preview_card_view.card_data] = glow_state
-		drag_data["preview_glow_states"] = preview_glow_states
 	var preview_offset: Vector2 = drag_data.get("preview_offset", Vector2.ZERO)
 	var drag_visual := drag_data.get("drag_visual") as CardDragPreview
 	# 拖动反馈继续使用带追赶延迟的快照；成功松手后的飞入起点改用
@@ -335,7 +327,7 @@ func get_drop_reservation_width() -> float:
 
 
 func get_drop_reservation_empty_width() -> float:
-	return _reservation_slot.size.x if has_drop_reservation() else 0.0
+	return _reservation_empty_width if has_drop_reservation() else 0.0
 
 
 func get_drop_reservation_index() -> int:
@@ -349,98 +341,77 @@ func clear_drop_preview(clear_stack_feedback: bool = true) -> void:
 		_clear_stack_target_feedback()
 
 
-func _clear_intent_preview(
-	next_preview_squad: SquadData = null
-) -> Dictionary:
-	var carried_glow_states: Dictionary = {}
-	var dragged_card: CardData
+# --- 唯一预留位：宽度由来源离场后的可用容量决定，位置随实体越过中线换位 ---
+func _clear_intent_preview() -> void:
 	if is_instance_valid(_preview_drag_visual):
-		var dragged_source := (
-			_preview_drag_visual.get_source_card_view() as CardView
-		)
-		if dragged_source != null:
-			dragged_card = dragged_source.card_data
 		_preview_drag_visual.set_preview_rune_highlights([])
 	_preview_drag_visual = null
-	if is_instance_valid(_preview_slot):
-		for card_view: CardView in _preview_slot.get_card_views():
-			var glow_state := card_view.get_preview_glow_state()
-			if glow_state.is_empty():
-				continue
-			if (
-				next_preview_squad != null
-				and next_preview_squad.contains(card_view.card_data)
-			):
-				carried_glow_states[card_view.card_data] = glow_state
-			elif card_view.card_data != dragged_card:
-				_fade_real_card_preview_glow(
-					card_view.card_data,
-					glow_state
-				)
+	if is_instance_valid(_preview_replaced_slot):
+		# 合并期间真实目标仍留在 HBox 中负责占位和实体边界；这里只恢复绘制。
+		_preview_replaced_slot.modulate.a = 1.0
 	_merge_preview_alignment_revision += 1
 	_merge_preview_anchor_card = null
-	_merge_preview_anchor_canvas_position = Vector2.ZERO
 	if _preview_slot != null:
-		var preview_parent := _preview_slot.get_parent()
-		if preview_parent != null:
-			preview_parent.remove_child(_preview_slot)
+		# 预览节点留在场景树中等待安全释放，避免鼠标切换帧对已经
+		# remove_child 的 Control 发送 get_local_mouse_position 通知。
+		_preview_slot.visible = false
+		_preview_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_preview_slot.queue_free()
 		_preview_slot = null
-	if is_instance_valid(_preview_replaced_slot):
-		_preview_replaced_slot.visible = true
 	_preview_replaced_slot = null
 	_preview_insert_index = -1
 	_preview_intent = {}
 	_preview_pointer_x = INF
 	if has_drop_reservation():
 		_set_drop_reservation_empty_width(_reservation_width)
-	return carried_glow_states
 
 
-func _fade_real_card_preview_glow(
-	card_data: CardData,
-	glow_state: Dictionary
-) -> void:
-	for slot: BoardSlot in _get_real_slots():
-		if slot.get_squad_data().contains(card_data):
-			slot.fade_card_preview_glow(card_data, glow_state)
-			return
-
-
-func _ensure_drop_reservation(pointer_x: float, data: Dictionary) -> void:
-	if data.get("kind") != &"card" or has_drop_reservation():
-		return
-	var new_squad_intent := {
-		"operation": &"new_squad",
-		"squad_index": _find_insert_index(
-			_get_drag_card_center_x(pointer_x, data)
-		),
-		"card_index": 0,
-		"result_squad": SquadData.from_card(data.get("card_data") as CardData),
-	}
+func _ensure_drop_reservation(
+	pointer_x: float,
+	data: Dictionary
+) -> bool:
+	if data.get("kind") != &"card":
+		return false
+	var drag_center_x := _get_drag_card_center_x(pointer_x, data)
+	var next_insert_index := _find_reservation_insert_index(drag_center_x)
+	var source_row := data.get("source_row") as BattlefieldRow
+	var source_slot := data.get("source_slot") as BoardSlot
 	if (
-		not _intent_fits_capacity(new_squad_intent, data)
-		and _get_legal_stack_candidates(pointer_x, data).is_empty()
+		not has_drop_reservation()
+		and source_row == self
+		and is_instance_valid(source_slot)
+		and not source_slot.get_current_visual_squad_data().horizontal_cards.is_empty()
 	):
-		return
-
+		var source_rect := _get_slot_visual_rect(source_slot)
+		if drag_center_x >= source_rect.position.x and drag_center_x <= source_rect.end.x:
+			# 从多卡小队原位抬起时，中心相等不能统一归到右侧；初始
+			# 唯一席位沿用该卡原本的水平侧，左卡在来源前、其余卡在来源后。
+			var source_card_index := (
+				source_slot.get_squad_data().horizontal_cards.find(
+					data.get("card_data") as CardData
+				)
+			)
+			var source_visible_index := _get_visible_real_slots().find(source_slot)
+			next_insert_index = (
+				source_visible_index
+				+ (0 if source_card_index == 0 else 1)
+			)
+	if has_drop_reservation():
+		if next_insert_index != _reservation_insert_index:
+			_reservation_insert_index = next_insert_index
+			_move_drop_reservation(_reservation_insert_index)
+			return true
+		return false
 	var previous_positions := _capture_visible_slot_positions()
 	var remaining_units := _get_units_available_after_source_lift(data)
 	if remaining_units <= 0:
-		return
-	var reserved_card_width := (
-		float(SINGLE_CARD_WIDTH)
+		return false
+	_reservation_width = (
+		float(SINGLE_CARD_WIDTH + SQUAD_GAP)
 		if remaining_units >= SINGLE_CARD_UNIT_COUNT
-		else (
-			remaining_units * STACKED_RUNE_STEP_WIDTH
-			+ STACKED_CARD_BORDER_WIDTH
-		)
+		else remaining_units * STACKED_RUNE_STEP_WIDTH
 	)
-	# 固定预算包含卡牌/最大叠卡宽度以及新增预留节点带来的一段小队间距。
-	_reservation_width = reserved_card_width + SQUAD_GAP
-	_reservation_insert_index = _find_insert_index(
-		_get_drag_card_center_x(pointer_x, data)
-	)
+	_reservation_insert_index = next_insert_index
 	_reservation_slot = Control.new()
 	_reservation_slot.name = "CardDropReservation"
 	_reservation_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -453,6 +424,57 @@ func _ensure_drop_reservation(pointer_x: float, data: Dictionary) -> void:
 	_move_drop_reservation(_reservation_insert_index)
 	_set_drop_reservation_empty_width(_reservation_width)
 	_animate_layout_next_frame(previous_positions)
+	return false
+
+
+func _find_reservation_insert_index(drag_center_x: float) -> int:
+	var visible_slots := _get_visible_real_slots()
+	var next_index := _find_insert_index(drag_center_x)
+	if not has_drop_reservation() or next_index == _reservation_insert_index:
+		return next_index
+	# 过滤恰好停在实体中线附近的亚像素来回跳动，但判断对象始终是
+	# 玩家当前看到的实体小队；预览虚影和席位自身都不参与边界。
+	if next_index == _reservation_insert_index - 1:
+		var crossed_left := visible_slots[next_index]
+		if (
+			drag_center_x
+			>= _get_slot_visual_rect(crossed_left).get_center().x
+			- RESERVATION_SWAP_HYSTERESIS
+		):
+			return _reservation_insert_index
+	elif (
+		next_index == _reservation_insert_index + 1
+		and _reservation_insert_index < visible_slots.size()
+	):
+		var crossed_right := visible_slots[_reservation_insert_index]
+		if (
+			drag_center_x
+			<= _get_slot_visual_rect(crossed_right).get_center().x
+			+ RESERVATION_SWAP_HYSTERESIS
+		):
+			return _reservation_insert_index
+	return next_index
+
+
+func _update_drop_reservation_width(intent: Dictionary) -> void:
+	if not has_drop_reservation():
+		return
+	if intent.get("operation") != &"merge_card":
+		_set_drop_reservation_empty_width(_reservation_width)
+		return
+	var consumed_width := 0.0
+	var target_slot := intent.get("target_slot") as BoardSlot
+	var result_squad := intent.get("result_squad") as SquadData
+	if is_instance_valid(target_slot) and result_squad != null:
+		consumed_width = maxf(
+			0.0,
+			result_squad.get_display_width()
+			- target_slot.get_current_visual_squad_data().get_display_width()
+		)
+	# 预留节点始终保持固定布局宽度；虚影覆盖其中 consumed_width，
+	# 这里只记录玩家实际还能看到的空白，不能再次压缩 HBox 触发整排位移。
+	var stack_budget := minf(_reservation_width, float(SINGLE_CARD_WIDTH))
+	_set_drop_reservation_empty_width(stack_budget - consumed_width)
 
 
 func _clear_drop_reservation() -> void:
@@ -464,16 +486,19 @@ func _clear_drop_reservation() -> void:
 	_reservation_slot = null
 	_reservation_insert_index = -1
 	_reservation_width = 0.0
+	_reservation_empty_width = 0.0
 
 
 func _set_drop_reservation_empty_width(value: float) -> void:
 	if not has_drop_reservation():
 		return
-	# 固定总预算只会因新增预留节点多出一段 HBox 间距；叠卡虚影
-	# 增长由调用方先扣除，剩余部分全部作为纯空白节点宽度。
-	var empty_width := maxf(0.0, value - SQUAD_GAP)
-	_reservation_slot.custom_minimum_size.x = empty_width
-	_reservation_slot.size.x = empty_width
+	_reservation_empty_width = maxf(0.0, value)
+	# HBox 中的节点宽度只由固定席位预算决定。预览虚影会覆盖席位的
+	# 一部分，但不能通过修改节点宽度反过来推动实体卡牌。
+	var node_width := maxf(0.0, _reservation_width - SQUAD_GAP)
+	_reservation_slot.visible = _reservation_width > 0.0
+	_reservation_slot.custom_minimum_size.x = node_width
+	_reservation_slot.size.x = node_width
 
 
 func _get_units_available_after_source_lift(data: Dictionary) -> int:
@@ -490,14 +515,6 @@ func _get_units_available_after_source_lift(data: Dictionary) -> int:
 	return maxi(0, BATTLEFIELD_UNIT_COUNT - used_units)
 
 
-func _reservation_contains_row_x(row_x: float) -> bool:
-	return (
-		has_drop_reservation()
-		and row_x >= _reservation_slot.position.x
-		and row_x < _reservation_slot.position.x + _reservation_slot.size.x
-	)
-
-
 func _move_drop_reservation(insert_index: int) -> void:
 	if not has_drop_reservation():
 		return
@@ -508,6 +525,7 @@ func _move_drop_reservation(insert_index: int) -> void:
 		_move_child_before(_reservation_slot, visible_slots[insert_index])
 
 
+# --- 合法目标反馈与放置意图推导 ---
 func update_stack_target_feedback_global(
 	pointer_global_position: Vector2,
 	data: Dictionary
@@ -532,12 +550,13 @@ func stop_stack_target_feedback() -> void:
 	_clear_stack_target_feedback()
 
 
-func _build_drop_intent(at_position: Vector2, data: Dictionary) -> Dictionary:
+func _build_drop_intent(
+	at_position: Vector2,
+	data: Dictionary,
+	reservation_created: bool = false
+) -> Dictionary:
 	var kind := data.get("kind") as StringName
 	if kind == &"squad":
-		var occupied_slot := _find_slot_at_x(at_position.x)
-		if occupied_slot != null:
-			return {}
 		return {
 			"operation": &"move_squad",
 			"squad_index": _find_insert_index(at_position.x),
@@ -547,15 +566,53 @@ func _build_drop_intent(at_position: Vector2, data: Dictionary) -> Dictionary:
 		return {}
 	var card_data := data.get("card_data") as CardData
 	var target_slot := _find_card_stack_target(at_position.x, data)
-	if target_slot == null:
-		return {
-			"operation": &"new_squad",
-			"squad_index": _find_insert_index(
+	var new_squad_intent := {
+		"operation": &"new_squad",
+		"squad_index": (
+			_reservation_insert_index
+			if has_drop_reservation()
+			else _find_insert_index(
 				_get_drag_card_center_x(at_position.x, data)
-			),
-			"card_index": 0,
-			"result_squad": SquadData.from_card(card_data),
-		}
+			)
+		),
+		"card_index": 0,
+		"result_squad": SquadData.from_card(card_data),
+	}
+	if (
+		is_instance_valid(target_slot)
+		and target_slot == data.get("source_slot")
+		and reservation_created
+	):
+		if (
+			is_instance_valid(data.get("drag_visual"))
+			and _intent_fits_capacity(new_squad_intent, data)
+		):
+			# 从多卡小队原位抬起且能独立落位时，先让拖动卡占用
+			# 刚建立的席位，不把原布局重叠误判成重新堆叠。
+			return new_squad_intent
+		# 容量不足以独立放置时只能显示回到来源的合法预览；首帧沿用
+		# 原双卡形态，但它不能再反向改变已经确定的席位侧别。
+		var source_squad := target_slot.get_squad_data()
+		var source_merge := _build_merge_intent(
+			target_slot,
+			at_position.x,
+			data,
+			source_squad.two_card_layout
+		)
+		return (
+			source_merge
+			if _intent_fits_capacity(source_merge, data)
+			else {}
+		)
+	if (
+		target_slot != null
+		and target_slot != data.get("source_slot")
+		and _is_drag_center_at_real_gap(at_position.x, data)
+		and _intent_fits_capacity(new_squad_intent, data)
+	):
+		return new_squad_intent
+	if target_slot == null:
+		return new_squad_intent
 	return _build_capacity_fitting_merge_intent(
 		target_slot,
 		at_position.x,
@@ -583,6 +640,25 @@ func _build_merge_intent(
 		result.get_card_count(),
 		data
 	)
+	if target_slot == source_slot:
+		var original_index := target_squad.horizontal_cards.find(card_data)
+		if original_index >= 0 and original_index <= result.get_card_count():
+			# 拖动卡仍覆盖来源小队的实体整体时，默认保持其原水平槽位；
+			# 双卡抽出后只在两个实体中心完全重合时沿用原槽位；一旦
+			# 拖动实体越过剩余卡中心，就必须允许 2+3 与 1+3 换边。
+			var drag_center_x := _get_drag_card_center_x(pointer_x, data)
+			var target_rect := _get_slot_visual_rect(target_slot)
+			if (
+				result.get_card_count() == 1
+				and is_equal_approx(drag_center_x, target_rect.get_center().x)
+			):
+				card_index = original_index
+			elif (
+				result.get_card_count() > 1
+				and drag_center_x >= target_rect.position.x
+				and drag_center_x <= target_rect.end.x
+			):
+				card_index = original_index
 	if (
 		target_slot != source_slot
 		and not target_squad.can_accept_external_card_at(card_index)
@@ -598,6 +674,14 @@ func _build_merge_intent(
 			data
 		)
 	)
+	if (
+		target_slot == source_slot
+		and result.get_card_count() == 1
+		and not has_drop_reservation()
+	):
+		# 当该排没有独立放置容量时，按下首帧只能回到来源小队，先保持
+		# 原双卡形态；鼠标继续移动后仍按实体边界切换展开/紧密布局。
+		layout = target_squad.two_card_layout
 	if not result.insert_card(card_data, card_index, layout):
 		return {}
 	return {
@@ -669,48 +753,66 @@ func _intent_fits_capacity(intent: Dictionary, data: Dictionary) -> bool:
 
 
 func _show_intent_preview(
-	intent: Dictionary, drag_data: Dictionary = {}
+	intent: Dictionary,
+	drag_data: Dictionary = {},
+	reservation_moved: bool = false
 ) -> void:
 	var previous_positions := _capture_visible_slot_positions()
 	var preview_squad := intent.get("result_squad") as SquadData
-	var carried_glow_states := _clear_intent_preview(preview_squad)
+	var next_target := intent.get("target_slot") as BoardSlot
+	var carried_anchor_canvas_position := Vector2.ZERO
+	var has_carried_anchor := false
+	if (
+		is_instance_valid(_preview_slot)
+		and next_target == _preview_replaced_slot
+		and _merge_preview_anchor_card != null
+	):
+		var previous_preview_data := (
+			_preview_slot.get_current_visual_squad_data()
+		)
+		if (
+			previous_preview_data != null
+			and previous_preview_data.contains(_merge_preview_anchor_card)
+		):
+			carried_anchor_canvas_position = _get_card_logical_canvas_position(
+				_preview_slot,
+				_merge_preview_anchor_card
+			)
+			has_carried_anchor = true
+	_clear_intent_preview()
 	_preview_intent = intent
 	_preview_insert_index = int(intent.get("squad_index", 0))
 	var operation := intent.get("operation") as StringName
-	if (
-		operation == &"new_squad"
-		and has_drop_reservation()
-		and _reservation_insert_index != _preview_insert_index
-	):
-		# 稳定的是总让位宽度，不是首次进入战场时的位置。独立部署的
-		# 插入边界变化后，预留位与它的单卡虚影必须一起移动到新索引。
-		_reservation_insert_index = _preview_insert_index
-		_move_drop_reservation(_reservation_insert_index)
-	_preview_replaced_slot = intent.get("target_slot") as BoardSlot
+	_preview_replaced_slot = next_target
+	var merge_anchor_canvas_position := Vector2.ZERO
+	var has_merge_anchor := false
 	if (
 		operation == &"merge_card"
 		and is_instance_valid(_preview_replaced_slot)
-		and drag_data.get("source_row") != self
 	):
-		var target_squad := _preview_replaced_slot.get_squad_data()
+		var target_squad := _preview_replaced_slot.get_current_visual_squad_data()
 		if target_squad != null and not target_squad.horizontal_cards.is_empty():
 			_merge_preview_anchor_card = target_squad.horizontal_cards[0]
-			var anchor_view := _preview_replaced_slot.get_card_view(
-				_merge_preview_anchor_card
-			)
-			if anchor_view != null:
-				_merge_preview_anchor_canvas_position = (
-					anchor_view.get_global_transform_with_canvas()
-					* Vector2.ZERO
+			if has_carried_anchor and not reservation_moved:
+				merge_anchor_canvas_position = carried_anchor_canvas_position
+				has_merge_anchor = true
+			else:
+				merge_anchor_canvas_position = _get_card_logical_canvas_position(
+					_preview_replaced_slot,
+					_merge_preview_anchor_card
 				)
-	if is_instance_valid(_preview_replaced_slot):
-		_preview_replaced_slot.visible = false
+				has_merge_anchor = true
 	_preview_slot = BOARD_SLOT_SCENE.instantiate() as BoardSlot
 	if operation == &"new_squad" and has_drop_reservation():
 		_reservation_slot.add_child(_preview_slot)
+	elif operation == &"merge_card" and is_instance_valid(_preview_replaced_slot):
+		# 合并虚影放入独立覆盖层，不再替换 HBox 中的目标节点。
+		# 因此实体边界、目标位置和唯一预留位都不会被虚影宽度二次改写。
+		placement_overlay.add_child(_preview_slot)
 	else:
 		squad_row.add_child(_preview_slot)
 	_preview_slot.z_index = DROP_PREVIEW_Z_INDEX
+	_preview_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# 单卡预览只让待加入卡半透明；整队移动则保持整队虚影。
 	_preview_slot.set_preview_squad(
 		preview_squad,
@@ -718,45 +820,35 @@ func _show_intent_preview(
 		if operation in [&"new_squad", &"merge_card"]
 		else null
 	)
-	for card_view: CardView in _preview_slot.get_card_views():
-		card_view.apply_preview_glow_transition(
-			carried_glow_states.get(card_view.card_data, {}) as Dictionary
-		)
 	_sync_dragged_card_preview_highlights(drag_data)
 	if is_instance_valid(_preview_replaced_slot):
 		_preview_slot.set_stack_target_feedback(
 			_preview_replaced_slot.get_stack_target_feedback_strength()
 		)
-	if operation != &"new_squad":
+		# 晃动由包含完整合并结果的预览节点绘制。真实目标只保留布局与边界，
+		# 避免目标快照和结果快照同时显示成两张重叠卡牌。
+		_preview_replaced_slot.modulate.a = 0.0
+	if operation not in [&"new_squad", &"merge_card"]:
 		# 先把虚影放到最终兄弟顺序，再按预留位真实左右邻居扣除 HBox 间距。
 		_move_preview_slot(_preview_insert_index)
-	if (
-		operation == &"merge_card"
-		and has_drop_reservation()
-		and is_instance_valid(_preview_replaced_slot)
-	):
-		var preview_growth := maxf(
-			0.0,
-			_preview_slot.size.x - _preview_replaced_slot.size.x
-		)
-		# 虚影横向增加的 30/60px 属于总预留预算的一部分，不能再额外
-		# 撑宽整排；纯空白宽度只保留“总预算 - 虚影增量”。
-		_set_drop_reservation_empty_width(
-			_reservation_width - preview_growth
-		)
-	elif has_drop_reservation():
-		_set_drop_reservation_empty_width(_reservation_width)
 	if operation == &"new_squad" and has_drop_reservation():
 		_preview_slot.position = Vector2(
 			(_reservation_slot.size.x - _preview_slot.size.x) * 0.5,
 			0.0
 		)
-	if _merge_preview_anchor_card != null:
+	if has_merge_anchor:
 		var alignment_revision := _merge_preview_alignment_revision
-		_align_merge_preview_to_target_anchor()
-		_align_merge_preview_to_target_anchor.call_deferred()
-		_align_merge_preview_after_layout(alignment_revision)
-	_animate_layout_next_frame(previous_positions)
+		_align_merge_preview_to_target_anchor(merge_anchor_canvas_position)
+		_align_merge_preview_to_target_anchor.call_deferred(
+			merge_anchor_canvas_position
+		)
+		_align_merge_preview_after_layout(
+			alignment_revision,
+			merge_anchor_canvas_position,
+			reservation_moved
+		)
+	if operation not in [&"new_squad", &"merge_card"]:
+		_animate_layout_next_frame(previous_positions)
 
 
 func _sync_dragged_card_preview_highlights(drag_data: Dictionary) -> void:
@@ -778,48 +870,54 @@ func _sync_dragged_card_preview_highlights(drag_data: Dictionary) -> void:
 	_preview_drag_visual.set_preview_rune_highlights(highlighted_indices)
 
 
-func _align_merge_preview_after_layout(revision: int) -> void:
+func _align_merge_preview_after_layout(
+	revision: int,
+	anchor_canvas_position: Vector2,
+	follow_replaced_slot: bool
+) -> void:
 	await get_tree().process_frame
 	if revision == _merge_preview_alignment_revision:
-		_align_merge_preview_to_target_anchor()
+		if (
+			follow_replaced_slot
+			and is_instance_valid(_preview_replaced_slot)
+			and _merge_preview_anchor_card != null
+		):
+			anchor_canvas_position = _get_card_logical_canvas_position(
+				_preview_replaced_slot,
+				_merge_preview_anchor_card
+			)
+		_align_merge_preview_to_target_anchor(anchor_canvas_position)
 
 
-func _align_merge_preview_to_target_anchor() -> void:
+func _align_merge_preview_to_target_anchor(
+	anchor_canvas_position: Vector2
+) -> void:
 	if (
 		_merge_preview_anchor_card == null
 		or not is_instance_valid(_preview_slot)
 	):
 		return
-	var preview_anchor_view := _preview_slot.get_card_view(
+	var preview_data := _preview_slot.get_current_visual_squad_data()
+	if (
+		preview_data == null
+		or not preview_data.contains(_merge_preview_anchor_card)
+	):
+		return
+	var preview_canvas_position := _get_card_logical_canvas_position(
+		_preview_slot,
 		_merge_preview_anchor_card
 	)
-	if preview_anchor_view == null:
-		return
-	var preview_canvas_position := (
-		preview_anchor_view.get_global_transform_with_canvas()
-		* Vector2.ZERO
-	)
 	var canvas_delta := (
-		_merge_preview_anchor_canvas_position - preview_canvas_position
+		anchor_canvas_position - preview_canvas_position
 	)
-	var visual_parent := _preview_slot.card_visual_layer.get_parent() as Control
-	var visual_parent_inverse := (
-		visual_parent.get_global_transform_with_canvas().affine_inverse()
+	var preview_parent := _preview_slot.get_parent() as Control
+	var parent_inverse := (
+		preview_parent.get_global_transform_with_canvas().affine_inverse()
 	)
-	var visual_local_delta := (
-		visual_parent_inverse * _merge_preview_anchor_canvas_position
-		- visual_parent_inverse * preview_canvas_position
+	_preview_slot.position += (
+		parent_inverse * (preview_canvas_position + canvas_delta)
+		- parent_inverse * preview_canvas_position
 	)
-	_preview_slot.card_visual_layer.position += visual_local_delta
-	var label_parent := _preview_slot.pattern_label.get_parent() as Control
-	var label_parent_inverse := (
-		label_parent.get_global_transform_with_canvas().affine_inverse()
-	)
-	var label_local_delta := (
-		label_parent_inverse * (preview_canvas_position + canvas_delta)
-		- label_parent_inverse * preview_canvas_position
-	)
-	_preview_slot.pattern_label.position += label_local_delta
 
 
 func _same_intent(left: Dictionary, right: Dictionary) -> bool:
@@ -834,6 +932,7 @@ func _same_intent(left: Dictionary, right: Dictionary) -> bool:
 	)
 
 
+# --- Godot 原生拖拽生命周期；只隐藏/恢复来源视觉，不提前改真实数据 ---
 func _notification(what: int) -> void:
 	if not is_node_ready():
 		return
@@ -918,9 +1017,15 @@ func _on_click_carry_requested(data: Dictionary, pointer_global_position: Vector
 	card_click_carry_requested.emit(data, pointer_global_position)
 
 
+# --- 以实体边界寻找堆叠目标或独立插入位置 ---
 func _find_slot_at_x(pointer_x: float) -> BoardSlot:
 	for slot: BoardSlot in _get_visible_real_slots():
-		if pointer_x >= slot.position.x and pointer_x < slot.position.x + slot.size.x:
+		var visual_data := slot.get_current_visual_squad_data()
+		var rect := Rect2(
+			slot.position,
+			Vector2(visual_data.get_display_width(), SquadView.CARD_SIZE.y)
+		)
+		if pointer_x >= rect.position.x and pointer_x < rect.end.x:
 			return slot
 	return null
 
@@ -944,39 +1049,74 @@ func _find_card_stack_target(pointer_x: float, data: Dictionary) -> BoardSlot:
 	if sticky_target != null:
 		return sticky_target
 	var candidates := _get_legal_stack_candidates(pointer_x, data)
-	if candidates.is_empty():
-		return null
 	var source_slot := data.get("source_slot") as BoardSlot
-	var nearest_new_overlapping: BoardSlot
-	var nearest_new_overlapping_distance := INF
-	var overlapping_source: BoardSlot
-	var overlapping_source_distance := INF
+	if (
+		data.get("source_row") == self
+		and is_instance_valid(source_slot)
+		and get_slot_index(source_slot) >= 0
+		and not source_slot.get_current_visual_squad_data().horizontal_cards.is_empty()
+	):
+		var source_rect := _get_slot_visual_rect(source_slot)
+		var drag_left_x := _get_drag_card_left_x(pointer_x, data)
+		var drag_right_x := drag_left_x + _get_drag_card_width(data)
+		var source_overlap := maxf(
+			0.0,
+			minf(drag_right_x, source_rect.end.x)
+			- maxf(drag_left_x, source_rect.position.x)
+		)
+		var strongest_external_overlap := 0.0
+		for candidate: Dictionary in candidates:
+			var external_slot := candidate.get("slot") as BoardSlot
+			if external_slot == source_slot:
+				continue
+			var external_rect := _get_slot_visual_rect(external_slot)
+			strongest_external_overlap = maxf(
+				strongest_external_overlap,
+				maxf(
+					0.0,
+					minf(drag_right_x, external_rect.end.x)
+					- maxf(drag_left_x, external_rect.position.x)
+				)
+			)
+		if (
+			source_overlap > 0.0
+			and (
+				source_slot.get_squad_data().get_card_count() > 1
+				or strongest_external_overlap <= source_overlap
+			)
+		):
+			var source_intent := _build_capacity_fitting_merge_intent(
+				source_slot,
+				pointer_x,
+				data
+			)
+			# 从小队中抬起卡牌时，拖动实体仍覆盖剩余实体小队就视为
+			# 原位重叠；无需先退到 10～70px 边缘带才能显示来源预览。
+			if not source_intent.is_empty():
+				return source_slot
+	var nearest_overlapping: BoardSlot
+	var nearest_overlapping_distance := INF
 	for candidate: Dictionary in candidates:
 		var slot := candidate.get("slot") as BoardSlot
 		var distance := float(candidate.get("distance", INF))
 		if not _is_in_stack_overlap_band(slot, pointer_x, data):
 			continue
-		if slot == source_slot:
-			if distance < overlapping_source_distance:
-				overlapping_source = slot
-				overlapping_source_distance = distance
-		elif distance < nearest_new_overlapping_distance:
-			nearest_new_overlapping = slot
-			nearest_new_overlapping_distance = distance
-	# 从小队抽出的卡仍覆盖来源小队时，玩家最可能是在调整水平位置或
-	# 把下层卡提到最上。来源小队必须先于旁边目标和新建小队判定。
-	if overlapping_source != null:
-		return overlapping_source
-	# 手牌卡或已经完全离开来源小队的场上卡，仍可使用两个小队之间的
-	# 独立部署区；这项判断要放在其他重叠目标之前。
-	if _can_use_new_squad_insert_zone(pointer_x, data):
-		return null
-	if nearest_new_overlapping != null:
-		return nearest_new_overlapping
+		if distance < nearest_overlapping_distance:
+			nearest_overlapping = slot
+			nearest_overlapping_distance = distance
+	return nearest_overlapping
 
-	# 即使当前容量无法新建小队，也不能越过 10～70px 卡边覆盖带，
-	# 自动跳去远处目标；没有精确命中时保持无效放置。
-	return null
+
+func _is_drag_center_at_real_gap(pointer_x: float, data: Dictionary) -> bool:
+	var drag_center_x := _get_drag_card_center_x(pointer_x, data)
+	var visible_slots := _get_visible_real_slots()
+	for index: int in visible_slots.size() - 1:
+		var left_rect := _get_slot_visual_rect(visible_slots[index])
+		var right_rect := _get_slot_visual_rect(visible_slots[index + 1])
+		var gap_center_x := (left_rect.end.x + right_rect.position.x) * 0.5
+		if absf(drag_center_x - gap_center_x) <= NEW_SQUAD_CENTER_RADIUS:
+			return true
+	return false
 
 
 func _get_sticky_stack_target(
@@ -1014,33 +1154,6 @@ func _get_sticky_stack_target(
 	return previous_target if not continued_intent.is_empty() else null
 
 
-func _can_use_new_squad_insert_zone(
-	pointer_x: float,
-	data: Dictionary
-) -> bool:
-	var new_squad_intent := {
-		"operation": &"new_squad",
-		"squad_index": _find_insert_index(
-			_get_drag_card_center_x(pointer_x, data)
-		),
-		"card_index": 0,
-		"result_squad": SquadData.from_card(data.get("card_data") as CardData),
-	}
-	if not _intent_fits_capacity(new_squad_intent, data):
-		return false
-	var drag_center_x := _get_drag_card_center_x(pointer_x, data)
-	var visible_slots := _get_visible_real_slots()
-	for index: int in visible_slots.size() - 1:
-		var left_slot := visible_slots[index]
-		var right_slot := visible_slots[index + 1]
-		var gap_center_x := (
-			left_slot.position.x + left_slot.size.x + right_slot.position.x
-		) * 0.5
-		if absf(drag_center_x - gap_center_x) <= NEW_SQUAD_INSERT_RADIUS:
-			return true
-	return false
-
-
 func _get_legal_stack_candidates(pointer_x: float, data: Dictionary) -> Array[Dictionary]:
 	var candidates: Array[Dictionary] = []
 	var drag_center_x := _get_drag_card_center_x(pointer_x, data)
@@ -1052,7 +1165,7 @@ func _get_legal_stack_candidates(pointer_x: float, data: Dictionary) -> Array[Di
 		)
 		if intent.is_empty():
 			continue
-		var slot_center_x := slot.position.x + slot.size.x * 0.5
+		var slot_center_x := _get_slot_visual_rect(slot).get_center().x
 		candidates.append({
 			"slot": slot,
 			"intent": intent,
@@ -1096,7 +1209,7 @@ func _find_insert_index(pointer_x: float) -> int:
 	var visible_slots := _get_visible_real_slots()
 	for index: int in visible_slots.size():
 		var slot := visible_slots[index]
-		if pointer_x < slot.position.x + slot.size.x * 0.5:
+		if pointer_x < _get_slot_visual_rect(slot).get_center().x:
 			return index
 	return visible_slots.size()
 
@@ -1107,15 +1220,43 @@ func _find_card_insert_index(
 	remaining_count: int,
 	drag_data: Dictionary
 ) -> int:
+	var visible_data := slot.get_current_visual_squad_data()
+	if (
+		remaining_count == 2
+		and visible_data != null
+		and visible_data.two_card_layout == SquadData.TwoCardLayout.EXPANDED
+		and _intent_fits_capacity({
+			"operation": &"merge_card",
+			"target_slot": slot,
+			"card_index": 1,
+			"result_squad": _build_expanded_middle_result(slot, drag_data),
+		}, drag_data)
+	):
+		# 展开双卡从任一实体外边缘接近时先形成 1+3+1 中插预览；
+		# 拖动卡中心越过整个小队中心后，唯一席位才与小队换位。
+		return 1
 	var drag_center_x := _get_drag_card_center_x(pointer_x, drag_data)
-	var local_x := drag_center_x - slot.position.x
+	var slot_rect := _get_slot_visual_rect(slot)
+	var local_x := drag_center_x - slot_rect.position.x
 	if remaining_count <= 1:
-		return 0 if local_x < slot.size.x * 0.5 else 1
-	if local_x < slot.size.x / 3.0:
+		return 0 if local_x < slot_rect.size.x * 0.5 else 1
+	if local_x < slot_rect.size.x / 3.0:
 		return 0
-	if local_x < slot.size.x * 2.0 / 3.0:
+	if local_x < slot_rect.size.x * 2.0 / 3.0:
 		return 1
 	return 2
+
+
+func _build_expanded_middle_result(
+	slot: BoardSlot,
+	drag_data: Dictionary
+) -> SquadData:
+	var result := slot.get_current_visual_squad_data().duplicate_squad()
+	var card_data := drag_data.get("card_data") as CardData
+	if result.contains(card_data):
+		result.remove_card(card_data)
+	result.insert_card(card_data, 1, SquadData.TwoCardLayout.EXPANDED)
+	return result
 
 
 func _find_two_card_layout(
@@ -1139,8 +1280,9 @@ func _get_stack_overlap(
 ) -> float:
 	var drag_left := _get_drag_card_left_x(pointer_x, drag_data)
 	var drag_right := drag_left + _get_drag_card_width(drag_data)
-	var target_left := _get_slot_visual_left_x(slot)
-	var target_right := target_left + SquadView.CARD_SIZE.x
+	var target_rect := _get_slot_visual_rect(slot)
+	var target_left := target_rect.position.x
+	var target_right := target_rect.end.x
 	var drag_center := (drag_left + drag_right) * 0.5
 	var target_center := (target_left + target_right) * 0.5
 	return maxf(
@@ -1152,18 +1294,52 @@ func _get_stack_overlap(
 
 
 func _get_slot_visual_left_x(slot: BoardSlot) -> float:
-	var primary_view := slot.get_primary_card_view()
-	if primary_view == null or not primary_view.is_inside_tree():
-		return slot.position.x
-	var global_left := (
-		primary_view.get_global_transform_with_canvas() * Vector2.ZERO
+	return _get_slot_visual_rect(slot).position.x
+
+
+func _get_slot_visual_rect(slot: BoardSlot) -> Rect2:
+	# 真实 BoardSlot 是边界权威。目标虚影即使视觉上与它重叠，也不能反向改变判定。
+	var visual_data := slot.get_current_visual_squad_data()
+	if visual_data == null or visual_data.horizontal_cards.is_empty():
+		return Rect2(slot.position, slot.size)
+	var left_card := visual_data.horizontal_cards[0]
+	var global_left := _get_card_logical_canvas_position(
+		slot,
+		left_card
 	)
-	return (
+	var row_left := (
 		placement_overlay
 		.get_global_transform_with_canvas()
 		.affine_inverse()
 		* global_left
-	).x
+	)
+	return Rect2(
+		row_left,
+		Vector2(visual_data.get_display_width(), SquadView.CARD_SIZE.y)
+	)
+
+
+func _get_card_logical_canvas_position(
+	slot: BoardSlot,
+	card: CardData
+) -> Vector2:
+	var card_x := 0.0
+	var visual_data := slot.get_current_visual_squad_data()
+	if visual_data != null:
+		var card_index := visual_data.horizontal_cards.find(card)
+		var card_positions := visual_data.get_card_x_positions()
+		if card_index >= 0 and card_index < card_positions.size():
+			card_x = card_positions[card_index]
+	# HBox 换位时 Slot 根节点会先到终点，CardVisualLayer 再从旧位置平滑追上。
+	# 边界必须加上这段玩家实际看见的让位偏移；悬停抬起与颤动位于它的
+	# 父层，仍不会反过来改变水平堆叠判定。
+	var layout_visual_offset := Vector2.ZERO
+	if is_instance_valid(slot.card_visual_layer):
+		layout_visual_offset = slot.card_visual_layer.position
+	return (
+		slot.get_global_transform_with_canvas()
+		* (Vector2(card_x, 0.0) + layout_visual_offset)
+	)
 
 
 func _is_in_stack_overlap_band(
@@ -1172,10 +1348,30 @@ func _is_in_stack_overlap_band(
 	drag_data: Dictionary
 ) -> bool:
 	var overlap := _get_stack_overlap(slot, pointer_x, drag_data)
-	return (
+	if (
 		overlap >= STACK_OVERLAP_MIN
 		and overlap <= STACK_OVERLAP_MAX
+	):
+		return true
+	# 展开双卡的可见整体宽 159px。第三张卡从外侧深入时，先在整体
+	# 中心两侧建立中插预览；实体中心越过小队中心后，席位才交换。
+	var visual_data := slot.get_current_visual_squad_data()
+	if (
+		visual_data == null
+		or visual_data.get_card_count() != 2
+		or visual_data.two_card_layout != SquadData.TwoCardLayout.EXPANDED
+	):
+		return false
+	var target_rect := _get_slot_visual_rect(slot)
+	var middle_radius := (
+		target_rect.size.x * 0.5
+		- _get_drag_card_width(drag_data) * 0.5
+		+ STACK_OVERLAP_MAX
 	)
+	return absf(
+		_get_drag_card_center_x(pointer_x, drag_data)
+		- target_rect.get_center().x
+	) <= middle_radius
 
 
 func _get_drag_card_left_x(pointer_x: float, drag_data: Dictionary) -> float:
@@ -1186,8 +1382,7 @@ func _get_drag_card_left_x(pointer_x: float, drag_data: Dictionary) -> float:
 		return pointer_x
 	var grab_local_position: Vector2 = drag_data.get("grab_local_position", Vector2.ZERO)
 	var preview_scale: Vector2 = drag_data.get("preview_scale", Vector2.ONE)
-	var visual_scale_x := preview_scale.x * CardDragPreview.DRAG_SCALE_MULTIPLIER
-	return pointer_x - grab_local_position.x * visual_scale_x
+	return pointer_x - grab_local_position.x * preview_scale.x
 
 
 func _get_drag_card_width(drag_data: Dictionary) -> float:
@@ -1195,7 +1390,7 @@ func _get_drag_card_width(drag_data: Dictionary) -> float:
 	if visual_rect.size.x > 0.0:
 		return visual_rect.size.x
 	var preview_scale: Vector2 = drag_data.get("preview_scale", Vector2.ONE)
-	return SquadView.CARD_SIZE.x * preview_scale.x * CardDragPreview.DRAG_SCALE_MULTIPLIER
+	return SquadView.CARD_SIZE.x * preview_scale.x
 
 
 func _get_drag_card_center_x(pointer_x: float, drag_data: Dictionary) -> float:
@@ -1227,6 +1422,7 @@ func _get_drag_visual_rect(drag_data: Dictionary) -> Rect2:
 	return Rect2(minimum, maximum - minimum)
 
 
+# --- 临时节点排序、真实槽过滤与让位动画 ---
 func _move_preview_slot(insert_index: int) -> void:
 	var visible_slots := _get_visible_real_slots()
 	if is_instance_valid(_preview_replaced_slot):

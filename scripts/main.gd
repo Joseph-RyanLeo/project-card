@@ -1,5 +1,11 @@
 extends Control
 
+## 主场景的流程协调器。
+##
+## 这里把手牌、两条战场行、阶段切换和两种拖拽入口连接起来；
+## 小队布局与牌型显示分别下放给 BattlefieldRow / SquadView。
+## 拖动期间只维护预览，只有 _transfer_* 系列函数会提交真实数据变更。
+
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
 # 手牌放大到最大交互比例时，也要容纳左侧 8px、顶部 4px、
 # 右侧 5px 的越界图标，避免 ScrollContainer 把它们裁掉。
@@ -15,10 +21,13 @@ var current_phase: GamePhase = GamePhase.PREPARE
 var selected_card: CardData
 var selected_board_row: BattlefieldRow
 var selected_board_slot: BoardSlot
+# 手牌预留位只表达“若此刻放下”的位置，不属于 hand_cards 真实顺序。
 var _hand_preview_slot: Control
 var _hand_preview_insert_index: int = -1
+# 点击携带与 Godot 原生拖拽共用同一种拖拽数据字典，避免两套规则分叉。
 var _click_carry_data: Dictionary = {}
 var _click_carry_preview: Control
+# revision 让已经排队的旧一帧动画失效，防止连续重建后旧回调移动新节点。
 var _hand_layout_animation_revision: int = 0
 var _active_hand_entry_animations: int = 0
 var _battlefield_clock_check_queued: bool = false
@@ -43,6 +52,7 @@ var _battlefield_clock_check_queued: bool = false
 @onready var drag_mode_button: Button = %DragModeButton
 
 
+# --- 场景初始化、阶段与全局状态 ---
 func _ready() -> void:
 	if not _battlefield_has_active_rune_effects():
 		CardView.reset_active_rune_flow()
@@ -170,6 +180,7 @@ func _apply_card_preview_scale() -> void:
 	selected_card_view.scale = Vector2(card_preview_scale, card_preview_scale)
 
 
+# --- 手牌视图构建与选中状态 ---
 func _build_hand_cards(
 	entering_card: CardData = null,
 	entry_global_position: Variant = null
@@ -260,6 +271,7 @@ func _on_board_slot_clicked(row: BattlefieldRow, slot: BoardSlot) -> void:
 	_refresh_drag_availability()
 
 
+# --- 点击携带状态机：创建、预览、提交或取消 ---
 func _on_click_carry_requested(
 	drag_data: Dictionary,
 	pointer_global_position: Vector2
@@ -462,6 +474,7 @@ func _to_row_drop_position(
 	)
 
 
+# --- 原生拖拽入口与手牌重排预览 ---
 func _on_board_card_dropped(
 	target_row: BattlefieldRow,
 	insert_index: int,
@@ -653,6 +666,7 @@ func _get_visible_hand_card_slots() -> Array[Control]:
 	return slots
 
 
+# --- 放置事务：从拖拽数据推导并提交唯一一次真实数据变更 ---
 func _transfer_card(
 	drag_data: Dictionary,
 	target_type: StringName,
@@ -853,16 +867,6 @@ func _transfer_drop_intent(
 		_build_hand_cards()
 	selected_board_row = target_row
 	_select_card(card_data)
-	var preview_glow_states := drag_data.get(
-		"preview_glow_states", {}
-	) as Dictionary
-	if not preview_glow_states.is_empty() and is_instance_valid(selected_board_slot):
-		for preview_card: CardData in preview_glow_states.keys():
-			var dropped_card_view := selected_board_slot.get_card_view(preview_card)
-			if dropped_card_view != null:
-				dropped_card_view.fade_preview_glow_state(
-					preview_glow_states[preview_card] as Dictionary
-				)
 	if entry_global_position is Vector2 and is_instance_valid(selected_board_slot):
 		_animate_board_card_entry.call_deferred(
 			selected_board_slot,
@@ -938,6 +942,7 @@ func _transfer_squad_to_hand(
 	return true
 
 
+# --- 拖拽可用性与移动动画 ---
 func _is_card_drag_data(data: Variant) -> bool:
 	if not data is Dictionary:
 		return false

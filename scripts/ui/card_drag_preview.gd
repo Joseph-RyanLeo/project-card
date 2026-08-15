@@ -1,12 +1,17 @@
 class_name CardDragPreview
 extends Control
 
+## 鼠标正在携带的实体卡牌视觉。
+##
+## CardSnapshotVisual 把复杂卡面压成一个纹理，本节点只负责跟随、拖尾和阴影。
+## BattlefieldRow 读取 get_card_global_corners() 作为拖动实体的几何边界；
+## 因此视觉位置与堆叠判断使用同一份数据，不得用目标虚影的位置替代。
+
 const CARD_SNAPSHOT_VISUAL_SCRIPT: Script = preload(
 	"res://scripts/ui/card_snapshot_visual.gd"
 )
 const FOLLOW_SPEED: float = 18.0 # 拖拽卡牌追赶鼠标的速度；越大越快贴近鼠标
 const LAG_RATIO: float = 0.42 # 鼠标移动时卡牌保留的滞后比例；越大拖尾感越强
-const DRAG_SCALE_MULTIPLIER: float = 1.06 # 拿起卡牌后相对来源显示比例的额外放大倍率
 const SHADOW_OFFSET := Vector2(6.0, 8.0) # 拖拽卡牌阴影相对卡牌的偏移
 const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.32) # 拖拽卡牌阴影的颜色及透明度
 const DRAG_PREVIEW_Z_INDEX: int = 3000 # 拖拽整卡/整队始终高于战场真实小队和目标虚影的全局层级
@@ -22,6 +27,7 @@ var _previous_root_global_position: Vector2 = Vector2.ZERO
 var _tracking_started: bool = false
 
 
+# 创建快照后，以抓取点为原点放置卡面和阴影。
 func configure(
 	card_visual: Control,
 	grab_local_position: Vector2,
@@ -51,7 +57,7 @@ func configure(
 	_shadow.size = card_size
 	_shadow.custom_minimum_size = card_size
 	_shadow.pivot_offset = grab_local_position
-	_shadow.scale = preview_scale * DRAG_SCALE_MULTIPLIER
+	_shadow.scale = preview_scale
 	var shadow_style := StyleBoxFlat.new()
 	shadow_style.bg_color = SHADOW_COLOR
 	shadow_style.corner_radius_top_left = 3
@@ -64,7 +70,7 @@ func configure(
 	_card_visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_card_visual.position = _rest_position
 	_card_visual.pivot_offset = grab_local_position + card_origin
-	_card_visual.scale = preview_scale * DRAG_SCALE_MULTIPLIER
+	_card_visual.scale = preview_scale
 	_update_visual_transform()
 
 
@@ -85,7 +91,7 @@ func _process(delta: float) -> void:
 
 	_update_visual_transform()
 
-
+# 以下位置查询给战场判定使用，返回的是当前屏幕上真实看到的拖动卡牌。
 func get_card_global_position() -> Vector2:
 	if (
 		is_instance_valid(_card_visual)
@@ -136,9 +142,8 @@ func set_preview_rune_highlights(rune_indices: Array[int]) -> void:
 		and source_card.get_highlighted_rune_indices() == rune_indices
 	):
 		return
-	var previous_state := source_card.get_preview_glow_state()
-	source_card.set_rune_pattern_highlights(rune_indices, true)
-	source_card.apply_preview_glow_transition(previous_state)
+	# 手中卡使用假设牌型的参与槽位与时间轴，但本身不是半透明目标虚影。
+	source_card.set_rune_pattern_highlights(rune_indices, true, false)
 
 
 func _update_visual_transform() -> void:

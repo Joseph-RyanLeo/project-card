@@ -1,6 +1,10 @@
 class_name SquadData
 extends Resource
 
+## 小队的权威数据模型。
+## horizontal_cards 决定左右位置，layer_cards 决定遮挡层级，
+## two_card_layout 决定双卡间距；显示节点只能据此绘制，不能另存一套顺序。
+
 enum TwoCardLayout {
 	COMPACT,
 	EXPANDED,
@@ -20,6 +24,7 @@ const RUNE_SLOT_CENTER_X: Array[float] = [19.5, 49.5, 79.5] # 三个符文槽相
 
 
 static func from_card(card_data: CardData) -> SquadData:
+	# 单卡进入战场时使用的最小合法小队工厂。
 	var squad := SquadData.new()
 	if card_data != null:
 		squad.horizontal_cards.append(card_data)
@@ -31,6 +36,7 @@ static func from_cards(
 	cards: Array[CardData],
 	layout: TwoCardLayout = TwoCardLayout.EXPANDED
 ) -> SquadData:
+	# 测试、预览和批量建队共用的工厂；自动去除 null 与重复引用。
 	var squad := SquadData.new()
 	for card_data: CardData in cards:
 		if card_data != null and not squad.horizontal_cards.has(card_data):
@@ -42,6 +48,7 @@ static func from_cards(
 
 
 func duplicate_squad() -> SquadData:
+	# 拖拽预览必须修改副本，成功 drop 前不得污染真实三套顺序。
 	var copy := SquadData.new()
 	copy.horizontal_cards.assign(horizontal_cards)
 	copy.layer_cards.assign(layer_cards)
@@ -50,6 +57,7 @@ func duplicate_squad() -> SquadData:
 
 
 func is_valid() -> bool:
+	# 合法小队要求两套顺序包含完全相同且互不重复的卡牌。
 	if horizontal_cards.is_empty() or horizontal_cards.size() > MAX_CARD_COUNT:
 		return false
 	if horizontal_cards.size() != layer_cards.size():
@@ -71,6 +79,7 @@ func contains(card_data: CardData) -> bool:
 
 
 func get_unit_count() -> int:
+	# 战场容量只认数据布局，不读取节点实际像素宽度。
 	match horizontal_cards.size():
 		1:
 			return SINGLE_UNIT_COUNT
@@ -87,6 +96,7 @@ func get_unit_count() -> int:
 
 
 func get_display_width() -> int:
+	# 真实显示宽度由卡宽与固定重叠推导，牌型标签不参与尺寸。
 	match horizontal_cards.size():
 		1:
 			return CARD_WIDTH
@@ -99,6 +109,7 @@ func get_display_width() -> int:
 
 
 func get_card_x_positions() -> Array[float]:
+	# 返回每张完整 99px 卡牌左边缘；重叠只由这些 X 差值形成。
 	var positions: Array[float] = []
 	match horizontal_cards.size():
 		1:
@@ -125,6 +136,8 @@ func get_visible_rune_counts() -> Array[int]:
 
 
 func get_visible_rune_slots() -> Array[Dictionary]:
+	# 输出的不只是数量，还包括卡牌、槽位和画面中心，保证牌型与高亮
+	# 使用同一份从左到右的可见符文事实。
 	var visible_slots: Array[Dictionary] = []
 	var x_positions := get_card_x_positions()
 	for card_index: int in horizontal_cards.size():
@@ -163,6 +176,7 @@ func get_visible_runes() -> Array[CardData.ElementType]:
 
 
 func get_rune_pattern_result() -> RunePatternResult:
+	# SquadData 负责提供真实序列，独立规则类只负责纯识别。
 	return RunePatternRules.identify(get_visible_runes())
 
 
@@ -189,6 +203,7 @@ func _is_rune_center_covered(
 
 
 func can_accept_external_card_at(horizontal_index: int) -> bool:
+	# 容量允许不代表布局一定合法；展开双卡只接受第三张中插。
 	if horizontal_cards.size() >= MAX_CARD_COUNT:
 		return false
 	if (
@@ -202,14 +217,17 @@ func can_accept_external_card_at(horizontal_index: int) -> bool:
 
 
 func get_action_source() -> CardData:
+	# 最左卡提供小队行动类型与行动值。
 	return horizontal_cards[0] if not horizontal_cards.is_empty() else null
 
 
 func get_vitals_source() -> CardData:
+	# 最右卡提供小队生命和护甲。
 	return horizontal_cards[-1] if not horizontal_cards.is_empty() else null
 
 
 func get_effect_source() -> CardData:
+	# 最上层卡提供效果文字，也是新卡默认置顶的语义来源。
 	return layer_cards[0] if not layer_cards.is_empty() else null
 
 
@@ -218,6 +236,7 @@ func insert_card(
 	horizontal_index: int,
 	layout: TwoCardLayout = TwoCardLayout.EXPANDED
 ) -> bool:
+	# 成功插入同时更新水平顺序、层级顺序和双卡布局。
 	if (
 		card_data == null
 		or contains(card_data)
@@ -240,6 +259,7 @@ func insert_card(
 
 
 func remove_card(card_data: CardData) -> bool:
+	# 三卡拆出后的双卡间距由被移除的水平位置决定，不能只看剩余数量。
 	if not contains(card_data):
 		return false
 
@@ -258,6 +278,7 @@ func remove_card(card_data: CardData) -> bool:
 
 
 func move_card_horizontally(card_data: CardData, horizontal_index: int) -> bool:
+	# 水平重排同时置顶，符合玩家拖动并重新放回小队的交互结果。
 	var old_index := horizontal_cards.find(card_data)
 	if old_index < 0:
 		return false
@@ -280,6 +301,7 @@ func bring_card_to_top(card_data: CardData) -> bool:
 
 
 func _normalize() -> void:
+	# 修复工厂或删除后的两套顺序一致性；不改变合法卡牌的相对顺序。
 	for index: int in range(layer_cards.size() - 1, -1, -1):
 		if not horizontal_cards.has(layer_cards[index]):
 			layer_cards.remove_at(index)
