@@ -1,6 +1,10 @@
 class_name CardSnapshotVisual
 extends Control
 
+## 把一张正在拖动的 CardView 放进 SubViewport，再显示为单张纹理。
+## 这样卡牌及越界图标会作为整体移动，避免分别变换导致像素模糊或裁切。
+## 原 CardView 会被移入 SubViewport，所以调用方不能同时再把它当普通场景子节点使用。
+
 # 卡牌内部有向左、向上和向右越出 99×136 裸卡范围的图标。
 # 先把这些内容一并收入快照，旋转时才不会把行动、护甲或生命图标裁掉。
 const CAPTURE_PADDING_TOP_LEFT := Vector2(8.0, 4.0) # 快照为左侧行动图标和顶部越界内容预留的像素
@@ -43,7 +47,10 @@ func configure(
 		_source_card_view.configure_drag_source(false)
 	if _source_card_view.has_method("set_snapshot_mode"):
 		_source_card_view.set_snapshot_mode(true)
-	# set_snapshot_mode() 会先清理交互缩放，因此整数放大必须在它之后设置。
+	# 悬停轻晃使用卡牌中心作为旋转支点；快照的整数放大则必须以
+	# 捕获区域左上角为支点，否则 2 倍缩放会把卡面推出 SubViewport 并裁切。
+	_source_card_view.pivot_offset = Vector2.ZERO
+	# set_snapshot_mode() 会先清理交互状态，因此整数放大必须在它之后设置。
 	_source_card_view.position = (
 		CAPTURE_PADDING_TOP_LEFT * SUPERSAMPLE_FACTOR
 	)
@@ -63,6 +70,7 @@ func configure(
 	add_child(_texture_rect)
 
 
+# 外部只通过这些查询读取快照纹理、原卡和裸卡在带 padding 纹理中的原点。
 func get_texture_control() -> TextureRect:
 	return _texture_rect
 

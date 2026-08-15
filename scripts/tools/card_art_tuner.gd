@@ -2,6 +2,9 @@
 class_name CardArtTuner
 extends Control
 
+## 卡面立绘取景的编辑器/运行时辅助工具。
+## 所有交互先修改预览副本；只有显式点击保存才会写回 .tres 资源。
+
 const MAIN_SCENE_PATH := "res://scenes/Main.tscn"
 const CARD_RESOURCE_PATHS := [
 	"res://resources/cards/ember_squire.tres",
@@ -14,8 +17,11 @@ const CARD_RESOURCE_PATHS := [
 	"res://resources/cards/sunlit_bastion.tres",
 ]
 
+# 资源列表是工具可选择的卡牌白名单，避免误写其他 Resource。
+
 @export_group("Card Art Preview")
 @export var card_data: CardData:
+	# 检查器切换卡牌时，同时重置预览偏移并刷新运行时控件。
 	set(value):
 		_card_data = value
 		_preview_art_offset = (
@@ -28,6 +34,7 @@ const CARD_RESOURCE_PATHS := [
 		return _card_data
 
 @export var preview_art_offset: Vector2i = Vector2i.ZERO:
+	# 临时预览值与 card_data.art_offset 分离，保存前不会修改真实资源。
 	set(value):
 		_preview_art_offset = value
 		_sync_offset_controls()
@@ -64,6 +71,7 @@ var _refresh_queued: bool = false
 
 
 func _ready() -> void:
+	# 场景节点就绪后再连接信号，避免 @tool 属性 setter 访问空节点。
 	_populate_card_selector()
 	_connect_runtime_controls()
 	_sync_runtime_controls()
@@ -71,6 +79,7 @@ func _ready() -> void:
 
 
 func _populate_card_selector() -> void:
+	# OptionButton 的 metadata 保存资源路径，显示文本仅供玩家辨认。
 	card_selector.clear()
 	for resource_path: String in CARD_RESOURCE_PATHS:
 		var available_card := load(resource_path) as CardData
@@ -82,6 +91,7 @@ func _populate_card_selector() -> void:
 
 
 func _connect_runtime_controls() -> void:
+	# bind() 把方向参数预先绑定到四个按钮，共用一个微调函数。
 	card_selector.item_selected.connect(_on_card_selected)
 	offset_x_spin_box.value_changed.connect(_on_offset_x_changed)
 	offset_y_spin_box.value_changed.connect(_on_offset_y_changed)
@@ -112,6 +122,7 @@ func _sync_card_selector() -> void:
 
 
 func _sync_offset_controls() -> void:
+	# 程序回填 SpinBox 时临时阻断信号，避免 setter 递归刷新。
 	if not is_instance_valid(offset_x_spin_box):
 		return
 	offset_x_spin_box.set_block_signals(true)
@@ -151,6 +162,7 @@ func _on_back_button_pressed() -> void:
 
 
 func _queue_preview_refresh() -> void:
+	# 同一帧多个属性变化只排队一次刷新，减少 @tool 模式重复重建卡面。
 	if not is_inside_tree() or _refresh_queued:
 		return
 
@@ -180,6 +192,7 @@ func _refresh_preview() -> void:
 
 
 func _save_offset_to_resource() -> void:
+	# 这是本工具唯一允许写入真实卡牌资源的入口。
 	if card_data == null:
 		_set_status("没有可保存的 CardData。")
 		return

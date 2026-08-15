@@ -1,6 +1,9 @@
 class_name BoardSlot
 extends SquadView
 
+## 战场行中的一个真实小队槽。
+## 它复用 SquadView 的显示与交互，只补充“被战场点击”和单卡兼容入口。
+
 signal slot_clicked(slot: BoardSlot)
 
 var card_view: CardView:
