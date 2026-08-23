@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://cfwi3ofew8eav"]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" uid="uid://ftroxk48h2qe" path="res://assets/card_art/rune_engraver.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"rune_engraver"
+display_name = "符文刻匠"
+action_type = 2
+base_value = 4
+max_health = 14
+runes = Array[int]([0, 1, 3])
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(1, 27)
+effect_text = "行动时造成法术伤害。灰烬征册视觉测试卡。"

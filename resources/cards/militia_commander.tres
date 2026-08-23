@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bcivudcce71ae"]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" uid="uid://cyrog23erc4ln" path="res://assets/card_art/militia_commander.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"militia_commander"
+display_name = "民兵指挥官"
+action_type = 4
+base_value = 8
+max_health = 16
+armor = 3
+target_priority = 5
+runes = Array[int]([4, 0, 2])
+rarity = 4
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(2, 26)
+effect_text = "行动时获得护甲。灰烬征册视觉测试卡。"

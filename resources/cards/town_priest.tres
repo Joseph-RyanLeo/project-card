@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://tivmoi1m7efi"]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" uid="uid://bjn0hi7el1b1i" path="res://assets/card_art/town_priest.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"town_priest"
+display_name = "城镇牧师"
+action_type = 3
+base_value = 6
+max_health = 16
+armor = 2
+target_priority = 3
+runes = Array[int]([2, 3, 0])
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-6, 7)
+effect_text = "行动时治疗受伤友方。灰烬征册视觉测试卡。"

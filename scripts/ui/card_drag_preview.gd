@@ -12,6 +12,9 @@ const CARD_SNAPSHOT_VISUAL_SCRIPT: Script = preload(
 )
 const FOLLOW_SPEED: float = 18.0 # 拖拽卡牌追赶鼠标的速度；越大越快贴近鼠标
 const LAG_RATIO: float = 0.42 # 鼠标移动时卡牌保留的滞后比例；越大拖尾感越强
+const ROTATION_RESPONSE_SPEED: float = 14.0 # 卡牌倾斜追随移动方向及回正的速度
+const ROTATION_PER_PIXEL: float = 0.65 # 水平移动量转换为倾斜角度的灵敏度
+const MAX_ROTATION_DEGREES: float = 10.0 # 拖拽移动倾斜允许达到的最大绝对角度
 const SHADOW_OFFSET := Vector2(6.0, 8.0) # 拖拽卡牌阴影相对卡牌的偏移
 const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.32) # 拖拽卡牌阴影的颜色及透明度
 const DRAG_PREVIEW_Z_INDEX: int = 3000 # 拖拽整卡/整队始终高于战场真实小队和目标虚影的全局层级
@@ -71,7 +74,7 @@ func configure(
 	_card_visual.position = _rest_position
 	_card_visual.pivot_offset = grab_local_position + card_origin
 	_card_visual.scale = preview_scale
-	_update_visual_transform()
+	_update_visual_transform(0.0)
 
 
 func _process(delta: float) -> void:
@@ -89,7 +92,18 @@ func _process(delta: float) -> void:
 	var follow_weight := 1.0 - exp(-FOLLOW_SPEED * delta)
 	_visual_lag = _visual_lag.lerp(Vector2.ZERO, follow_weight)
 
-	_update_visual_transform()
+	var desired_rotation := clampf(
+		root_movement.x * ROTATION_PER_PIXEL,
+		-MAX_ROTATION_DEGREES,
+		MAX_ROTATION_DEGREES
+	)
+	var rotation_weight := 1.0 - exp(-ROTATION_RESPONSE_SPEED * delta)
+	var next_rotation := lerpf(
+		_card_visual.rotation_degrees,
+		desired_rotation,
+		rotation_weight
+	)
+	_update_visual_transform(next_rotation)
 
 # 以下位置查询给战场判定使用，返回的是当前屏幕上真实看到的拖动卡牌。
 func get_card_global_position() -> Vector2:
@@ -146,16 +160,19 @@ func set_preview_rune_highlights(rune_indices: Array[int]) -> void:
 	source_card.set_rune_pattern_highlights(rune_indices, true, false)
 
 
-func _update_visual_transform() -> void:
+func _update_visual_transform(rotation_degrees_value: float = NAN) -> void:
 	if not is_instance_valid(_card_visual):
 		return
+	if is_nan(rotation_degrees_value):
+		rotation_degrees_value = _card_visual.rotation_degrees
 
 	_card_visual.position = _rest_position + _visual_lag
-	# 活动卡保持水平，避免左上、右上越界属性随旋转半径产生明显位移。
-	# 叠卡提示所需的旋转颤动由目标 SquadView 独立负责。
-	_card_visual.rotation_degrees = 0.0
+	_card_visual.rotation_degrees = rotation_degrees_value
 	if is_instance_valid(_shadow):
-		_shadow.position = (
-			_shadow_rest_position + _visual_lag + SHADOW_OFFSET
+		var shadow_offset := SHADOW_OFFSET.rotated(
+			deg_to_rad(rotation_degrees_value)
 		)
-		_shadow.rotation_degrees = 0.0
+		_shadow.position = (
+			_shadow_rest_position + _visual_lag + shadow_offset
+		)
+		_shadow.rotation_degrees = rotation_degrees_value

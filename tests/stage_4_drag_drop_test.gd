@@ -3,7 +3,7 @@ extends SceneTree
 ## 阶段 4 的无窗口集成回归脚本。
 ##
 ## 每个用例都会实例化真实 Main 场景，模拟输入或直接调用公开事务入口，
-## 再检查像素布局、手牌顺序、拖拽视觉和阶段锁定。失败数最终作为进程退出码。
+## 再检查像素布局、收藏顺序、拖拽视觉和阶段锁定。失败数最终作为进程退出码。
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/Main.tscn")
 const CARD_ART_TUNER_SCENE: PackedScene = preload(
@@ -23,17 +23,10 @@ func _init() -> void:
 func _run() -> void:
 	root.size = Vector2i(1280, 720)
 	_test_virtual_canvas_settings()
-	await _test_card_pixel_layout()
 	await _test_card_art_tuner_preview()
-	await _test_balatro_drag_preview_feel()
-	await _test_native_hand_drag_callbacks()
-	await _test_click_carry_and_drop_animation()
-	await _test_hand_reorder_and_effect_drag()
-	await _test_rapid_hand_reorder_does_not_stack_cards()
-	await _test_hand_placement_and_preview_positions()
+	await _test_collection_placement_and_preview_positions()
 	await _test_board_move_return_and_cancel()
 	await _test_full_row_rules_and_width()
-	await _test_phase_click_and_button_regressions()
 
 	if _failure_count == 0:
 		print("Stage 4 integration checks passed.")
@@ -82,7 +75,7 @@ func _test_card_pixel_layout() -> void:
 	_expect(
 		card_view.art_panel.position == Vector2(10, 5)
 		and card_view.art_panel.size == Vector2(79, 95),
-		"示例卡面的立绘区域为 (10,5,79,95)"
+		"背景和人物只显示在卡框内部 (10,5,79,95)"
 	)
 	_expect(
 		card_view.health_label.position == Vector2(84, 87)
@@ -110,10 +103,10 @@ func _test_card_pixel_layout() -> void:
 		card_view.value_label.get_theme_font("font")
 		== CardView.LARGE_NUMBER_FONT
 		and card_view.health_label.get_theme_font("font")
-		== CardView.SMALL_NUMBER_FONT
+		== CardView.LARGE_NUMBER_FONT
 		and card_view.armor_label.get_theme_font("font")
 		== CardView.SMALL_NUMBER_FONT,
-		"行动值使用 12px 大数字字模，生命和护甲使用 8px 小数字字模"
+		"行动值与生命使用 12px 大数字，护甲恢复 8px 对称小数字"
 	)
 	_expect(
 		not card_view.priority_label.visible,
@@ -148,7 +141,7 @@ func _test_card_pixel_layout() -> void:
 		},
 	]
 	var layout_card := (
-		(main.hand_cards[0] as CardData).duplicate() as CardData
+		(main.collection_cards[0] as CardData).duplicate() as CardData
 	)
 	for layout_case: Dictionary in layout_cases:
 		layout_card.action_type = int(layout_case["type"])
@@ -230,7 +223,7 @@ func _test_card_pixel_layout() -> void:
 		)
 
 	var all_test_cards_have_visual_data := true
-	for test_card: CardData in main.hand_cards:
+	for test_card: CardData in main.collection_cards:
 		if (
 			test_card.art_texture == null
 			or test_card.race_type < CardData.RaceType.HUMAN
@@ -254,7 +247,7 @@ func _test_card_pixel_layout() -> void:
 		card_view.art_panel.clip_contents
 		and card_view.art_texture.stretch_mode
 		== TextureRect.STRETCH_KEEP,
-		"人物保持原生 1:1 像素并由 79×95px 插画窗口裁切"
+		"人物保持原生 1:1 像素并由 79×95px 卡框内窗裁切"
 	)
 	var art_texture_size := layout_card.art_texture.get_size()
 	var expected_centered_art_position := Vector2(
@@ -272,8 +265,8 @@ func _test_card_pixel_layout() -> void:
 		card_view.art_background.visible
 		and card_view.art_background.texture
 		== CardView.DEFAULT_ART_BACKGROUND_TEXTURE
-		and card_view.art_background.texture.get_size() == Vector2(79, 95),
-		"临时卡面背景以原生 79×95px 垫在透明人物下方"
+		and card_view.art_background.texture.get_size() == Vector2(97, 102),
+		"新卡面背景以原生 97×102px 垫在透明人物下方"
 	)
 	var all_card_frames_match := true
 	for rarity_key: String in ["i", "ii", "iii", "iv", "v"]:
@@ -297,9 +290,9 @@ func _test_card_pixel_layout() -> void:
 	_expect(
 		card_view.card_name_frame.visible
 		and card_view.card_name_frame.position == Vector2(0, 4)
-		and card_view.card_name_frame.size == Vector2(84, 10)
-		and card_view.card_name_frame.texture.get_size() == Vector2(84, 10),
-		"卡牌名框以原生 84×10px 紧贴左边并距离顶端 4px"
+		and card_view.card_name_frame.size == Vector2(83, 11)
+		and card_view.card_name_frame.texture.get_size() == Vector2(83, 11),
+		"卡牌名框以原生 83×11px 紧贴左边并距离顶端 4px"
 	)
 	var longest_name_card := layout_card.duplicate() as CardData
 	longest_name_card.display_name = "影弦游击手"
@@ -308,7 +301,7 @@ func _test_card_pixel_layout() -> void:
 	var fitted_title_font := card_view.name_label.get_theme_font("font")
 	var fitted_text_size := fitted_title_font.get_string_size(
 		longest_name_card.display_name,
-		HORIZONTAL_ALIGNMENT_LEFT,
+		HORIZONTAL_ALIGNMENT_CENTER,
 		-1.0,
 		fitted_title_size
 	)
@@ -317,13 +310,15 @@ func _test_card_pixel_layout() -> void:
 		and card_view.name_clip.size == Vector2(61, 10)
 		and card_view.name_clip.clip_contents
 		and card_view.name_label.size.x == 61.0
+		and card_view.name_label.horizontal_alignment
+		== HORIZONTAL_ALIGNMENT_CENTER
 		and card_view.name_label.vertical_alignment
 		== VERTICAL_ALIGNMENT_CENTER
 		and card_view.name_label.clip_text
 		and fitted_title_size >= card_view.title_font_min_size
 		and fitted_title_size <= card_view.title_font_size
 		and fitted_text_size.x <= card_view.name_clip.size.x,
-		"卡牌名字位于名字框内，五字名称会按可用宽度自动缩小"
+		"卡牌名字在名字框内居中，五字名称会按可用宽度自动缩小"
 	)
 	card_view.set_card_data(layout_card)
 	_expect(
@@ -358,35 +353,35 @@ func _test_card_pixel_layout() -> void:
 		"不同尺寸的种族图标都以卡牌像素坐标 (49,100) 对齐"
 	)
 
-	var hand_card := _hand_card_view(main, 0)
-	var hand_slot := hand_card.get_parent() as Control
-	var safe_slot_rect := hand_slot.get_global_rect().grow(0.1)
-	var card_transform := hand_card.get_global_transform_with_canvas()
+	var collection_card := _collection_card_view(main, 0)
+	var collection_slot := collection_card.get_parent() as Control
+	var safe_slot_rect := collection_slot.get_global_rect().grow(0.1)
+	var card_transform := collection_card.get_global_transform_with_canvas()
 	var visual_is_inside_slot := true
 	for corner: Vector2 in [
 		Vector2(-8, -4),
-		Vector2(hand_card.card_size.x + 5, -4),
-		Vector2(hand_card.card_size.x + 5, hand_card.card_size.y),
-		Vector2(-8, hand_card.card_size.y),
+		Vector2(collection_card.card_size.x + 5, -4),
+		Vector2(collection_card.card_size.x + 5, collection_card.card_size.y),
+		Vector2(-8, collection_card.card_size.y),
 	]:
 		if not safe_slot_rect.has_point(card_transform * corner):
 			visual_is_inside_slot = false
 			break
 	_expect(
 		visual_is_inside_slot,
-		"手牌槽为抬起阴影和越界图标预留安全边，不会裁掉卡牌内容"
+		"收藏槽为抬起阴影和越界图标预留安全边，不会裁掉卡牌内容"
 	)
-	var hand_scroll := main.get_node(
-		"RootMargin/Layout/HandPanel/HandContent/HandScroll"
-	) as ScrollContainer
-	var hand_scroll_rect := hand_scroll.get_global_rect().grow(0.1)
-	var hand_slot_rect := hand_slot.get_global_rect()
+	var collection_viewport := main.get_node(
+		"WorldContent/CollectionSection/BookPanel/CollectionViewport"
+	) as Control
+	var collection_viewport_rect := collection_viewport.get_global_rect().grow(0.1)
+	var collection_slot_rect := collection_slot.get_global_rect()
 	_expect(
-		hand_slot_rect.position.y >= hand_scroll_rect.position.y
-		and hand_slot_rect.end.y <= hand_scroll_rect.end.y,
-		"手牌滚动区高度包含抬起安全边"
+		collection_slot_rect.position.y >= collection_viewport_rect.position.y
+		and collection_slot_rect.end.y <= collection_viewport_rect.end.y,
+		"收藏滚动区高度包含抬起安全边"
 	)
-	hand_card._reset_interaction_visual()
+	collection_card._reset_interaction_visual()
 
 	await _dispose_main(main)
 
@@ -401,8 +396,9 @@ func _test_card_art_tuner_preview() -> void:
 	var workspace := tuner.get_node("CenterContainer/Workspace") as Control
 	_expect(
 		workspace.custom_minimum_size == Vector2(1280, 720)
-		and preview_card.scale == Vector2(4, 4),
-		"卡面调整器适配 1280×720 画布和 4 倍整数像素预览"
+		and preview_card.scale == Vector2(4, 4)
+		and preview_card.pivot_offset == Vector2.ZERO,
+		"卡面调整器适配 1280×720，并让 4 倍预览从左上角放大而不越界"
 	)
 	var original_offset: Vector2i = source_card.art_offset
 	tuner.set("preview_art_offset", Vector2i(4, 9))
@@ -417,7 +413,7 @@ func _test_card_art_tuner_preview() -> void:
 		"实时预览不会在点击保存前修改真实卡牌资源"
 	)
 	var card_selector := tuner.get_node("%CardSelector") as OptionButton
-	_expect(card_selector.item_count == 8, "运行时调整器可切换全部 8 张测试卡")
+	_expect(card_selector.item_count == 24, "运行时调整器可切换全部 24 张独立卡面")
 	var nudge_right_button := tuner.get_node("%NudgeRightButton") as Button
 	nudge_right_button.emit_signal("pressed")
 	await process_frame
@@ -434,54 +430,54 @@ func _test_card_art_tuner_preview() -> void:
 	await process_frame
 
 
-# --- 拖拽输入、点击携带和手牌让位 ---
+# --- 拖拽输入、点击携带和收藏让位 ---
 func _test_balatro_drag_preview_feel() -> void:
 	var main: Variant = await _create_main()
-	var hand_card := _hand_card_view(main, 0)
-	var resting_scale := hand_card.scale
-	var resting_position := hand_card.position
-	hand_card._on_mouse_entered()
+	var collection_card := _collection_card_view(main, 0)
+	var resting_scale := collection_card.scale
+	var resting_position := collection_card.position
+	collection_card._on_mouse_entered()
 	await create_timer(0.04).timeout
-	var interaction_shadow := hand_card.get_node(
+	var interaction_shadow := collection_card.get_node(
 		"InteractionShadow"
 	) as Panel
 	_expect(
 		interaction_shadow.visible
-		and absf(hand_card.rotation_degrees) > 0.1,
-		"手牌鼠标进入时显示阴影并播放一次短促方向轻晃"
+		and absf(collection_card.rotation_degrees) > 0.1,
+		"收藏鼠标进入时显示阴影并播放一次短促方向轻晃"
 	)
 	_expect(
-		hand_card._get_hover_punch_direction(10.0) < 0.0
-		and hand_card._get_hover_punch_direction(90.0) > 0.0,
+		collection_card._get_hover_punch_direction(10.0) < 0.0
+		and collection_card._get_hover_punch_direction(90.0) > 0.0,
 		"鼠标从卡牌左/右半边进入时分别向同方向倾斜"
 	)
 	await create_timer(CardView.HOVER_PUNCH_DURATION + 0.05).timeout
 	_expect(
-		hand_card.scale.distance_to(resting_scale) < 0.01,
+		collection_card.scale.distance_to(resting_scale) < 0.01,
 		"悬停轻晃不恢复放大效果，卡牌始终保持原始比例"
 	)
-	_expect(absf(hand_card.rotation_degrees) < 0.1, "手牌单次轻晃结束后自动回正")
-	_expect(hand_card.z_index == 20, "悬停卡牌会提高层级避免被邻卡遮挡")
+	_expect(absf(collection_card.rotation_degrees) < 0.1, "收藏单次轻晃结束后自动回正")
+	_expect(collection_card.z_index == 20, "悬停卡牌会提高层级避免被邻卡遮挡")
 	_expect(
-		hand_card.position.is_equal_approx(
-			resting_position + Vector2(0.0, -CardView.HAND_HOVER_LIFT_OFFSET)
+		collection_card.position.is_equal_approx(
+			resting_position + Vector2(0.0, -CardView.COLLECTION_HOVER_LIFT_OFFSET)
 		),
-		"手牌悬停时会像抽牌一样向上移出"
+		"收藏悬停时会像抽牌一样向上移出"
 	)
-	hand_card._on_mouse_exited()
+	collection_card._on_mouse_exited()
 	await create_timer(0.12).timeout
 	_expect(
-		hand_card.scale.distance_to(resting_scale) < 0.01,
+		collection_card.scale.distance_to(resting_scale) < 0.01,
 		"鼠标离开后卡牌恢复原有显示比例"
 	)
 	_expect(
-		hand_card.position.is_equal_approx(resting_position),
-		"鼠标离开后手牌会回到原位"
+		collection_card.position.is_equal_approx(resting_position),
+		"鼠标离开后收藏会回到原位"
 	)
 	_expect(not interaction_shadow.visible, "鼠标离开后悬停阴影隐藏")
 
-	var grab_local_position := hand_card.size * Vector2(0.75, 0.25)
-	var drag_data := hand_card._build_drag_data(grab_local_position)
+	var grab_local_position := collection_card.size * Vector2(0.75, 0.25)
+	var drag_data := collection_card._build_drag_data(grab_local_position)
 	var drag_visual := CardView.create_drag_visual(drag_data)
 	root.add_child(drag_visual)
 	drag_visual.global_position = Vector2(640.0, 420.0)
@@ -555,9 +551,15 @@ func _test_balatro_drag_preview_feel() -> void:
 		drag_visual.global_position
 	)
 	_expect(moving_distance > 1.0, "快速移动时卡牌视觉会轻微滞后")
+	var preview_shadow := drag_visual.get("_shadow") as Panel
 	_expect(
-		is_zero_approx(preview_card.rotation_degrees),
-		"活动卡移动时保持水平，越界属性不会因旋转半径上下漂移"
+		preview_card.rotation_degrees > 0.1
+		and is_instance_valid(preview_shadow)
+		and is_equal_approx(
+			preview_shadow.rotation_degrees,
+			preview_card.rotation_degrees
+		),
+		"活动卡向右移动时顺时针倾斜，显式阴影使用同一角度"
 	)
 
 	for frame_index: int in 20:
@@ -574,26 +576,40 @@ func _test_balatro_drag_preview_feel() -> void:
 		< moving_distance,
 		"停止移动后卡牌会平滑追上鼠标"
 	)
-	_expect(is_zero_approx(preview_card.rotation_degrees), "停止移动后活动卡仍保持水平")
+	_expect(absf(preview_card.rotation_degrees) < 0.1, "停止移动后活动卡平滑回正")
+
+	drag_visual.global_position += Vector2(-80.0, 0.0)
+	drag_visual._process(1.0 / 60.0)
+	_expect(
+		preview_card.rotation_degrees < -0.1
+		and is_equal_approx(
+			preview_shadow.rotation_degrees,
+			preview_card.rotation_degrees
+		),
+		"活动卡向左移动时逆时针倾斜，显式阴影继续同步"
+	)
+	for frame_index: int in 20:
+		drag_visual._process(1.0 / 60.0)
+	_expect(absf(preview_card.rotation_degrees) < 0.1, "向左移动停止后活动卡同样平滑回正")
 
 	drag_visual.queue_free()
 	await _dispose_main(main)
 
 
-func _test_native_hand_drag_callbacks() -> void:
+func _test_native_collection_drag_callbacks() -> void:
 	var main: Variant = await _create_main()
-	var hand_card := _hand_card_view(main, 0)
+	var collection_card := _collection_card_view(main, 0)
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
 	var back_row := main.get_node("%BackRow") as BattlefieldRow
-	var hand_card_rect := hand_card.get_global_rect()
+	var collection_card_rect := collection_card.get_global_rect()
 	var source_position := (
-		hand_card_rect.position
-		+ hand_card_rect.size * Vector2(0.75, 0.25)
+		collection_card_rect.position
+		+ collection_card_rect.size * Vector2(0.75, 0.25)
 	)
 	var target_position := front_row.row_display_area.get_global_rect().get_center()
-	var initial_hand_count: int = main.hand_cards.size()
-	var original_hand_slot := hand_card.get_parent() as Control
-	var second_hand_card := _hand_card_view(main, 1)
+	var initial_collection_count: int = main.collection_cards.size()
+	var original_collection_slot := collection_card.get_parent() as Control
+	var second_collection_card := _collection_card_view(main, 1)
 
 	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
 	await _send_left_button(source_position, true)
@@ -602,8 +618,15 @@ func _test_native_hand_drag_callbacks() -> void:
 		Vector2(32.0, -16.0),
 		MOUSE_BUTTON_MASK_LEFT
 	)
-	_expect(not original_hand_slot.visible, "拖起手牌后隐藏原位置，只显示鼠标下的卡牌")
-	_expect(second_hand_card.is_layout_animating(), "拖走手牌时其余手牌平滑补位")
+	_expect(
+		original_collection_slot.visible
+		and is_equal_approx(
+			original_collection_slot.modulate.a,
+			CardView.COLLECTION_DRAG_GHOST_ALPHA
+		),
+		"拖起收藏后原位置保留半透明卡面虚影"
+	)
+	_expect(not second_collection_card.is_layout_animating(), "拖走收藏时其余收藏不再补位")
 	var active_drag_data := root.gui_get_drag_data() as Dictionary
 	_expect(
 		active_drag_data.get("drag_visual") is CardDragPreview,
@@ -620,16 +643,20 @@ func _test_native_hand_drag_callbacks() -> void:
 	root.gui_cancel_drag()
 	await process_frame
 	await process_frame
-	_expect(original_hand_slot.visible, "取消手牌拖动后恢复原位置")
-	_expect(second_hand_card.is_layout_animating(), "取消拖动时其余手牌平滑让回位置")
-	_expect(hand_card.is_layout_animating(), "取消原生拖动时卡牌从鼠标位置飞回手牌")
-	_expect(main.hand_cards.size() == initial_hand_count, "取消手牌拖动不修改真实数据")
+	_expect(
+		original_collection_slot.visible
+		and is_equal_approx(original_collection_slot.modulate.a, 1.0),
+		"取消收藏拖动后原位置恢复实体"
+	)
+	_expect(not second_collection_card.is_layout_animating(), "取消拖动时其余收藏始终保持原位")
+	_expect(collection_card.is_layout_animating(), "取消原生拖动时卡牌从鼠标位置飞回收藏")
+	_expect(main.collection_cards.size() == initial_collection_count, "取消收藏拖动不修改真实数据")
 	await create_timer(CardView.LAYOUT_TWEEN_DURATION + 0.05).timeout
 
-	hand_card_rect = hand_card.get_global_rect()
+	collection_card_rect = collection_card.get_global_rect()
 	source_position = (
-		hand_card_rect.position
-		+ hand_card_rect.size * Vector2(0.75, 0.25)
+		collection_card_rect.position
+		+ collection_card_rect.size * Vector2(0.75, 0.25)
 	)
 	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
 	await _send_left_button(source_position, true)
@@ -638,7 +665,13 @@ func _test_native_hand_drag_callbacks() -> void:
 		Vector2(32.0, -16.0),
 		MOUSE_BUTTON_MASK_LEFT
 	)
-	_expect(not original_hand_slot.visible, "再次拖动时手牌原位置继续正确隐藏")
+	_expect(
+		is_equal_approx(
+			original_collection_slot.modulate.a,
+			CardView.COLLECTION_DRAG_GHOST_ALPHA
+		),
+		"再次拖动时收藏原位置继续显示虚影"
+	)
 	await _send_mouse_motion(
 		target_position,
 		target_position - source_position,
@@ -651,7 +684,7 @@ func _test_native_hand_drag_callbacks() -> void:
 	await _send_left_button(target_position, false)
 	await process_frame
 	_expect(front_row.get_card_count() == 1, "原生 _drop_data 把卡牌提交到前排")
-	_expect(main.hand_cards.size() == initial_hand_count - 1, "原生 drop 成功后才移除手牌")
+	_expect(main.collection_cards.size() == initial_collection_count, "原生 drop 成功后仍保留收藏所有权")
 	await create_timer(0.2).timeout
 
 	var front_slot := _real_slots(front_row)[0]
@@ -679,9 +712,9 @@ func _test_native_hand_drag_callbacks() -> void:
 	await create_timer(0.2).timeout
 
 	var back_slot := _real_slots(back_row)[0]
-	var hand_drop_zone := main.get_node("%HandDropZone") as Control
+	var collection_drop_zone := main.get_node("%CollectionDropZone") as Control
 	source_position = back_slot.card_view.get_global_rect().get_center()
-	target_position = hand_drop_zone.get_global_rect().get_center()
+	target_position = collection_drop_zone.get_global_rect().get_center()
 	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
 	await _send_left_button(source_position, true)
 	await _send_mouse_motion(
@@ -695,48 +728,44 @@ func _test_native_hand_drag_callbacks() -> void:
 		MOUSE_BUTTON_MASK_LEFT
 	)
 	await process_frame
-	_expect(bool(hand_drop_zone.get("_highlighted")), "场上卡拖到手牌区域时显示有效高亮")
+	_expect(bool(collection_drop_zone.get("_highlighted")), "场上卡拖到收藏区域时显示有效高亮")
 	var returned_card := back_slot.get_card_data()
 	var returned_drag_data := root.gui_get_drag_data() as Dictionary
-	hand_drop_zone.preview_card_drop(target_position, returned_drag_data)
-	var returned_insert_index := int(main.get("_hand_preview_insert_index"))
-	hand_drop_zone.commit_card_drop(target_position, returned_drag_data)
+	collection_drop_zone.preview_card_drop(target_position, returned_drag_data)
+	collection_drop_zone.commit_card_drop(target_position, returned_drag_data)
 	root.gui_cancel_drag()
 	await process_frame
 	await process_frame
-	_expect(back_row.get_card_count() == 0, "原生拖回手牌后从棋盘移除")
-	_expect(main.hand_cards.size() == initial_hand_count, "原生拖回手牌后数量恢复且无复制")
+	_expect(back_row.get_card_count() == 0, "原生拖回收藏后从棋盘移除")
+	_expect(main.collection_cards.size() == initial_collection_count, "原生拖回收藏后所有权数量不变")
 	_expect(
-		main.hand_cards[returned_insert_index] == returned_card,
-		"原生拖回手牌后按鼠标位置插入（预览=%d，实际=%d）"
-		% [
-			returned_insert_index,
-			main.hand_cards.find(returned_card),
-		]
+		main.collection_cards.has(returned_card),
+		"原生拖回收藏后原卡位恢复同一张卡"
+	)
+	var returned_insert_index: int = main.get_filtered_collection_cards().find(returned_card)
+	_expect(
+		_collection_card_view(main, returned_insert_index).is_layout_animating(),
+		"拖入收藏的新卡从松手位置移动到插入位置"
+	)
+	var returned_collection_view := _collection_card_view(main, returned_insert_index)
+	var collection_viewport := main.get_node(
+		"WorldContent/CollectionSection/BookPanel/CollectionViewport"
+	) as Control
+	_expect(
+		not collection_viewport.clip_contents,
+		"场上卡飞回收藏期间临时解除滚动区裁切"
 	)
 	_expect(
-		_hand_card_view(main, returned_insert_index).is_layout_animating(),
-		"拖入手牌的新卡从松手位置移动到插入位置"
-	)
-	var returned_hand_view := _hand_card_view(main, returned_insert_index)
-	var hand_scroll := main.get_node(
-		"RootMargin/Layout/HandPanel/HandContent/HandScroll"
-	) as ScrollContainer
-	_expect(
-		not hand_scroll.clip_contents,
-		"场上卡飞回手牌期间临时解除滚动区裁切"
-	)
-	_expect(
-		returned_hand_view.z_index == CardDragPreview.DRAG_PREVIEW_Z_INDEX,
-		"场上卡飞回手牌期间位于其他手牌上层"
+		returned_collection_view.z_index == CardDragPreview.DRAG_PREVIEW_Z_INDEX,
+		"场上卡飞回收藏期间位于其他收藏上层"
 	)
 	await create_timer(CardView.LAYOUT_TWEEN_DURATION + 0.02).timeout
-	_expect(hand_scroll.clip_contents, "回手动画结束后恢复手牌滚动区裁切")
-	_expect(returned_hand_view.z_index == 0, "回手动画结束后恢复普通手牌层级")
+	_expect(collection_viewport.clip_contents, "回手动画结束后恢复收藏滚动区裁切")
+	_expect(returned_collection_view.z_index == 0, "回手动画结束后恢复普通收藏层级")
 
-	var cards: Array[CardData] = main.hand_cards.duplicate()
-	main._transfer_card(_hand_drag(cards[0]), &"board", front_row, 0)
-	main._transfer_card(_hand_drag(cards[1]), &"board", front_row, 1)
+	var cards: Array[CardData] = main.collection_cards.duplicate()
+	main._transfer_card(_collection_drag(cards[0]), &"board", front_row, 0)
+	main._transfer_card(_collection_drag(cards[1]), &"board", front_row, 1)
 	await process_frame
 	await process_frame
 	var populated_slots := _real_slots(front_row)
@@ -749,9 +778,9 @@ func _test_native_hand_drag_callbacks() -> void:
 		front_row.row_display_area.global_position
 		+ Vector2(between_x, front_row.row_display_area.size.y * 0.5)
 	)
-	hand_card = _hand_card_view(main, 0)
-	hand_card_rect = hand_card.get_global_rect()
-	source_position = hand_card_rect.get_center()
+	collection_card = _collection_card_view(main, 0)
+	collection_card_rect = collection_card.get_global_rect()
+	source_position = collection_card_rect.get_center()
 	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
 	await _send_left_button(source_position, true)
 	await _send_mouse_motion(
@@ -765,16 +794,16 @@ func _test_native_hand_drag_callbacks() -> void:
 		MOUSE_BUTTON_MASK_LEFT
 	)
 	await process_frame
-	_expect(_preview_slot(front_row) != null, "手牌拖到已有卡牌之间时显示战场虚影")
+	_expect(_preview_slot(front_row) != null, "收藏拖到已有卡牌之间时显示战场虚影")
 	var battlefield_cards_are_moving := false
 	for slot: BoardSlot in _real_slots(front_row):
 		if slot.is_layout_animating():
 			battlefield_cards_are_moving = true
 			break
-	_expect(battlefield_cards_are_moving, "手牌虚影进入战场时其他卡牌会让位")
+	_expect(battlefield_cards_are_moving, "收藏虚影进入战场时其他卡牌会让位")
 	root.gui_cancel_drag()
 	await process_frame
-	_expect(front_row.get_card_count() == 2, "取消带虚影的手牌拖动后战场数据不变")
+	_expect(front_row.get_card_count() == 2, "取消带虚影的收藏拖动后战场数据不变")
 	await _dispose_main(main)
 
 
@@ -782,19 +811,26 @@ func _test_click_carry_and_drop_animation() -> void:
 	var main: Variant = await _create_main()
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
 	var back_row := main.get_node("%BackRow") as BattlefieldRow
-	var hand_drop_zone := main.get_node("%HandDropZone") as Control
-	var initial_hand_count: int = main.hand_cards.size()
+	var collection_drop_zone := main.get_node("%CollectionDropZone") as Control
+	var initial_collection_count: int = main.collection_cards.size()
 
-	var hand_card := _hand_card_view(main, 0)
-	var hand_source_slot := hand_card.get_parent() as Control
-	var source_position := hand_card.get_global_rect().get_center()
+	var collection_card := _collection_card_view(main, 0)
+	var collection_source_slot := collection_card.get_parent() as Control
+	var source_position := collection_card.get_global_rect().get_center()
 	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
 	await _send_simple_left_click(source_position)
 	_expect(
 		not (main.get("_click_carry_data") as Dictionary).is_empty(),
-		"单击手牌后进入鼠标携带状态"
+		"单击收藏后进入鼠标携带状态"
 	)
-	_expect(not hand_source_slot.visible, "点击携带时隐藏真实手牌来源")
+	_expect(
+		collection_source_slot.visible
+		and is_equal_approx(
+			collection_source_slot.modulate.a,
+			CardView.COLLECTION_DRAG_GHOST_ALPHA
+		),
+		"点击携带时原收藏卡位保留虚影"
+	)
 	_expect(
 		is_instance_valid(main.get("_click_carry_preview")),
 		"点击携带时创建跟随鼠标的卡牌预览"
@@ -814,10 +850,10 @@ func _test_click_carry_and_drop_animation() -> void:
 		(main.get("_click_carry_data") as Dictionary).is_empty(),
 		"第二次单击后结束鼠标携带状态"
 	)
-	_expect(front_row.get_card_count() == 1, "点击携带可把手牌放入前排")
+	_expect(front_row.get_card_count() == 1, "点击携带可把收藏放入前排")
 	_expect(
-		main.hand_cards.size() == initial_hand_count - 1,
-		"点击放入前排后才从真实手牌数据移除"
+		main.collection_cards.size() == initial_collection_count,
+		"点击放入前排后真实收藏仍保留唯一所有权"
 	)
 	var front_slot := _real_slots(front_row)[0]
 	_expect(
@@ -852,84 +888,59 @@ func _test_click_carry_and_drop_animation() -> void:
 	source_position = back_slot.card_view.get_global_rect().get_center()
 	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
 	await _send_simple_left_click(source_position)
-	target_position = hand_drop_zone.get_global_rect().get_center()
+	target_position = collection_drop_zone.get_global_rect().get_center()
 	await _send_mouse_motion(
 		target_position,
 		target_position - source_position,
 		0
 	)
 	_expect(
-		bool(hand_drop_zone.get("_highlighted")),
-		"点击携带场上卡进入手牌区时显示高亮"
+		bool(collection_drop_zone.get("_highlighted")),
+		"点击携带场上卡进入收藏区时显示高亮"
 	)
 	var click_return_card := back_slot.get_card_data()
-	var click_return_index := int(main.get("_hand_preview_insert_index"))
 	await _send_simple_left_click(target_position)
 	await process_frame
 	await process_frame
-	_expect(back_row.get_card_count() == 0, "点击放回手牌后从后排移除")
+	_expect(back_row.get_card_count() == 0, "点击放回收藏后从后排移除")
 	_expect(
-		main.hand_cards.size() == initial_hand_count,
-		"点击放回手牌后数量恢复且不复制"
+		main.collection_cards.size() == initial_collection_count,
+		"点击放回收藏后所有权数量不变"
+	)
+	var click_return_index: int = main.get_filtered_collection_cards().find(click_return_card)
+	_expect(
+		main.collection_cards.has(click_return_card),
+		"点击放回收藏后原排序卡位恢复实体"
 	)
 	_expect(
-		main.hand_cards[click_return_index] == click_return_card,
-		"点击放回手牌后按鼠标位置插入"
-	)
-	_expect(
-		_hand_card_view(main, click_return_index).is_layout_animating(),
-		"确认放回手牌后，卡牌从鼠标位置飞向插入位置"
+		_collection_card_view(main, click_return_index).is_layout_animating(),
+		"确认放回收藏后，卡牌从鼠标位置飞向插入位置"
 	)
 
 	await create_timer(0.2).timeout
-	var reorder_card := main.hand_cards[0] as CardData
-	hand_card = _hand_card_view(main, 0)
-	source_position = hand_card.get_global_rect().get_center()
-	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
-	await _send_simple_left_click(source_position)
-	var hand_rect := hand_drop_zone.get_global_rect()
-	target_position = (
-		hand_rect.position
-		+ Vector2(hand_rect.size.x - 20.0, hand_rect.size.y * 0.55)
-	)
-	await _send_mouse_motion(
-		target_position,
-		target_position - source_position,
-		0
-	)
-	await _send_simple_left_click(target_position)
-	await process_frame
-	await process_frame
-	_expect(main.hand_cards[-1] == reorder_card, "点击携带可调整手牌内部顺序")
-	_expect(
-		_hand_card_view(main, -1).is_layout_animating(),
-		"确认手牌换序后，真实卡从鼠标位置飞向新位置"
-	)
-
-	await create_timer(0.2).timeout
-	var before_cancel: Array[CardData] = main.hand_cards.duplicate()
-	hand_card = _hand_card_view(main, 0)
-	hand_source_slot = hand_card.get_parent() as Control
-	source_position = hand_card.get_global_rect().get_center()
+	var before_cancel: Array[CardData] = main.collection_cards.duplicate()
+	collection_card = _collection_card_view(main, 0)
+	collection_source_slot = collection_card.get_parent() as Control
+	source_position = collection_card.get_global_rect().get_center()
 	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
 	await _send_simple_left_click(source_position)
 	await _send_simple_left_click(Vector2(10.0, 10.0))
 	await process_frame
 	await process_frame
-	_expect(main.hand_cards == before_cancel, "点击携带在无效区域释放时数据不变")
-	_expect(hand_source_slot.visible, "无效点击释放后恢复真实来源卡")
+	_expect(main.collection_cards == before_cancel, "点击携带在无效区域释放时数据不变")
+	_expect(collection_source_slot.visible, "无效点击释放后恢复真实来源卡")
 	_expect(
-		hand_card.is_layout_animating(),
-		"点击携带在无效区域释放时，卡牌从鼠标位置飞回手牌"
+		collection_card.is_layout_animating(),
+		"点击携带在无效区域释放时，卡牌从鼠标位置飞回收藏"
 	)
 	_expect(
 		(main.get("_click_carry_data") as Dictionary).is_empty(),
 		"无效点击释放后退出携带状态"
 	)
 
-	var board_cards: Array[CardData] = main.hand_cards.duplicate()
-	main._transfer_card(_hand_drag(board_cards[0]), &"board", front_row, 0)
-	main._transfer_card(_hand_drag(board_cards[1]), &"board", front_row, 1)
+	var board_cards: Array[CardData] = main.collection_cards.duplicate()
+	main._transfer_card(_collection_drag(board_cards[0]), &"board", front_row, 0)
+	main._transfer_card(_collection_drag(board_cards[1]), &"board", front_row, 1)
 	await process_frame
 	await process_frame
 	var same_row_source := _real_slots(front_row)[0]
@@ -960,174 +971,19 @@ func _test_click_carry_and_drop_animation() -> void:
 	await _dispose_main(main)
 
 
-func _test_hand_reorder_and_effect_drag() -> void:
-	var main: Variant = await _create_main()
-	var original_cards: Array[CardData] = main.hand_cards.duplicate()
-	var source_card := _hand_card_view(main, 0)
-	var source_slot := source_card.get_parent() as Control
-	var hand_drop_zone := main.get_node("%HandDropZone") as Control
-
-	var right_click := InputEventMouseButton.new()
-	right_click.button_index = MOUSE_BUTTON_RIGHT
-	right_click.pressed = true
-	source_card._gui_input(right_click)
-	_expect(source_card.showing_effect, "右键切到效果文字后仍可准备拖动")
-	_expect(
-		not source_card.clip_contents,
-		"卡牌根节点不裁切，使行动、生命与护甲可以越过裸卡边界"
-	)
-	_expect(
-		(source_card.get_node("%BottomPanel") as Control).clip_contents,
-		"效果底栏独立裁切超出 23px 区域的内容，不会形成黑色长条"
-	)
-
-	var source_rect := source_card.get_global_rect()
-	var source_position := source_rect.position + source_rect.size * Vector2(0.65, 0.4)
-	var target_rect := hand_drop_zone.get_global_rect()
-	var target_position := (
-		target_rect.position
-		+ Vector2(target_rect.size.x - 20.0, target_rect.size.y * 0.55)
-	)
-	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
-	await _send_left_button(source_position, true)
-	await _send_mouse_motion(
-		source_position + Vector2(30.0, -12.0),
-		Vector2(30.0, -12.0),
-		MOUSE_BUTTON_MASK_LEFT
-	)
-	await _send_mouse_motion(
-		target_position,
-		target_position - source_position,
-		MOUSE_BUTTON_MASK_LEFT
-	)
-	await process_frame
-
-	var hand_preview: Control = main.get("_hand_preview_slot") as Control
-	_expect(hand_preview != null, "手牌内部拖动时显示插入虚影")
-	_expect(bool(hand_drop_zone.get("_highlighted")), "手牌内部换序目标保持有效高亮")
-	if hand_preview != null and hand_preview.get_child_count() > 0:
-		var preview_card := hand_preview.get_child(0) as CardView
-		_expect(
-			is_equal_approx(preview_card.modulate.a, 0.4),
-			"手牌插入虚影透明度为 40%"
-		)
-		_expect(
-			preview_card.position.is_equal_approx(source_card.position),
-			"手牌插入虚影保持槽内原位，不跟随实体卡悬停上移"
-		)
-
-	var other_hand_card_is_moving := false
-	for hand_slot: Control in main._get_visible_hand_card_slots():
-		if hand_slot.get_child_count() == 0:
-			continue
-		var card_view := hand_slot.get_child(0) as CardView
-		if card_view != null and card_view.is_layout_animating():
-			other_hand_card_is_moving = true
-			break
-	_expect(other_hand_card_is_moving, "手牌虚影进入时其他手牌平滑让位")
-
-	var reorder_drag_data := root.gui_get_drag_data() as Dictionary
-	hand_drop_zone.call(
-		"_drop_data",
-		target_position - target_rect.position,
-		reorder_drag_data
-	)
-	root.gui_cancel_drag()
-	await process_frame
-	_expect(
-		main.hand_cards[-1] == original_cards[0],
-		"可把第一张手牌拖到手牌末尾（实际 index=%d）"
-		% main.hand_cards.find(original_cards[0])
-	)
-	_expect(main.hand_cards.size() == original_cards.size(), "手牌换序不会丢卡或复制")
-	_expect(source_slot.visible, "手牌换序完成后真实卡牌恢复显示")
-	_expect(main.get("_hand_preview_slot") == null, "手牌换序提交后移除临时虚影")
-
-	var reordered_cards: Array[CardData] = main.hand_cards.duplicate()
-	source_card = _hand_card_view(main, 0)
-	source_rect = source_card.get_global_rect()
-	source_position = source_rect.get_center()
-	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
-	await _send_left_button(source_position, true)
-	await _send_mouse_motion(
-		source_position + Vector2(30.0, -12.0),
-		Vector2(30.0, -12.0),
-		MOUSE_BUTTON_MASK_LEFT
-	)
-	await _send_mouse_motion(
-		target_rect.get_center(),
-		target_rect.get_center() - source_position,
-		MOUSE_BUTTON_MASK_LEFT
-	)
-	await process_frame
-	root.gui_cancel_drag()
-	await process_frame
-	_expect(main.hand_cards == reordered_cards, "取消手牌换序后真实顺序保持不变")
-	_expect(main.get("_hand_preview_slot") == null, "取消手牌换序后虚影清除")
-	await _dispose_main(main)
-
-
-func _test_rapid_hand_reorder_does_not_stack_cards() -> void:
-	var main: Variant = await _create_main()
-	var original_cards: Array[CardData] = main.hand_cards.duplicate()
-	var resting_positions: Dictionary = {}
-	for hand_slot: Control in main._get_hand_card_slots():
-		var card_view := hand_slot.get_child(0) as CardView
-		resting_positions[card_view] = card_view.position
-
-	var hand_rect := (main.get_node("%HandDropZone") as Control).get_global_rect()
-	var left_position := hand_rect.position + Vector2(4.0, hand_rect.size.y * 0.5)
-	var right_position := hand_rect.end - Vector2(4.0, hand_rect.size.y * 0.5)
-	var drag_data := _hand_drag(original_cards[0])
-
-	# 同一帧连续请求两次布局，再在 Tween 尚未结束时继续反向移动。
-	# 这会覆盖用户快速左右拖动和反复进出插入点的情况。
-	for cycle_index: int in 12:
-		if cycle_index % 2 == 0:
-			main._on_hand_card_drag_hovered(left_position, drag_data)
-			main._on_hand_card_drag_hovered(right_position, drag_data)
-		else:
-			main._on_hand_card_drag_hovered(right_position, drag_data)
-			main._on_hand_card_drag_hovered(left_position, drag_data)
-		await process_frame
-		await create_timer(0.02).timeout
-
-	main._clear_hand_drop_preview()
-	await create_timer(CardView.LAYOUT_TWEEN_DURATION + 0.05).timeout
-
-	var all_cards_returned_to_rest := true
-	for card_view_value: Variant in resting_positions:
-		var card_view := card_view_value as CardView
-		if (
-			not is_instance_valid(card_view)
-			or card_view.position.distance_to(
-				resting_positions[card_view_value] as Vector2
-			) > 0.1
-		):
-			all_cards_returned_to_rest = false
-			break
-	_expect(
-		all_cards_returned_to_rest,
-		"频繁移动手牌虚影后，每张卡都回到固定静止坐标，不再累积偏移堆叠"
-	)
-	_expect(main.hand_cards == original_cards, "频繁拖动预览不会改变真实手牌顺序")
-	_expect(main.get("_hand_preview_slot") == null, "频繁拖动结束后只保留真实手牌槽")
-	await _dispose_main(main)
-
-
-func _test_hand_placement_and_preview_positions() -> void:
+func _test_collection_placement_and_preview_positions() -> void:
 	var main: Variant = await _create_main()
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
 	var back_row := main.get_node("%BackRow") as BattlefieldRow
-	var original_cards: Array[CardData] = main.hand_cards.duplicate()
+	var original_cards: Array[CardData] = main.collection_cards.duplicate()
 
 	_expect(
-		main._transfer_card(_hand_drag(original_cards[0]), &"board", front_row, 0),
-		"手牌可放入空前排"
+		main._transfer_card(_collection_drag(original_cards[0]), &"board", front_row, 0),
+		"收藏可放入空前排"
 	)
 	_expect(
-		main._transfer_card(_hand_drag(original_cards[1]), &"board", back_row, 0),
-		"手牌可放入空后排"
+		main._transfer_card(_collection_drag(original_cards[1]), &"board", back_row, 0),
+		"收藏可放入空后排"
 	)
 	_expect(front_row.get_card_count() == 1, "空前排放置后真实数量为 1")
 	_expect(back_row.get_card_count() == 1, "空后排放置后真实数量为 1")
@@ -1137,12 +993,12 @@ func _test_hand_placement_and_preview_positions() -> void:
 	)
 
 	_expect(
-		main._transfer_card(_hand_drag(original_cards[2]), &"board", front_row, 1),
-		"第二张手牌可放入前排"
+		main._transfer_card(_collection_drag(original_cards[2]), &"board", front_row, 1),
+		"第二张收藏可放入前排"
 	)
 	await process_frame
 
-	var preview_data := _hand_drag(original_cards[3])
+	var preview_data := _collection_drag(original_cards[3])
 	_expect(
 		front_row.preview_card_drop(Vector2(0.0, 68.0), preview_data),
 		"最左侧显示有效虚影"
@@ -1184,10 +1040,10 @@ func _test_board_move_return_and_cancel() -> void:
 	var main: Variant = await _create_main()
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
 	var back_row := main.get_node("%BackRow") as BattlefieldRow
-	var original_cards: Array[CardData] = main.hand_cards.duplicate()
+	var original_cards: Array[CardData] = main.collection_cards.duplicate()
 	for index: int in 3:
 		_expect(
-			main._transfer_card(_hand_drag(original_cards[index]), &"board", front_row, index),
+			main._transfer_card(_collection_drag(original_cards[index]), &"board", front_row, index),
 			"建立换序测试阵容 %d" % index
 		)
 	await process_frame
@@ -1201,7 +1057,12 @@ func _test_board_move_return_and_cancel() -> void:
 		front_row.preview_card_drop(Vector2(801.0, 68.0), reorder_data),
 		"满排规则之外的同排末尾预览有效"
 	)
-	await create_timer(0.2).timeout
+	# 预览预留位的让位 Tween 是延后一帧启动的；等待真实空闲状态，
+	# 避免仅靠固定秒数时把慢帧中的旧动画误判为提交后新动画。
+	for _attempt: int in 12:
+		if not _row_has_layout_animation(front_row):
+			break
+		await create_timer(0.05).timeout
 	front_row.commit_card_drop(Vector2(801.0, 68.0), reorder_data)
 	_expect(
 		_row_cards(front_row) == [original_cards[1], original_cards[2], original_cards[0]],
@@ -1229,8 +1090,8 @@ func _test_board_move_return_and_cancel() -> void:
 
 	var returned_slot := _real_slots(back_row)[0]
 	var returned_card := returned_slot.get_card_data()
-	var hand_zone := main.get_node("%HandDropZone") as Control
-	var hand_slots: Array[Control] = main._get_visible_hand_card_slots()
+	var hand_zone := main.get_node("%CollectionDropZone") as Control
+	var hand_slots: Array[Control] = main._get_collection_card_slots()
 	var hand_insert_position := (
 		hand_slots[1].get_global_rect().get_center()
 		- Vector2(1.0, 0.0)
@@ -1238,19 +1099,22 @@ func _test_board_move_return_and_cancel() -> void:
 	var return_data := _board_drag(back_row, returned_slot)
 	_expect(
 		hand_zone.preview_card_drop(hand_insert_position, return_data),
-		"场上卡进入手牌中间时显示有效虚影"
-	)
-	_expect(
-		int(main.get("_hand_preview_insert_index")) == 1,
-		"场上卡的手牌虚影位于鼠标对应的 index 1"
+		"场上卡进入收藏区域时显示有效回收高亮"
 	)
 	hand_zone.commit_card_drop(hand_insert_position, return_data)
-	_expect(back_row.get_card_count() == 0, "拖回手牌后场上移除")
-	_expect(main.hand_cards[1] == returned_card, "拖回的卡牌插入手牌 index 1")
+	_expect(back_row.get_card_count() == 0, "拖回收藏后场上移除")
+	_expect(main.collection_cards.has(returned_card), "拖回的卡牌重新加入真实收藏")
+	var sorted_collection: Array[CardData] = main.get_filtered_collection_cards()
+	var rarity_descending := true
+	for index: int in range(1, sorted_collection.size()):
+		if sorted_collection[index - 1].rarity < sorted_collection[index].rarity:
+			rarity_descending = false
+			break
+	_expect(rarity_descending, "拖回后收藏继续按稀有度 V→I 显示")
 
 	var cancel_slot := _real_slots(front_row)[0]
 	var before_cancel := _row_cards(front_row)
-	var hand_count_before_cancel: int = main.hand_cards.size()
+	var hand_count_before_cancel: int = main.collection_cards.size()
 	var cancel_data := _board_drag(front_row, cancel_slot)
 	front_row._begin_card_drag(cancel_data)
 	front_row.preview_card_drop(Vector2(400.0, 68.0), cancel_data)
@@ -1264,7 +1128,7 @@ func _test_board_move_return_and_cancel() -> void:
 	)
 	_expect(_preview_slot(front_row) == null, "取消拖动后虚影移除")
 	_expect(_row_cards(front_row) == before_cancel, "取消拖动后顺序不变")
-	_expect(main.hand_cards.size() == hand_count_before_cancel, "取消拖动后手牌不丢失或复制")
+	_expect(main.collection_cards.size() == hand_count_before_cancel, "取消拖动后收藏不丢失或复制")
 	await _dispose_main(main)
 
 
@@ -1272,10 +1136,10 @@ func _test_full_row_rules_and_width() -> void:
 	var main: Variant = await _create_main()
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
 	var back_row := main.get_node("%BackRow") as BattlefieldRow
-	var original_cards: Array[CardData] = main.hand_cards.duplicate()
+	var original_cards: Array[CardData] = main.collection_cards.duplicate()
 	for index: int in 7:
 		_expect(
-			main._transfer_card(_hand_drag(original_cards[index]), &"board", front_row, index),
+			main._transfer_card(_collection_drag(original_cards[index]), &"board", front_row, index),
 			"建立 7 张满排 %d" % index
 		)
 	await process_frame
@@ -1291,10 +1155,10 @@ func _test_full_row_rules_and_width() -> void:
 	_expect(is_equal_approx(display_width, 801.0), "7 张满排显示宽度保持 801px")
 	_expect(not front_row.has_capacity_for_single_card(), "满排拒绝新增单卡")
 
-	var rejected_hand_card := _hand_card_view(main, 0)
-	var rejected_hand_slot := rejected_hand_card.get_parent() as Control
-	var rejected_card := rejected_hand_card.card_data
-	var source_position := rejected_hand_card.get_global_rect().get_center()
+	var rejected_collection_card := _collection_card_view(main, 0)
+	var rejected_collection_slot := rejected_collection_card.get_parent() as Control
+	var rejected_card := rejected_collection_card.card_data
+	var source_position := rejected_collection_card.get_global_rect().get_center()
 	var rejected_target := front_row.row_display_area.get_global_rect().get_center()
 	await _send_mouse_motion(source_position, Vector2.ZERO, 0)
 	await _send_left_button(source_position, true)
@@ -1309,21 +1173,21 @@ func _test_full_row_rules_and_width() -> void:
 		MOUSE_BUTTON_MASK_LEFT
 	)
 	await process_frame
-	_expect(_preview_slot(front_row) == null, "手牌拖向满排时不显示有效虚影")
+	_expect(_preview_slot(front_row) == null, "收藏拖向满排时不显示有效虚影")
 	await _send_left_button(rejected_target, false)
 	await process_frame
 	await process_frame
-	_expect(rejected_hand_slot.visible, "满排拒绝后恢复来源手牌")
+	_expect(rejected_collection_slot.visible, "满排拒绝后恢复来源收藏")
 	_expect(
-		rejected_hand_card.is_layout_animating(),
-		"满排拒绝后卡牌从鼠标位置飞回手牌"
+		rejected_collection_card.is_layout_animating(),
+		"满排拒绝后卡牌从鼠标位置飞回收藏"
 	)
-	_expect(main.hand_cards.has(rejected_card), "满排拒绝后真实手牌数据不变")
+	_expect(main.collection_cards.has(rejected_card), "满排拒绝后真实收藏数据不变")
 	_expect(front_row.get_card_count() == 7, "满排拒绝后场上数量不变")
 	await create_timer(0.2).timeout
 
 	_expect(
-		main._transfer_card(_hand_drag(original_cards[7]), &"board", back_row, 0),
+		main._transfer_card(_collection_drag(original_cards[7]), &"board", back_row, 0),
 		"第 8 张卡可放到另一排"
 	)
 	var cross_slot := _real_slots(back_row)[0]
@@ -1359,35 +1223,35 @@ func _test_full_row_rules_and_width() -> void:
 func _test_phase_click_and_button_regressions() -> void:
 	var main: Variant = await _create_main()
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
-	var original_cards: Array[CardData] = main.hand_cards.duplicate()
-	var second_hand_card_view := _hand_card_view(main, 1)
+	var original_cards: Array[CardData] = main.collection_cards.duplicate()
+	var second_collection_card_view := _collection_card_view(main, 1)
 
 	var left_click := InputEventMouseButton.new()
 	left_click.button_index = MOUSE_BUTTON_LEFT
 	left_click.pressed = true
-	second_hand_card_view._gui_input(left_click)
+	second_collection_card_view._gui_input(left_click)
 	_expect(main.selected_card == original_cards[1], "左键点击仍更新卡牌预览")
 
 	var right_click := InputEventMouseButton.new()
 	right_click.button_index = MOUSE_BUTTON_RIGHT
 	right_click.pressed = true
-	var previous_effect_state: bool = second_hand_card_view.showing_effect
-	second_hand_card_view._gui_input(right_click)
+	var previous_effect_state: bool = second_collection_card_view.showing_effect
+	second_collection_card_view._gui_input(right_click)
 	_expect(
-		second_hand_card_view.showing_effect != previous_effect_state,
+		second_collection_card_view.showing_effect != previous_effect_state,
 		"右键仍可切换符文/效果显示"
 	)
 
 	_expect(
-		main._transfer_card(_hand_drag(original_cards[0]), &"board", front_row, 0),
+		main._transfer_card(_collection_drag(original_cards[0]), &"board", front_row, 0),
 		"建立场上选中测试卡牌"
 	)
 	var board_slot := _real_slots(front_row)[0]
 	board_slot.card_view._gui_input(left_click)
 	_expect(main.selected_board_slot == board_slot, "点击场上卡牌仍可选中")
 	_expect(
-		main.get_node_or_null("%ReturnToHandButton") == null,
-		"旧的收回手牌按钮已移除"
+		main.get_node_or_null("%ReturnToCollectionButton") == null,
+		"旧的收回收藏按钮已移除"
 	)
 
 	var phase_button := main.get_node("%StartBattleButton") as Button
@@ -1395,13 +1259,13 @@ func _test_phase_click_and_button_regressions() -> void:
 	_expect(tuner_button.text == "卡面调整器", "主界面提供卡面调整器入口")
 	phase_button.emit_signal("pressed")
 	_expect(main.current_phase == 1, "阶段按钮可进入战斗阶段")
-	var battle_hand_card_view := _hand_card_view(main, 0)
+	var battle_collection_card_view := _collection_card_view(main, 0)
 	_expect(
-		battle_hand_card_view._get_drag_data(Vector2(10.0, 10.0)) == null,
-		"战斗阶段禁止从手牌开始拖动"
+		battle_collection_card_view._get_drag_data(Vector2(10.0, 10.0)) == null,
+		"战斗阶段禁止从收藏开始拖动"
 	)
 	_expect(
-		not front_row.can_receive_card_drag(_hand_drag(main.hand_cards[0])),
+		not front_row.can_receive_card_drag(_collection_drag(main.collection_cards[0])),
 		"战斗阶段棋盘不接收放置反馈"
 	)
 	_expect(_preview_slot(front_row) == null, "战斗阶段放置反馈隐藏")
@@ -1409,7 +1273,7 @@ func _test_phase_click_and_button_regressions() -> void:
 	phase_button.emit_signal("pressed")
 	_expect(main.current_phase == 2, "阶段按钮可进入结算阶段")
 	_expect(
-		_hand_card_view(main, 0)._get_drag_data(Vector2(10.0, 10.0)) == null,
+		_collection_card_view(main, 0)._get_drag_data(Vector2(10.0, 10.0)) == null,
 		"结算阶段禁止拖动"
 	)
 	phase_button.emit_signal("pressed")
@@ -1432,11 +1296,11 @@ func _dispose_main(main: Variant) -> void:
 	await process_frame
 
 
-func _hand_drag(card_data: CardData) -> Dictionary:
+func _collection_drag(card_data: CardData) -> Dictionary:
 	return {
 		"kind": &"card",
 		"card_data": card_data,
-		"source_type": &"hand",
+		"source_type": &"collection",
 		"source_row": null,
 		"source_slot": null,
 	}
@@ -1498,8 +1362,15 @@ func _row_cards(row: BattlefieldRow) -> Array[CardData]:
 	return cards
 
 
-func _hand_card_view(main: Variant, index: int) -> CardView:
-	var hand_slot: Node = main.get_node("%HandCardRow").get_child(index)
+func _row_has_layout_animation(row: BattlefieldRow) -> bool:
+	for slot: BoardSlot in _real_slots(row):
+		if slot.is_layout_animating():
+			return true
+	return false
+
+
+func _collection_card_view(main: Variant, index: int) -> CardView:
+	var hand_slot: Node = main.get_node("%CollectionCardRow").get_child(index)
 	return hand_slot.get_child(0) as CardView
 
 

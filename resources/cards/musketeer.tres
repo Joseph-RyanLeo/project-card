@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://dub7ke83lo4ic"]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" uid="uid://cv8x31oxjomhb" path="res://assets/card_art/musketeer.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"musketeer"
+display_name = "火枪手"
+action_type = 1
+base_value = 6
+max_health = 22
+target_priority = 3
+runes = Array[int]([2, 3, 0])
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-3, 12)
+effect_text = "行动时造成射击伤害。灰烬征册视觉测试卡。"

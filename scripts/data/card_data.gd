@@ -9,6 +9,7 @@ enum CardType {
 	MINION,
 	EQUIPMENT,
 	SPELL,
+	RESOURCE,
 }
 
 enum ActionType {

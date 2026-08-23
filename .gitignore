@@ -21,3 +21,4 @@ Thumbs.db
 
 # Locally exported playable builds
 builds/
+*.exe

@@ -10,11 +10,27 @@ const CARD_RESOURCE_PATHS := [
 	"res://resources/cards/ember_squire.tres",
 	"res://resources/cards/tide_archer.tres",
 	"res://resources/cards/spark_mage.tres",
-	"res://resources/cards/dusk_mender.tres",
-	"res://resources/cards/thorn_guard.tres",
-	"res://resources/cards/shadow_slinger.tres",
-	"res://resources/cards/grove_lancer.tres",
-	"res://resources/cards/sunlit_bastion.tres",
+	"res://resources/cards/old_wolf_kaspar.tres",
+	"res://resources/cards/anvil_margaret.tres",
+	"res://resources/cards/town_priest.tres",
+	"res://resources/cards/diplomat.tres",
+	"res://resources/cards/recruiter.tres",
+	"res://resources/cards/elegy_poet.tres",
+	"res://resources/cards/war_drum_musician.tres",
+	"res://resources/cards/javelin_skirmisher.tres",
+	"res://resources/cards/militia.tres",
+	"res://resources/cards/militia_commander.tres",
+	"res://resources/cards/mudleg_brothers.tres",
+	"res://resources/cards/fireman.tres",
+	"res://resources/cards/musketeer.tres",
+	"res://resources/cards/berserker_vanguard.tres",
+	"res://resources/cards/shieldwall_private.tres",
+	"res://resources/cards/rune_engraver.tres",
+	"res://resources/cards/timid_infantry.tres",
+	"res://resources/cards/baggage_muleteer.tres",
+	"res://resources/cards/heavy_knight.tres",
+	"res://resources/cards/armorsmith.tres",
+	"res://resources/cards/field_medic.tres",
 ]
 
 # 资源列表是工具可选择的卡牌白名单，避免误写其他 Resource。
@@ -72,6 +88,9 @@ var _refresh_queued: bool = false
 
 func _ready() -> void:
 	# 场景节点就绪后再连接信号，避免 @tool 属性 setter 访问空节点。
+	# 普通 CardView 为悬停晃动使用中心支点；工具的 4 倍固定预览改用左上角，
+	# 否则放大后会从预览区域向左上溢出并被屏幕裁切。
+	preview_card.pivot_offset = Vector2.ZERO
 	_populate_card_selector()
 	_connect_runtime_controls()
 	_sync_runtime_controls()

@@ -1,6 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://h8d2kcrlgbxx"]
+[gd_scene load_steps=4 format=3 uid="uid://h8d2kcrlgbxx"]
 
 [ext_resource type="Script" uid="uid://b3035ae3jd5ej" path="res://scripts/ui/board_slot.gd" id="1_board_slot"]
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_slot"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pattern"]
 content_margin_left = 3.0
@@ -21,6 +23,7 @@ corner_radius_bottom_left = 3
 [node name="BoardSlot" type="PanelContainer" unique_id=1635154848]
 custom_minimum_size = Vector2(99, 136)
 mouse_default_cursor_shape = 2
+theme_override_styles/panel = SubResource("StyleBoxEmpty_slot")
 script = ExtResource("1_board_slot")
 
 [node name="StackFeedbackLayer" type="Control" parent="."]

@@ -1,13 +1,12 @@
 extends Control
 
-## 手牌区域的拖放接收层。
-## 它验证是否为卡牌/小队拖拽并发出信号，真实的手牌重排或回收事务由 Main 提交。
+## 收藏区域的拖放接收层。
+## 它只接收从我方战场放回的卡牌/小队；收藏自身的卡牌不会被它接收，
+## 因而玩家无法通过拖放调整收藏顺序。真实回收事务仍由 Main 提交。
 
 signal card_dropped(data: Dictionary, card_global_position: Vector2)
-signal card_drag_hovered(pointer_global_position: Vector2, data: Dictionary)
-signal card_drag_exited
 
-const HIGHLIGHT_COLOR := Color(0.48, 0.9, 0.66, 0.95) # 场上卡可放回手牌时，手牌区域边框的高亮颜色
+const HIGHLIGHT_COLOR := Color(0.48, 0.9, 0.66, 0.95) # 场上卡可放回收藏时，收藏区域边框的高亮颜色
 
 var drop_enabled: bool = false
 var _accepting_current_drag: bool = false
@@ -27,16 +26,11 @@ func _drop_data(at_position: Vector2, data: Variant) -> void:
 
 
 func preview_card_drop(
-	pointer_global_position: Vector2,
+	_pointer_global_position: Vector2,
 	data: Variant
 ) -> bool:
 	var can_drop := _is_card_drag(data)
 	_set_highlighted(can_drop)
-	if can_drop:
-		card_drag_hovered.emit(
-			pointer_global_position,
-			data as Dictionary
-		)
 	return can_drop
 
 
@@ -50,7 +44,6 @@ func commit_card_drop(
 
 	_set_highlighted(false)
 	var drag_data := data as Dictionary
-	card_drag_hovered.emit(pointer_global_position, drag_data)
 	var preview_offset: Vector2 = drag_data.get("preview_offset", Vector2.ZERO)
 	var drag_visual := drag_data.get("drag_visual") as CardDragPreview
 	card_dropped.emit(
@@ -63,11 +56,10 @@ func commit_card_drop(
 
 func clear_drop_preview() -> void:
 	_set_highlighted(false)
-	card_drag_exited.emit()
 
 
 func _notification(what: int) -> void:
-	# 拖拽开始时才启用鼠标拦截，平时不遮挡下方手牌。
+	# 拖拽开始时才启用鼠标拦截，平时不遮挡下方收藏。
 	if what == NOTIFICATION_DRAG_BEGIN:
 		var drag_data: Variant = get_viewport().gui_get_drag_data()
 		_accepting_current_drag = _is_card_drag(drag_data)
@@ -80,7 +72,6 @@ func _notification(what: int) -> void:
 		_accepting_current_drag = false
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_set_highlighted(false)
-		card_drag_exited.emit()
 
 
 func _draw() -> void:
@@ -93,7 +84,7 @@ func _is_card_drag(data: Variant) -> bool:
 		return false
 
 	var drag_data := data as Dictionary
-	if drag_data.get("source_type") not in [&"hand", &"board"]:
+	if drag_data.get("source_type") != &"board":
 		return false
 	if drag_data.get("kind") == &"card":
 		return drag_data.get("card_data") is CardData
@@ -112,4 +103,3 @@ func _set_highlighted(value: bool) -> void:
 
 func _on_mouse_exited() -> void:
 	_set_highlighted(false)
-	card_drag_exited.emit()

@@ -23,7 +23,7 @@ const SQUAD_LIFT_OFFSET: float = 7.0 # 小队整体反馈时，全部成员一�
 const SQUAD_SHAKE_ANGLE: float = 2.5 # 小队优先反馈触发时左右短促震动的角度
 const SQUAD_SHAKE_DURATION: float = 0.13 # 小队优先反馈单次震动的总时长（秒）
 const STACK_TARGET_MAX_ROTATION_ANGLE: float = 2.0 # 拖动卡贴近合法目标时，目标小队持续旋转颤动的最大角度
-const STACK_TARGET_ROTATION_CYCLES_PER_SECOND: float = 4.0 # 合法叠卡目标每秒完成左右旋转颤动的次数
+const STACK_TARGET_ROTATION_CYCLE_DURATION: float = 0.2 # 合法叠卡目标完成一次丝滑左右轻晃的总时长（秒）
 const SQUAD_SHADOW_OFFSET := Vector2(5.0, 7.0) # 小队整体阴影相对小队的偏移
 const SQUAD_SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.34) # 小队整体反馈阴影的颜色与透明度
 const LAYOUT_TWEEN_DURATION: float = 0.15 # 小队随行布局让位、恢复和飞入的动画时长（秒）
@@ -51,7 +51,7 @@ var _squad_shadow: Panel
 var _shake_tween: Tween
 var _layout_tween: Tween
 var _stack_target_feedback_strength: float = 0.0
-var _stack_target_rotation_phase: float = 0.0
+var _stack_target_rotation_tween: Tween
 var _stack_target_snapshot_layer: Control
 var _squad_feedback_active: bool = false
 var _displayed_pattern_result: RunePatternResult
@@ -67,21 +67,6 @@ func _ready() -> void:
 	_create_mode_timer()
 	_create_squad_shadow()
 	_refresh()
-	set_process(false)
-
-
-func _process(delta: float) -> void:
-	if _stack_target_feedback_strength <= 0.0:
-		set_process(false)
-		return
-	_stack_target_rotation_phase += (
-		delta * STACK_TARGET_ROTATION_CYCLES_PER_SECOND * TAU
-	)
-	stack_feedback_layer.rotation_degrees = (
-		sin(_stack_target_rotation_phase)
-		* STACK_TARGET_MAX_ROTATION_ANGLE
-		* _stack_target_feedback_strength
-	)
 
 
 func set_squad_data(value: SquadData) -> void:
@@ -158,17 +143,62 @@ func set_stack_target_feedback(strength: float) -> void:
 	var next_strength := clampf(strength, 0.0, 1.0)
 	if next_strength <= 0.0:
 		_stack_target_feedback_strength = 0.0
-		_stack_target_rotation_phase = 0.0
-		if is_instance_valid(stack_feedback_layer):
-			stack_feedback_layer.rotation_degrees = 0.0
+		_stop_stack_target_rotation()
 		_remove_stack_target_snapshots()
-		set_process(false)
 		return
-	if _stack_target_feedback_strength <= 0.0:
-		_stack_target_rotation_phase = 0.0
 	_stack_target_feedback_strength = next_strength
 	_ensure_stack_target_snapshots()
-	set_process(true)
+	_start_stack_target_rotation()
+
+
+func _start_stack_target_rotation() -> void:
+	if (
+		_stack_target_rotation_tween != null
+		and _stack_target_rotation_tween.is_valid()
+	):
+		return
+	stack_feedback_layer.rotation_degrees = 0.0
+	_stack_target_rotation_tween = create_tween()
+	_stack_target_rotation_tween.set_loops()
+	_stack_target_rotation_tween.set_trans(Tween.TRANS_SINE)
+	_stack_target_rotation_tween.set_ease(Tween.EASE_IN_OUT)
+	_stack_target_rotation_tween.tween_method(
+		_apply_stack_target_rotation,
+		0.0,
+		-1.0,
+		STACK_TARGET_ROTATION_CYCLE_DURATION * 0.25
+	)
+	_stack_target_rotation_tween.tween_method(
+		_apply_stack_target_rotation,
+		-1.0,
+		1.0,
+		STACK_TARGET_ROTATION_CYCLE_DURATION * 0.5
+	)
+	_stack_target_rotation_tween.tween_method(
+		_apply_stack_target_rotation,
+		1.0,
+		0.0,
+		STACK_TARGET_ROTATION_CYCLE_DURATION * 0.25
+	)
+
+
+func _apply_stack_target_rotation(normalized_rotation: float) -> void:
+	stack_feedback_layer.rotation_degrees = (
+		normalized_rotation
+		* STACK_TARGET_MAX_ROTATION_ANGLE
+		* _stack_target_feedback_strength
+	)
+
+
+func _stop_stack_target_rotation() -> void:
+	if (
+		_stack_target_rotation_tween != null
+		and _stack_target_rotation_tween.is_valid()
+	):
+		_stack_target_rotation_tween.kill()
+	_stack_target_rotation_tween = null
+	if is_instance_valid(stack_feedback_layer):
+		stack_feedback_layer.rotation_degrees = 0.0
 
 
 func get_stack_target_feedback_strength() -> float:
@@ -176,7 +206,11 @@ func get_stack_target_feedback_strength() -> float:
 
 
 func is_stack_target_rotation_active() -> bool:
-	return _stack_target_feedback_strength > 0.0 and is_processing()
+	return (
+		_stack_target_feedback_strength > 0.0
+		and _stack_target_rotation_tween != null
+		and _stack_target_rotation_tween.is_valid()
+	)
 
 
 func has_stack_target_snapshots() -> bool:
@@ -284,8 +318,11 @@ func clear_drag_hidden_card() -> void:
 	_refresh()
 
 
-func animate_from_global_position(previous_global_position: Vector2) -> void:
-	if not visible or is_preview():
+func animate_from_global_position(
+	previous_global_position: Vector2,
+	include_preview: bool = false
+) -> void:
+	if not visible or (is_preview() and not include_preview):
 		return
 	if _layout_tween != null and _layout_tween.is_valid():
 		_layout_tween.kill()
@@ -620,8 +657,8 @@ func _create_squad_shadow() -> void:
 	style.corner_radius_bottom_left = 3
 	style.corner_radius_bottom_right = 3
 	_squad_shadow.add_theme_stylebox_override("panel", style)
-	add_child(_squad_shadow)
-	move_child(_squad_shadow, 0)
+	card_visual_layer.add_child(_squad_shadow)
+	card_visual_layer.move_child(_squad_shadow, 0)
 
 
 func _on_card_clicked(_ignored: CardData, clicked_card: CardData) -> void:

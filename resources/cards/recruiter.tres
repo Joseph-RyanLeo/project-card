@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://ceqni4ymff3ei"]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" uid="uid://c1g3hn1hbyx1l" path="res://assets/card_art/recruiter.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"recruiter"
+display_name = "征召官"
+action_type = 4
+base_value = 8
+max_health = 20
+armor = 3
+target_priority = 5
+runes = Array[int]([4, 0, 2])
+rarity = 4
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(2, 29)
+effect_text = "行动时获得护甲。灰烬征册视觉测试卡。"

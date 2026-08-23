@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://qmj6fku2yu67"]
+
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" uid="uid://cca5nmh2vl76o" path="res://assets/card_art/war_drum_musician.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"war_drum_musician"
+display_name = "战鼓乐师"
+action_type = 3
+base_value = 5
+max_health = 24
+target_priority = 2
+runes = Array[int]([1, 2, 4])
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-3, 19)
+effect_text = "行动时治疗受伤友方。灰烬征册视觉测试卡。"

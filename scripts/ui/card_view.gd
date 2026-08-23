@@ -10,7 +10,6 @@ extends Panel
 
 signal card_clicked(card_data: CardData)
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
-signal hand_source_visibility_changing
 
 const RUNE_FIRE_TEXTURE: Texture2D = preload("res://assets/runes/rune_fire.png")
 const RUNE_WATER_TEXTURE: Texture2D = preload("res://assets/runes/rune_water.png")
@@ -33,13 +32,15 @@ const DEFAULT_ART_BACKGROUND_TEXTURE: Texture2D = preload(
 const CARD_NAME_FRAME_TEXTURE: Texture2D = preload(
 	"res://assets/card_ui/card_name_frame.png"
 )
+const CARD_TEXT_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const LARGE_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_large.fnt")
 const SMALL_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_small.fnt")
 const LAYOUT_TWEEN_DURATION: float = 0.15 # 卡牌让位、归位和飞入目标位置的动画时长（秒）
 const INTERACTION_TWEEN_DURATION: float = 0.10 # 悬停、按压时阴影移动的动画时长（秒）
 const HOVER_PUNCH_ANGLE: float = 5.0 # 鼠标进入实体卡左/右半边时，同方向轻晃的最大角度
 const HOVER_PUNCH_DURATION: float = 0.16 # 悬停单方向轻晃并复位的总时长（秒）
-const HAND_HOVER_LIFT_OFFSET: float = 7.0 # 手牌悬停时向上抽出的像素距离
+const COLLECTION_HOVER_LIFT_OFFSET: float = 7.0 # 收藏悬停时向上抽出的像素距离
+const COLLECTION_DRAG_GHOST_ALPHA: float = 0.32 # 收藏卡拖起后原槽虚影的透明度
 const RESTING_SHADOW_OFFSET := Vector2(6.0, 7.0) # 悬停状态下阴影相对卡牌的偏移
 const PRESSED_SHADOW_OFFSET := Vector2(6.0, 8.0) # 按住状态下阴影相对卡牌的偏移
 const INTERACTION_SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.28) # 悬停和按压阴影的颜色及透明度
@@ -55,11 +56,11 @@ const ACTIVE_RUNE_CYCLE_SECONDS: float = 2.0 # 一轮完整流光动画的总时
 const ACTIVE_RUNE_START_PHASE_SECONDS: float = 1.4 # 新一轮真实流光首次出现时使用的精灵表时间相位（秒）
 @export_group("Card Pixel Layout")
 @export var card_size: Vector2 = Vector2(99, 136) # 裸卡的基准像素尺寸
-@export var title_area_position: Vector2 = Vector2(21, 4) # 卡牌名字文字区域的左上角坐标
+@export var title_area_position: Vector2 = Vector2(21, 5) # 卡牌名字文字区域整体下移 1px 后的左上角坐标
 @export var title_area_size: Vector2 = Vector2(61, 10) # 卡牌名字文字可使用的最大区域
 @export var name_frame_position: Vector2 = Vector2(0, 4) # 卡牌名字框的左上角坐标
-@export var art_area_position: Vector2 = Vector2(10, 5) # 立绘裁切窗口的左上角坐标
-@export var art_area_size: Vector2 = Vector2(79, 95) # 立绘裁切窗口的像素尺寸
+@export var art_area_position: Vector2 = Vector2(10, 5) # 卡框内部立绘裁切窗口的左上角坐标
+@export var art_area_size: Vector2 = Vector2(79, 95) # 背景和人物只允许显示在卡框内部的区域
 @export var bottom_area_position: Vector2 = Vector2(8, 108) # 符文或效果文字区域的左上角坐标
 @export var bottom_area_size: Vector2 = Vector2(83, 23) # 符文或效果文字区域的像素尺寸
 @export var health_badge_size: Vector2 = Vector2(20, 17) # 生命图标与数字共用区域的尺寸
@@ -75,11 +76,13 @@ const ACTIVE_RUNE_START_PHASE_SECONDS: float = 1.4 # 新一轮真实流光首次
 @export var rune_spacing: int = 7 # 三个元素符文布局槽之间的水平间距
 
 @export_group("Card Font Sizes")
-@export var title_font_size: int = 7 # 卡牌名字优先使用的字号
+@export var title_font_size: int = 8 # 寒蝉点阵 7px 在卡牌名字上使用的固定字号
 @export var title_font_min_size: int = 5 # 名字过长时允许缩小到的最小字号
 @export var value_font_size: int = 12 # 行动数值使用的字号
 @export var stats_font_size: int = 8 # 生命值和护甲值使用的字号
-@export var effect_font_size: int = 7 # 卡牌效果文字使用的字号
+@export var effect_font_size: int = 8 # 寒蝉点阵 7px 在卡牌效果文字上使用的固定字号
+@export var effect_line_spacing: int = 0 # 卡牌效果文字多行之间增加或减少的像素间距
+@export var effect_text_color: Color = Color.WHITE # 卡牌效果文字的默认颜色
 
 @export var card_data: CardData:
 	set(value):
@@ -89,12 +92,12 @@ const ACTIVE_RUNE_START_PHASE_SECONDS: float = 1.4 # 新一轮真实流光首次
 
 var _card_data: CardData
 var showing_effect: bool = false
-# 拖拽来源信息由手牌或 SquadView 注入，CardView 不直接修改来源容器。
+# 拖拽来源信息由收藏或 SquadView 注入，CardView 不直接修改来源容器。
 var _drag_enabled: bool = false
 var _drag_source_type: StringName
 var _drag_source_row: Node
 var _drag_source_slot: Control
-var _hand_source_hidden: bool = false
+var _collection_source_ghosted: bool = false
 var _left_button_pressed: bool = false
 var _active_drag_preview_offset: Vector2 = Vector2.ZERO
 var _active_drag_visual: CardDragPreview
@@ -120,6 +123,9 @@ static var _active_rune_flow_epoch_msec: int = -1
 static var _active_rune_flow_cached_process_frame: int = -1
 static var _active_rune_flow_cached_elapsed_seconds: float = 0.0
 static var _active_rune_flow_initial_process_frame: int = -1
+static var debug_effect_line_spacing: int = 0 # Main 文字调试控件当前预览的效果文字行距
+static var debug_effect_text_color: Color = Color.WHITE # Main 文字调试控件当前预览的效果文字颜色
+static var debug_force_effect_text: bool = false # Main 文字调试控件是否让所有卡直接显示效果文字
 
 @onready var name_clip: Control = %NameClip
 @onready var name_label: Label = %NameLabel
@@ -147,6 +153,7 @@ static var _active_rune_flow_initial_process_frame: int = -1
 
 # --- 生命周期、鼠标输入与拖拽数据 ---
 func _ready() -> void:
+	add_to_group("card_views")
 	_layout_resting_position = position
 	# 普通实体卡围绕中心轻晃；尚未入树就被配置成快照的卡必须保持
 	# 左上角支点，避免稍后进入 SceneTree 时重新覆盖快照捕获变换。
@@ -317,15 +324,14 @@ func _notification(what: int) -> void:
 			_reset_interaction_visual()
 		if (
 			_drag_enabled
-			and _drag_source_type == &"hand"
+			and _drag_source_type == &"collection"
 			and is_instance_valid(_drag_source_slot)
 			and drag_data is Dictionary
 			and (drag_data as Dictionary).get("source_slot") == _drag_source_slot
 		):
-			hand_source_visibility_changing.emit()
-			_drag_source_slot.visible = false
-			_hand_source_hidden = true
-	elif what == NOTIFICATION_DRAG_END and _hand_source_hidden:
+			_drag_source_slot.modulate.a = COLLECTION_DRAG_GHOST_ALPHA
+			_collection_source_ghosted = true
+	elif what == NOTIFICATION_DRAG_END and _collection_source_ghosted:
 		var should_animate_back := (
 			not get_viewport().gui_is_drag_successful()
 		)
@@ -337,10 +343,9 @@ func _notification(what: int) -> void:
 				- _active_drag_preview_offset
 			)
 		)
-		hand_source_visibility_changing.emit()
 		if is_instance_valid(_drag_source_slot):
-			_drag_source_slot.visible = true
-		_hand_source_hidden = false
+			_drag_source_slot.modulate.a = 1.0
+		_collection_source_ghosted = false
 		if should_animate_back:
 			_animate_cancelled_drag_return.call_deferred(
 				return_global_position
@@ -393,7 +398,7 @@ func show_pointer_hover_feedback(play_rotation_punch: bool = false) -> void:
 		z_index = _resting_z_index + 20
 		_set_interaction_shadow_visible(true)
 		_animate_shadow_offset(RESTING_SHADOW_OFFSET)
-		_set_hand_hover_lift(true)
+		_set_collection_hover_lift(true)
 		if play_rotation_punch:
 			_play_hover_rotation_punch()
 
@@ -403,7 +408,7 @@ func _on_mouse_exited() -> void:
 	if _drag_enabled and not _left_button_pressed:
 		z_index = _resting_z_index
 		_set_interaction_shadow_visible(false)
-		_set_hand_hover_lift(false)
+		_set_collection_hover_lift(false)
 
 
 func clear_pointer_hover_feedback() -> void:
@@ -414,7 +419,7 @@ func clear_pointer_hover_feedback() -> void:
 	if not _left_button_pressed:
 		z_index = _resting_z_index
 		_set_interaction_shadow_visible(false)
-		_set_hand_hover_lift(false)
+		_set_collection_hover_lift(false)
 
 
 func _reset_interaction_visual() -> void:
@@ -426,10 +431,10 @@ func _reset_interaction_visual() -> void:
 	set_external_lift(0.0)
 
 
-func _set_hand_hover_lift(value: bool) -> void:
-	# 战场卡的抽出距离由 SquadView 决定；CardView 只直接控制手牌。
-	if _drag_source_type == &"hand":
-		set_external_lift(HAND_HOVER_LIFT_OFFSET if value else 0.0)
+func _set_collection_hover_lift(value: bool) -> void:
+	# 战场卡的抽出距离由 SquadView 决定；CardView 只直接控制收藏。
+	if _drag_source_type == &"collection":
+		set_external_lift(COLLECTION_HOVER_LIFT_OFFSET if value else 0.0)
 
 
 func _create_interaction_shadow() -> void:
@@ -531,7 +536,7 @@ func animate_from_global_position(previous_global_position: Vector2) -> void:
 func set_external_lift(pixels: float) -> void:
 	_external_lift = maxf(pixels, 0.0)
 	# 入树前尚未记录真实静止坐标，此时只保存状态；否则 configure_drag_source(false)
-	# 会把手牌虚影预先设置好的安全边距位置误写成 (0, 0)。
+	# 会把收藏虚影预先设置好的安全边距位置误写成 (0, 0)。
 	if not is_node_ready():
 		return
 	if _layout_tween != null and _layout_tween.is_valid():
@@ -677,7 +682,7 @@ func _refresh_bottom_text() -> void:
 	if card_data == null:
 		return
 
-	if showing_effect:
+	if showing_effect or debug_force_effect_text:
 		rune_row.visible = false
 		set_process(false)
 		effect_text_label.visible = true
@@ -736,7 +741,7 @@ func _set_card_name(display_name: String) -> void:
 	while fitted_size > title_font_min_size:
 		var text_size := name_font.get_string_size(
 			display_name,
-			HORIZONTAL_ALIGNMENT_LEFT,
+			HORIZONTAL_ALIGNMENT_CENTER,
 			-1.0,
 			fitted_size
 		)
@@ -1133,25 +1138,48 @@ func _apply_pixel_layout() -> void:
 	armor_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	armor_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_apply_action_layout(CardData.ActionType.MELEE)
-	name_label.add_theme_font_size_override("font_size", title_font_size)
+	_apply_card_typography()
 	name_label.add_theme_color_override(
 		"font_color",
 		Color("35251c")
 	)
-	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_layout_name_label()
 	value_label.add_theme_font_override("font", LARGE_NUMBER_FONT)
 	value_label.add_theme_font_size_override("font_size", value_font_size)
-	health_label.add_theme_font_override("font", SMALL_NUMBER_FONT)
-	health_label.add_theme_font_size_override("font_size", stats_font_size)
+	health_label.add_theme_font_override("font", LARGE_NUMBER_FONT)
+	health_label.add_theme_font_size_override("font_size", value_font_size)
 	armor_label.add_theme_font_override("font", SMALL_NUMBER_FONT)
 	armor_label.add_theme_font_size_override("font_size", stats_font_size)
 	priority_label.add_theme_font_size_override("font_size", stats_font_size)
-	effect_text_label.add_theme_font_size_override("font_size", effect_font_size)
 	rune_row.add_theme_constant_override("separation", rune_spacing)
+
+
+func refresh_text_debug_style() -> void:
+	if not is_node_ready():
+		return
+	_apply_card_typography()
+	if card_data != null:
+		_set_card_name(card_data.display_name)
+	_refresh_bottom_text()
+
+
+func _apply_card_typography() -> void:
+	name_label.add_theme_font_override("font", CARD_TEXT_FONT)
+	effect_text_label.add_theme_font_override("font", CARD_TEXT_FONT)
+	name_label.add_theme_font_size_override("font_size", title_font_size)
+	effect_text_label.add_theme_font_size_override("font_size", effect_font_size)
+	effect_text_label.add_theme_color_override(
+		"font_color",
+		debug_effect_text_color
+	)
+	effect_text_label.add_theme_constant_override(
+		"line_spacing",
+		debug_effect_line_spacing
+	)
 
 
 func _apply_action_layout(action_type: CardData.ActionType) -> void:
