@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bpqa8p0ngxcta"]
 
-[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" path="res://assets/card_art/arcane_mage.png" id="2_art"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" uid="uid://dnsfvxturw2sv" path="res://assets/card_art/arcane_mage.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -11,7 +11,6 @@ action_type = 2
 base_value = 7
 cooldown_seconds = 4.0
 max_health = 12
-target_priority = 3
 runes = Array[int]([0, 3, 4])
 race_type = 4
 rarity = 2

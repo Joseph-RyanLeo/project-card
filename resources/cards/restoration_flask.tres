@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://cmu7syrnwhk30"]
+
+[ext_resource type="Texture2D" uid="uid://cxolut360nx6u" path="res://assets/card_art/equipment/restoration_flask.png" id="1_i6x2y"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_77auh"]
+
+[resource]
+script = ExtResource("2_77auh")
+id = &"restoration_flask"
+display_name = "复苏药剂"
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 3
+equipment_type = 5
+equipment_action_delta = 1
+equipment_cooldown_delta = 0.5
+equipment_health_delta = 1
+art_texture = ExtResource("1_i6x2y")
+art_offset = Vector2i(0, 14)
+effect_text = "占位：消耗品；行动+1，冷却+0.5秒，生命+1，护甲+0。"

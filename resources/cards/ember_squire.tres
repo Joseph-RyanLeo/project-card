@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://cmvbil3cm6clg"]
 
-[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" path="res://assets/card_art/agile_fighter.png" id="2_art"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" uid="uid://dxplp66h3ftgp" path="res://assets/card_art/agile_fighter.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -10,7 +10,6 @@ display_name = "余烬侍从"
 base_value = 6
 max_health = 18
 armor = 2
-target_priority = 4
 runes = Array[int]([0, 0, 1])
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-1, 26)

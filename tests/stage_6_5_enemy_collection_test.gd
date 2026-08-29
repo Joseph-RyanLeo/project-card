@@ -103,7 +103,11 @@ func _test_world_rows_views_and_lock() -> void:
 	_expect(not bool(main.collection_drop_zone.get("drop_enabled")), "战斗阶段收藏只能查看")
 	main.set_phase_for_test(main.GamePhase.RESULT)
 	_expect(not player_back.can_receive_card_drag(_collection_drag(main.collection_cards[0])), "结算阶段继续只读")
-	_expect(main.get_node_or_null("%StartBattleButton") == null, "旧可见阶段按钮已删除")
+	_expect(
+		main.get_node_or_null("%StartBattleButton") != null
+		and main.start_battle_button.text == "开始战斗",
+		"阶段 7 新增正式开始战斗按钮，不恢复旧阶段循环调试按钮"
+	)
 	_expect(main.get_node_or_null("%SelectedCardView") == null and main.get_node_or_null("%HandCardRow") == null, "旧大卡预览与手牌 UI 已删除")
 	_expect(main.card_art_tuner_button != null and main.get_node("%BadgePanel") != null, "卡面调整器与强化徽章预留节点保留")
 	main.queue_free()
@@ -114,7 +118,7 @@ func _test_collection_pages_filters_and_transactions() -> void:
 	var main = MAIN_SCENE.instantiate()
 	root.add_child(main)
 	await process_frame
-	_expect(main.collection_cards.size() == 24, "Demo 收藏使用 24 张卡名与卡面均不重复的卡牌")
+	_expect(main.collection_cards.size() == 53, "Demo 收藏使用 53 张卡名与卡面均不重复的卡牌")
 	var unique_card_objects: Dictionary = {}
 	var unique_card_names: Dictionary = {}
 	var unique_card_art: Dictionary = {}
@@ -123,13 +127,25 @@ func _test_collection_pages_filters_and_transactions() -> void:
 		unique_card_names[card.display_name] = true
 		unique_card_art[card.art_texture.resource_path] = true
 	_expect(
-		unique_card_objects.size() == 24
-		and unique_card_names.size() == 24
-		and unique_card_art.size() == 24,
-		"24 张 Demo 卡拥有独立对象、名称和卡面资源"
+		unique_card_objects.size() == 53
+		and unique_card_names.size() == 53
+		and unique_card_art.size() == 53,
+		"53 张 Demo 卡拥有独立对象、名称和卡面资源"
 	)
 	_expect(main.collection_card_row.get_child_count() == 12, "空位也保留：每组左右书页固定 12 个卡位")
 	_expect(main.action_filter_tabs.get_child_count() == 5, "顶部五个标签分别建立五种行动方式筛选")
+	for tab_index: int in main.action_filter_tabs.get_child_count():
+		var action_tab := main.action_filter_tabs.get_child(tab_index) as Control
+		var action_icon := action_tab.get_node("ActionIcon") as TextureRect
+		var expected_icon_rect: Rect2 = main.get_action_tab_icon_rect(tab_index)
+		_expect(
+			action_icon.texture == main.ACTION_FILTER_TEXTURES[tab_index]
+			and action_icon.position == expected_icon_rect.position
+			and action_icon.size == expected_icon_rect.size
+			and action_icon.stretch_mode == TextureRect.STRETCH_KEEP
+			and action_icon.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST,
+			"第 %d 个行动筛选图标使用原图尺寸与整数像素坐标" % [tab_index + 1]
+		)
 	var book_panel := main.get_node("%BookPanel") as Control
 	_expect(
 		main.left_edge_button.size.x >= 48.0
@@ -205,11 +221,70 @@ func _test_collection_pages_filters_and_transactions() -> void:
 		and not recent_left_art.visible,
 		"普通收藏层级固定为书皮、书签、独立左右书页、收藏卡"
 	)
+	var persistent_effect_card_view := _find_collection_card_view(main)
+	_expect(
+		persistent_effect_card_view != null,
+		"当前收藏页存在可验证效果面持久状态的随从卡"
+	)
+	if persistent_effect_card_view != null:
+		var persistent_effect_card := persistent_effect_card_view.card_data
+		var right_click := InputEventMouseButton.new()
+		right_click.button_index = MOUSE_BUTTON_RIGHT
+		right_click.pressed = true
+		persistent_effect_card_view._gui_input(right_click)
+		await create_timer(
+			persistent_effect_card_view.effect_transition_duration + 0.05
+		).timeout
+		_expect(
+			persistent_effect_card_view.showing_effect
+			and persistent_effect_card_view.effect_text_label.visible,
+			"收藏随从首次右键后持续显示效果文字"
+		)
+		main.turn_collection_page(1, &"direct")
+		main._clear_page_turn_overlay()
+		main.turn_collection_page(0, &"direct")
+		main._clear_page_turn_overlay()
+		var rebuilt_effect_card_view := _find_collection_card_view(
+			main,
+			persistent_effect_card
+		)
+		_expect(
+			rebuilt_effect_card_view != null
+			and rebuilt_effect_card_view != persistent_effect_card_view
+			and rebuilt_effect_card_view.showing_effect
+			and rebuilt_effect_card_view.effect_text_label.visible
+			and is_equal_approx(
+				rebuilt_effect_card_view.rune_row.modulate.a,
+				rebuilt_effect_card_view.effect_rune_dim_alpha
+			),
+			"翻页销毁并重建收藏卡后仍恢复效果文字与20%符文"
+		)
+		if rebuilt_effect_card_view != null:
+			rebuilt_effect_card_view._gui_input(right_click)
+			await create_timer(
+				rebuilt_effect_card_view.effect_transition_duration + 0.05
+			).timeout
+			main.turn_collection_page(1, &"direct")
+			main._clear_page_turn_overlay()
+			main.turn_collection_page(0, &"direct")
+			main._clear_page_turn_overlay()
+			var restored_rune_card_view := _find_collection_card_view(
+				main,
+				persistent_effect_card
+			)
+			_expect(
+				restored_rune_card_view != null
+				and not restored_rune_card_view.showing_effect
+				and not restored_rune_card_view.effect_text_label.visible
+				and is_equal_approx(restored_rune_card_view.rune_row.modulate.a, 1.0),
+				"第二次右键清除持久效果面，之后翻页继续显示完整符文"
+			)
 	var first_tab := main.action_filter_tabs.get_child(0) as Control
 	var second_tab := main.action_filter_tabs.get_child(1) as Control
 	_expect(
 		main.action_filter_tabs.position == main.ACTION_TABS_POSITION
-		and (first_tab.get_node("ActionIcon") as TextureRect).position == main.ACTION_TAB_ICON_POSITION
+		and (first_tab.get_node("ActionIcon") as TextureRect).position
+		== main.get_action_tab_icon_rect(CardData.ActionType.MELEE).position
 		and is_equal_approx(first_tab.position.y, main.ACTION_TAB_REST_Y)
 		and is_equal_approx(second_tab.position.y, main.ACTION_TAB_REST_Y),
 		"行动方式书签组与书签内图标都使用集中可调位置"
@@ -358,11 +433,11 @@ func _test_collection_pages_filters_and_transactions() -> void:
 	main.turn_collection_page(1, &"direct")
 	_expect(main._get_collection_card_slots().size() == 12, "第二页保持 12 张真实收藏卡可用于翻页调试")
 	_expect(
-		main.get_collection_physical_page_count() == 4
-		and main.get_collection_spread_count() == 2
+		main.get_collection_physical_page_count() == 9
+		and main.get_collection_spread_count() == 5
 		and main.left_page_number_label.text == "3"
 		and main.right_page_number_label.text == "4",
-		"24 张卡动态生成 4 个物理页，左右下角显示独立物理页码"
+		"53 张卡动态生成 9 个物理页（5 组展开页），左右下角显示独立物理页码"
 	)
 	main._clear_page_turn_overlay()
 	main.turn_collection_page(0, &"direct")
@@ -414,6 +489,47 @@ func _test_collection_pages_filters_and_transactions() -> void:
 		and (main.card_type_filter_tabs.get_child(2) as BaseButton).button_pressed,
 		"卡牌种类书签互斥选择，新选择替换旧选择并回到第一页"
 	)
+	main.toggle_action_filter(CardData.ActionType.MELEE)
+	await create_timer(main.ACTION_TAB_TWEEN_DURATION + 0.02).timeout
+	_expect(
+		main.active_action_filters == [CardData.ActionType.MELEE]
+		and main.active_card_type_filters == [CardData.CardType.MINION]
+		and (main.card_type_filter_tabs.get_child(0) as BaseButton).button_pressed
+		and not (main.card_type_filter_tabs.get_child(2) as BaseButton).button_pressed
+		and (main.action_filter_tabs.get_child(CardData.ActionType.MELEE).get_node("Hotspot") as Button).button_pressed
+		and is_equal_approx(
+			(main.card_type_filter_tabs.get_child(0) as Control).position.y,
+			main.CARD_TYPE_TAB_SELECTED_Y
+		),
+		"行动筛选会在同一事务中弹起随从标签并弹回非随从标签"
+	)
+	main.toggle_card_type_filter(CardData.CardType.SPELL)
+	await create_timer(main.CARD_TYPE_TAB_TWEEN_DURATION + 0.02).timeout
+	_expect(
+		main.active_card_type_filters == [CardData.CardType.SPELL]
+		and main.active_action_filters.is_empty()
+		and not (main.card_type_filter_tabs.get_child(0) as BaseButton).button_pressed
+		and (main.card_type_filter_tabs.get_child(1) as BaseButton).button_pressed
+		and is_equal_approx(
+			(main.card_type_filter_tabs.get_child(0) as Control).position.y,
+			main.CARD_TYPE_TAB_REST_Y
+		),
+		"选择非随从类型会同时弹回随从和行动方式标签"
+	)
+	main.toggle_element_filter(CardData.ElementType.FIRE)
+	_expect(
+		main.active_card_type_filters == [CardData.CardType.MINION]
+		and main.active_element_filters == [CardData.ElementType.FIRE]
+		and not (main.card_type_filter_tabs.get_child(1) as BaseButton).button_pressed,
+		"元素筛选同样自动切到随从，避免非随从类型与随从专属条件冲突"
+	)
+	main.toggle_card_type_filter(CardData.CardType.EQUIPMENT)
+	_expect(
+		main.active_card_type_filters == [CardData.CardType.EQUIPMENT]
+		and main.active_action_filters.is_empty()
+		and main.active_element_filters.is_empty(),
+		"选择装备会一次清空行动与元素两组随从专属筛选"
+	)
 	main.toggle_card_type_filter(CardData.CardType.EQUIPMENT)
 	main.toggle_rarity_filter(CardData.Rarity.I)
 	main.toggle_rarity_filter(CardData.Rarity.III)
@@ -442,7 +558,14 @@ func _test_collection_pages_filters_and_transactions() -> void:
 		"行动方式互斥选择，并与当前稀有度使用 AND"
 	)
 	main.toggle_action_filter(final_action)
-	var element_source: CardData = rarity_filtered[0]
+	var element_source: CardData = null
+	for candidate: CardData in rarity_filtered:
+		if candidate.card_type == CardData.CardType.MINION and candidate.runes.size() >= 2:
+			element_source = candidate
+			break
+	_expect(element_source != null, "元素筛选使用仍包含至少两个符文的随从样本")
+	if element_source == null:
+		return
 	var selected_elements: Array[int] = []
 	for rune: CardData.ElementType in element_source.runes:
 		if not selected_elements.has(rune):
@@ -639,6 +762,21 @@ func _test_collection_pages_filters_and_transactions() -> void:
 
 func _collection_drag(card: CardData) -> Dictionary:
 	return {"kind": &"card", "card_data": card, "source_type": &"collection"}
+
+
+func _find_collection_card_view(
+	main,
+	card_data: CardData = null
+) -> CardView:
+	for slot: Control in main._get_collection_card_slots():
+		var card_view := slot.get_child(0) as CardView
+		if card_view == null or card_view.card_data == null:
+			continue
+		if card_data != null and card_view.card_data != card_data:
+			continue
+		if card_view.card_data.card_type == CardData.CardType.MINION:
+			return card_view
+	return null
 
 
 func _board_drag(row: BattlefieldRow, slot: BoardSlot, card: CardData) -> Dictionary:

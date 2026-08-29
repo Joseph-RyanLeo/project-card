@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://dbgo0m4l6nmbf"]
+
+[ext_resource type="Texture2D" uid="uid://uknqd2mt3vfr" path="res://assets/card_art/spells/summon_scarab_swarm.png" id="1_kj1c5"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_jjfdu"]
+
+[resource]
+script = ExtResource("2_jjfdu")
+id = &"summon_scarab_swarm"
+display_name = "甲虫军团"
+card_type = 2
+base_value = 0
+max_health = 0
+spell_type = 1
+art_texture = ExtResource("1_kj1c5")
+art_offset = Vector2i(0, 2)
+effect_text = "占位：召唤类法术，后续补充释放条件与效果。"

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://by1s7ypbj4gud"]
+
+[ext_resource type="Texture2D" uid="uid://sl75gjdyiby7" path="res://assets/card_art/spells/disruption_counterspell.png" id="1_s7yy6"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_l14xw"]
+
+[resource]
+script = ExtResource("2_l14xw")
+id = &"disruption_counterspell"
+display_name = "法术反制"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 1
+spell_type = 4
+art_texture = ExtResource("1_s7yy6")
+art_offset = Vector2i(8, 9)
+effect_text = "占位：干扰类法术，后续补充释放条件与效果。"

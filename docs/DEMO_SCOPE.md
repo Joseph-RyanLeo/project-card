@@ -79,3 +79,4 @@
 - 阶段 5：随从堆叠与小队数据已经完成，详细范围、数据职责、验证结果和遗留问题见 [`STAGE_5_SUMMARY.md`](STAGE_5_SUMMARY.md)。
 - 阶段 6：真实可见符文序列、九种牌型识别、小队牌型显示与参与符文流光已经完成，详细范围与验证结果见 [`STAGE_6_SUMMARY.md`](STAGE_6_SUMMARY.md)。
 - 阶段 6.5：敌方四排空间、双视角和 5×12 收藏册已经完成，详细范围与验证结果见 [`STAGE_6_5_SUMMARY.md`](STAGE_6_5_SUMMARY.md)。
+- 阶段 7：准备→基础自动战斗→空结算→精确重开的完整闭环已经完成，详细规则、职责与验证结果见 [`STAGE_7_SUMMARY.md`](STAGE_7_SUMMARY.md)。

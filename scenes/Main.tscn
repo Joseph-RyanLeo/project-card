@@ -1,4 +1,4 @@
-[gd_scene load_steps=26 format=3 uid="uid://dludejv386xnm"]
+[gd_scene load_steps=55 format=3 uid="uid://dludejv386xnm"]
 
 [ext_resource type="Script" uid="uid://yylgsewq26jh" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Resource" path="res://resources/cards/ember_squire.tres" id="2_ember"]
@@ -25,6 +25,35 @@
 [ext_resource type="Resource" path="res://resources/cards/heavy_knight.tres" id="23_knight"]
 [ext_resource type="Resource" path="res://resources/cards/armorsmith.tres" id="24_armorsmith"]
 [ext_resource type="Resource" path="res://resources/cards/field_medic.tres" id="25_medic"]
+[ext_resource type="Resource" path="res://resources/cards/frostfang_blade.tres" id="26_frostfang"]
+[ext_resource type="Resource" path="res://resources/cards/azure_hunt_bow.tres" id="27_azure"]
+[ext_resource type="Resource" path="res://resources/cards/mana_tonic.tres" id="28_mana"]
+[ext_resource type="Resource" path="res://resources/cards/glacial_crossbow.tres" id="29_glacial"]
+[ext_resource type="Resource" path="res://resources/cards/emberbrand_sword.tres" id="30_emberbrand"]
+[ext_resource type="Resource" path="res://resources/cards/sapphire_plate.tres" id="31_sapphire"]
+[ext_resource type="Resource" path="res://resources/cards/seastone_ring.tres" id="32_seastone"]
+[ext_resource type="Resource" path="res://resources/cards/tidecaller_scepter.tres" id="33_tidecaller"]
+[ext_resource type="Resource" path="res://resources/cards/restoration_flask.tres" id="34_restoration"]
+[ext_resource type="Resource" path="res://resources/cards/stormstring_bow.tres" id="35_stormstring"]
+[ext_resource type="Resource" path="res://resources/cards/inferno_edge.tres" id="36_inferno"]
+[ext_resource type="Resource" path="res://resources/cards/royal_aegis.tres" id="37_royal"]
+[ext_resource type="Resource" path="res://resources/cards/starsea_ring.tres" id="38_starsea"]
+[ext_resource type="Resource" path="res://resources/cards/void_orb_scepter.tres" id="39_void"]
+[ext_resource type="Resource" path="res://resources/cards/bloodrage_elixir.tres" id="40_bloodrage"]
+[ext_resource type="Resource" path="res://resources/cards/blessing_sacred_shield.tres" id="41_sacred"]
+[ext_resource type="Resource" path="res://resources/cards/blessing_strength.tres" id="42_strength"]
+[ext_resource type="Resource" path="res://resources/cards/blessing_vitality.tres" id="43_vitality"]
+[ext_resource type="Resource" path="res://resources/cards/summon_undead_army.tres" id="44_undead"]
+[ext_resource type="Resource" path="res://resources/cards/summon_resurrection.tres" id="45_resurrection"]
+[ext_resource type="Resource" path="res://resources/cards/summon_scarab_swarm.tres" id="46_scarab"]
+[ext_resource type="Resource" path="res://resources/cards/damage_fireball.tres" id="47_fireball"]
+[ext_resource type="Resource" path="res://resources/cards/damage_sandstorm.tres" id="48_sandstorm"]
+[ext_resource type="Resource" path="res://resources/cards/damage_ice_cone.tres" id="49_ice_cone"]
+[ext_resource type="Resource" path="res://resources/cards/support_healing_aura.tres" id="50_healing_aura"]
+[ext_resource type="Resource" path="res://resources/cards/support_repulsion_aura.tres" id="51_repulsion_aura"]
+[ext_resource type="Resource" path="res://resources/cards/disruption_counterspell.tres" id="52_counterspell"]
+[ext_resource type="Resource" path="res://resources/cards/disruption_rust_blade.tres" id="53_rust_blade"]
+[ext_resource type="Resource" path="res://resources/cards/disruption_discordant_wave.tres" id="54_discordant"]
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -35,4 +64,4 @@ grow_horizontal = 2
 grow_vertical = 2
 clip_contents = true
 script = ExtResource("1_main")
-collection_cards = Array[Resource]([ExtResource("2_ember"), ExtResource("3_tide"), ExtResource("4_spark"), ExtResource("5_kaspar"), ExtResource("6_margaret"), ExtResource("7_priest"), ExtResource("8_diplomat"), ExtResource("9_recruiter"), ExtResource("10_poet"), ExtResource("11_drum"), ExtResource("12_javelin"), ExtResource("13_militia"), ExtResource("14_commander"), ExtResource("15_brothers"), ExtResource("16_fireman"), ExtResource("17_musketeer"), ExtResource("18_berserker"), ExtResource("19_shieldwall"), ExtResource("20_rune"), ExtResource("21_timid"), ExtResource("22_baggage"), ExtResource("23_knight"), ExtResource("24_armorsmith"), ExtResource("25_medic")])
+collection_cards = Array[Resource]([ExtResource("2_ember"), ExtResource("3_tide"), ExtResource("4_spark"), ExtResource("5_kaspar"), ExtResource("6_margaret"), ExtResource("7_priest"), ExtResource("8_diplomat"), ExtResource("9_recruiter"), ExtResource("10_poet"), ExtResource("11_drum"), ExtResource("12_javelin"), ExtResource("13_militia"), ExtResource("14_commander"), ExtResource("15_brothers"), ExtResource("16_fireman"), ExtResource("17_musketeer"), ExtResource("18_berserker"), ExtResource("19_shieldwall"), ExtResource("20_rune"), ExtResource("21_timid"), ExtResource("22_baggage"), ExtResource("23_knight"), ExtResource("24_armorsmith"), ExtResource("25_medic"), ExtResource("26_frostfang"), ExtResource("27_azure"), ExtResource("28_mana"), ExtResource("29_glacial"), ExtResource("30_emberbrand"), ExtResource("31_sapphire"), ExtResource("32_seastone"), ExtResource("33_tidecaller"), ExtResource("34_restoration"), ExtResource("35_stormstring"), ExtResource("36_inferno"), ExtResource("37_royal"), ExtResource("38_starsea"), ExtResource("39_void"), ExtResource("40_bloodrage"), ExtResource("41_sacred"), ExtResource("42_strength"), ExtResource("43_vitality"), ExtResource("44_undead"), ExtResource("45_resurrection"), ExtResource("46_scarab"), ExtResource("47_fireball"), ExtResource("48_sandstorm"), ExtResource("49_ice_cone"), ExtResource("50_healing_aura"), ExtResource("51_repulsion_aura"), ExtResource("52_counterspell"), ExtResource("53_rust_blade"), ExtResource("54_discordant")])

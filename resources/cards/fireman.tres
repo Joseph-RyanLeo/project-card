@@ -10,7 +10,6 @@ display_name = "火夫"
 base_value = 5
 max_health = 20
 armor = 2
-target_priority = 2
 runes = Array[int]([1, 2, 4])
 rarity = 1
 art_texture = ExtResource("2_art")

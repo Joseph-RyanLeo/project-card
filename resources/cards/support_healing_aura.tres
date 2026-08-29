@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://cocu7xpfqm1m7"]
+
+[ext_resource type="Texture2D" uid="uid://cibfqxfp3s8t1" path="res://assets/card_art/spells/support_healing_aura.png" id="1_gpasy"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_hantt"]
+
+[resource]
+script = ExtResource("2_hantt")
+id = &"support_healing_aura"
+display_name = "治疗光环"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 4
+spell_type = 3
+art_texture = ExtResource("1_gpasy")
+art_offset = Vector2i(0, 12)
+effect_text = "占位：支援类法术，后续补充释放条件与效果。"

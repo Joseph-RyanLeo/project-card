@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://br7jsm0epba1x"]
+
+[ext_resource type="Texture2D" uid="uid://cb5bks10al8qo" path="res://assets/card_art/spells/damage_ice_cone.png" id="1_pm2ps"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_uai0a"]
+
+[resource]
+script = ExtResource("2_uai0a")
+id = &"damage_ice_cone"
+display_name = "冰锥术"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 3
+spell_type = 2
+art_texture = ExtResource("1_pm2ps")
+art_offset = Vector2i(2, -2)
+effect_text = "占位：伤害类法术，后续补充释放条件与效果。"

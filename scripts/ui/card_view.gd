@@ -10,6 +10,11 @@ extends Panel
 
 signal card_clicked(card_data: CardData)
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
+signal effect_display_changed(card_data: CardData, is_showing_effect: bool)
+signal collection_return_requested(
+	card_view: CardView,
+	return_global_position: Vector2
+)
 
 const RUNE_FIRE_TEXTURE: Texture2D = preload("res://assets/runes/rune_fire.png")
 const RUNE_WATER_TEXTURE: Texture2D = preload("res://assets/runes/rune_water.png")
@@ -26,6 +31,43 @@ const ACTION_HEAL_TEXTURE: Texture2D = preload("res://assets/actions/action_heal
 const ACTION_DEFENSE_TEXTURE: Texture2D = preload("res://assets/actions/action_defense.png")
 const HEALTH_TEXTURE: Texture2D = preload("res://assets/stats/health.png")
 const ARMOR_TEXTURE: Texture2D = preload("res://assets/stats/armor.png")
+const COOLDOWN_HOURGLASS_TEXTURE: Texture2D = preload(
+	"res://assets/stats/cooldown_hourglass.png"
+)
+const SPELL_RARITY_BADGE_TEXTURE: Texture2D = preload(
+	"res://assets/card_ui/placeholders/spell_rarity_badges.png"
+)
+const SPELL_TYPE_ATLAS: Texture2D = preload(
+	"res://assets/card_ui/placeholders/spell_type_atlas.png"
+)
+const EQUIPMENT_TYPE_ATLAS: Texture2D = preload(
+	"res://assets/card_ui/placeholders/equipment_type_atlas.png"
+)
+const EQUIPMENT_ACTION_INCREASE_TEXTURE: Texture2D = preload(
+	"res://assets/card_ui/placeholders/equipment_action_increase.png"
+)
+const EQUIPMENT_ACTION_DECREASE_TEXTURE: Texture2D = preload(
+	"res://assets/card_ui/placeholders/equipment_action_decrease.png"
+)
+const SPELL_RARITY_BADGE_REGIONS := [
+	Rect2(0, 0, 22, 22),
+	Rect2(0, 106, 22, 22),
+	Rect2(0, 80, 22, 22),
+	Rect2(0, 52, 22, 22),
+	Rect2(0, 26, 22, 22),
+] # 法术稀有度图集视觉顺序为 I、V、IV、III、II，显式映射到 I～V
+const SPELL_RARITY_BADGE_POSITION := Vector2(-6, -2) # 按法术参考图相对 99×136 卡框原点对齐
+const SPELL_RARITY_BADGE_SIZE := Vector2(22, 22) # 法术稀有度角标保持原生 22×22px
+const EQUIPMENT_ACTION_POSITION := Vector2(-9, -9) # 装备参考合图相对卡框原点的位置；完整箭头位于合图顶部
+const EQUIPMENT_ACTION_SIZE := Vector2(28, 28) # 装备增减箭头保持原生 28×28px 画布
+const SPELL_TYPE_ATLAS_X := [5, 26, 46, 67, 86] # 法术类型图集视觉列为 V、IV、III、II、I
+const SPELL_TYPE_ATLAS_Y := [6, 23, 37, 52, 66] # 法术类型图集行依次为强化、召唤、伤害、支援、干扰
+const SPELL_TYPE_ATLAS_W := [13, 13, 13, 13, 13] # 法术类型图标的原始裁切宽度
+const SPELL_TYPE_ATLAS_H := [13, 12, 11, 10, 9] # 法术类型图标的原始裁切高度
+const EQUIPMENT_TYPE_ATLAS_X := [2, 22, 40, 58, 76] # 装备类型图集视觉列为 II、III、IV、V、I
+const EQUIPMENT_TYPE_ATLAS_Y := [4, 20, 36, 51, 66, 81] # 装备类型图集行依次为六种装备类型
+const EQUIPMENT_TYPE_ATLAS_W := [13, 13, 13, 13, 13] # 装备类型图标的原始裁切宽度
+const EQUIPMENT_TYPE_ATLAS_H := [13, 13, 10, 10, 12, 10] # 装备类型图标的原始裁切高度
 const DEFAULT_ART_BACKGROUND_TEXTURE: Texture2D = preload(
 	"res://assets/card_backgrounds/card_background_placeholder.png"
 )
@@ -33,18 +75,18 @@ const CARD_NAME_FRAME_TEXTURE: Texture2D = preload(
 	"res://assets/card_ui/card_name_frame.png"
 )
 const CARD_TEXT_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
-const LARGE_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_large.fnt")
-const SMALL_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_small.fnt")
 const LAYOUT_TWEEN_DURATION: float = 0.15 # 卡牌让位、归位和飞入目标位置的动画时长（秒）
 const INTERACTION_TWEEN_DURATION: float = 0.10 # 悬停、按压时阴影移动的动画时长（秒）
 const HOVER_PUNCH_ANGLE: float = 5.0 # 鼠标进入实体卡左/右半边时，同方向轻晃的最大角度
 const HOVER_PUNCH_DURATION: float = 0.16 # 悬停单方向轻晃并复位的总时长（秒）
 const COLLECTION_HOVER_LIFT_OFFSET: float = 7.0 # 收藏悬停时向上抽出的像素距离
+const HOVER_Z_OFFSET: int = 20 # 战场卡悬停时相对所在小队层级的提升量
 const COLLECTION_DRAG_GHOST_ALPHA: float = 0.32 # 收藏卡拖起后原槽虚影的透明度
 const RESTING_SHADOW_OFFSET := Vector2(6.0, 7.0) # 悬停状态下阴影相对卡牌的偏移
 const PRESSED_SHADOW_OFFSET := Vector2(6.0, 8.0) # 按住状态下阴影相对卡牌的偏移
 const INTERACTION_SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.28) # 悬停和按压阴影的颜色及透明度
 const CARD_LAYER_Z_STEP: int = 100 # 小队相邻整卡之间的层级间隔，必须大于卡牌内部所有子图层与悬停增量
+const VISUAL_CAPTURE_LEFT_SAFETY: float = 1.0 # 快照在行动数字最左像素外额外保留的安全边
 const ACTIVE_RUNE_FRAME_COUNT: int = 14 # 流光符文精灵表包含的动画帧数
 const ACTIVE_RUNE_SHEET_COLUMN_STEP: int = 30 # 精灵表相邻元素符文起点的水平距离
 const ACTIVE_RUNE_FRAME_SECONDS: Array[float] = [
@@ -54,6 +96,23 @@ const ACTIVE_RUNE_FRAME_SECONDS: Array[float] = [
 const PREVIEW_ACTIVE_RUNE_ALPHA: float = 0.62 # 假设牌型中流光符文相对真实结果的透明度
 const ACTIVE_RUNE_CYCLE_SECONDS: float = 2.0 # 一轮完整流光动画的总时长（秒）
 const ACTIVE_RUNE_START_PHASE_SECONDS: float = 1.4 # 新一轮真实流光首次出现时使用的精灵表时间相位（秒）
+const ACTION_VALUE_POSITIONS := {
+	&"single_other": Vector2(0, 7),
+	&"single_one": Vector2(1, 7),
+	&"double": Vector2(-5, 7),
+} # 行动数值按位数和数字1使用的绝对卡面坐标
+const HEALTH_VALUE_POSITIONS := {
+	1: [Vector2(89, 88), Vector2(90, 88)],
+	2: [Vector2(84, 88), Vector2(85, 88), Vector2(86, 88)],
+	3: [Vector2(79, 88), Vector2(80, 88), Vector2(81, 88), Vector2(83, 88)],
+} # 生命数值按“位数 -> 数字1数量”使用的绝对卡面坐标
+const ARMOR_VALUE_POSITIONS := {
+	1: [Vector2(90, 74), Vector2(90, 74)],
+	2: [Vector2(86, 74), Vector2(87, 74), Vector2(88, 74)],
+	3: [Vector2(82, 74), Vector2(82, 74), Vector2(84, 74), Vector2(84, 74)],
+} # 护甲数值按“位数 -> 数字1数量”使用的绝对卡面坐标
+const COOLDOWN_VALUE_POSITION := Vector2(-3, 24) # 冷却整数、小数点和小数位组合节点的绝对卡面坐标
+const MAX_STATS_RIGHT_EDGE: float = 109.0 # 999生命在当前绝对坐标下到达的最右边界
 @export_group("Card Pixel Layout")
 @export var card_size: Vector2 = Vector2(99, 136) # 裸卡的基准像素尺寸
 @export var title_area_position: Vector2 = Vector2(21, 5) # 卡牌名字文字区域整体下移 1px 后的左上角坐标
@@ -61,14 +120,17 @@ const ACTIVE_RUNE_START_PHASE_SECONDS: float = 1.4 # 新一轮真实流光首次
 @export var name_frame_position: Vector2 = Vector2(0, 4) # 卡牌名字框的左上角坐标
 @export var art_area_position: Vector2 = Vector2(10, 5) # 卡框内部立绘裁切窗口的左上角坐标
 @export var art_area_size: Vector2 = Vector2(79, 95) # 背景和人物只允许显示在卡框内部的区域
-@export var bottom_area_position: Vector2 = Vector2(8, 108) # 符文或效果文字区域的左上角坐标
-@export var bottom_area_size: Vector2 = Vector2(83, 23) # 符文或效果文字区域的像素尺寸
-@export var health_badge_size: Vector2 = Vector2(20, 17) # 生命图标与数字共用区域的尺寸
-@export var health_right_overhang: float = 5.0 # 生命区域超出裸卡右边缘的像素数
-@export var health_bottom_gap: float = 32.0 # 生命区域底边距离裸卡底边的像素数
-@export var armor_badge_size: Vector2 = Vector2(12, 12) # 护甲图标与数字共用区域的尺寸
-@export var armor_right_overhang: float = 1.0 # 护甲区域超出裸卡右边缘的像素数
-@export var armor_bottom_gap: float = 50.0 # 护甲区域底边距离裸卡底边的像素数
+@export var bottom_area_position: Vector2 = Vector2(1, 106) # 底部描述叠放层左上角；贴近卡框内沿并为描边保留空间
+@export var bottom_area_size: Vector2 = Vector2(97, 28) # 底部描述叠放层尺寸；覆盖卡框底栏但不压住最外框
+@export var rune_area_position: Vector2 = Vector2(8, 108) # 符文行继续使用原来的卡面绝对坐标，不随文字框扩宽而移动
+@export var rune_area_size: Vector2 = Vector2(83, 23) # 三枚符文继续使用原来的布局尺寸
+@export var effect_text_inset: Vector2 = Vector2(3, 2) # 效果文字相对描述叠放层四周预留的内边距
+@export var health_icon_position: Vector2 = Vector2(84, 88) # 20×17生命图标在卡面上的绝对左上角坐标
+@export var health_badge_size: Vector2 = Vector2(20, 17) # 新版生命图标的原生逻辑尺寸
+@export var armor_icon_position: Vector2 = Vector2(87, 71) # 14×16护甲图标在卡面上的绝对左上角坐标
+@export var armor_badge_size: Vector2 = Vector2(14, 16) # 新版护甲图标的原生逻辑尺寸
+@export var cooldown_icon_position: Vector2 = Vector2(-1, 22) # 沙漏图标在卡面左上区域的绝对左上角坐标
+@export var cooldown_icon_size: Vector2 = Vector2(12, 16) # 沙漏保持用户素材的 12×16px 原生尺寸
 @export var action_top_overhang: float = 4.0 # 行动图标超出裸卡顶边缘的像素数
 @export var race_center_pixel: Vector2i = Vector2i(49, 100) # 不同尺寸种族图标共用的中心像素坐标
 @export var rune_slot_size: Vector2 = Vector2(23, 23) # 每个元素符文空腔的布局尺寸
@@ -78,11 +140,16 @@ const ACTIVE_RUNE_START_PHASE_SECONDS: float = 1.4 # 新一轮真实流光首次
 @export_group("Card Font Sizes")
 @export var title_font_size: int = 8 # 寒蝉点阵 7px 在卡牌名字上使用的固定字号
 @export var title_font_min_size: int = 5 # 名字过长时允许缩小到的最小字号
-@export var value_font_size: int = 12 # 行动数值使用的字号
-@export var stats_font_size: int = 8 # 生命值和护甲值使用的字号
+@export var stats_font_size: int = 8 # 受击权重等尚未替换为图片数字的辅助字号
 @export var effect_font_size: int = 8 # 寒蝉点阵 7px 在卡牌效果文字上使用的固定字号
 @export var effect_line_spacing: int = 0 # 卡牌效果文字多行之间增加或减少的像素间距
 @export var effect_text_color: Color = Color.WHITE # 卡牌效果文字的默认颜色
+@export var effect_text_outline_size: int = 2 # 效果文字外扩的像素描边宽度；2px保证复杂插画上仍清晰可读
+@export var effect_text_outline_color: Color = Color(0.03, 0.025, 0.02, 0.95) # 效果文字描边颜色；近黑但保留少量底色融合
+
+@export_group("Card Effect Transition")
+@export_range(0.0, 1.0, 0.05) var effect_rune_dim_alpha: float = 0.2 # 右键显示效果文字时符文保留的透明度
+@export_range(0.01, 1.0, 0.01) var effect_transition_duration: float = 0.2 # 符文与效果文字交叉淡化的动画时长（秒）
 
 @export var card_data: CardData:
 	set(value):
@@ -104,6 +171,7 @@ var _active_drag_visual: CardDragPreview
 var _layout_tween: Tween
 var _hover_punch_tween: Tween
 var _shadow_tween: Tween
+var _effect_transition_tween: Tween
 var _layout_resting_position: Vector2 = Vector2.ZERO
 var _mouse_hovered: bool = false
 var _snapshot_mode: bool = false
@@ -117,20 +185,22 @@ var _dim_preview_active_runes: bool = true
 var _active_rune_icons: Dictionary = {}
 var _active_rune_join_cycles: Dictionary = {}
 var _active_rune_frame: int = -1
+var _battle_vitals_active: bool = false
+var _battle_current_health: int = 0
+var _battle_current_armor: int = 0
+var _battle_cooldown_active: bool = false
+var _battle_remaining_cooldown: float = 0.0
 
 # 所有真实卡共享一条静态时间轴；新加入的符文等到下一轮再同步开始。
 static var _active_rune_flow_epoch_msec: int = -1
 static var _active_rune_flow_cached_process_frame: int = -1
 static var _active_rune_flow_cached_elapsed_seconds: float = 0.0
 static var _active_rune_flow_initial_process_frame: int = -1
-static var debug_effect_line_spacing: int = 0 # Main 文字调试控件当前预览的效果文字行距
-static var debug_effect_text_color: Color = Color.WHITE # Main 文字调试控件当前预览的效果文字颜色
-static var debug_force_effect_text: bool = false # Main 文字调试控件是否让所有卡直接显示效果文字
 
 @onready var name_clip: Control = %NameClip
 @onready var name_label: Label = %NameLabel
 @onready var action_icon: TextureRect = %ActionIcon
-@onready var value_label: Label = %ValueLabel
+@onready var value_label: RuneNumberDisplay = %ValueLabel
 @onready var top_row: Control = %TopRow
 @onready var art_panel: Panel = %ArtPanel
 @onready var art_content: Control = %ArtContent
@@ -142,9 +212,11 @@ static var debug_force_effect_text: bool = false # Main 文字调试控件是否
 @onready var race_icon: TextureRect = %RaceIcon
 @onready var stats_row: Control = %StatsRow
 @onready var health_icon: TextureRect = %HealthIcon
-@onready var health_label: Label = %HealthLabel
+@onready var health_label: RuneNumberDisplay = %HealthLabel
 @onready var armor_icon: TextureRect = %ArmorIcon
-@onready var armor_label: Label = %ArmorLabel
+@onready var armor_label: RuneNumberDisplay = %ArmorLabel
+@onready var cooldown_icon: TextureRect = %CooldownIcon
+@onready var cooldown_label: RuneNumberDisplay = %CooldownLabel
 @onready var priority_label: Label = %PriorityLabel
 @onready var bottom_panel: PanelContainer = %BottomPanel
 @onready var rune_row: HBoxContainer = %RuneRow
@@ -170,7 +242,7 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	if _active_rune_icons.is_empty() or showing_effect:
+	if _active_rune_icons.is_empty():
 		set_process(false)
 		return
 	_update_active_rune_frames()
@@ -213,8 +285,7 @@ func _gui_input(event: InputEvent) -> void:
 			mouse_event.button_index == MOUSE_BUTTON_RIGHT
 			and mouse_event.pressed
 		):
-			showing_effect = not showing_effect
-			_refresh_bottom_text()
+			toggle_effect_display()
 			accept_event()
 
 
@@ -232,12 +303,28 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 		return null
 
 	var drag_data := _build_drag_data(at_position)
-	_active_drag_preview_offset = drag_data["preview_offset"] as Vector2
+	# Godot 把原生拖拽预览挂在当前 SubViewport 的拖拽层，而不是
+	# DesignCanvas 下。预览需要继承显示链路的实际视觉缩放；
+	# 玩法判定仍继续使用逻辑 preview_scale。
+	_apply_native_drag_visual_metrics(drag_data)
+	_active_drag_preview_offset = (
+		drag_data.get("drag_visual_offset", drag_data["preview_offset"])
+		as Vector2
+	)
 	var preview_root := create_drag_visual(drag_data)
 	drag_data["drag_visual"] = preview_root
 	_active_drag_visual = preview_root
 	set_drag_preview(preview_root)
 	return drag_data
+
+
+func _apply_native_drag_visual_metrics(drag_data: Dictionary) -> void:
+	var visual_scale := get_global_transform_with_canvas().get_scale()
+	drag_data["drag_visual_scale"] = visual_scale
+	drag_data["drag_visual_offset"] = (
+		(drag_data.get("grab_local_position", Vector2.ZERO) as Vector2)
+		* visual_scale
+	)
 
 
 func _build_drag_data(at_position: Vector2) -> Dictionary:
@@ -264,6 +351,10 @@ func _build_drag_data(at_position: Vector2) -> Dictionary:
 static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 	var preview_root := CardDragPreview.new()
 	var card_view_scene := load("res://scenes/ui/CardView.tscn") as PackedScene
+	var visual_scale: Vector2 = drag_data.get(
+		"drag_visual_scale",
+		drag_data.get("preview_scale", Vector2.ONE)
+	)
 	if drag_data.get("kind") == &"squad":
 		var squad_visual := Control.new()
 		var squad_size: Vector2 = drag_data.get("squad_size", Vector2(99, 136))
@@ -287,7 +378,7 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 		preview_root.configure(
 			squad_visual,
 			drag_data.get("grab_local_position", Vector2.ZERO),
-			drag_data.get("preview_scale", Vector2.ONE),
+			visual_scale,
 			squad_size
 		)
 		return preview_root
@@ -297,7 +388,6 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 	preview_card.showing_effect = bool(drag_data.get("showing_effect", false))
 	preview_card.set_card_data(drag_data["card_data"] as CardData)
 	preview_card.configure_drag_source(false)
-	var preview_scale: Vector2 = drag_data.get("preview_scale", Vector2.ONE)
 	var grab_local_position: Vector2 = drag_data.get(
 		"grab_local_position",
 		Vector2.ZERO
@@ -305,7 +395,7 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 	preview_root.configure(
 		preview_card,
 		grab_local_position,
-		preview_scale,
+		visual_scale,
 		preview_card.card_size
 	)
 	return preview_root
@@ -347,19 +437,12 @@ func _notification(what: int) -> void:
 			_drag_source_slot.modulate.a = 1.0
 		_collection_source_ghosted = false
 		if should_animate_back:
-			_animate_cancelled_drag_return.call_deferred(
+			collection_return_requested.emit(
+				self,
 				return_global_position
-				)
+			)
 		_active_drag_preview_offset = Vector2.ZERO
 		_active_drag_visual = null
-
-
-func _animate_cancelled_drag_return(
-	return_global_position: Vector2
-) -> void:
-	await get_tree().process_frame
-	if is_inside_tree() and is_visible_in_tree():
-		animate_from_global_position(return_global_position)
 
 
 # --- 拖拽来源配置、悬停反馈与卡牌布局动画 ---
@@ -395,7 +478,14 @@ func _on_mouse_entered() -> void:
 func show_pointer_hover_feedback(play_rotation_punch: bool = false) -> void:
 	_mouse_hovered = true
 	if _drag_enabled and not _left_button_pressed and not _snapshot_mode:
-		z_index = _resting_z_index + 20
+		# 收藏中的卡牌必须作为一个整体高于相邻卡牌的全部子图层；
+		# 战场小队已经用 100 为整卡分层，只需要原有的小幅提升。
+		var hover_z_offset := (
+			CARD_LAYER_Z_STEP
+			if _drag_source_type == &"collection"
+			else HOVER_Z_OFFSET
+		)
+		z_index = _resting_z_index + hover_z_offset
 		_set_interaction_shadow_visible(true)
 		_animate_shadow_offset(RESTING_SHADOW_OFFSET)
 		_set_collection_hover_lift(true)
@@ -520,8 +610,17 @@ func animate_from_global_position(previous_global_position: Vector2) -> void:
 	# 新动画可能在旧动画尚未完成时开始。必须先回到固定静止坐标，
 	# 不能把 Tween 中途的临时 position 当成下一轮目标，否则偏移会累加。
 	position = _layout_resting_position
-	var resting_global_position := global_position
-	position += previous_global_position - resting_global_position
+	var visual_parent := get_parent() as CanvasItem
+	if visual_parent == null:
+		return
+	# 拖拽起点是画布坐标，position 是父节点本地坐标；显式反变换后，
+	# 720p、1080p、2K 和全屏都得到同一逻辑位移。
+	position = (
+		visual_parent
+		.get_global_transform_with_canvas()
+		.affine_inverse()
+		* previous_global_position
+	)
 	_layout_tween = create_tween()
 	_layout_tween.set_trans(Tween.TRANS_QUAD)
 	_layout_tween.set_ease(Tween.EASE_OUT)
@@ -568,11 +667,30 @@ func set_attribute_source_state(
 	var vitals_alpha := 1.0 if vitals_active else inactive_alpha
 	action_icon.modulate.a = action_alpha
 	value_label.modulate.a = action_alpha
+	cooldown_icon.modulate.a = action_alpha
+	cooldown_label.modulate.a = action_alpha
 	health_icon.modulate.a = vitals_alpha
 	health_label.modulate.a = vitals_alpha
 	armor_icon.modulate.a = vitals_alpha
 	armor_label.modulate.a = vitals_alpha
 	effect_text_label.modulate.a = 1.0 if effect_active else inactive_alpha
+
+
+func toggle_effect_display() -> bool:
+	if card_data == null or card_data.card_type != CardData.CardType.MINION:
+		return false
+	showing_effect = not showing_effect
+	_animate_effect_transition()
+	effect_display_changed.emit(card_data, showing_effect)
+	return true
+
+
+func is_effect_transition_animating() -> bool:
+	return (
+		_effect_transition_tween != null
+		and _effect_transition_tween.is_valid()
+		and _effect_transition_tween.is_running()
+	)
 
 
 func is_layout_animating() -> bool:
@@ -591,6 +709,45 @@ func set_card_data(value: CardData) -> void:
 		_refresh()
 
 
+func set_battle_vitals(current_health: int, current_armor: int) -> void:
+	_battle_vitals_active = true
+	_battle_current_health = clampi(current_health, 0, CardData.MAXIMUM_HEALTH)
+	_battle_current_armor = clampi(current_armor, 0, CardData.MAXIMUM_ARMOR)
+	if is_node_ready():
+		_refresh_vitals_text()
+
+
+func clear_battle_vitals() -> void:
+	_battle_vitals_active = false
+	if is_node_ready():
+		_refresh_vitals_text()
+
+
+func has_battle_vitals() -> bool:
+	return _battle_vitals_active
+
+
+func set_battle_remaining_cooldown(remaining_cooldown: float) -> void:
+	_battle_cooldown_active = true
+	_battle_remaining_cooldown = clampf(
+		remaining_cooldown,
+		0.0,
+		CardData.MAXIMUM_COOLDOWN_SECONDS
+	)
+	if is_node_ready():
+		_refresh_cooldown_text()
+
+
+func clear_battle_remaining_cooldown() -> void:
+	_battle_cooldown_active = false
+	if is_node_ready():
+		_refresh_cooldown_text()
+
+
+func has_battle_remaining_cooldown() -> bool:
+	return _battle_cooldown_active
+
+
 func set_rune_pattern_highlights(
 	rune_indices: Array[int],
 	is_preview_highlight: bool = false,
@@ -607,7 +764,7 @@ func set_rune_pattern_highlights(
 	_highlighted_rune_indices.assign(rune_indices)
 	_rune_highlight_is_preview = is_preview_highlight
 	_dim_preview_active_runes = dim_preview_active_runes
-	if is_node_ready() and not showing_effect:
+	if is_node_ready():
 		_refresh_runes()
 
 
@@ -666,11 +823,12 @@ func _refresh() -> void:
 
 	_set_card_name(card_data.display_name)
 	action_icon.texture = _get_action_texture(card_data.action_type)
-	_apply_action_layout(card_data.action_type)
 	value_label.text = str(card_data.base_value)
-	health_label.text = str(card_data.max_health)
-	armor_label.text = str(card_data.armor)
-	priority_label.text = str(card_data.target_priority)
+	_apply_action_layout(card_data.action_type)
+	_refresh_card_type_visuals()
+	_refresh_vitals_text()
+	_refresh_cooldown_text()
+	priority_label.text = str(card_data.get_base_target_priority())
 	card_name_frame.visible = true
 	_refresh_card_frame()
 	_refresh_art()
@@ -678,22 +836,124 @@ func _refresh() -> void:
 	_refresh_bottom_text()
 
 
+func _refresh_vitals_text() -> void:
+	if card_data == null:
+		health_label.text = ""
+		armor_label.text = ""
+		return
+	if card_data.card_type == CardData.CardType.SPELL:
+		health_label.text = ""
+		armor_label.text = ""
+		return
+	if card_data.card_type == CardData.CardType.EQUIPMENT:
+		health_label.text = str(card_data.equipment_health_delta)
+		armor_label.text = str(card_data.equipment_armor_delta)
+		_layout_vitals_numbers()
+		return
+	health_label.text = str(
+		_battle_current_health if _battle_vitals_active else card_data.max_health
+	)
+	armor_label.text = str(
+		_battle_current_armor if _battle_vitals_active else card_data.armor
+	)
+	_layout_vitals_numbers()
+
+
+func _refresh_cooldown_text() -> void:
+	if card_data == null:
+		cooldown_label.text = ""
+		return
+	if card_data.card_type == CardData.CardType.SPELL:
+		cooldown_label.text = ""
+		return
+	var seconds := card_data.cooldown_seconds
+	if card_data.card_type == CardData.CardType.EQUIPMENT:
+		seconds = absf(card_data.equipment_cooldown_delta)
+	elif _battle_cooldown_active:
+		seconds = _battle_remaining_cooldown
+	cooldown_label.text = format_cooldown_seconds(seconds)
+	_set_control_rect(
+		cooldown_label,
+		COOLDOWN_VALUE_POSITION,
+		cooldown_label.get_rendered_size()
+	)
+
+
+static func format_cooldown_seconds(seconds: float) -> String:
+	# 显示层向上保留一位小数；减去极小误差，避免精确 3.0 因浮点误差显示 3.1。
+	var tenths := clampi(
+		ceili(maxf(seconds, 0.0) * 10.0 - 0.0001),
+		0,
+		int(CardData.MAXIMUM_COOLDOWN_SECONDS * 10.0)
+	)
+	return "%d.%d" % [tenths / 10, tenths % 10]
+
+
 func _refresh_bottom_text() -> void:
 	if card_data == null:
 		return
-
-	if showing_effect or debug_force_effect_text:
+	_stop_effect_transition()
+	effect_text_label.text = card_data.effect_text
+	if card_data.card_type != CardData.CardType.MINION:
+		showing_effect = false
 		rune_row.visible = false
+		rune_row.modulate.a = 1.0
 		set_process(false)
 		effect_text_label.visible = true
-		effect_text_label.text = card_data.effect_text
+		effect_text_label.self_modulate.a = 1.0
 	else:
-		effect_text_label.visible = false
 		rune_row.visible = true
 		_refresh_runes()
+		rune_row.modulate.a = effect_rune_dim_alpha if showing_effect else 1.0
+		effect_text_label.visible = showing_effect
+		effect_text_label.self_modulate.a = 1.0 if showing_effect else 0.0
+
+
+func _animate_effect_transition() -> void:
+	_stop_effect_transition()
+	rune_row.visible = true
+	effect_text_label.visible = true
+	effect_text_label.text = card_data.effect_text
+	var target_rune_alpha := effect_rune_dim_alpha if showing_effect else 1.0
+	var target_text_alpha := 1.0 if showing_effect else 0.0
+	_effect_transition_tween = create_tween()
+	_effect_transition_tween.set_trans(Tween.TRANS_QUAD)
+	_effect_transition_tween.set_ease(Tween.EASE_IN_OUT)
+	_effect_transition_tween.set_parallel(true)
+	_effect_transition_tween.tween_property(
+		rune_row,
+		"modulate:a",
+		target_rune_alpha,
+		effect_transition_duration
+	)
+	_effect_transition_tween.tween_property(
+		effect_text_label,
+		"self_modulate:a",
+		target_text_alpha,
+		effect_transition_duration
+	)
+	_effect_transition_tween.chain().tween_callback(
+		_finish_effect_transition.bind(showing_effect)
+	)
+
+
+func _finish_effect_transition(expected_showing_effect: bool) -> void:
+	if showing_effect != expected_showing_effect:
+		return
+	rune_row.modulate.a = effect_rune_dim_alpha if showing_effect else 1.0
+	effect_text_label.self_modulate.a = 1.0 if showing_effect else 0.0
+	effect_text_label.visible = showing_effect
+	_effect_transition_tween = null
+
+
+func _stop_effect_transition() -> void:
+	if _effect_transition_tween != null and _effect_transition_tween.is_valid():
+		_effect_transition_tween.kill()
+	_effect_transition_tween = null
 
 
 func _show_empty_card() -> void:
+	_stop_effect_transition()
 	_active_rune_icons.clear()
 	_active_rune_join_cycles.clear()
 	set_process(false)
@@ -709,21 +969,34 @@ func _show_empty_card() -> void:
 	art_label.visible = true
 	race_icon.texture = null
 	race_icon.visible = false
-	value_label.text = "-"
-	health_label.text = "-"
-	armor_label.text = "-"
+	value_label.text = ""
+	health_label.text = ""
+	armor_label.text = ""
+	cooldown_label.text = ""
 	priority_label.text = "-"
+	action_icon.visible = false
+	value_label.visible = false
+	health_icon.visible = false
+	health_label.visible = false
+	armor_icon.visible = false
+	armor_label.visible = false
+	cooldown_icon.visible = false
+	cooldown_label.visible = false
+	priority_label.visible = false
 	effect_text_label.visible = true
+	effect_text_label.self_modulate.a = 1.0
 	effect_text_label.text = "没有绑定 CardData"
 	rune_row.visible = false
+	rune_row.modulate.a = 1.0
 
 
 func _refresh_art() -> void:
-	art_background.texture = (
+	var base_background := (
 		card_data.background_texture
 		if card_data.background_texture != null
 		else DEFAULT_ART_BACKGROUND_TEXTURE
 	)
+	art_background.texture = base_background
 	art_background.visible = art_background.texture != null
 	art_texture.texture = card_data.art_texture
 	art_texture.visible = card_data.art_texture != null
@@ -793,6 +1066,32 @@ func _refresh_card_frame() -> void:
 
 
 func _refresh_race_icon() -> void:
+	if card_data.card_type == CardData.CardType.SPELL:
+		race_icon.texture = _make_raw_atlas_texture(
+			SPELL_TYPE_ATLAS,
+			_get_spell_type_region(card_data.spell_type, card_data.rarity)
+		)
+		race_icon.visible = true
+		var spell_icon_size := (_get_spell_type_region(card_data.spell_type, card_data.rarity)).size
+		_set_centered_identity_icon(spell_icon_size)
+		race_icon.tooltip_text = "%s · 稀有度 %s" % [
+			card_data.get_spell_type_name(),
+			card_data.get_rarity_name(),
+		]
+		return
+	if card_data.card_type == CardData.CardType.EQUIPMENT:
+		race_icon.texture = _make_raw_atlas_texture(
+			EQUIPMENT_TYPE_ATLAS,
+			_get_equipment_type_region(card_data.equipment_type, card_data.rarity)
+		)
+		race_icon.visible = true
+		var equipment_icon_size := (_get_equipment_type_region(card_data.equipment_type, card_data.rarity)).size
+		_set_centered_identity_icon(equipment_icon_size)
+		race_icon.tooltip_text = "%s · 稀有度 %s" % [
+			card_data.get_equipment_type_name(),
+			card_data.get_rarity_name(),
+		]
+		return
 	if card_data.card_type != CardData.CardType.MINION:
 		race_icon.texture = null
 		race_icon.visible = false
@@ -822,7 +1121,110 @@ func _refresh_race_icon() -> void:
 	]
 
 
+func _refresh_card_type_visuals() -> void:
+	# 共用随从节点：非随从只替换左上/中央身份图标，不复制第二套 CardView。
+	action_icon.visible = true
+	value_label.visible = true
+	health_icon.visible = true
+	health_label.visible = true
+	armor_icon.visible = true
+	armor_label.visible = true
+	cooldown_icon.visible = true
+	cooldown_label.visible = true
+	priority_label.visible = false
+	if card_data.card_type == CardData.CardType.SPELL:
+		action_icon.texture = _make_raw_atlas_texture(
+			SPELL_RARITY_BADGE_TEXTURE,
+			SPELL_RARITY_BADGE_REGIONS[card_data.rarity]
+		)
+		_set_control_rect(
+			action_icon,
+			SPELL_RARITY_BADGE_POSITION,
+			SPELL_RARITY_BADGE_SIZE
+		)
+		value_label.text = ""
+		value_label.visible = false
+		health_icon.visible = false
+		health_label.visible = false
+		armor_icon.visible = false
+		armor_label.visible = false
+		cooldown_icon.visible = false
+		cooldown_label.visible = false
+	elif card_data.card_type == CardData.CardType.EQUIPMENT:
+		action_icon.texture = (
+			EQUIPMENT_ACTION_INCREASE_TEXTURE
+			if card_data.equipment_action_delta >= 0
+			else EQUIPMENT_ACTION_DECREASE_TEXTURE
+		)
+		_set_control_rect(
+			action_icon,
+			EQUIPMENT_ACTION_POSITION,
+			EQUIPMENT_ACTION_SIZE
+		)
+		value_label.text = str(absi(card_data.equipment_action_delta))
+		_set_control_rect(
+			value_label,
+			_get_action_value_position(value_label.text),
+			value_label.get_rendered_size()
+		)
+	else:
+		_apply_action_layout(card_data.action_type)
+		priority_label.visible = false
+
+
+func _make_raw_atlas_texture(atlas: Texture2D, region: Rect2) -> AtlasTexture:
+	var atlas_texture := AtlasTexture.new()
+	atlas_texture.atlas = atlas
+	atlas_texture.region = region
+	return atlas_texture
+
+
+func _get_spell_type_region(
+	spell_type: CardData.SpellType,
+	rarity: CardData.Rarity,
+) -> Rect2:
+	var visual_column_by_rarity := [4, 3, 2, 1, 0] # I、II、III、IV、V 对应图集 I、II、III、IV、V 的反向视觉列
+	var visual_column: int = visual_column_by_rarity[rarity]
+	return Rect2(
+		SPELL_TYPE_ATLAS_X[visual_column],
+		SPELL_TYPE_ATLAS_Y[spell_type],
+		SPELL_TYPE_ATLAS_W[visual_column],
+		SPELL_TYPE_ATLAS_H[spell_type],
+	)
+
+
+func _get_equipment_type_region(
+	equipment_type: CardData.EquipmentType,
+	rarity: CardData.Rarity,
+) -> Rect2:
+	var visual_column_by_rarity := [4, 0, 1, 2, 3] # I、II、III、IV、V 对应图集 I、II、III、IV、V 的非顺序列
+	var visual_column: int = visual_column_by_rarity[rarity]
+	return Rect2(
+		EQUIPMENT_TYPE_ATLAS_X[visual_column],
+		EQUIPMENT_TYPE_ATLAS_Y[equipment_type],
+		EQUIPMENT_TYPE_ATLAS_W[visual_column],
+		EQUIPMENT_TYPE_ATLAS_H[equipment_type],
+	)
+
+
+func _set_centered_identity_icon(icon_size: Vector2) -> void:
+	_set_control_rect(
+		race_icon,
+		Vector2(
+			race_center_pixel.x - floori(icon_size.x * 0.5),
+			race_center_pixel.y - floori(icon_size.y * 0.5)
+		),
+		icon_size
+	)
+
+
 func _refresh_runes() -> void:
+	if card_data == null or card_data.card_type != CardData.CardType.MINION:
+		_active_rune_icons.clear()
+		_active_rune_join_cycles.clear()
+		set_process(false)
+		rune_row.visible = false
+		return
 	var previous_join_cycles := _active_rune_join_cycles.duplicate()
 	_active_rune_icons.clear()
 	_active_rune_join_cycles.clear()
@@ -1050,7 +1452,7 @@ func _get_action_texture(action_type: CardData.ActionType) -> Texture2D:
 # --- 固定像素布局；集中设置 Rect 可避免场景与脚本各维护一份坐标 ---
 func _apply_pixel_layout() -> void:
 	# 行动、生命和护甲图标会越过 99×136 裸卡边界，根节点不能裁切。
-	# 效果文字只由 BottomPanel 自己裁切，避免再次出现黑色长条。
+	# 效果文字自身负责三行布局，外层不裁切，让2px黑色描边可以画入预留边距。
 	clip_contents = false
 	custom_minimum_size = card_size
 	size = card_size
@@ -1059,8 +1461,7 @@ func _apply_pixel_layout() -> void:
 	_set_control_rect(name_clip, title_area_position, title_area_size)
 	name_clip.clip_contents = true
 	_set_control_rect(art_panel, art_area_position, art_area_size)
-	# 人物原图大于 79×95px 插画窗口时保持 1:1 像素，不再二次缩放；
-	# 超出窗口的部分交给 ArtPanel 裁切，保证人物与卡牌框像素同尺度。
+	# 人物原图保持 1:1 像素；超出插画窗口的部分由 ArtPanel 裁切。
 	art_panel.clip_contents = true
 	_set_control_rect(art_content, Vector2.ZERO, art_area_size)
 	_set_control_rect(art_background, Vector2.ZERO, art_area_size)
@@ -1081,45 +1482,29 @@ func _apply_pixel_layout() -> void:
 	card_name_frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	card_name_frame.stretch_mode = TextureRect.STRETCH_SCALE
 	_set_control_rect(stats_row, Vector2.ZERO, card_size)
-	var health_right := card_size.x + health_right_overhang
-	var health_bottom := card_size.y - health_bottom_gap
 	_set_control_rect(
 		health_icon,
-		Vector2(
-			health_right - health_badge_size.x,
-			health_bottom - health_badge_size.y
-		),
+		health_icon_position,
 		health_badge_size
 	)
-	_set_control_rect(
-		health_label,
-		Vector2(
-			health_right - health_badge_size.x,
-			health_bottom - health_badge_size.y
-		),
-		health_badge_size
-	)
-	var armor_right := card_size.x + armor_right_overhang
-	var armor_bottom := card_size.y - armor_bottom_gap
 	_set_control_rect(
 		armor_icon,
-		Vector2(
-			armor_right - armor_badge_size.x,
-			armor_bottom - armor_badge_size.y
-		),
+		armor_icon_position,
 		armor_badge_size
 	)
-	_set_control_rect(
-		armor_label,
-		Vector2(
-			armor_right - armor_badge_size.x,
-			armor_bottom - armor_badge_size.y
-		),
-		armor_badge_size
-	)
+	_set_control_rect(cooldown_icon, cooldown_icon_position, cooldown_icon_size)
+	_set_control_rect(cooldown_label, COOLDOWN_VALUE_POSITION, cooldown_label.get_rendered_size())
+	_layout_vitals_numbers()
 	priority_label.visible = false
 	_set_control_rect(bottom_panel, bottom_area_position, bottom_area_size)
-	bottom_panel.clip_contents = true
+	bottom_panel.clip_contents = false
+	_set_control_rect(
+		rune_row,
+		rune_area_position - bottom_area_position,
+		rune_area_size
+	)
+	var effect_text_size := bottom_area_size - effect_text_inset * 2.0
+	_set_control_rect(effect_text_label, effect_text_inset, effect_text_size)
 
 	art_panel.z_index = 0
 	card_frame.z_index = 5
@@ -1131,12 +1516,16 @@ func _apply_pixel_layout() -> void:
 	value_label.z_index = 11
 	action_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	action_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# 三个状态图标直接使用正式 1×源图，由显示壳统一放大最终画面。
 	health_icon.texture = HEALTH_TEXTURE
 	health_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	health_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	armor_icon.texture = ARMOR_TEXTURE
 	armor_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	armor_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	cooldown_icon.texture = COOLDOWN_HOURGLASS_TEXTURE
+	cooldown_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	cooldown_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_apply_action_layout(CardData.ActionType.MELEE)
 	_apply_card_typography()
 	name_label.add_theme_color_override(
@@ -1148,41 +1537,120 @@ func _apply_pixel_layout() -> void:
 	name_label.clip_text = true
 	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_layout_name_label()
-	value_label.add_theme_font_override("font", LARGE_NUMBER_FONT)
-	value_label.add_theme_font_size_override("font_size", value_font_size)
-	health_label.add_theme_font_override("font", LARGE_NUMBER_FONT)
-	health_label.add_theme_font_size_override("font_size", value_font_size)
-	armor_label.add_theme_font_override("font", SMALL_NUMBER_FONT)
-	armor_label.add_theme_font_size_override("font_size", stats_font_size)
 	priority_label.add_theme_font_size_override("font_size", stats_font_size)
 	rune_row.add_theme_constant_override("separation", rune_spacing)
-
-
-func refresh_text_debug_style() -> void:
-	if not is_node_ready():
-		return
-	_apply_card_typography()
-	if card_data != null:
-		_set_card_name(card_data.display_name)
-	_refresh_bottom_text()
 
 
 func _apply_card_typography() -> void:
 	name_label.add_theme_font_override("font", CARD_TEXT_FONT)
 	effect_text_label.add_theme_font_override("font", CARD_TEXT_FONT)
+	# WORD_SMART 在没有空格的中文长句中会退回逐字断行，避免 Windows
+	# 把整句当成一个单词撑出卡框；最多显示三行。
+	effect_text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# 文字外框不裁切，2px黑色描边可以进入四周预留的空隙；行数仍限制为3行，
+	# 避免极长描述越过卡牌底边。
+	effect_text_label.clip_text = false
+	effect_text_label.max_lines_visible = 3
+	effect_text_label.custom_minimum_size = bottom_area_size - effect_text_inset * 2.0
 	name_label.add_theme_font_size_override("font_size", title_font_size)
 	effect_text_label.add_theme_font_size_override("font_size", effect_font_size)
 	effect_text_label.add_theme_color_override(
 		"font_color",
-		debug_effect_text_color
+		effect_text_color
+	)
+	effect_text_label.add_theme_color_override(
+		"font_outline_color",
+		effect_text_outline_color
+	)
+	effect_text_label.add_theme_constant_override(
+		"outline_size",
+		effect_text_outline_size
 	)
 	effect_text_label.add_theme_constant_override(
 		"line_spacing",
-		debug_effect_line_spacing
+		effect_line_spacing
 	)
 
 
 func _apply_action_layout(action_type: CardData.ActionType) -> void:
+	var icon_rect := _get_action_icon_rect(action_type)
+	_set_control_rect(action_icon, icon_rect.position, icon_rect.size)
+	_set_control_rect(
+		value_label,
+		_get_action_value_position(value_label.text),
+		value_label.get_rendered_size()
+	)
+
+
+func get_visual_capture_padding_top_left() -> Vector2:
+	if card_data != null:
+		if card_data.card_type == CardData.CardType.SPELL:
+			return _get_rect_capture_padding(
+				Rect2(SPELL_RARITY_BADGE_POSITION, SPELL_RARITY_BADGE_SIZE)
+			)
+		if card_data.card_type == CardData.CardType.EQUIPMENT:
+			return _get_rect_capture_padding(
+				Rect2(EQUIPMENT_ACTION_POSITION, EQUIPMENT_ACTION_SIZE)
+			)
+	var action_type := (
+		card_data.action_type
+		if card_data != null
+		else CardData.ActionType.MELEE
+	)
+	return _get_visual_capture_padding_top_left(action_type)
+
+
+func get_max_visual_capture_padding_top_left() -> Vector2:
+	var padding := Vector2.ZERO
+	for action_type: CardData.ActionType in [
+		CardData.ActionType.MELEE,
+		CardData.ActionType.RANGED,
+		CardData.ActionType.MAGIC,
+		CardData.ActionType.HEAL,
+		CardData.ActionType.DEFENSE,
+	]:
+		var action_padding := _get_visual_capture_padding_top_left(action_type)
+		padding.x = maxf(padding.x, action_padding.x)
+		padding.y = maxf(padding.y, action_padding.y)
+	for extra_rect: Rect2 in [
+		Rect2(SPELL_RARITY_BADGE_POSITION, SPELL_RARITY_BADGE_SIZE),
+		Rect2(EQUIPMENT_ACTION_POSITION, EQUIPMENT_ACTION_SIZE),
+	]:
+		var extra_padding := _get_rect_capture_padding(extra_rect)
+		padding.x = maxf(padding.x, extra_padding.x)
+		padding.y = maxf(padding.y, extra_padding.y)
+	return padding
+
+
+func get_visual_capture_padding_bottom_right() -> Vector2:
+	return Vector2(maxf(MAX_STATS_RIGHT_EDGE - card_size.x, 0.0), 0.0)
+
+
+func _get_visual_capture_padding_top_left(
+	action_type: CardData.ActionType
+) -> Vector2:
+	var icon_rect := _get_action_icon_rect(action_type)
+	var value_text := str(card_data.base_value) if card_data != null else "0"
+	var value_rect := Rect2(
+		_get_action_value_position(value_text),
+		Vector2(20, RuneNumberDisplay.LARGE_HEIGHT)
+	)
+	var left_edge := minf(icon_rect.position.x, value_rect.position.x)
+	var top_edge := minf(icon_rect.position.y, value_rect.position.y)
+	return Vector2(
+		maxf(-left_edge, 0.0) + VISUAL_CAPTURE_LEFT_SAFETY,
+		maxf(-top_edge, 0.0)
+	)
+
+
+func _get_rect_capture_padding(rect: Rect2) -> Vector2:
+	return Vector2(
+		maxf(-rect.position.x, 0.0) + VISUAL_CAPTURE_LEFT_SAFETY,
+		maxf(-rect.position.y, 0.0)
+	)
+
+
+func _get_action_icon_rect(action_type: CardData.ActionType) -> Rect2:
 	var icon_size := Vector2(25, 25)
 	var left_overhang: float = 4.0
 	match action_type:
@@ -1198,13 +1666,64 @@ func _apply_action_layout(action_type: CardData.ActionType) -> void:
 		CardData.ActionType.HEAL:
 			icon_size = Vector2(25, 28)
 			left_overhang = 8.0
+	return Rect2(Vector2(-left_overhang, -action_top_overhang), icon_size)
 
-	var icon_position := Vector2(-left_overhang, -action_top_overhang)
-	_set_control_rect(action_icon, icon_position, icon_size)
+
+static func get_action_value_position(value: int) -> Vector2:
+	return _get_action_value_position(str(clampi(value, 0, CardData.MAXIMUM_BASE_VALUE)))
+
+
+static func get_health_value_position(value: int) -> Vector2:
+	return _get_position_by_digits_and_ones(
+		clampi(value, 0, CardData.MAXIMUM_HEALTH),
+		HEALTH_VALUE_POSITIONS
+	)
+
+
+static func get_armor_value_position(value: int) -> Vector2:
+	return _get_position_by_digits_and_ones(
+		clampi(value, 0, CardData.MAXIMUM_ARMOR),
+		ARMOR_VALUE_POSITIONS
+	)
+
+
+static func _get_action_value_position(value_text: String) -> Vector2:
+	if value_text.length() >= 2:
+		return ACTION_VALUE_POSITIONS[&"double"] as Vector2
+	if value_text == "1":
+		return ACTION_VALUE_POSITIONS[&"single_one"] as Vector2
+	return ACTION_VALUE_POSITIONS[&"single_other"] as Vector2
+
+
+static func _get_position_by_digits_and_ones(value: int, positions: Dictionary) -> Vector2:
+	var value_text := str(value)
+	var digit_count := clampi(value_text.length(), 1, 3)
+	var one_count := mini(value_text.count("1"), digit_count)
+	var positions_for_digits := positions[digit_count] as Array
+	return positions_for_digits[mini(one_count, positions_for_digits.size() - 1)] as Vector2
+
+
+func _layout_vitals_numbers() -> void:
+	if not is_instance_valid(health_label) or not is_instance_valid(armor_label):
+		return
+	var health_value := 0
+	var armor_value := 0
+	if card_data != null:
+		if card_data.card_type == CardData.CardType.EQUIPMENT:
+			health_value = card_data.equipment_health_delta
+			armor_value = card_data.equipment_armor_delta
+		else:
+			health_value = _battle_current_health if _battle_vitals_active else card_data.max_health
+			armor_value = _battle_current_armor if _battle_vitals_active else card_data.armor
 	_set_control_rect(
-		value_label,
-		icon_position + Vector2(-1.0, icon_size.y - 12.0),
-		Vector2(18, 12)
+		health_label,
+		get_health_value_position(health_value),
+		health_label.get_rendered_size()
+	)
+	_set_control_rect(
+		armor_label,
+		get_armor_value_position(armor_value),
+		armor_label.get_rendered_size()
 	)
 
 

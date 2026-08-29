@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bysybjbaj8mc"]
+
+[ext_resource type="Texture2D" uid="uid://c0piqjoj4lfns" path="res://assets/card_art/equipment/bloodrage_elixir.png" id="1_ydafs"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_ca5do"]
+
+[resource]
+script = ExtResource("2_ca5do")
+id = &"bloodrage_elixir"
+display_name = "血怒药剂"
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 4
+equipment_type = 5
+equipment_action_delta = 2
+equipment_cooldown_delta = 0.5
+equipment_armor_delta = 2
+art_texture = ExtResource("1_ydafs")
+art_offset = Vector2i(-4, 14)
+effect_text = "占位：消耗品；行动+2，冷却+0.5秒，生命+0，护甲+2。"

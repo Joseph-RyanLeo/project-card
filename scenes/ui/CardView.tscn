@@ -2,11 +2,11 @@
 
 [ext_resource type="Script" uid="uid://cx3rcjwjai7ag" path="res://scripts/ui/card_view.gd" id="1_card_view"]
 [ext_resource type="FontFile" uid="uid://72c4ylmounnl" path="res://assets/fonts/chill_7.ttf" id="2_d0r2e"]
-[ext_resource type="FontFile" uid="uid://8omrlgnq0tlm" path="res://assets/fonts/pixel_numbers_small.fnt" id="3_small"]
-[ext_resource type="FontFile" uid="uid://mmyb0cn0d8rc" path="res://assets/fonts/pixel_numbers_large.fnt" id="3_yr3bm"]
-[ext_resource type="Texture2D" uid="uid://clh0oj37afm84" path="res://assets/card_ui/card_name_frame.png" id="4_b1dbq"]
-[ext_resource type="Texture2D" uid="uid://bplmkmwb5ogtn" path="res://assets/stats/health.png" id="5_ov1un"]
-[ext_resource type="Texture2D" uid="uid://cu6hf48egokqi" path="res://assets/stats/armor.png" id="6_n0p23"]
+[ext_resource type="Script" uid="uid://btosvon6uh78v" path="res://scripts/ui/rune_number_display.gd" id="3_rune_number"]
+[ext_resource type="Texture2D" uid="uid://clh0oj37afm84" path="res://assets/card_ui/card_name_frame.png" id="4_ov1un"]
+[ext_resource type="Texture2D" uid="uid://bplmkmwb5ogtn" path="res://assets/stats/health.png" id="5_n0p23"]
+[ext_resource type="Texture2D" uid="uid://cu6hf48egokqi" path="res://assets/stats/armor.png" id="6_5h83i"]
+[ext_resource type="Texture2D" uid="uid://cmivgkqjiogiu" path="res://assets/stats/cooldown_hourglass.png" id="8_1rni3"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
 content_margin_left = 10.0
@@ -31,7 +31,6 @@ content_margin_bottom = 0.0
 bg_color = Color(0, 0, 0, 0)
 
 [node name="CardView" type="Panel" unique_id=693465731]
-texture_filter = 1
 custom_minimum_size = Vector2(99, 136)
 offset_right = 99.0
 offset_bottom = 136.0
@@ -50,6 +49,7 @@ mouse_filter = 2
 
 [node name="ActionIcon" type="TextureRect" parent="TopRow" unique_id=633356944]
 unique_name_in_owner = true
+visible = false
 z_index = 10
 custom_minimum_size = Vector2(25, 25)
 layout_mode = 0
@@ -82,24 +82,22 @@ theme_override_colors/font_color = Color(0.20784314, 0.14509805, 0.10980392, 1)
 theme_override_fonts/font = ExtResource("2_d0r2e")
 theme_override_font_sizes/font_size = 8
 text = "空卡牌"
+horizontal_alignment = 1
 vertical_alignment = 1
 clip_text = true
 text_overrun_behavior = 3
 
-[node name="ValueLabel" type="Label" parent="TopRow" unique_id=1447209711]
+[node name="ValueLabel" type="Control" parent="TopRow" unique_id=1447209711]
 unique_name_in_owner = true
+visible = false
 z_index = 11
-custom_minimum_size = Vector2(18, 12)
-layout_mode = 0
-offset_left = -5.0
-offset_top = 9.0
-offset_right = 13.0
-offset_bottom = 24.0
-theme_override_fonts/font = ExtResource("3_yr3bm")
-theme_override_font_sizes/font_size = 12
-text = "-"
-horizontal_alignment = 1
-vertical_alignment = 1
+texture_filter = 1
+custom_minimum_size = Vector2(0, 14)
+anchors_preset = 0
+offset_top = 7.0
+offset_bottom = 21.0
+mouse_filter = 2
+script = ExtResource("3_rune_number")
 
 [node name="ArtPanel" type="Panel" parent="." unique_id=1176165577]
 unique_name_in_owner = true
@@ -137,7 +135,6 @@ visible = false
 layout_mode = 0
 mouse_filter = 2
 expand_mode = 1
-stretch_mode = 2
 
 [node name="ArtLabel" type="Label" parent="ArtPanel/ArtContent" unique_id=1583902405]
 unique_name_in_owner = true
@@ -171,7 +168,7 @@ offset_top = 4.0
 offset_right = 84.0
 offset_bottom = 14.0
 mouse_filter = 2
-texture = ExtResource("4_b1dbq")
+texture = ExtResource("4_ov1un")
 expand_mode = 1
 
 [node name="RaceIcon" type="TextureRect" parent="." unique_id=1723936687]
@@ -194,63 +191,88 @@ mouse_filter = 2
 
 [node name="HealthIcon" type="TextureRect" parent="StatsRow" unique_id=1101741149]
 unique_name_in_owner = true
+visible = false
 custom_minimum_size = Vector2(20, 17)
 layout_mode = 0
 offset_left = 84.0
-offset_top = 87.0
+offset_top = 88.0
 offset_right = 104.0
-offset_bottom = 104.0
+offset_bottom = 105.0
 mouse_filter = 2
-texture = ExtResource("5_ov1un")
+texture = ExtResource("5_n0p23")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="HealthLabel" type="Label" parent="StatsRow" unique_id=488129659]
+[node name="HealthLabel" type="Control" parent="StatsRow" unique_id=488129659]
 unique_name_in_owner = true
+visible = false
 z_index = 1
-custom_minimum_size = Vector2(20, 17)
-layout_mode = 0
-offset_left = 84.0
-offset_top = 87.0
-offset_right = 104.0
-offset_bottom = 104.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_fonts/font = ExtResource("3_yr3bm")
-theme_override_font_sizes/font_size = 12
-text = "-"
-horizontal_alignment = 1
-vertical_alignment = 1
-clip_text = true
+texture_filter = 1
+custom_minimum_size = Vector2(0, 14)
+anchors_preset = 0
+offset_left = 89.0
+offset_top = 88.0
+offset_right = 89.0
+offset_bottom = 102.0
+mouse_filter = 2
+script = ExtResource("3_rune_number")
 
 [node name="ArmorIcon" type="TextureRect" parent="StatsRow" unique_id=8630803]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(12, 12)
+visible = false
+custom_minimum_size = Vector2(14, 16)
 layout_mode = 0
-offset_left = 88.0
-offset_top = 74.0
-offset_right = 100.0
-offset_bottom = 86.0
+offset_left = 87.0
+offset_top = 71.0
+offset_right = 101.0
+offset_bottom = 87.0
 mouse_filter = 2
-texture = ExtResource("6_n0p23")
+texture = ExtResource("6_5h83i")
 expand_mode = 1
 stretch_mode = 5
 
-[node name="ArmorLabel" type="Label" parent="StatsRow" unique_id=1921884453]
+[node name="ArmorLabel" type="Control" parent="StatsRow" unique_id=1921884453]
 unique_name_in_owner = true
+visible = false
 z_index = 1
-custom_minimum_size = Vector2(12, 12)
-layout_mode = 0
-offset_left = 88.0
+texture_filter = 1
+custom_minimum_size = Vector2(0, 12)
+anchors_preset = 0
+offset_left = 90.0
 offset_top = 74.0
-offset_right = 100.0
-offset_bottom = 89.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_fonts/font = ExtResource("3_small")
-theme_override_font_sizes/font_size = 8
-text = "-"
-horizontal_alignment = 1
-vertical_alignment = 1
-clip_text = true
+offset_right = 90.0
+offset_bottom = 86.0
+mouse_filter = 2
+script = ExtResource("3_rune_number")
+number_style = 1
+
+[node name="CooldownIcon" type="TextureRect" parent="StatsRow" unique_id=1282655208]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(12, 16)
+layout_mode = 0
+offset_left = -1.0
+offset_top = 22.0
+offset_right = 11.0
+offset_bottom = 38.0
+mouse_filter = 2
+texture = ExtResource("8_1rni3")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CooldownLabel" type="Control" parent="StatsRow" unique_id=1304739321]
+unique_name_in_owner = true
+visible = false
+z_index = 1
+texture_filter = 1
+anchors_preset = 0
+offset_left = -3.0
+offset_top = 24.0
+offset_right = -3.0
+offset_bottom = 24.0
+mouse_filter = 2
+script = ExtResource("3_rune_number")
+number_style = 2
 
 [node name="PriorityLabel" type="Label" parent="StatsRow" unique_id=556386469]
 unique_name_in_owner = true
@@ -263,35 +285,46 @@ horizontal_alignment = 2
 [node name="BottomPanel" type="PanelContainer" parent="." unique_id=222941276]
 unique_name_in_owner = true
 z_index = 10
-custom_minimum_size = Vector2(83, 23)
-clip_contents = true
+custom_minimum_size = Vector2(97, 28)
 layout_mode = 0
-offset_left = 8.0
-offset_top = 108.0
-offset_right = 91.0
-offset_bottom = 148.0
+offset_left = 1.0
+offset_top = 106.0
+offset_right = 98.0
+offset_bottom = 134.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_bottom")
 
-[node name="BottomStack" type="VBoxContainer" parent="BottomPanel" unique_id=695318422]
+[node name="BottomStack" type="Control" parent="BottomPanel" unique_id=695318422]
 layout_mode = 2
 mouse_filter = 2
-theme_override_constants/separation = 0
 
 [node name="RuneRow" type="HBoxContainer" parent="BottomPanel/BottomStack" unique_id=1926824887]
 unique_name_in_owner = true
 visible = false
-layout_mode = 2
+custom_minimum_size = Vector2(83, 23)
+layout_mode = 0
+offset_left = 7.0
+offset_top = 2.0
+offset_right = 90.0
+offset_bottom = 25.0
 mouse_filter = 2
 theme_override_constants/separation = 7
 alignment = 1
 
 [node name="EffectTextLabel" type="Label" parent="BottomPanel/BottomStack" unique_id=207339904]
 unique_name_in_owner = true
-layout_mode = 2
+custom_minimum_size = Vector2(91, 24)
+layout_mode = 0
+offset_left = 3.0
+offset_top = 2.0
+offset_right = 94.0
+offset_bottom = 26.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.03, 0.025, 0.02, 0.95)
 theme_override_constants/line_spacing = 0
+theme_override_constants/outline_size = 2
 theme_override_fonts/font = ExtResource("2_d0r2e")
 theme_override_font_sizes/font_size = 8
 text = "没有绑定 CardData"
-autowrap_mode = 2
+autowrap_mode = 3
+max_lines_visible = 3

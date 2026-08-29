@@ -10,7 +10,6 @@ display_name = "外交官"
 action_type = 2
 base_value = 7
 max_health = 18
-target_priority = 4
 runes = Array[int]([3, 4, 1])
 rarity = 3
 art_texture = ExtResource("2_art")

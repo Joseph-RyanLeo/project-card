@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://cobrmepwo2r87"]
+
+[ext_resource type="Texture2D" uid="uid://dck67yldn1ssd" path="res://assets/card_art/equipment/tidecaller_scepter.png" id="1_cau3r"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_w0iq3"]
+
+[resource]
+script = ExtResource("2_w0iq3")
+id = &"tidecaller_scepter"
+display_name = "潮汐权杖"
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 2
+equipment_type = 4
+equipment_action_delta = -2
+equipment_cooldown_delta = -0.5
+equipment_health_delta = 3
+equipment_armor_delta = 1
+art_texture = ExtResource("1_cau3r")
+art_offset = Vector2i(-2, 22)
+effect_text = "占位：法器；行动-2，冷却-0.5秒，生命+3，护甲+1。"

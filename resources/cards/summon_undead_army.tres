@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://cfucvwes7pyjq"]
+
+[ext_resource type="Texture2D" uid="uid://bco5l72j0lhku" path="res://assets/card_art/spells/summon_undead_army.png" id="1_0mufl"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_46jda"]
+
+[resource]
+script = ExtResource("2_46jda")
+id = &"summon_undead_army"
+display_name = "亡灵大军"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 3
+spell_type = 1
+art_texture = ExtResource("1_0mufl")
+art_offset = Vector2i(3, 9)
+effect_text = "占位：召唤类法术，后续补充释放条件与效果。"

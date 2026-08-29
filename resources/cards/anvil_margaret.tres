@@ -6,12 +6,11 @@
 [resource]
 script = ExtResource("1_card_data")
 id = &"anvil_margaret"
-display_name = "“铁砧”玛格丽特"
+display_name = "铁砧-玛格丽特"
 action_type = 4
 base_value = 5
 max_health = 14
 armor = 3
-target_priority = 2
 runes = Array[int]([1, 2, 4])
 rarity = 1
 art_texture = ExtResource("2_art")

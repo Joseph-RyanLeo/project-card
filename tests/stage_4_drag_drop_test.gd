@@ -23,6 +23,9 @@ func _init() -> void:
 func _run() -> void:
 	root.size = Vector2i(1280, 720)
 	_test_virtual_canvas_settings()
+	await _test_balatro_drag_preview_feel()
+	await _test_native_collection_drag_callbacks()
+	await _test_click_carry_and_drop_animation()
 	await _test_card_art_tuner_preview()
 	await _test_collection_placement_and_preview_positions()
 	await _test_board_move_return_and_cancel()
@@ -40,23 +43,29 @@ func _test_virtual_canvas_settings() -> void:
 	_expect(
 		ProjectSettings.get_setting("display/window/size/viewport_width") == 1280
 		and ProjectSettings.get_setting("display/window/size/viewport_height") == 720,
-		"项目使用 1280×720 固定虚拟画布"
+		"项目使用 1280×720 固定逻辑画布"
 	)
 	_expect(
 		ProjectSettings.get_setting("display/window/size/mode")
-		== DisplayServer.WINDOW_MODE_FULLSCREEN,
-		"项目默认以全屏模式启动"
+		== DisplayServer.WINDOW_MODE_WINDOWED,
+		"项目默认以固定 1080p 窗口启动"
 	)
 	_expect(
-		ProjectSettings.get_setting("display/window/size/window_width_override") == 2560
-		and ProjectSettings.get_setting("display/window/size/window_height_override") == 1440,
-		"窗口化覆盖尺寸记录为 2560×1440"
+		ProjectSettings.get_setting("display/window/size/window_width_override") == 1920
+		and ProjectSettings.get_setting("display/window/size/window_height_override") == 1080
+		and not ProjectSettings.get_setting("display/window/size/resizable"),
+		"默认窗口为不可拖动缩放的 1920×1080"
 	)
 	_expect(
-		ProjectSettings.get_setting("display/window/stretch/mode") == "viewport"
-		and ProjectSettings.get_setting("display/window/stretch/aspect") == "keep"
+		ProjectSettings.get_setting("display/window/stretch/mode") == "disabled"
 		and ProjectSettings.get_setting("display/window/stretch/scale_mode") == "fractional",
-		"虚拟画布保持 16:9，并允许 1080p 使用 1.5 倍缩放"
+		"逻辑画布保持 16:9，由 1280×720 显示壳直接适配实际窗口客户区"
+	)
+	_expect(
+		ProjectSettings.get_setting(
+			"rendering/textures/canvas_textures/default_texture_filter"
+		) == Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR,
+		"项目默认开启线性像素平滑，分数缩放时混合相邻四个纹理像素"
 	)
 
 
@@ -78,35 +87,49 @@ func _test_card_pixel_layout() -> void:
 		"背景和人物只显示在卡框内部 (10,5,79,95)"
 	)
 	_expect(
-		card_view.health_label.position == Vector2(84, 87)
-		and card_view.health_label.size == Vector2(20, 17),
-		"血量区域为 (84,87,20,17)，向裸卡右侧伸出 5px"
+		card_view.health_label.position
+		== CardView.get_health_value_position(card_view.card_data.max_health)
+		and card_view.health_label.size == card_view.health_label.get_rendered_size(),
+		"生命数字按当前数值选择已确认的绝对坐标和真实字形宽度"
 	)
 	_expect(
-		card_view.health_icon.position == Vector2(84, 87)
+		card_view.health_icon.position == Vector2(85, 88)
 		and card_view.health_icon.size == Vector2(20, 17)
 		and card_view.health_icon.texture.get_size() == Vector2(20, 17),
-		"20×17px 生命图片与血量数字共用正确位置"
+		"20×17px 新版生命图标位于 (85,88)"
 	)
 	_expect(
-		card_view.armor_label.position == Vector2(88, 74)
-		and card_view.armor_label.size == Vector2(12, 12),
-		"护甲区域为 (88,74,12,12)，向裸卡右侧伸出 1px"
+		card_view.armor_label.position
+		== CardView.get_armor_value_position(card_view.card_data.armor)
+		and card_view.armor_label.size == card_view.armor_label.get_rendered_size(),
+		"护甲数字按当前数值选择已确认的绝对坐标和真实字形宽度"
 	)
 	_expect(
-		card_view.armor_icon.position == Vector2(88, 74)
-		and card_view.armor_icon.size == Vector2(12, 12)
-		and card_view.armor_icon.texture.get_size() == Vector2(12, 12),
-		"12×12px 护甲图片与护甲数字共用正确位置"
+		card_view.armor_icon.position == Vector2(88, 71)
+		and card_view.armor_icon.size == Vector2(14, 16)
+		and card_view.armor_icon.texture.get_size() == Vector2(14, 16),
+		"14×16px 新版护甲图标位于 (88,71)"
 	)
 	_expect(
-		card_view.value_label.get_theme_font("font")
-		== CardView.LARGE_NUMBER_FONT
-		and card_view.health_label.get_theme_font("font")
-		== CardView.LARGE_NUMBER_FONT
-		and card_view.armor_label.get_theme_font("font")
-		== CardView.SMALL_NUMBER_FONT,
-		"行动值与生命使用 12px 大数字，护甲恢复 8px 对称小数字"
+		card_view.cooldown_icon.position == card_view.cooldown_icon_position
+		and card_view.cooldown_icon.position == Vector2(-1, 22)
+		and card_view.cooldown_icon.size == card_view.cooldown_icon_size
+		and card_view.cooldown_icon.texture.get_size() == Vector2(12, 16)
+		and card_view.cooldown_label.position == Vector2(-3, 24)
+		and card_view.cooldown_label.size
+		== card_view.cooldown_label.get_rendered_size(),
+		"12×16px 沙漏与冷却秒数固定放在卡面左上区域"
+	)
+	_expect(
+		card_view.value_label.number_style == RuneNumberDisplay.NumberStyle.LARGE
+		and card_view.health_label.number_style == RuneNumberDisplay.NumberStyle.LARGE
+		and card_view.armor_label.number_style == RuneNumberDisplay.NumberStyle.MEDIUM
+		and card_view.cooldown_label.number_style
+		== RuneNumberDisplay.NumberStyle.COOLDOWN
+		and card_view.cooldown_label.text == CardView.format_cooldown_seconds(
+			card_view.card_data.cooldown_seconds
+		),
+		"行动/生命/护甲/冷却分别使用大/大/中/混合卢恩图片数字"
 	)
 	_expect(
 		not card_view.priority_label.visible,
@@ -246,8 +269,8 @@ func _test_card_pixel_layout() -> void:
 	_expect(
 		card_view.art_panel.clip_contents
 		and card_view.art_texture.stretch_mode
-		== TextureRect.STRETCH_KEEP,
-		"人物保持原生 1:1 像素并由 79×95px 卡框内窗裁切"
+		== TextureRect.STRETCH_SCALE,
+		"人物保持 1×逻辑尺寸并由 79×95px 卡框内窗裁切"
 	)
 	var art_texture_size := layout_card.art_texture.get_size()
 	var expected_centered_art_position := Vector2(
@@ -393,12 +416,90 @@ func _test_card_art_tuner_preview() -> void:
 	await process_frame
 	var source_card := tuner.get("card_data") as CardData
 	var preview_card := tuner.get_node("%PreviewCard") as CardView
+	var preview_viewport := tuner.get_node("%PreviewViewport") as SubViewport
+	var preview_display := tuner.get_node("%PreviewDisplay") as TextureRect
 	var workspace := tuner.get_node("CenterContainer/Workspace") as Control
 	_expect(
 		workspace.custom_minimum_size == Vector2(1280, 720)
-		and preview_card.scale == Vector2(4, 4)
+		and preview_viewport.size == Vector2i(123, 149)
+		and preview_card.scale == Vector2.ONE
+		and preview_card.position
+		== preview_card.get_max_visual_capture_padding_top_left()
+		and preview_display.scale == Vector2(4, 4)
+		and preview_viewport.canvas_item_default_texture_filter
+		== Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+		and preview_display.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST
 		and preview_card.pivot_offset == Vector2.ZERO,
-		"卡面调整器适配 1280×720，并让 4 倍预览从左上角放大而不越界"
+		"卡面调整器用最近邻把完整 SubViewport 精确放大 4 倍，保持像素边缘清晰"
+	)
+	var preview_bounds := Rect2(Vector2.ZERO, Vector2(preview_viewport.size))
+	var preview_action_data := source_card.duplicate() as CardData
+	var all_action_visuals_inside := true
+	for action_type: CardData.ActionType in [
+		CardData.ActionType.MELEE,
+		CardData.ActionType.RANGED,
+		CardData.ActionType.MAGIC,
+		CardData.ActionType.HEAL,
+		CardData.ActionType.DEFENSE,
+	]:
+		preview_action_data.action_type = action_type
+		preview_card.set_card_data(preview_action_data)
+		var icon_rect := Rect2(
+			preview_card.position + preview_card.action_icon.position,
+			preview_card.action_icon.size
+		)
+		var value_rect := Rect2(
+			preview_card.position + preview_card.value_label.position,
+			preview_card.value_label.size
+		)
+		if not preview_bounds.encloses(icon_rect) or not preview_bounds.encloses(value_rect):
+			all_action_visuals_inside = false
+			break
+	_expect(
+		all_action_visuals_inside,
+		"近战、远程、法术、治疗、防御的行动图标与行动数字都不会被 4 倍预览裁切"
+	)
+	var healing_data := source_card.duplicate() as CardData
+	healing_data.action_type = CardData.ActionType.HEAL
+	var healing_card := (
+		load("res://scenes/ui/CardView.tscn") as PackedScene
+	).instantiate() as CardView
+	healing_card.set_card_data(healing_data)
+	var healing_snapshot := CARD_SNAPSHOT_VISUAL_SCRIPT.new() as CardSnapshotVisual
+	root.add_child(healing_snapshot)
+	healing_snapshot.configure(healing_card, healing_card.card_size)
+	await process_frame
+	_expect(
+		healing_snapshot.get_card_origin_in_texture()
+		== healing_card.get_visual_capture_padding_top_left()
+		and healing_snapshot.get_card_origin_in_texture() == Vector2(9, 4),
+		"拖拽快照与调整器共用新版行动数字和状态数值的完整越界边界"
+	)
+	healing_snapshot.queue_free()
+	await process_frame
+	var preview_material := preview_display.material as ShaderMaterial
+	var preview_shader_code := preview_material.shader.code
+	var use_3d_check := tuner.get_node("%Use3DCheck") as CheckButton
+	var use_flash_check := tuner.get_node("%UseFlashCheck") as CheckButton
+	var flash_type_selector := tuner.get_node("%FlashTypeSelector") as OptionButton
+	_expect(
+		preview_material != null
+		and preview_material.shader.resource_path
+		== "res://shaders/card_preview_3d.gdshader"
+		and bool(preview_material.get_shader_parameter("use_3d"))
+		== use_3d_check.button_pressed
+		and bool(preview_material.get_shader_parameter("use_flash"))
+		== use_flash_check.button_pressed
+		and int(preview_material.get_shader_parameter("flash_type"))
+		== flash_type_selector.get_selected_id()
+		and not bool(preview_material.get_shader_parameter("use_normal_texture"))
+		and is_zero_approx(float(preview_material.get_shader_parameter("inset")))
+		and is_equal_approx(float(preview_material.get_shader_parameter("stripe_spacing")), 7.0)
+		and is_equal_approx(float(preview_material.get_shader_parameter("stripe_width")), 2.4)
+		and is_equal_approx(float(preview_material.get_shader_parameter("flash_intensity")), 0.32)
+		and not preview_shader_code.contains("character_mask")
+		and preview_shader_code.contains("sample_uv.x * 0.85 + sample_uv.y * 0.55"),
+		"4 倍预览整卡共用 Shader，3D 开关不缩小卡牌，并使用更少、更宽、更弱的光带"
 	)
 	var original_offset: Vector2i = source_card.art_offset
 	tuner.set("preview_art_offset", Vector2i(4, 9))
@@ -412,8 +513,13 @@ func _test_card_art_tuner_preview() -> void:
 		source_card.art_offset == original_offset,
 		"实时预览不会在点击保存前修改真实卡牌资源"
 	)
-	var card_selector := tuner.get_node("%CardSelector") as OptionButton
-	_expect(card_selector.item_count == 24, "运行时调整器可切换全部 24 张独立卡面")
+	var card_type_selector := tuner.get_node("%CardTypeSelector") as OptionButton
+	var card_selector := tuner.get_node("%CardSelector") as ItemList
+	_expect(
+		card_type_selector.item_count == 3
+		and card_selector.item_count == 24,
+		"运行时调整器把 53 张卡分为三类，并用固定高度滚动列表显示随从"
+	)
 	var nudge_right_button := tuner.get_node("%NudgeRightButton") as Button
 	nudge_right_button.emit_signal("pressed")
 	await process_frame
@@ -421,6 +527,21 @@ func _test_card_art_tuner_preview() -> void:
 		tuner.get("preview_art_offset") == Vector2i(5, 9)
 		and preview_card.card_data.art_offset == Vector2i(5, 9),
 		"方向按钮会以 1px 为单位实时调整人物取景"
+	)
+	var keyboard_up := InputEventKey.new()
+	keyboard_up.keycode = KEY_UP
+	keyboard_up.pressed = true
+	tuner._input(keyboard_up)
+	await process_frame
+	_expect(
+		tuner.get("preview_art_offset") == Vector2i(5, 8)
+		and preview_card.card_data.art_offset == Vector2i(5, 8),
+		"键盘上下左右键与 1px 方向按钮共用同一人物微调入口"
+	)
+	use_3d_check.button_pressed = false
+	_expect(
+		not bool(preview_material.get_shader_parameter("use_3d")),
+		"卡面调整器可即时关闭 3D 透视并保留普通像素预览"
 	)
 	_expect(
 		tuner.get_node_or_null("%BackButton") != null,
@@ -441,9 +562,11 @@ func _test_balatro_drag_preview_feel() -> void:
 	var interaction_shadow := collection_card.get_node(
 		"InteractionShadow"
 	) as Panel
+	var hover_punch_tween := collection_card.get("_hover_punch_tween") as Tween
 	_expect(
 		interaction_shadow.visible
-		and absf(collection_card.rotation_degrees) > 0.1,
+		and hover_punch_tween != null
+		and hover_punch_tween.is_valid(),
 		"收藏鼠标进入时显示阴影并播放一次短促方向轻晃"
 	)
 	_expect(
@@ -457,7 +580,10 @@ func _test_balatro_drag_preview_feel() -> void:
 		"悬停轻晃不恢复放大效果，卡牌始终保持原始比例"
 	)
 	_expect(absf(collection_card.rotation_degrees) < 0.1, "收藏单次轻晃结束后自动回正")
-	_expect(collection_card.z_index == 20, "悬停卡牌会提高层级避免被邻卡遮挡")
+	_expect(
+		collection_card.z_index == CardView.CARD_LAYER_Z_STEP,
+		"收藏悬停会按整卡层级提升，避免与邻卡内部图层交错"
+	)
 	_expect(
 		collection_card.position.is_equal_approx(
 			resting_position + Vector2(0.0, -CardView.COLLECTION_HOVER_LIFT_OFFSET)
@@ -650,8 +776,18 @@ func _test_native_collection_drag_callbacks() -> void:
 	)
 	_expect(not second_collection_card.is_layout_animating(), "取消拖动时其余收藏始终保持原位")
 	_expect(collection_card.is_layout_animating(), "取消原生拖动时卡牌从鼠标位置飞回收藏")
+	_expect(
+		collection_card.z_index == CardDragPreview.DRAG_PREVIEW_Z_INDEX,
+		"取消原生拖动的回位卡进入统一拖拽层，不被筛选按钮遮挡"
+	)
+	var collection_viewport := main.get_node("%CollectionViewport") as Control
+	_expect(
+		not collection_viewport.clip_contents,
+		"取消原生拖动不会改变收藏视口的长期非裁切状态"
+	)
 	_expect(main.collection_cards.size() == initial_collection_count, "取消收藏拖动不修改真实数据")
 	await create_timer(CardView.LAYOUT_TWEEN_DURATION + 0.05).timeout
+	_expect(collection_card.z_index == 0, "原生拖动回位完成后恢复普通收藏层级")
 
 	collection_card_rect = collection_card.get_global_rect()
 	source_position = (
@@ -748,7 +884,7 @@ func _test_native_collection_drag_callbacks() -> void:
 		"拖入收藏的新卡从松手位置移动到插入位置"
 	)
 	var returned_collection_view := _collection_card_view(main, returned_insert_index)
-	var collection_viewport := main.get_node(
+	collection_viewport = main.get_node(
 		"WorldContent/CollectionSection/BookPanel/CollectionViewport"
 	) as Control
 	_expect(
@@ -760,7 +896,7 @@ func _test_native_collection_drag_callbacks() -> void:
 		"场上卡飞回收藏期间位于其他收藏上层"
 	)
 	await create_timer(CardView.LAYOUT_TWEEN_DURATION + 0.02).timeout
-	_expect(collection_viewport.clip_contents, "回手动画结束后恢复收藏滚动区裁切")
+	_expect(not collection_viewport.clip_contents, "回手动画结束后收藏视口继续允许越界图标显示")
 	_expect(returned_collection_view.z_index == 0, "回手动画结束后恢复普通收藏层级")
 
 	var cards: Array[CardData] = main.collection_cards.duplicate()
@@ -934,8 +1070,19 @@ func _test_click_carry_and_drop_animation() -> void:
 		"点击携带在无效区域释放时，卡牌从鼠标位置飞回收藏"
 	)
 	_expect(
+		collection_card.z_index == CardDragPreview.DRAG_PREVIEW_Z_INDEX
+		and not (main.get_node("%CollectionViewport") as Control).clip_contents,
+		"点击携带失败与原生拖拽共用高层级、非裁切回位规则"
+	)
+	_expect(
 		(main.get("_click_carry_data") as Dictionary).is_empty(),
 		"无效点击释放后退出携带状态"
+	)
+	await create_timer(CardView.LAYOUT_TWEEN_DURATION + 0.05).timeout
+	_expect(
+		collection_card.z_index == 0
+		and not (main.get_node("%CollectionViewport") as Control).clip_contents,
+		"点击携带回位结束后只恢复卡牌层级，不泄漏视口裁切状态"
 	)
 
 	var board_cards: Array[CardData] = main.collection_cards.duplicate()

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://c62d2qa42m1eq"]
+
+[ext_resource type="Texture2D" uid="uid://bk16a6xyuxbmd" path="res://assets/card_art/equipment/azure_hunt_bow.png" id="1_0noqe"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_ce13g"]
+
+[resource]
+script = ExtResource("2_ce13g")
+id = &"azure_hunt_bow"
+display_name = "苍蓝猎弓"
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 1
+equipment_action_delta = -1
+equipment_cooldown_delta = -0.5
+equipment_health_delta = 2
+equipment_armor_delta = 1
+art_texture = ExtResource("1_0noqe")
+art_offset = Vector2i(5, 12)
+effect_text = "占位：远程武器；行动-1，冷却-0.5秒，生命+2，护甲+1。"

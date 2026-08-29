@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://c6rrwl1gthjxi"]
+
+[ext_resource type="Texture2D" uid="uid://cevb4bacorkiw" path="res://assets/card_art/spells/blessing_strength.png" id="1_yr2dj"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_m8oca"]
+
+[resource]
+script = ExtResource("2_m8oca")
+id = &"blessing_strength"
+display_name = "力量祝福"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 1
+art_texture = ExtResource("1_yr2dj")
+art_offset = Vector2i(0, 5)
+effect_text = "占位：强化类法术，后续补充释放条件与效果。"

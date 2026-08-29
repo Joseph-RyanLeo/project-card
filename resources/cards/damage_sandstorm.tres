@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://cke7qs3c2kk1q"]
+
+[ext_resource type="Texture2D" uid="uid://d1lyh6eyr4xxi" path="res://assets/card_art/spells/damage_sandstorm.png" id="1_s777a"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_nh0kk"]
+
+[resource]
+script = ExtResource("2_nh0kk")
+id = &"damage_sandstorm"
+display_name = "沙尘暴"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 2
+spell_type = 2
+art_texture = ExtResource("1_s777a")
+art_offset = Vector2i(0, 3)
+effect_text = "占位：伤害类法术，后续补充释放条件与效果。"

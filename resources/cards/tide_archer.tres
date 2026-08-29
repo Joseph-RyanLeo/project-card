@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3]
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bkrpajbey2haj"]
 
-[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" path="res://assets/card_art/red_gunner.png" id="2_art"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" uid="uid://ds0u22ox7d4rs" path="res://assets/card_art/red_gunner.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -12,7 +12,6 @@ base_value = 5
 cooldown_seconds = 3.4
 max_health = 14
 armor = 1
-target_priority = 2
 runes = Array[int]([1, 1, 2])
 race_type = 1
 rarity = 1

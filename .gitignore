@@ -22,3 +22,8 @@ Thumbs.db
 # Locally exported playable builds
 builds/
 *.exe
+
+# Optional local high-resolution art packs and artist handoff archives
+assets/2x/
+assets/4x/
+art_handoff/

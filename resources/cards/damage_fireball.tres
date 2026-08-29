@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://dpxvj0au5dthg"]
+
+[ext_resource type="Texture2D" uid="uid://c670grcmdt60p" path="res://assets/card_art/spells/damage_fireball.png" id="1_7a74k"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_bn01u"]
+
+[resource]
+script = ExtResource("2_bn01u")
+id = &"damage_fireball"
+display_name = "火球术"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 1
+spell_type = 2
+art_texture = ExtResource("1_7a74k")
+art_offset = Vector2i(8, -13)
+effect_text = "占位：伤害类法术，后续补充释放条件与效果。"

@@ -5,30 +5,25 @@ extends Control
 ## 这样卡牌及越界图标会作为整体移动，避免分别变换导致像素模糊或裁切。
 ## 原 CardView 会被移入 SubViewport，所以调用方不能同时再把它当普通场景子节点使用。
 
-# 卡牌内部有向左、向上和向右越出 99×136 裸卡范围的图标。
-# 先把这些内容一并收入快照，旋转时才不会把行动、护甲或生命图标裁掉。
-const CAPTURE_PADDING_TOP_LEFT := Vector2(8.0, 4.0) # 快照为左侧行动图标和顶部越界内容预留的像素
-const CAPTURE_PADDING_BOTTOM_RIGHT := Vector2(5.0, 0.0) # 快照为右侧生命、护甲等越界内容预留的像素
 const SUPERSAMPLE_FACTOR: int = 2 # 快照内部整数倍渲染倍率；越高越清晰但显存与渲染开销越大
 
-var _source_card_view: Variant
+var _source_card_view: Control
 var _viewport: SubViewport
 var _texture_rect: TextureRect
 var _capture_size: Vector2 = Vector2.ZERO
+var _card_origin_in_texture: Vector2 = Vector2.ZERO
 
 
 func configure(
-	source_card_view: Variant,
+	source_card_view: Control,
 	card_size: Vector2,
 	output_texture_filter: CanvasItem.TextureFilter = CanvasItem.TEXTURE_FILTER_LINEAR
 ) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_source_card_view = source_card_view
-	_capture_size = (
-		CAPTURE_PADDING_TOP_LEFT
-		+ card_size
-		+ CAPTURE_PADDING_BOTTOM_RIGHT
-	)
+	var visual_bounds := _calculate_visual_bounds(source_card_view, card_size)
+	_card_origin_in_texture = -visual_bounds.position
+	_capture_size = visual_bounds.size
 	custom_minimum_size = _capture_size
 	size = _capture_size
 
@@ -52,7 +47,7 @@ func configure(
 	_source_card_view.pivot_offset = Vector2.ZERO
 	# set_snapshot_mode() 会先清理交互状态，因此整数放大必须在它之后设置。
 	_source_card_view.position = (
-		CAPTURE_PADDING_TOP_LEFT * SUPERSAMPLE_FACTOR
+		_card_origin_in_texture * SUPERSAMPLE_FACTOR
 	)
 	_source_card_view.scale = Vector2.ONE * SUPERSAMPLE_FACTOR
 	_source_card_view.rotation = 0.0
@@ -75,13 +70,45 @@ func get_texture_control() -> TextureRect:
 	return _texture_rect
 
 
-func get_source_card_view() -> Variant:
+func get_source_card_view() -> Control:
 	return _source_card_view
 
 
 func get_card_origin_in_texture() -> Vector2:
-	return CAPTURE_PADDING_TOP_LEFT
+	return _card_origin_in_texture
 
 
 func get_capture_size() -> Vector2:
 	return _capture_size
+
+
+func _calculate_visual_bounds(source: Control, card_size: Vector2) -> Rect2:
+	var content_min := Vector2.ZERO
+	var content_max := card_size
+	var card_views: Array[CardView] = []
+	if source is CardView:
+		card_views.append(source as CardView)
+	else:
+		for child: Node in source.get_children():
+			if child is CardView:
+				card_views.append(child as CardView)
+	for card_view: CardView in card_views:
+		var card_position := (
+			Vector2.ZERO
+			if card_view == source
+			else card_view.position
+		)
+		var card_min := (
+			card_position
+			- card_view.get_visual_capture_padding_top_left()
+		)
+		var card_max := (
+			card_position
+			+ card_view.card_size
+			+ card_view.get_visual_capture_padding_bottom_right()
+		)
+		content_min.x = minf(content_min.x, card_min.x)
+		content_min.y = minf(content_min.y, card_min.y)
+		content_max.x = maxf(content_max.x, card_max.x)
+		content_max.y = maxf(content_max.y, card_max.y)
+	return Rect2(content_min, content_max - content_min)

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bn1j442x1bnbu"]
+
+[ext_resource type="Texture2D" uid="uid://kt17o7pp5j0n" path="res://assets/card_art/spells/disruption_discordant_wave.png" id="1_1h1uf"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_4uamg"]
+
+[resource]
+script = ExtResource("2_4uamg")
+id = &"disruption_discordant_wave"
+display_name = "扰乱音波"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 3
+spell_type = 4
+art_texture = ExtResource("1_1h1uf")
+art_offset = Vector2i(3, -2)
+effect_text = "占位：干扰类法术，后续补充释放条件与效果。"

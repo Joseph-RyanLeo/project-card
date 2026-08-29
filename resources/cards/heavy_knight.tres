@@ -9,7 +9,6 @@ id = &"heavy_knight"
 display_name = "重装骑士"
 base_value = 7
 max_health = 20
-target_priority = 4
 runes = Array[int]([3, 4, 1])
 rarity = 3
 art_texture = ExtResource("2_art")

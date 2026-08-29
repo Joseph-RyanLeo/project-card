@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bew2sknrd71q0"]
+
+[ext_resource type="Texture2D" uid="uid://bdnsvm6f1ii2c" path="res://assets/card_art/spells/disruption_rust_blade.png" id="1_s7kud"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_wwyf8"]
+
+[resource]
+script = ExtResource("2_wwyf8")
+id = &"disruption_rust_blade"
+display_name = "锈刃术"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 2
+spell_type = 4
+art_texture = ExtResource("1_s7kud")
+art_offset = Vector2i(2, 12)
+effect_text = "占位：干扰类法术，后续补充释放条件与效果。"

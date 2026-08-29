@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://fe6po6voxxb2"]
+
+[ext_resource type="Texture2D" uid="uid://c3xuvjbuh20rl" path="res://assets/card_art/spells/blessing_vitality.png" id="1_nusy4"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_32fcb"]
+
+[resource]
+script = ExtResource("2_32fcb")
+id = &"blessing_vitality"
+display_name = "生命祝福"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 2
+art_texture = ExtResource("1_nusy4")
+art_offset = Vector2i(-2, 3)
+effect_text = "占位：强化类法术，后续补充释放条件与效果。"

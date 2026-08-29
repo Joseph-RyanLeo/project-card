@@ -9,7 +9,11 @@ extends Control
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
 const BATTLEFIELD_ROW_SCENE: PackedScene = preload("res://scenes/ui/BattlefieldRow.tscn")
 const COLLECTION_DROP_ZONE_SCRIPT: Script = preload("res://scripts/ui/collection_drop_zone.gd")
+const BattleSquadState = preload("res://scripts/battle/battle_squad_state.gd")
+const BattleController = preload("res://scripts/battle/battle_controller.gd")
+const BattleRules = preload("res://scripts/battle/battle_rules.gd")
 const PAGE_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_large.fnt")
+const BATTLE_LOG_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const WOOD_WORLD_TEXTURE: Texture2D = preload("res://assets/stage_6_5/wood_world.png")
 const BATTLEFIELD_BACKGROUND_TEXTURE: Texture2D = preload("res://assets/stage_6_5/battlefield_background.png")
 const TABLECLOTH_DECOR_TEXTURE: Texture2D = preload("res://assets/stage_6_5/tablecloth_decor.png")
@@ -21,8 +25,6 @@ const COLLECTION_RIGHT_PAGE_FRONT_TEXTURE: Texture2D = preload("res://assets/sta
 const RECENT_CARDS_BOOKMARK_TEXTURE: Texture2D = preload("res://assets/stage_6_5/recent_cards_bookmark.png")
 const RECENT_CARDS_LEFT_PAGE_TEXTURE: Texture2D = preload("res://assets/stage_6_5/recent_cards_left_page.png")
 const RECENT_CARDS_RIGHT_PAGE_TEXTURE: Texture2D = preload("res://assets/stage_6_5/recent_cards_right_page.png")
-const COLLECTION_LEFT_PAGE_BACK_TEXTURE: Texture2D = preload("res://assets/stage_6_5/collection_left_page_back.png")
-const COLLECTION_RIGHT_PAGE_BACK_TEXTURE: Texture2D = preload("res://assets/stage_6_5/collection_right_page_back.png")
 const CHARACTER_SHEET_TEXTURE: Texture2D = preload("res://assets/stage_6_5/character_front_back.png")
 const ACTION_TABS_TEXTURE: Texture2D = preload("res://assets/stage_6_5/page_tabs.png")
 const CARD_TYPE_TABS_TEXTURE: Texture2D = preload("res://assets/stage_6_5/card_type_tabs.png")
@@ -98,6 +100,7 @@ const ACTION_TAB_STEP_X: float = 42.0 # 相邻行动标签左边缘的固定水�
 const ACTION_TAB_REST_Y: float = 8.0 # 未选中行动标签的静止 Y 位置
 const ACTION_TAB_SELECTED_Y: float = 0.0 # 选中行动标签向上抬起后的 Y 位置
 const ACTION_TAB_ICON_POSITION := Vector2(5, 5) # 行动方式图标相对单个行动书签的位置
+const ACTION_TAB_ICON_FRAME_SIZE := Vector2(25, 28) # 五种行动图标共同对齐的逻辑框，不直接作为纹理拉伸尺寸
 const CARD_TYPE_TABS_POSITION := Vector2(266, 7) # 卡牌种类书签组相对书本的位置
 const CARD_TYPE_TAB_REST_Y: float = -2.0 # 未选中卡牌种类书签的静止 Y 位置
 const CARD_TYPE_TAB_SELECTED_Y: float = -10.0 # 选中卡牌种类书签向上抽出的 Y 位置
@@ -129,6 +132,19 @@ const PAGE_TURN_EDGE_DARK_COLOR := Color("76563b") # 活动页最外侧暗边颜
 const PAGE_TURN_EDGE_LIGHT_COLOR := Color("f0d1a2") # 活动页内侧高光颜色
 const PAGE_TURN_SHADOW_Z_INDEX: int = 50 # 高于固定页卡牌内部节点、低于活动页的投影层级
 const PAGE_TURN_MOVING_Z_INDEX: int = 100 # 活动页纸张必须压住固定页卡牌内部最高绘制层
+const START_BATTLE_BUTTON_POSITION := Vector2(704, 294) # 正式开始战斗按钮在我方战场区的位置
+const START_BATTLE_BUTTON_SIZE := Vector2(150, 38) # 正式开始战斗按钮的可点击尺寸
+const BATTLE_SPEED_BUTTON_POSITION := Vector2(78, 190) # 战斗速度按钮位于左上敌方画像正下方
+const BATTLE_SPEED_BUTTON_SIZE := Vector2(82, 30) # 1×/2×/3×循环按钮的可点击尺寸
+const BATTLE_SPEED_MULTIPLIERS: Array[float] = [1.0, 2.0, 3.0] # 可循环选择的现实播放速度
+const BATTLE_TIMER_POSITION := Vector2(54, 343) # 战斗逻辑计时位于战场中线靠左位置
+const BATTLE_TIMER_SIZE := Vector2(130, 32) # 战斗计时文字的固定显示区域
+const BATTLE_LOG_POSITION := Vector2(12, 448) # 战斗日志位于战场页面左下角的固定位置
+const BATTLE_LOG_SIZE := Vector2(202, 246) # 战斗日志容器的固定显示尺寸
+const BATTLE_LOG_MAX_ENTRIES: int = 100 # 日志最多保留的行动条数，避免长战斗无限增长
+const BATTLE_RESULT_PANEL_POSITION := Vector2(490, 252) # 空结算容器在 1280×720 屏幕中的位置
+const BATTLE_RESULT_PANEL_SIZE := Vector2(300, 200) # 空结算容器的固定显示尺寸
+signal battle_departure_requested(state: BattleSquadState)
 
 enum WorldView { BATTLEFIELDS, COLLECTION }
 
@@ -145,7 +161,6 @@ var selected_board_slot: BoardSlot
 # 点击携带与 Godot 原生拖拽共用同一种拖拽数据字典，避免两套规则分叉。
 var _click_carry_data: Dictionary = {}
 var _click_carry_preview: Control
-var _active_collection_entry_animations: int = 0
 var _battlefield_clock_check_queued: bool = false
 var current_world_view: WorldView = WorldView.COLLECTION
 var current_collection_page: int = 0
@@ -157,6 +172,7 @@ var search_query: String = ""
 var recently_returned_cards: Array[CardData] = []
 var collection_bookmark_active: bool = false
 var _regular_collection_page_before_bookmark: int = 0
+var _collection_effect_display_states: Dictionary = {} # 按卡牌稳定id保存收藏中的效果面状态，翻页重建节点后仍可恢复
 var last_page_turn_method: StringName = &""
 var _view_tween: Tween
 var _page_tween: Tween
@@ -165,6 +181,16 @@ var _card_type_tab_tween: Tween
 var _recent_bookmark_tween: Tween
 var _recent_bookmark_shake_tween: Tween
 var _page_turn_overlay: Control
+var _battle_snapshot: Dictionary = {}
+var _battle_state_slots: Dictionary = {}
+var battle_departure_count: int = 0
+var battle_speed_index: int = 0
+var _active_battle_departures: int = 0
+var _pending_battle_result: BattleController.Result = BattleController.Result.NONE
+var _battle_log_entries: Array[String] = []
+var _battle_generation: int = 0
+var _completed_battle_departures: Array[Dictionary] = []
+var _battle_departure_flush_queued: bool = false
 
 @export var collection_cards: Array[CardData] = [] # 真实收藏成员；显示顺序固定按稀有度 V→I 派生
 @export var collection_card_scale: float = 1.0 # 收藏区域中卡牌的基础缩放倍率
@@ -182,7 +208,16 @@ var collection_drop_zone: Control
 var card_art_tuner_button: Button
 var drag_mode_button: Button
 var enemy_avatar: TextureRect
+var battle_speed_button: Button
+var battle_timer_label: Label
+var battle_log_panel: PanelContainer
+var battle_log_text: RichTextLabel
 var player_avatar_button: TextureButton
+var start_battle_button: Button
+var battle_result_panel: Panel
+var battle_result_label: Label
+var restart_battle_button: Button
+var battle_controller: BattleController
 var search_edit: LineEdit
 var search_button: Button
 var clear_search_button: Button
@@ -201,11 +236,6 @@ var regular_left_page_art: TextureRect
 var regular_right_page_art: TextureRect
 var recent_left_page_art: TextureRect
 var recent_right_page_art: TextureRect
-var card_text_debug_panel: Panel
-var effect_line_spacing_spin_box: SpinBox
-var effect_color_button: ColorPickerButton
-var effect_text_toggle: Button
-var text_debug_reset_button: Button
 
 
 func _build_scene_structure() -> void:
@@ -231,9 +261,9 @@ func _build_scene_structure() -> void:
 	_build_board_section(world, "PlayerBoardSection", WORLD_SECTION_HEIGHT, false)
 	_build_collection_section(world)
 	_build_enemy_avatar(world)
-	_build_card_text_debug_controls()
+	_build_battle_hud(world)
+	_build_battle_result_panel()
 	_assign_runtime_owner(world)
-	_assign_runtime_owner(card_text_debug_panel)
 
 
 func _add_texture_layer(
@@ -250,11 +280,13 @@ func _add_texture_layer(
 	layer.position = pos
 	layer.size = node_size
 	layer.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	layer.stretch_mode = TextureRect.STRETCH_KEEP
-	layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	layer.stretch_mode = TextureRect.STRETCH_SCALE
 	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.z_index = depth
 	parent.add_child(layer)
+	# TextureRect 入树时可能按纹理最小尺寸重算 Rect，因此入树后写回设计坐标。
+	layer.position = pos
+	layer.size = node_size
 	return layer
 
 
@@ -277,11 +309,86 @@ func _build_enemy_avatar(parent: Control) -> void:
 	avatar.position = Vector2(38, 0)
 	avatar.size = CHARACTER_FRONT_REGION.size
 	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	avatar.stretch_mode = TextureRect.STRETCH_KEEP
-	avatar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	avatar.stretch_mode = TextureRect.STRETCH_SCALE
 	avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	avatar.z_index = 100
 	parent.add_child(avatar)
+	avatar.position = Vector2(38, 0)
+	avatar.size = CHARACTER_FRONT_REGION.size
+
+
+func _build_battle_hud(parent: Control) -> void:
+	var speed_button := _make_button(
+		"BattleSpeedButton",
+		"速度 1×",
+		BATTLE_SPEED_BUTTON_POSITION,
+		BATTLE_SPEED_BUTTON_SIZE,
+		true
+	)
+	speed_button.tooltip_text = "循环切换 1×、2×、3× 战斗播放速度"
+	speed_button.z_index = 200
+	speed_button.visible = false
+	parent.add_child(speed_button)
+	var timer := _make_label("战斗 00:00.0", BATTLE_TIMER_POSITION, BATTLE_TIMER_SIZE)
+	timer.name = "BattleTimerLabel"
+	timer.unique_name_in_owner = true
+	timer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	timer.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	timer.add_theme_font_size_override("font_size", 16)
+	timer.add_theme_color_override("font_color", Color("f5df9b"))
+	timer.add_theme_color_override("font_outline_color", Color("231d18"))
+	timer.add_theme_constant_override("outline_size", 2)
+	timer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	timer.z_index = 200
+	timer.visible = false
+	parent.add_child(timer)
+
+	var log_panel := PanelContainer.new()
+	log_panel.name = "BattleLogPanel"
+	log_panel.unique_name_in_owner = true
+	log_panel.position = BATTLE_LOG_POSITION
+	log_panel.size = BATTLE_LOG_SIZE
+	log_panel.custom_minimum_size = BATTLE_LOG_SIZE
+	log_panel.z_index = 200
+	log_panel.visible = false
+	log_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.025, 0.035, 0.043, 0.9)
+	panel_style.border_color = Color(0.31, 0.55, 0.58, 0.9)
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(4)
+	panel_style.content_margin_left = 7.0
+	panel_style.content_margin_top = 5.0
+	panel_style.content_margin_right = 7.0
+	panel_style.content_margin_bottom = 5.0
+	log_panel.add_theme_stylebox_override("panel", panel_style)
+	parent.add_child(log_panel)
+
+	var log_layout := VBoxContainer.new()
+	log_layout.add_theme_constant_override("separation", 3)
+	log_panel.add_child(log_layout)
+	var log_title := Label.new()
+	log_title.name = "BattleLogTitle"
+	log_title.unique_name_in_owner = true
+	log_title.text = "战斗日志"
+	log_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	log_title.add_theme_font_override("font", BATTLE_LOG_FONT)
+	log_title.add_theme_font_size_override("font_size", 16)
+	log_title.add_theme_color_override("font_color", Color("f5df9b"))
+	log_layout.add_child(log_title)
+	var log_text := RichTextLabel.new()
+	log_text.name = "BattleLogText"
+	log_text.unique_name_in_owner = true
+	log_text.bbcode_enabled = false
+	log_text.fit_content = false
+	log_text.scroll_active = true
+	log_text.scroll_following = true
+	log_text.selection_enabled = true
+	log_text.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	log_text.add_theme_font_override("normal_font", BATTLE_LOG_FONT)
+	log_text.add_theme_font_size_override("normal_font_size", 8)
+	log_text.add_theme_color_override("default_color", Color("d9e5df"))
+	log_layout.add_child(log_text)
 
 
 func _assign_runtime_owner(node: Node) -> void:
@@ -338,11 +445,12 @@ func _build_board_section(parent: Control, section_name: String, top: float, ene
 		player_avatar.position = Vector2(897, 160)
 		player_avatar.size = CHARACTER_BACK_REGION.size
 		player_avatar.ignore_texture_size = true
-		player_avatar.stretch_mode = TextureButton.STRETCH_KEEP
-		player_avatar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		player_avatar.stretch_mode = TextureButton.STRETCH_SCALE
 		player_avatar.tooltip_text = "切换敌我战场与收藏视角"
 		player_avatar.z_index = 100
 		section.add_child(player_avatar)
+		player_avatar.position = Vector2(897, 160)
+		player_avatar.size = CHARACTER_BACK_REGION.size
 		var phase := _make_label("准备阶段", Vector2(742, 76), Vector2(116, 24))
 		phase.name = "PhaseLabel"
 		phase.unique_name_in_owner = true
@@ -354,6 +462,60 @@ func _build_board_section(parent: Control, section_name: String, top: float, ene
 		drag_button.button_pressed = true
 		drag_button.visible = false
 		section.add_child(drag_button)
+		var start_button := _make_button(
+			"StartBattleButton",
+			"开始战斗",
+			START_BATTLE_BUTTON_POSITION,
+			START_BATTLE_BUTTON_SIZE,
+			true
+		)
+		start_button.tooltip_text = "锁定准备阵容并开始基础自动战斗"
+		start_button.z_index = 200
+		section.add_child(start_button)
+
+
+func _build_battle_result_panel() -> void:
+	# 本阶段只提供清晰的结果状态和重开入口，奖励内容留在这个容器后续扩展。
+	var panel := Panel.new()
+	panel.name = "BattleResultPanel"
+	panel.unique_name_in_owner = true
+	panel.position = BATTLE_RESULT_PANEL_POSITION
+	panel.size = BATTLE_RESULT_PANEL_SIZE
+	panel.z_index = 4000
+	panel.visible = false
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.047, 0.055, 0.96)
+	style.border_color = Color(0.82, 0.68, 0.31, 1.0)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel", style)
+	add_child(panel)
+
+	var title := _make_label("结算占位", Vector2(20, 22), Vector2(260, 42))
+	title.name = "BattleResultLabel"
+	title.unique_name_in_owner = true
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	panel.add_child(title)
+	var placeholder := _make_label(
+		"奖励与完整结算将在后续阶段加入",
+		Vector2(20, 72),
+		Vector2(260, 28)
+	)
+	placeholder.name = "BattleResultPlaceholder"
+	placeholder.unique_name_in_owner = true
+	placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(placeholder)
+	var restart := _make_button(
+		"RestartBattleButton",
+		"重新开始",
+		Vector2(75, 124),
+		Vector2(150, 44),
+		true
+	)
+	panel.add_child(restart)
+	_assign_runtime_owner(panel)
 
 
 func _build_collection_section(parent: Control) -> void:
@@ -477,12 +639,13 @@ func _build_collection_section(parent: Control) -> void:
 	bookmark.position = book.position + RECENT_BOOKMARK_POSITION
 	bookmark.size = RECENT_CARDS_BOOKMARK_TEXTURE.get_size()
 	bookmark.ignore_texture_size = true
-	bookmark.stretch_mode = TextureButton.STRETCH_KEEP
-	bookmark.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	bookmark.stretch_mode = TextureButton.STRETCH_SCALE
 	bookmark.tooltip_text = "最近使用的卡牌"
 	bookmark.pivot_offset = bookmark.size * 0.5
 	bookmark.z_index = -48
 	section.add_child(bookmark)
+	bookmark.position = book.position + RECENT_BOOKMARK_POSITION
+	bookmark.size = RECENT_CARDS_BOOKMARK_TEXTURE.get_size()
 	var regular_pages := Control.new()
 	regular_pages.name = "RegularPagesArt"
 	regular_pages.unique_name_in_owner = true
@@ -557,6 +720,8 @@ func _build_collection_section(parent: Control) -> void:
 	viewport.unique_name_in_owner = true
 	viewport.position = COLLECTION_VIEWPORT_POSITION
 	viewport.size = Vector2(822, 306)
+	# 卡牌左上角图标和悬停抽出会越过卡位区域；收藏视口只负责定位，不负责裁切。
+	viewport.clip_contents = false
 	book.add_child(viewport)
 	var card_row := Control.new()
 	card_row.name = "CollectionCardRow"
@@ -607,95 +772,6 @@ func _make_label(text_value: String, pos: Vector2, node_size: Vector2) -> Label:
 	return label
 
 
-func _build_card_text_debug_controls() -> void:
-	card_text_debug_panel = Panel.new()
-	card_text_debug_panel.name = "CardTextDebugPanel"
-	card_text_debug_panel.unique_name_in_owner = true
-	card_text_debug_panel.position = Vector2(8, 534)
-	card_text_debug_panel.size = Vector2(210, 178)
-	card_text_debug_panel.z_index = 4000
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.055, 0.065, 0.08, 0.92)
-	panel_style.border_color = Color(0.48, 0.38, 0.24, 1.0)
-	panel_style.set_border_width_all(2)
-	panel_style.corner_radius_top_left = 4
-	panel_style.corner_radius_top_right = 4
-	panel_style.corner_radius_bottom_left = 4
-	panel_style.corner_radius_bottom_right = 4
-	card_text_debug_panel.add_theme_stylebox_override("panel", panel_style)
-	add_child(card_text_debug_panel)
-	var title := _make_label("卡牌文字调试", Vector2(10, 5), Vector2(190, 20))
-	title.add_theme_font_size_override("font_size", 13)
-	card_text_debug_panel.add_child(title)
-	card_text_debug_panel.add_child(_make_label("效果行距", Vector2(10, 37), Vector2(64, 20)))
-	effect_line_spacing_spin_box = SpinBox.new()
-	effect_line_spacing_spin_box.name = "EffectLineSpacingSpinBox"
-	effect_line_spacing_spin_box.unique_name_in_owner = true
-	effect_line_spacing_spin_box.position = Vector2(104, 32)
-	effect_line_spacing_spin_box.size = Vector2(96, 28)
-	effect_line_spacing_spin_box.min_value = -4
-	effect_line_spacing_spin_box.max_value = 8
-	effect_line_spacing_spin_box.step = 1
-	card_text_debug_panel.add_child(effect_line_spacing_spin_box)
-	card_text_debug_panel.add_child(_make_label("效果文字颜色", Vector2(10, 73), Vector2(88, 20)))
-	effect_color_button = ColorPickerButton.new()
-	effect_color_button.name = "EffectColorButton"
-	effect_color_button.unique_name_in_owner = true
-	effect_color_button.position = Vector2(104, 68)
-	effect_color_button.size = Vector2(96, 28)
-	effect_color_button.color = Color.WHITE
-	effect_color_button.edit_alpha = true
-	card_text_debug_panel.add_child(effect_color_button)
-	effect_text_toggle = _make_button("EffectTextToggle", "显示效果文字", Vector2(10, 104), Vector2(92, 28), true)
-	effect_text_toggle.toggle_mode = true
-	card_text_debug_panel.add_child(effect_text_toggle)
-	text_debug_reset_button = _make_button("TextDebugResetButton", "恢复默认", Vector2(108, 104), Vector2(92, 28), true)
-	card_text_debug_panel.add_child(text_debug_reset_button)
-
-
-func _connect_card_text_debug_controls() -> void:
-	# Main 可能在同一测试进程内多次实例化；先清除上一实例留下的静态调试状态。
-	CardView.debug_effect_line_spacing = int(effect_line_spacing_spin_box.value)
-	CardView.debug_effect_text_color = effect_color_button.color
-	CardView.debug_force_effect_text = effect_text_toggle.button_pressed
-	effect_line_spacing_spin_box.value_changed.connect(_on_effect_line_spacing_changed)
-	effect_color_button.color_changed.connect(_on_effect_color_changed)
-	effect_text_toggle.toggled.connect(_on_effect_text_toggled)
-	text_debug_reset_button.pressed.connect(_reset_card_text_debug)
-	_refresh_existing_card_text_style()
-
-
-func _on_effect_line_spacing_changed(value: float) -> void:
-	CardView.debug_effect_line_spacing = int(value)
-	_refresh_existing_card_text_style()
-
-
-func _on_effect_color_changed(color: Color) -> void:
-	CardView.debug_effect_text_color = color
-	_refresh_existing_card_text_style()
-
-
-func _on_effect_text_toggled(show_effect: bool) -> void:
-	CardView.debug_force_effect_text = show_effect
-	_refresh_existing_card_text_style()
-
-
-func _reset_card_text_debug() -> void:
-	CardView.debug_effect_line_spacing = 0
-	CardView.debug_effect_text_color = Color.WHITE
-	CardView.debug_force_effect_text = false
-	effect_line_spacing_spin_box.set_value_no_signal(0)
-	effect_color_button.color = Color.WHITE
-	effect_text_toggle.set_pressed_no_signal(false)
-	_refresh_existing_card_text_style()
-
-
-func _refresh_existing_card_text_style() -> void:
-	for node: Node in get_tree().get_nodes_in_group("card_views"):
-		if node is CardView:
-			(node as CardView).refresh_text_debug_style()
-
-
 # --- 场景初始化、阶段与全局状态 ---
 func _ready() -> void:
 	if not has_node("WorldContent"):
@@ -704,7 +780,6 @@ func _ready() -> void:
 	if not _battlefield_has_active_rune_effects():
 		CardView.reset_active_rune_flow()
 	card_art_tuner_button.pressed.connect(_on_card_art_tuner_button_pressed)
-	_connect_card_text_debug_controls()
 	drag_mode_button.toggled.connect(_on_drag_mode_toggled)
 	player_avatar_button.pressed.connect(_on_player_avatar_button_pressed)
 	search_edit.text_changed.connect(_on_search_text_changed)
@@ -714,6 +789,18 @@ func _ready() -> void:
 	left_edge_button.pressed.connect(func() -> void: turn_collection_page(current_collection_page - 1, &"edge"))
 	right_edge_button.pressed.connect(func() -> void: turn_collection_page(current_collection_page + 1, &"edge"))
 	recent_bookmark_button.pressed.connect(toggle_recent_bookmark)
+	start_battle_button.pressed.connect(_on_start_battle_button_pressed)
+	restart_battle_button.pressed.connect(_on_restart_battle_button_pressed)
+	battle_speed_button.pressed.connect(cycle_battle_speed)
+	battle_controller = BattleController.new() as BattleController
+	battle_controller.name = "BattleController"
+	add_child(battle_controller)
+	battle_controller.states_changed.connect(_on_battle_states_changed)
+	battle_controller.action_resolved.connect(_on_battle_action_resolved)
+	battle_controller.direct_damage_resolved.connect(_on_battle_direct_damage_resolved)
+	battle_controller.squad_defeated.connect(_request_battle_squad_departure)
+	battle_controller.battle_finished.connect(_on_battle_finished)
+	_apply_battle_speed()
 	_build_filter_buttons()
 	collection_drop_zone.connect("card_dropped", _on_collection_card_dropped)
 	_connect_board_rows()
@@ -735,12 +822,20 @@ func _bind_scene_nodes() -> void:
 	enemy_back_row = get_node("%EnemyBackRow") as BattlefieldRow
 	enemy_front_row = get_node("%EnemyFrontRow") as BattlefieldRow
 	enemy_avatar = get_node("%EnemyAvatar") as TextureRect
+	battle_speed_button = get_node("%BattleSpeedButton") as Button
+	battle_timer_label = get_node("%BattleTimerLabel") as Label
+	battle_log_panel = get_node("%BattleLogPanel") as PanelContainer
+	battle_log_text = get_node("%BattleLogText") as RichTextLabel
 	collection_viewport = get_node("%CollectionViewport") as Control
 	collection_card_row = get_node("%CollectionCardRow") as Control
 	collection_drop_zone = get_node("%CollectionDropZone") as Control
 	card_art_tuner_button = get_node("%CardArtTunerButton") as Button
 	drag_mode_button = get_node("%DragModeButton") as Button
 	player_avatar_button = get_node("%PlayerAvatarButton") as TextureButton
+	start_battle_button = get_node("%StartBattleButton") as Button
+	battle_result_panel = get_node("%BattleResultPanel") as Panel
+	battle_result_label = get_node("%BattleResultLabel") as Label
+	restart_battle_button = get_node("%RestartBattleButton") as Button
 	search_edit = get_node("%SearchEdit") as LineEdit
 	search_button = get_node("%SearchButton") as Button
 	clear_search_button = get_node("%ClearSearchButton") as Button
@@ -759,11 +854,6 @@ func _bind_scene_nodes() -> void:
 	regular_right_page_art = get_node("%RegularRightPageArt") as TextureRect
 	recent_left_page_art = get_node("%RecentLeftPageArt") as TextureRect
 	recent_right_page_art = get_node("%RecentRightPageArt") as TextureRect
-	card_text_debug_panel = get_node("%CardTextDebugPanel") as Panel
-	effect_line_spacing_spin_box = get_node("%EffectLineSpacingSpinBox") as SpinBox
-	effect_color_button = get_node("%EffectColorButton") as ColorPickerButton
-	effect_text_toggle = get_node("%EffectTextToggle") as Button
-	text_debug_reset_button = get_node("%TextDebugResetButton") as Button
 
 
 func _on_drag_mode_toggled(prefer_minion: bool) -> void:
@@ -776,6 +866,19 @@ func _on_drag_mode_toggled(prefer_minion: bool) -> void:
 
 func _on_player_avatar_button_pressed() -> void:
 	set_world_view(WorldView.BATTLEFIELDS if current_world_view == WorldView.COLLECTION else WorldView.COLLECTION)
+
+
+func cycle_battle_speed() -> void:
+	battle_speed_index = (battle_speed_index + 1) % BATTLE_SPEED_MULTIPLIERS.size()
+	_apply_battle_speed()
+
+
+func _apply_battle_speed() -> void:
+	var multiplier := BATTLE_SPEED_MULTIPLIERS[battle_speed_index]
+	if battle_speed_button != null:
+		battle_speed_button.text = "速度 %d×" % int(multiplier)
+	if battle_controller != null:
+		battle_controller.set_battle_speed_multiplier(multiplier)
 
 
 func set_world_view(view: WorldView, animate: bool = true) -> void:
@@ -793,29 +896,34 @@ func set_world_view(view: WorldView, animate: bool = true) -> void:
 	_view_tween.tween_property(world_content, "position:y", target_y, VIEW_TWEEN_DURATION)
 
 
-func is_view_transitioning() -> bool:
-	return _view_tween != null and _view_tween.is_valid() and _view_tween.is_running()
-
-
 func _build_enemy_test_squads() -> void:
-	if collection_cards.size() < 6:
+	if collection_cards.size() < 17:
 		return
 	var back_cards: Array[CardData] = [collection_cards[1], collection_cards[2]]
 	var front_cards: Array[CardData] = [collection_cards[4], collection_cards[5]]
 	enemy_back_row.add_squad(SquadData.from_cards(back_cards, SquadData.TwoCardLayout.COMPACT), 0)
 	enemy_front_row.add_squad(SquadData.from_cards(front_cards, SquadData.TwoCardLayout.EXPANDED), 0)
+	# 每排再加入两个独立伤害小队，让固定敌阵拥有更接近实战的测试压力。
+	enemy_back_row.add_squad(SquadData.from_card(collection_cards[10]), 1)
+	enemy_front_row.add_squad(SquadData.from_card(collection_cards[11]), 1)
+	enemy_back_row.add_squad(SquadData.from_card(collection_cards[15]), 2)
+	enemy_front_row.add_squad(SquadData.from_card(collection_cards[16]), 2)
 	enemy_back_row.set_drag_enabled(false)
 	enemy_front_row.set_drag_enabled(false)
 
 
 func _build_filter_buttons() -> void:
 	for child: Node in rarity_buttons.get_children():
+		rarity_buttons.remove_child(child)
 		child.queue_free()
 	for child: Node in card_type_filter_tabs.get_children():
+		card_type_filter_tabs.remove_child(child)
 		child.queue_free()
 	for child: Node in element_buttons.get_children():
+		element_buttons.remove_child(child)
 		child.queue_free()
 	for child: Node in action_filter_tabs.get_children():
+		action_filter_tabs.remove_child(child)
 		child.queue_free()
 	for rarity: int in CardData.Rarity.size():
 		var region := RARITY_FILTER_REGIONS[rarity]
@@ -830,6 +938,7 @@ func _build_filter_buttons() -> void:
 		_add_filter_selected_mark(button)
 		button.pressed.connect(_on_rarity_button_pressed.bind(rarity))
 		rarity_buttons.add_child(button)
+		button.size = region.size
 	for visual_index: int in ELEMENT_FILTER_REGIONS.size():
 		var element_type: int = ELEMENT_FILTER_TYPES[visual_index]
 		var region := ELEMENT_FILTER_REGIONS[visual_index]
@@ -844,6 +953,7 @@ func _build_filter_buttons() -> void:
 		_add_filter_selected_mark(button)
 		button.pressed.connect(_on_element_button_pressed.bind(element_type))
 		element_buttons.add_child(button)
+		button.size = region.size
 	for visual_index: int in CARD_TYPE_FILTER_REGIONS.size():
 		var card_type: int = CARD_TYPE_FILTER_TYPES[visual_index]
 		var region := CARD_TYPE_FILTER_REGIONS[visual_index]
@@ -858,6 +968,7 @@ func _build_filter_buttons() -> void:
 		button.button_pressed = active_card_type_filters.has(card_type)
 		button.pressed.connect(_on_card_type_filter_pressed.bind(card_type))
 		card_type_filter_tabs.add_child(button)
+		button.size = region.size
 	for action_type: int in CardData.ActionType.size():
 		var tab_root := Control.new()
 		tab_root.name = "ActionTab%d" % action_type
@@ -870,20 +981,25 @@ func _build_filter_buttons() -> void:
 		art.texture = _make_atlas_texture(ACTION_TABS_TEXTURE, ACTION_TAB_REGION)
 		art.size = ACTION_TAB_REGION.size
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		art.stretch_mode = TextureRect.STRETCH_KEEP
-		art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		art.stretch_mode = TextureRect.STRETCH_SCALE
 		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		tab_root.add_child(art)
+		art.size = ACTION_TAB_REGION.size
 		var action_icon := TextureRect.new()
 		action_icon.name = "ActionIcon"
+		# GameDisplay 固定在 1×内部画布绘制；筛选图标直接使用各自的 1×原图，
+		# 避免 24×25 防御图标被统一拉到 25px 宽，也避免 25×25 图标产生半像素居中。
 		action_icon.texture = ACTION_FILTER_TEXTURES[action_type]
-		action_icon.position = ACTION_TAB_ICON_POSITION
-		action_icon.size = Vector2(16, 16)
+		var icon_rect := get_action_tab_icon_rect(action_type)
+		action_icon.position = icon_rect.position
+		action_icon.size = icon_rect.size
 		action_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		action_icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		action_icon.stretch_mode = TextureRect.STRETCH_KEEP
 		action_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		action_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		tab_root.add_child(action_icon)
+		action_icon.position = icon_rect.position
+		action_icon.size = icon_rect.size
 		var hotspot := Button.new()
 		hotspot.name = "Hotspot"
 		hotspot.size = Vector2(ACTION_TAB_REGION.size.x, 28)
@@ -898,6 +1014,13 @@ func _build_filter_buttons() -> void:
 	_update_filter_selected_marks()
 
 
+func get_action_tab_icon_rect(action_type: int) -> Rect2:
+	var icon_size := ACTION_FILTER_TEXTURES[action_type].get_size()
+	# 奇数差值无法真正居中时固定向左、向上取整，保证最终坐标始终落在整数像素。
+	var centered_offset := ((ACTION_TAB_ICON_FRAME_SIZE - icon_size) * 0.5).floor()
+	return Rect2(ACTION_TAB_ICON_POSITION + centered_offset, icon_size)
+
+
 func _create_atlas_filter_button(
 	atlas: Texture2D,
 	region: Rect2,
@@ -908,8 +1031,7 @@ func _create_atlas_filter_button(
 	button.texture_normal = _make_atlas_texture(atlas, region)
 	button.size = region.size
 	button.ignore_texture_size = true
-	button.stretch_mode = TextureButton.STRETCH_KEEP
-	button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	button.stretch_mode = TextureButton.STRETCH_SCALE
 	button.tooltip_text = tooltip
 	return button
 
@@ -1074,22 +1196,48 @@ func _toggle_single_filter(active_filters: Array[int], value: int) -> void:
 
 func toggle_action_filter(action_type: int) -> void:
 	_toggle_single_filter(active_action_filters, action_type)
-	for tab_index: int in action_filter_tabs.get_child_count():
-		var hotspot := action_filter_tabs.get_child(tab_index).get_node("Hotspot") as Button
-		hotspot.button_pressed = active_action_filters.has(tab_index)
-	current_collection_page = 0
-	_update_action_tab_positions()
-	_build_collection_cards()
+	if not active_action_filters.is_empty():
+		active_card_type_filters.assign([CardData.CardType.MINION])
+	elif (
+		active_element_filters.is_empty()
+		and active_card_type_filters == [CardData.CardType.MINION]
+	):
+		# 随从标签由行动筛选自动带起；最后一个行动条件弹回时一起恢复无类型筛选。
+		active_card_type_filters.clear()
+	_sync_minion_filter_controls()
 
 
 func toggle_card_type_filter(card_type: int) -> void:
 	_toggle_single_filter(active_card_type_filters, card_type)
+	if card_type != CardData.CardType.MINION:
+		if active_card_type_filters.has(card_type):
+			active_action_filters.clear()
+			active_element_filters.clear()
+	elif active_card_type_filters.is_empty():
+		# 行动方式和元素只属于随从；主动弹回随从标签时也同时清空它们。
+		active_action_filters.clear()
+		active_element_filters.clear()
+	_sync_minion_filter_controls()
+
+
+func _sync_minion_filter_controls() -> void:
+	# 类型、行动与元素共同描述“随从筛选”，必须在一次状态提交中同步。
+	for tab_index: int in action_filter_tabs.get_child_count():
+		var hotspot := action_filter_tabs.get_child(tab_index).get_node("Hotspot") as Button
+		hotspot.button_pressed = active_action_filters.has(tab_index)
 	for visual_index: int in card_type_filter_tabs.get_child_count():
 		var button := card_type_filter_tabs.get_child(visual_index) as BaseButton
 		button.button_pressed = active_card_type_filters.has(
 			CARD_TYPE_FILTER_TYPES[visual_index]
 		)
+	for visual_index: int in element_buttons.get_child_count():
+		var element_button := element_buttons.get_child(visual_index) as BaseButton
+		element_button.button_pressed = active_element_filters.has(
+			ELEMENT_FILTER_TYPES[visual_index]
+		)
 	current_collection_page = 0
+	_update_filter_selected_marks()
+	_update_action_tab_positions()
 	_update_card_type_tab_positions()
 	_build_collection_cards()
 
@@ -1110,12 +1258,9 @@ func toggle_element_filter(element_type: int) -> void:
 		active_element_filters.erase(element_type)
 	else:
 		active_element_filters.append(element_type)
-	var visual_index := ELEMENT_FILTER_TYPES.find(element_type)
-	if visual_index >= 0 and visual_index < element_buttons.get_child_count():
-		(element_buttons.get_child(visual_index) as BaseButton).button_pressed = active_element_filters.has(element_type)
-	current_collection_page = 0
-	_update_filter_selected_marks()
-	_build_collection_cards()
+	if not active_element_filters.is_empty():
+		active_card_type_filters.assign([CardData.CardType.MINION])
+	_sync_minion_filter_controls()
 
 
 func apply_search() -> void:
@@ -1146,9 +1291,17 @@ func get_filtered_collection_cards() -> Array[CardData]:
 				continue
 			if not active_rarity_filters.is_empty() and not active_rarity_filters.has(card_data.rarity):
 				continue
-			if not active_action_filters.is_empty() and not active_action_filters.has(card_data.action_type):
+			if (
+				not active_action_filters.is_empty()
+				and (
+					card_data.card_type != CardData.CardType.MINION
+					or not active_action_filters.has(card_data.action_type)
+				)
+			):
 				continue
 			var contains_all_selected_elements := true
+			if not active_element_filters.is_empty() and card_data.card_type != CardData.CardType.MINION:
+				continue
 			for element_type: int in active_element_filters:
 				if not card_data.runes.has(element_type):
 					contains_all_selected_elements = false
@@ -1156,7 +1309,17 @@ func get_filtered_collection_cards() -> Array[CardData]:
 			if not contains_all_selected_elements:
 				continue
 			if not search_query.is_empty():
-				var searchable := "%s %s %s" % [card_data.display_name, card_data.get_race_name(), card_data.effect_text]
+				var subtype_name := card_data.get_race_name()
+				if card_data.card_type == CardData.CardType.SPELL:
+					subtype_name = card_data.get_spell_type_name()
+				elif card_data.card_type == CardData.CardType.EQUIPMENT:
+					subtype_name = card_data.get_equipment_type_name()
+				var searchable := "%s %s %s %s" % [
+					card_data.display_name,
+					card_data.get_card_type_name(),
+					subtype_name,
+					card_data.effect_text,
+				]
 				if not searchable.to_lower().contains(search_query):
 					continue
 			filtered.append(card_data)
@@ -1434,7 +1597,11 @@ func _play_collection_page_turn(
 
 
 func _get_regular_page_texture(page_side: int) -> Texture2D:
-	return COLLECTION_LEFT_PAGE_FRONT_TEXTURE if page_side == 0 else COLLECTION_RIGHT_PAGE_FRONT_TEXTURE
+	return (
+		COLLECTION_LEFT_PAGE_FRONT_TEXTURE
+		if page_side == 0
+		else COLLECTION_RIGHT_PAGE_FRONT_TEXTURE
+	)
 
 
 func _create_page_turn_snapshot(
@@ -1456,10 +1623,10 @@ func _create_page_turn_snapshot(
 	art.texture = page_texture
 	art.size = COLLECTION_PAGE_SIZE
 	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	art.stretch_mode = TextureRect.STRETCH_KEEP
-	art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	art.stretch_mode = TextureRect.STRETCH_SCALE
 	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	page.add_child(art)
+	art.size = COLLECTION_PAGE_SIZE
 	var card_layer := Control.new()
 	card_layer.name = "CardLayer"
 	card_layer.size = COLLECTION_PAGE_SIZE
@@ -1626,6 +1793,14 @@ func _is_collection_drag_active() -> bool:
 
 func _on_card_art_tuner_button_pressed() -> void:
 	_cancel_click_carry()
+	var display_shell := get_tree().get_first_node_in_group(&"game_display_shell")
+	if (
+		is_instance_valid(display_shell)
+		and display_shell.is_ancestor_of(self)
+		and display_shell.has_method("open_card_art_tuner")
+	):
+		display_shell.call("open_card_art_tuner")
+		return
 	get_tree().change_scene_to_file("res://scenes/tools/CardArtTuner.tscn")
 
 
@@ -1660,19 +1835,74 @@ func _input(event: InputEvent) -> void:
 
 
 func _on_start_battle_button_pressed() -> void:
+	start_battle()
+
+
+func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
+	if current_phase != GamePhase.PREPARE or battle_controller == null:
+		return false
 	_cancel_click_carry()
-	match current_phase:
-		GamePhase.PREPARE:
-			current_phase = GamePhase.BATTLE
-		GamePhase.BATTLE:
-			current_phase = GamePhase.RESULT
-		GamePhase.RESULT:
-			current_phase = GamePhase.PREPARE
+	_battle_snapshot = _capture_battle_snapshot()
+	_battle_state_slots.clear()
+	_clear_battle_log()
+	_battle_generation += 1
+	_completed_battle_departures.clear()
+	_battle_departure_flush_queued = false
+	battle_departure_count = 0
+	_active_battle_departures = 0
+	_pending_battle_result = BattleController.Result.NONE
+	var player_formation := _build_battle_formation(front_row, &"player_front")
+	player_formation.append_array(_build_battle_formation(back_row, &"player_back"))
+	var enemy_formation := _build_battle_formation(enemy_front_row, &"enemy_front")
+	enemy_formation.append_array(_build_battle_formation(enemy_back_row, &"enemy_back"))
+	current_phase = GamePhase.BATTLE
+	battle_result_panel.visible = false
 	_update_phase_label()
+	battle_controller.start_battle(
+		player_formation,
+		enemy_formation,
+		random_seed,
+		auto_run
+	)
+	_map_battle_states_to_slots(battle_controller.player_states, player_formation)
+	_map_battle_states_to_slots(battle_controller.enemy_states, enemy_formation)
+	_update_battle_timer()
+	_on_battle_states_changed()
+	if battle_controller.current_result == BattleController.Result.NONE:
+		play_area_label.text = "自动战斗开始：同冷却时间点按统一批次结算"
+	return true
+
+
+func _on_restart_battle_button_pressed() -> void:
+	restart_battle()
+
+
+func restart_battle() -> bool:
+	if _battle_snapshot.is_empty() or battle_controller == null:
+		return false
+	battle_controller.clear_battle()
+	_clear_battle_log()
+	_battle_generation += 1
+	_completed_battle_departures.clear()
+	_battle_departure_flush_queued = false
+	_active_battle_departures = 0
+	_pending_battle_result = BattleController.Result.NONE
+	_restore_battle_snapshot()
+	_battle_state_slots.clear()
+	current_phase = GamePhase.PREPARE
+	battle_result_panel.visible = false
+	battle_result_label.text = "结算占位"
+	_update_battle_timer()
+	_update_phase_label()
+	_build_collection_cards()
+	play_area_label.text = "已精确恢复本次战斗开始前的阵容与准备状态"
+	return true
 
 
 func set_phase_for_test(phase: GamePhase) -> void:
 	_cancel_click_carry()
+	if battle_controller != null and phase != GamePhase.BATTLE:
+		battle_controller.stop_battle()
 	current_phase = phase
 	_update_phase_label()
 
@@ -1686,7 +1916,289 @@ func _update_phase_label() -> void:
 		GamePhase.RESULT:
 			phase_label.text = "结算阶段"
 	set_world_view(WorldView.COLLECTION if current_phase == GamePhase.PREPARE else WorldView.BATTLEFIELDS)
+	start_battle_button.visible = current_phase == GamePhase.PREPARE
+	battle_speed_button.visible = current_phase == GamePhase.BATTLE
+	battle_timer_label.visible = current_phase == GamePhase.BATTLE
+	battle_log_panel.visible = current_phase == GamePhase.BATTLE
+	battle_result_panel.visible = current_phase == GamePhase.RESULT
 	_refresh_drag_availability()
+
+
+func _capture_battle_snapshot() -> Dictionary:
+	return {
+		"player_front": _duplicate_row_squads(front_row),
+		"player_back": _duplicate_row_squads(back_row),
+		"enemy_front": _duplicate_row_squads(enemy_front_row),
+		"enemy_back": _duplicate_row_squads(enemy_back_row),
+	}
+
+
+func _duplicate_row_squads(row: BattlefieldRow) -> Array[SquadData]:
+	var squads: Array[SquadData] = []
+	for slot: BoardSlot in row.get_squads():
+		squads.append(slot.get_squad_data().duplicate_squad())
+	return squads
+
+
+func _restore_battle_snapshot() -> void:
+	_restore_row_from_snapshot(front_row, _battle_snapshot.get("player_front", []))
+	_restore_row_from_snapshot(back_row, _battle_snapshot.get("player_back", []))
+	_restore_row_from_snapshot(enemy_front_row, _battle_snapshot.get("enemy_front", []))
+	_restore_row_from_snapshot(enemy_back_row, _battle_snapshot.get("enemy_back", []))
+
+
+func _restore_row_from_snapshot(row: BattlefieldRow, snapshot_value: Variant) -> void:
+	row.clear_squads()
+	var squads := snapshot_value as Array
+	for squad_value: Variant in squads:
+		var squad := squad_value as SquadData
+		if squad != null:
+			var slot := row.add_squad(squad.duplicate_squad(), row.get_squad_count())
+			if slot != null:
+				slot.clear_battle_status()
+
+
+func _build_battle_formation(
+	row: BattlefieldRow,
+	row_key: StringName
+) -> Array[Dictionary]:
+	var formation: Array[Dictionary] = []
+	for index: int in row.get_squad_count():
+		var slot := row.get_squads()[index]
+		formation.append({
+			"squad_data": slot.get_squad_data(),
+			"row_key": row_key,
+			"formation_index": index,
+			"slot": slot,
+		})
+	return formation
+
+
+func _map_battle_states_to_slots(
+	states: Array[BattleSquadState],
+	formation: Array[Dictionary]
+) -> void:
+	for index: int in mini(states.size(), formation.size()):
+		_battle_state_slots[states[index]] = formation[index].get("slot")
+
+
+func _on_battle_states_changed() -> void:
+	if battle_controller == null:
+		return
+	_update_battle_timer()
+	for state: BattleSquadState in battle_controller.get_all_states():
+		var slot := _battle_state_slots.get(state) as BoardSlot
+		if is_instance_valid(slot):
+			slot.set_battle_status(
+				state.current_health,
+				state.current_armor,
+				state.remaining_cooldown,
+				state.get_buff_stacks(BattleRules.FATIGUE_BUFF_ID)
+			)
+
+
+func _update_battle_timer() -> void:
+	if battle_timer_label == null:
+		return
+	var elapsed := battle_controller.elapsed_seconds if battle_controller != null else 0.0
+	var total_tenths := maxi(floori(elapsed * 10.0 + 0.0001), 0)
+	var minutes := total_tenths / 600
+	var seconds := (total_tenths / 10) % 60
+	var tenths := total_tenths % 10
+	battle_timer_label.text = "战斗 %02d:%02d.%d" % [minutes, seconds, tenths]
+
+
+func _on_battle_action_resolved(
+	actor: BattleSquadState,
+	target: BattleSquadState,
+	action_type: CardData.ActionType,
+	amount: int
+) -> void:
+	var actor_slot := _battle_state_slots.get(actor) as BoardSlot
+	var target_slot := _battle_state_slots.get(target) as BoardSlot
+	var action_name := actor.get_action_source().get_action_type_name()
+	var target_name := target.get_effect_source().display_name
+	if is_instance_valid(actor_slot):
+		actor_slot.play_battle_action_lift(
+			battle_controller.battle_speed_multiplier
+			if battle_controller != null
+			else 1.0
+		)
+		actor_slot.show_battle_action("%s → %s  %d" % [action_name, target_name, amount])
+	if is_instance_valid(target_slot):
+		var target_text := (
+			"受到 %d" % amount
+			if action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
+			else "%s +%d" % [action_name, amount]
+		)
+		target_slot.show_battle_action(target_text, true)
+	var verb := (
+		"造成了"
+		if action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
+		else "提供了"
+	)
+	var value_name := (
+		"伤害"
+		if action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
+		else "治疗" if action_type == CardData.ActionType.HEAL else "护盾"
+	)
+	_append_battle_log(
+		"%s对%s%s%d点%s" % [
+			_format_battle_squad_name(actor),
+			_format_battle_squad_name(target),
+			verb,
+			amount,
+			value_name,
+		]
+	)
+
+
+func _on_battle_direct_damage_resolved(
+	state: BattleSquadState,
+	source_id: StringName,
+	amount: int
+) -> void:
+	var slot := _battle_state_slots.get(state) as BoardSlot
+	if not is_instance_valid(slot):
+		return
+	var source_name := "疲劳" if source_id == BattleRules.FATIGUE_BUFF_ID else String(source_id)
+	slot.show_battle_action("%s -%d" % [source_name, amount], true)
+	_append_battle_log(
+		"%s使%s受到%d点伤害" % [
+			source_name,
+			_format_battle_squad_name(state),
+			amount,
+		]
+	)
+
+
+func _format_battle_squad_name(state: BattleSquadState) -> String:
+	if state == null or state.get_effect_source() == null:
+		return "未知目标"
+	var side_name := (
+		"我方"
+		if state.side == BattleSquadState.Side.PLAYER
+		else "敌方"
+	)
+	var result := "%s%s" % [side_name, state.get_effect_source().display_name]
+	if state.squad_data != null and state.squad_data.get_card_count() > 1:
+		result += "的小队"
+	return result
+
+
+func _append_battle_log(entry: String) -> void:
+	if entry.is_empty() or battle_log_text == null:
+		return
+	_battle_log_entries.append(entry)
+	while _battle_log_entries.size() > BATTLE_LOG_MAX_ENTRIES:
+		_battle_log_entries.pop_front()
+	battle_log_text.text = "\n".join(_battle_log_entries)
+
+
+func _clear_battle_log() -> void:
+	_battle_log_entries.clear()
+	if battle_log_text != null:
+		battle_log_text.text = ""
+
+
+func _request_battle_squad_departure(state: BattleSquadState) -> void:
+	# 战斗规则只发出阵亡事实；所有卡牌退场表现仍集中在这个单一入口。
+	battle_departure_count += 1
+	battle_departure_requested.emit(state)
+	var slot := _battle_state_slots.get(state) as BoardSlot
+	var row := _row_for_battle_key(state.row_key)
+	_active_battle_departures += 1
+	_animate_battle_squad_departure(
+		state,
+		slot,
+		row,
+		_battle_generation
+	)
+
+
+func _animate_battle_squad_departure(
+	state: BattleSquadState,
+	slot: BoardSlot,
+	row: BattlefieldRow,
+	battle_generation: int
+) -> void:
+	if is_instance_valid(slot):
+		var noise_seed := float(state.side * 101 + state.formation_index * 17 + battle_departure_count)
+		await slot.play_death_dissolve(noise_seed)
+	if battle_generation != _battle_generation:
+		return
+	_completed_battle_departures.append({
+		"state": state,
+		"slot": slot,
+		"row": row,
+	})
+	_active_battle_departures = maxi(_active_battle_departures - 1, 0)
+	if not _battle_departure_flush_queued:
+		_battle_departure_flush_queued = true
+		_flush_completed_battle_departures.call_deferred()
+
+
+func _flush_completed_battle_departures() -> void:
+	_battle_departure_flush_queued = false
+	var row_slots := {}
+	for entry: Dictionary in _completed_battle_departures:
+		var state := entry.get("state") as BattleSquadState
+		var row := entry.get("row") as BattlefieldRow
+		var slot := entry.get("slot") as BoardSlot
+		if is_instance_valid(row) and is_instance_valid(slot):
+			if not row_slots.has(row):
+				row_slots[row] = []
+			(row_slots[row] as Array).append(slot)
+		_battle_state_slots.erase(state)
+	_completed_battle_departures.clear()
+	for row_value: Variant in row_slots:
+		var slots: Array[BoardSlot] = []
+		for slot_value: Variant in row_slots[row_value]:
+			var slot := slot_value as BoardSlot
+			if is_instance_valid(slot):
+				slots.append(slot)
+		(row_value as BattlefieldRow).remove_squad_slots(slots)
+	if (
+		_active_battle_departures == 0
+		and _pending_battle_result != BattleController.Result.NONE
+	):
+		_show_battle_result(_pending_battle_result)
+
+
+func _row_for_battle_key(row_key: StringName) -> BattlefieldRow:
+	match row_key:
+		&"player_front":
+			return front_row
+		&"player_back":
+			return back_row
+		&"enemy_front":
+			return enemy_front_row
+		&"enemy_back":
+			return enemy_back_row
+		_:
+			return null
+
+
+func _on_battle_finished(result: BattleController.Result) -> void:
+	_pending_battle_result = result
+	if _active_battle_departures == 0:
+		_show_battle_result(result)
+
+
+func _show_battle_result(result: BattleController.Result) -> void:
+	_pending_battle_result = BattleController.Result.NONE
+	current_phase = GamePhase.RESULT
+	match result:
+		BattleController.Result.PLAYER_VICTORY:
+			battle_result_label.text = "胜利"
+		BattleController.Result.PLAYER_DEFEAT:
+			battle_result_label.text = "失败"
+		BattleController.Result.DRAW:
+			battle_result_label.text = "平局"
+		_:
+			battle_result_label.text = "结算占位"
+	_update_phase_label()
+	play_area_label.text = "战斗结束：%s" % battle_result_label.text
 
 
 func _connect_board_rows() -> void:
@@ -1794,12 +2306,24 @@ func _create_collection_card_slot(
 	)
 	card_view.scale = Vector2(collection_card_scale, collection_card_scale)
 	card_view.set_card_data(card_data)
+	card_view.showing_effect = bool(
+		_collection_effect_display_states.get(
+			_get_collection_effect_state_key(card_data),
+			false
+		)
+	)
+	card_view.collection_return_requested.connect(
+		_animate_collection_card_entry
+	)
 	if is_deployed_ghost:
 		card_view.modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA
 		card_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card_view.configure_drag_source(false)
 	elif interactive:
 		card_view.card_clicked.connect(_on_collection_card_clicked)
+		card_view.effect_display_changed.connect(
+			_on_collection_effect_display_changed
+		)
 		card_view.click_carry_requested.connect(
 			_on_click_carry_requested
 		)
@@ -1815,6 +2339,26 @@ func _create_collection_card_slot(
 
 	slot.add_child(card_view)
 	return slot
+
+
+func _on_collection_effect_display_changed(
+	card_data: CardData,
+	is_showing_effect: bool
+) -> void:
+	if card_data == null or card_data.card_type != CardData.CardType.MINION:
+		return
+	var state_key: Variant = _get_collection_effect_state_key(card_data)
+	if is_showing_effect:
+		_collection_effect_display_states[state_key] = true
+	else:
+		_collection_effect_display_states.erase(state_key)
+
+
+func _get_collection_effect_state_key(card_data: CardData) -> Variant:
+	# 正式卡使用稳定id；测试或临时卡没有id时退回资源对象本身，避免空id互相串状态。
+	if card_data != null and not card_data.id.is_empty():
+		return card_data.id
+	return card_data
 
 
 func _is_card_deployed(card_data: CardData) -> bool:
@@ -2127,6 +2671,9 @@ func _transfer_card(
 		return false
 
 	var card_data := drag_data["card_data"] as CardData
+	if card_data == null or card_data.card_type != CardData.CardType.MINION:
+		# 法术/装备当前只有占位卡面；统一走失败返回路径，不能进入战场规则。
+		return false
 	var source_type := drag_data["source_type"] as StringName
 	if target_type == &"board" and target_row == null:
 		return false
@@ -2227,6 +2774,13 @@ func _transfer_drop_intent(
 		return false
 	var kind := drag_data.get("kind") as StringName
 	if kind == &"squad":
+		if intent.get("operation") == &"merge_squad":
+			return _transfer_compact_squad_into_single(
+				drag_data,
+				target_row,
+				intent,
+				entry_global_position
+			)
 		return _transfer_whole_squad(
 			drag_data,
 			target_row,
@@ -2237,6 +2791,9 @@ func _transfer_drop_intent(
 		return false
 
 	var card_data := drag_data.get("card_data") as CardData
+	if card_data == null or card_data.card_type != CardData.CardType.MINION:
+		# 非随从不能生成新小队或合并到小队，原生拖拽结束后由来源恢复。
+		return false
 	var source_type := drag_data.get("source_type") as StringName
 	var source_row := drag_data.get("source_row") as BattlefieldRow
 	var source_slot := drag_data.get("source_slot") as BoardSlot
@@ -2318,6 +2875,55 @@ func _transfer_drop_intent(
 			entry_global_position as Vector2
 		)
 	play_area_label.text = "已将 %s 放入%s的小队" % [card_data.display_name, target_row.row_title]
+	_refresh_drag_availability()
+	_on_battlefield_squads_changed()
+	return true
+
+
+func _transfer_compact_squad_into_single(
+	drag_data: Dictionary,
+	target_row: BattlefieldRow,
+	intent: Dictionary,
+	entry_global_position: Variant = null
+) -> bool:
+	var source_row := drag_data.get("source_row") as BattlefieldRow
+	var source_slot := drag_data.get("source_slot") as BoardSlot
+	var source_squad := drag_data.get("squad_data") as SquadData
+	var target_slot := intent.get("target_slot") as BoardSlot
+	if (
+		not is_instance_valid(source_row)
+		or not is_instance_valid(source_slot)
+		or source_row.get_slot_index(source_slot) < 0
+		or source_slot.get_squad_data() != source_squad
+		or not is_instance_valid(target_slot)
+		or target_row.get_slot_index(target_slot) < 0
+		or target_slot == source_slot
+	):
+		return false
+	var target_squad := target_slot.get_squad_data()
+	var result := source_squad.merge_compact_double_with_single(
+		target_squad,
+		bool(intent.get("single_on_left", false))
+	)
+	if result == null:
+		return false
+	var used_units := target_row.get_used_unit_count()
+	if source_row == target_row:
+		used_units -= source_squad.get_unit_count()
+	used_units -= target_squad.get_unit_count()
+	used_units += result.get_unit_count()
+	if used_units > BattlefieldRow.BATTLEFIELD_UNIT_COUNT:
+		return false
+
+	source_row.remove_squad_slot(source_slot)
+	target_slot.set_squad_data(result)
+	target_slot.configure_drag_source(true, target_row)
+	selected_board_row = target_row
+	selected_board_slot = target_slot
+	_select_card(result.get_effect_source())
+	if entry_global_position is Vector2:
+		_animate_board_card_entry.call_deferred(target_slot, entry_global_position)
+	play_area_label.text = "已将四符文双卡小队与%s的单卡合并" % target_row.row_title
 	_refresh_drag_availability()
 	_on_battlefield_squads_changed()
 	return true
@@ -2447,20 +3053,15 @@ func _animate_collection_card_entry(
 	if card_view == null or card_view.is_queued_for_deletion():
 		return
 
-	# 飞回收藏的卡仍属于 CollectionViewport；动画期间临时解除滚动区裁切并
-	# 提到拖拽层，既能在收藏区外完整显示，也不会从其他收藏中间穿过。
+	# 点击携带和原生长按拖拽都进入这里；回位期间只临时提升真实卡牌，
+	# 收藏视口本身始终不裁切，避免一次失败回位永久改变后续悬停表现。
 	var resting_z_index := card_view.z_index
-	_active_collection_entry_animations += 1
-	collection_viewport.clip_contents = false
 	card_view.set_resting_z_index(CardDragPreview.DRAG_PREVIEW_Z_INDEX)
 	card_view.animate_from_global_position(entry_global_position)
 	await get_tree().create_timer(CardView.LAYOUT_TWEEN_DURATION).timeout
 
 	if is_instance_valid(card_view) and not card_view.is_queued_for_deletion():
 		card_view.set_resting_z_index(resting_z_index)
-	_active_collection_entry_animations = maxi(_active_collection_entry_animations - 1, 0)
-	if _active_collection_entry_animations == 0 and is_instance_valid(collection_viewport):
-		collection_viewport.clip_contents = true
 
 
 func _animate_board_card_entry(

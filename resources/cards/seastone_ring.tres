@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://dyjwg22a3cl00"]
+
+[ext_resource type="Texture2D" uid="uid://cstwy1bqa38j8" path="res://assets/card_art/equipment/seastone_ring.png" id="1_dmm2x"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_p7dhg"]
+
+[resource]
+script = ExtResource("2_p7dhg")
+id = &"seastone_ring"
+display_name = "海晶戒"
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 1
+equipment_type = 3
+equipment_action_delta = 2
+equipment_cooldown_delta = 0.5
+equipment_armor_delta = 2
+art_texture = ExtResource("1_dmm2x")
+art_offset = Vector2i(5, 6)
+effect_text = "占位：饰品；行动+2，冷却+0.5秒，生命+0，护甲+2。"

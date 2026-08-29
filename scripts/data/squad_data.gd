@@ -258,6 +258,35 @@ func insert_card(
 	return true
 
 
+func merge_compact_double_with_single(
+	single_squad: SquadData,
+	single_on_left: bool
+) -> SquadData:
+	# 整队合并保留双卡原本的水平顺序和完整层级顺序。目标单卡只按
+	# 落点方向接到左/右侧，并始终放到层级末尾，不能夺走原顶牌的效果来源。
+	if (
+		get_card_count() != 2
+		or two_card_layout != TwoCardLayout.COMPACT
+		or get_visible_runes().size() != COMPACT_DOUBLE_UNIT_COUNT
+		or single_squad == null
+		or single_squad.get_card_count() != 1
+	):
+		return null
+	var single_card := single_squad.horizontal_cards[0]
+	if single_card == null or contains(single_card):
+		return null
+
+	var result := duplicate_squad()
+	if single_on_left:
+		result.horizontal_cards.push_front(single_card)
+	else:
+		result.horizontal_cards.append(single_card)
+	result.layer_cards.append(single_card)
+	result.two_card_layout = TwoCardLayout.EXPANDED
+	result._normalize()
+	return result if result.is_valid() else null
+
+
 func remove_card(card_data: CardData) -> bool:
 	# 三卡拆出后的双卡间距由被移除的水平位置决定，不能只看剩余数量。
 	if not contains(card_data):

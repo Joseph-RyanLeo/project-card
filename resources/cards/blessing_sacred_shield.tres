@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://dnr2wnly6hun"]
+
+[ext_resource type="Texture2D" uid="uid://7qognysrljrr" path="res://assets/card_art/spells/blessing_sacred_shield.png" id="1_4ahkg"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_f5855"]
+
+[resource]
+script = ExtResource("2_f5855")
+id = &"blessing_sacred_shield"
+display_name = "圣盾"
+card_type = 2
+base_value = 0
+max_health = 0
+art_texture = ExtResource("1_4ahkg")
+art_offset = Vector2i(-2, 4)
+effect_text = "占位：强化类法术，后续补充释放条件与效果。"

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bxaw16y2kqjc1"]
+
+[ext_resource type="Texture2D" uid="uid://c6fwoobfhd8bn" path="res://assets/card_art/spells/summon_resurrection.png" id="1_c6lbk"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_frckw"]
+
+[resource]
+script = ExtResource("2_frckw")
+id = &"summon_resurrection"
+display_name = "死者苏生"
+card_type = 2
+base_value = 0
+max_health = 0
+rarity = 4
+spell_type = 1
+art_texture = ExtResource("1_c6lbk")
+art_offset = Vector2i(-2, 15)
+effect_text = "占位：召唤类法术，后续补充释放条件与效果。"

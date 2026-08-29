@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Project Card"
-run/main_scene="res://scenes/Main.tscn"
+run/main_scene="res://scenes/GameDisplay.tscn"
 config/features=PackedStringArray("4.7")
 config/icon="res://icon.svg"
 
@@ -19,12 +19,13 @@ config/icon="res://icon.svg"
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
-window/size/mode=3
-window/size/window_width_override=2560
-window/size/window_height_override=1440
-window/stretch/mode="viewport"
+window/size/mode=0
+window/size/window_width_override=1920
+window/size/window_height_override=1080
+window/size/resizable=false
+window/stretch/mode="disabled"
 
 [rendering]
 
-textures/canvas_textures/default_texture_filter=0
+textures/canvas_textures/default_texture_filter=1
 renderer/rendering_method="gl_compatibility"

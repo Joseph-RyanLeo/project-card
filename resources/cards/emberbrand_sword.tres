@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://7xcorrbj8ddt"]
+
+[ext_resource type="Texture2D" uid="uid://dy23mbafggxl7" path="res://assets/card_art/equipment/emberbrand_sword.png" id="1_r4cdm"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_tqvje"]
+
+[resource]
+script = ExtResource("2_tqvje")
+id = &"emberbrand_sword"
+display_name = "烬火长剑"
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 4
+equipment_type = 1
+equipment_action_delta = 1
+equipment_cooldown_delta = 0.5
+equipment_health_delta = 1
+art_texture = ExtResource("1_r4cdm")
+art_offset = Vector2i(-1, 9)
+effect_text = "占位：近战武器；行动+1，冷却+0.5秒，生命+1，护甲+0。"

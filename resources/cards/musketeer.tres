@@ -10,7 +10,6 @@ display_name = "火枪手"
 action_type = 1
 base_value = 6
 max_health = 22
-target_priority = 3
 runes = Array[int]([2, 3, 0])
 rarity = 2
 art_texture = ExtResource("2_art")

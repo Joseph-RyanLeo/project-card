@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bmb5pkayoppsf"]
+
+[ext_resource type="Texture2D" uid="uid://dx503oculkh3s" path="res://assets/card_art/equipment/stormstring_bow.png" id="1_d3p8m"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_h5enp"]
+
+[resource]
+script = ExtResource("2_h5enp")
+id = &"stormstring_bow"
+display_name = "风暴弓"
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 4
+equipment_action_delta = -1
+equipment_cooldown_delta = -0.5
+equipment_health_delta = 2
+equipment_armor_delta = 1
+art_texture = ExtResource("1_d3p8m")
+art_offset = Vector2i(0, 4)
+effect_text = "占位：远程武器；行动-1，冷却-0.5秒，生命+2，护甲+1。"

@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://lnm4o3k52l3y"]
+
+[ext_resource type="Texture2D" uid="uid://c62epc1yiybeq" path="res://assets/card_art/equipment/royal_aegis.png" id="1_81svi"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_wuhdq"]
+
+[resource]
+script = ExtResource("2_wuhdq")
+id = &"royal_aegis"
+display_name = "苍穹礼甲"
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 1
+equipment_type = 2
+equipment_action_delta = -2
+equipment_cooldown_delta = -0.5
+equipment_health_delta = 3
+equipment_armor_delta = 1
+art_texture = ExtResource("1_81svi")
+art_offset = Vector2i(5, 15)
+effect_text = "占位：防具；行动-2，冷却-0.5秒，生命+3，护甲+1。"

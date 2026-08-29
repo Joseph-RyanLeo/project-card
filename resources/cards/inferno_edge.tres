@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://be8lk7ixy47l6"]
+
+[ext_resource type="Texture2D" uid="uid://dfqyog5ootme2" path="res://assets/card_art/equipment/inferno_edge.png" id="1_ttubc"]
+[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_ctdjo"]
+
+[resource]
+script = ExtResource("2_ctdjo")
+id = &"inferno_edge"
+display_name = "炼狱之刃"
+card_type = 1
+base_value = 0
+max_health = 0
+equipment_type = 1
+equipment_action_delta = 2
+equipment_cooldown_delta = 0.5
+equipment_armor_delta = 2
+art_texture = ExtResource("1_ttubc")
+art_offset = Vector2i(-10, 12)
+effect_text = "占位：近战武器；行动+2，冷却+0.5秒，生命+0，护甲+2。"
