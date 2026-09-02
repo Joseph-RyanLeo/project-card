@@ -17,6 +17,15 @@ const CARD_SNAPSHOT_VISUAL_SCRIPT: Script = preload(
 const DEATH_DISSOLVE_SHADER: Shader = preload(
 	"res://shaders/card_death_dissolve.gdshader"
 )
+const BATTLE_RESULT_ACTION_TEXTURES: Array[Texture2D] = [
+	preload("res://assets/actions/action_melee.png"),
+	preload("res://assets/actions/action_ranged.png"),
+	preload("res://assets/actions/action_magic.png"),
+] # 输出伤害依次使用近战、远程、法术行动图标
+const BATTLE_RESULT_HEAL_TEXTURE: Texture2D = preload("res://assets/actions/action_heal.png")
+const BATTLE_RESULT_ARMOR_TEXTURE: Texture2D = preload("res://assets/actions/action_defense.png")
+const BATTLE_RESULT_HEALTH_TEXTURE: Texture2D = preload("res://assets/stats/health.png")
+const BATTLE_RESULT_DEATH_TEXTURE: Texture2D = preload("res://assets/stats/battle_result_death.png")
 const CARD_SIZE := Vector2(99, 136) # 每张随从卡始终保持的完整裸卡尺寸
 const PREVIEW_ALPHA: float = 0.4 # 放置预览中待加入卡牌的不透明度
 const INACTIVE_ATTRIBUTE_ALPHA: float = 0.4 # 非属性来源卡牌对应图标与数字的不透明度
@@ -44,6 +53,10 @@ const BATTLE_ACTION_LIFT_SECONDS: float = 0.18 # 小队完成抬起并回到原�
 const DEATH_DISSOLVE_BODY_SECONDS: float = 0.5 # 阵亡卡牌主体按噪声阈值完全溶解所需时间（秒）
 const DEATH_DISSOLVE_EDGE_SECONDS: float = 0.56 # 绿色溶解边缘仅比主体稍慢退场的总时长（秒）
 const DEATH_DISSOLVE_EDGE_COLOR := Color("63bd4f") # 参考视频中溶解边缘使用的绿色
+const BATTLE_RESULT_CARD_MODULATE := Color(0.30, 0.30, 0.30, 1.0) # 战后卡面进一步压暗，统计图标本身不受影响
+const BATTLE_RESULT_CONTENT_WIDTH: float = 82.0 # 原生图标与卢恩数字在卡面中央占用的宽度
+const BATTLE_RESULT_ROW_HEIGHT: float = 30.0 # 兼容治疗图标原生 28px 高度的统计行高
+const BATTLE_RESULT_DEATH_SIZE := Vector2(10.0, 10.0) # 用户提供骷髅图标保持原生像素尺寸
 
 var squad_data: SquadData
 # 真实模式和预览模式互斥；ghost_cards 标识预览中需要半透明的待加入卡。
@@ -74,6 +87,13 @@ var _death_dissolve_tween: Tween
 var _death_dissolving: bool = false
 var _death_dissolve_material: ShaderMaterial
 var _death_dissolve_item_count: int = 0
+var _battle_result_overlay: Control
+var _battle_result_rows: VBoxContainer
+var _battle_result_death_icon: TextureRect
+var _battle_result_active: bool = false
+var _battle_result_statistics: Dictionary = {}
+var _battle_result_defeated: bool = false
+var _battle_result_action_type: CardData.ActionType = CardData.ActionType.MELEE
 
 @onready var stack_feedback_layer: Control = %StackFeedbackLayer
 @onready var squad_lift_layer: Control = %SquadLiftLayer
@@ -194,6 +214,46 @@ func clear_battle_status() -> void:
 		_battle_action_lift_tween.kill()
 	if is_instance_valid(squad_lift_layer):
 		squad_lift_layer.position = Vector2.ZERO
+
+
+func show_battle_result_statistics(
+	statistics: Dictionary,
+	defeated: bool,
+	action_type: CardData.ActionType
+) -> void:
+	_battle_result_statistics = statistics.duplicate(true)
+	_battle_result_defeated = defeated
+	_battle_result_action_type = action_type
+	_battle_result_active = true
+	_refresh()
+
+
+func clear_battle_result_statistics() -> void:
+	_battle_result_statistics.clear()
+	_battle_result_defeated = false
+	_battle_result_active = false
+	_refresh()
+
+
+func is_showing_battle_result_statistics() -> bool:
+	return _battle_result_active
+
+
+func get_battle_result_statistics() -> Dictionary:
+	return _battle_result_statistics.duplicate(true)
+
+
+func has_battle_result_death_mark() -> bool:
+	return (
+		_battle_result_active
+		and _battle_result_defeated
+		and is_instance_valid(_battle_result_death_icon)
+		and _battle_result_death_icon.visible
+	)
+
+
+func get_battle_result_stat_row_count() -> int:
+	return _battle_result_rows.get_child_count() if is_instance_valid(_battle_result_rows) else 0
 
 
 func show_battle_action(text_value: String, target_feedback: bool = false) -> void:
@@ -637,6 +697,129 @@ func _refresh() -> void:
 			draw_child_index += 1
 	if _stack_target_feedback_strength > 0.0:
 		_ensure_stack_target_snapshots()
+	_apply_battle_result_visual_state(display_width)
+
+
+func _apply_battle_result_visual_state(display_width: float) -> void:
+	card_visual_layer.modulate = BATTLE_RESULT_CARD_MODULATE if _battle_result_active else Color.WHITE
+	if not _battle_result_active:
+		if is_instance_valid(_battle_result_overlay):
+			_battle_result_overlay.visible = false
+		return
+	pattern_label.visible = false
+	battle_status_label.visible = false
+	battle_action_label.visible = false
+	_ensure_battle_result_overlay()
+	_refresh_battle_result_overlay(display_width)
+
+
+func _ensure_battle_result_overlay() -> void:
+	if is_instance_valid(_battle_result_overlay):
+		return
+	_battle_result_overlay = Control.new()
+	_battle_result_overlay.name = "BattleResultStatistics"
+	_battle_result_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_battle_result_overlay.z_index = 4093
+	stack_feedback_layer.add_child(_battle_result_overlay)
+
+	_battle_result_rows = VBoxContainer.new()
+	_battle_result_rows.name = "StatisticsRows"
+	_battle_result_rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_battle_result_rows.add_theme_constant_override("separation", 1)
+	_battle_result_overlay.add_child(_battle_result_rows)
+
+	_battle_result_death_icon = TextureRect.new()
+	_battle_result_death_icon.name = "DeathMark"
+	_battle_result_death_icon.texture = BATTLE_RESULT_DEATH_TEXTURE
+	_battle_result_death_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_battle_result_death_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_battle_result_death_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_battle_result_death_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_battle_result_overlay.add_child(_battle_result_death_icon)
+
+
+func _refresh_battle_result_overlay(display_width: float) -> void:
+	_battle_result_overlay.visible = true
+	_battle_result_overlay.size = Vector2(display_width, CARD_SIZE.y)
+	for child: Node in _battle_result_rows.get_children():
+		_battle_result_rows.remove_child(child)
+		child.queue_free()
+	var entries := _get_visible_battle_result_entries()
+	for entry: Dictionary in entries:
+		_battle_result_rows.add_child(_make_battle_result_row(entry))
+	var content_height := float(entries.size()) * BATTLE_RESULT_ROW_HEIGHT + float(maxi(entries.size() - 1, 0))
+	_battle_result_rows.custom_minimum_size = Vector2(BATTLE_RESULT_CONTENT_WIDTH, content_height)
+	_battle_result_rows.size = Vector2(BATTLE_RESULT_CONTENT_WIDTH, content_height)
+	_battle_result_rows.position = Vector2(
+		floorf((display_width - BATTLE_RESULT_CONTENT_WIDTH) * 0.5),
+		floorf((CARD_SIZE.y - content_height) * 0.5)
+	)
+	_battle_result_death_icon.visible = _battle_result_defeated
+	_battle_result_death_icon.size = BATTLE_RESULT_DEATH_SIZE
+	_battle_result_death_icon.position = Vector2(
+		display_width - BATTLE_RESULT_DEATH_SIZE.x - 3.0,
+		3.0
+	)
+
+
+func _get_visible_battle_result_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	var damage_dealt := float(_battle_result_statistics.get("damage_dealt", 0.0))
+	var damage_taken := float(_battle_result_statistics.get("damage_taken", 0.0))
+	var healing_done := float(_battle_result_statistics.get("healing_done", 0.0))
+	var armor_granted := float(_battle_result_statistics.get("armor_granted", 0.0))
+	if damage_dealt > 0.000001:
+		var damage_texture_index := clampi(int(_battle_result_action_type), 0, 2)
+		entries.append({
+			"kind": &"damage_dealt",
+			"texture": BATTLE_RESULT_ACTION_TEXTURES[damage_texture_index],
+			"value": damage_dealt,
+		})
+	if damage_taken > 0.000001:
+		entries.append({"kind": &"damage_taken", "texture": BATTLE_RESULT_HEALTH_TEXTURE, "value": damage_taken})
+	if healing_done > 0.000001:
+		entries.append({"kind": &"healing_done", "texture": BATTLE_RESULT_HEAL_TEXTURE, "value": healing_done})
+	if armor_granted > 0.000001:
+		entries.append({"kind": &"armor_granted", "texture": BATTLE_RESULT_ARMOR_TEXTURE, "value": armor_granted})
+	if entries.is_empty():
+		var fallback_kind: StringName = &"damage_dealt"
+		var fallback_texture: Texture2D = BATTLE_RESULT_ACTION_TEXTURES[clampi(int(_battle_result_action_type), 0, 2)]
+		if _battle_result_action_type == CardData.ActionType.HEAL:
+			fallback_kind = &"healing_done"
+			fallback_texture = BATTLE_RESULT_HEAL_TEXTURE
+		elif _battle_result_action_type == CardData.ActionType.DEFENSE:
+			fallback_kind = &"armor_granted"
+			fallback_texture = BATTLE_RESULT_ARMOR_TEXTURE
+		entries.append({"kind": fallback_kind, "texture": fallback_texture, "value": 0.0})
+	return entries
+
+
+func _make_battle_result_row(entry: Dictionary) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = String(entry["kind"]).to_pascal_case()
+	row.custom_minimum_size = Vector2(BATTLE_RESULT_CONTENT_WIDTH, BATTLE_RESULT_ROW_HEIGHT)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 4)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.set_meta("stat_kind", entry["kind"])
+
+	var icon := TextureRect.new()
+	icon.texture = entry["texture"] as Texture2D
+	icon.custom_minimum_size = icon.texture.get_size()
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(icon)
+
+	var value_display := RuneNumberDisplay.new()
+	value_display.name = "Value"
+	value_display.number_style = RuneNumberDisplay.NumberStyle.LARGE
+	value_display.text = str(roundi(float(entry["value"])))
+	value_display.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(value_display)
+	return row
 
 
 func _refresh_pattern_label(data: SquadData, display_width: float) -> void:

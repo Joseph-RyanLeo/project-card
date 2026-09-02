@@ -135,6 +135,7 @@ visible = false
 layout_mode = 0
 mouse_filter = 2
 expand_mode = 1
+stretch_mode = 2
 
 [node name="ArtLabel" type="Label" parent="ArtPanel/ArtContent" unique_id=1583902405]
 unique_name_in_owner = true

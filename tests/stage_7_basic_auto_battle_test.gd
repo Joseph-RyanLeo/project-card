@@ -91,7 +91,7 @@ func _test_runtime_sources_isolation_and_rule_config() -> void:
 		RunePatternResult.PatternType.FIVE_OF_A_KIND,
 		RunePatternResult.PatternType.STRAIGHT,
 	]
-	var expected_amounts := [10, 15, 20, 20, 22, 25, 25, 30, 30]
+	var expected_amounts := [10, 15, 20, 20, 20, 25, 25, 30, 30]
 	for index: int in patterns.size():
 		_expect(
 			BattleRules.calculate_action_amount(10, patterns[index]) == expected_amounts[index],
@@ -309,6 +309,13 @@ func _test_timeline_batches_and_results() -> void:
 		and draw.current_result == BattleController.Result.DRAW,
 		"同冷却时间点双方都基于批次开始存活状态行动，同时全灭判为平局"
 	)
+	_expect(
+		is_equal_approx(draw.player_states[0].battle_damage_dealt, 5.0)
+		and is_equal_approx(draw.player_states[0].battle_damage_taken, 5.0)
+		and is_equal_approx(draw.enemy_states[0].battle_damage_dealt, 5.0)
+		and is_equal_approx(draw.enemy_states[0].battle_damage_taken, 5.0),
+		"每个战斗状态分别累计实际造成伤害与承受伤害"
+	)
 	await _dispose_controller(draw)
 
 	var heal_after_damage := await _create_controller(
@@ -324,6 +331,12 @@ func _test_timeline_batches_and_results() -> void:
 		and heal_after_damage.current_result == BattleController.Result.NONE,
 		"受伤治疗者同批次先伤害到 -3，再治疗 4 回到 1，最后统一判定仍存活"
 	)
+	_expect(
+		is_equal_approx(heal_after_damage.player_states[0].battle_damage_dealt, 7.0)
+		and is_equal_approx(heal_after_damage.enemy_states[0].battle_damage_taken, 7.0)
+		and is_equal_approx(heal_after_damage.enemy_states[0].battle_healing_done, 4.0),
+		"伤害与实际生效治疗分别归属到正确来源和目标"
+	)
 	await _dispose_controller(heal_after_damage)
 
 	var armor_after_damage := await _create_controller(
@@ -337,6 +350,10 @@ func _test_timeline_batches_and_results() -> void:
 		and armor_after_damage.enemy_states[0].current_armor == 5
 		and not armor_after_damage.enemy_states[0].alive,
 		"同批次护甲在伤害后增加，不能倒流抵挡已经结算的伤害"
+	)
+	_expect(
+		is_equal_approx(armor_after_damage.enemy_states[0].battle_armor_granted, 5.0),
+		"实际施加的护甲单独累计到防御来源"
 	)
 	await _dispose_controller(armor_after_damage)
 
@@ -464,7 +481,7 @@ func _test_main_battle_loop_and_restart() -> void:
 		and main.start_battle_button.text == "开始战斗"
 		and main.get_node("%BattleResultPlaceholder") != null
 		and main.restart_battle_button.text == "重新开始",
-		"正式开始战斗按钮、空结算容器和重新开始按钮均存在"
+		"正式开始战斗按钮、战后统计提示和重新开始按钮均存在"
 	)
 	_expect(
 		main.battle_speed_button != null
@@ -590,6 +607,14 @@ func _test_main_battle_loop_and_restart() -> void:
 		),
 		"真实行动把敌我名称、实际数值和伤害/治疗/护盾类型写入左下角日志"
 	)
+	var action_beam := main.battle_effect_layer.get_node_or_null("ElementEnergyBeam") as Node2D
+	var action_beam_mesh := action_beam.get_node_or_null("BeamMesh") as MeshInstance2D if action_beam != null else null
+	var action_beam_material := action_beam_mesh.material as ShaderMaterial if action_beam_mesh != null else null
+	_expect(
+		action_beam_material != null
+		and action_beam_material.shader.resource_path == "res://shaders/battle_energy_beam.gdshader",
+		"近战、远程或法术行动会在攻击卡牌与目标之间生成弧线像素能量束"
+	)
 	_expect(
 		_main_formation_signature(main) != {}
 		and _card_resource_signature(main.collection_cards) == cards_before,
@@ -613,9 +638,57 @@ func _test_main_battle_loop_and_restart() -> void:
 	_expect(
 		main.current_phase == main.GamePhase.RESULT
 		and main.battle_result_panel.visible
+		and main.battle_log_panel.visible
+		and not main.battle_log_text.text.is_empty()
 		and main.battle_result_label.text in ["胜利", "失败", "平局"],
-		"阵亡溶解完成后进入带结果状态的空结算占位"
+		"阵亡溶解完成后进入结算页，并保留本场战斗日志供玩家查看"
 	)
+	var result_states: Array[BattleSquadState] = main.battle_controller.get_all_states()
+	var result_state_slots := main.get("_battle_state_slots") as Dictionary
+	var defeated_state: BattleSquadState
+	var any_result_slot: BoardSlot
+	for state: BattleSquadState in result_states:
+		var mapped_slot := result_state_slots.get(state) as BoardSlot
+		if any_result_slot == null and mapped_slot != null:
+			any_result_slot = mapped_slot
+		if not state.alive:
+			defeated_state = state
+	_expect(
+		_main_formation_signature(main) == formation_before
+		and result_state_slots.size() == result_states.size(),
+		"进入结算页时立即恢复战前四排布局，并把全部战斗状态映射回原排位"
+	)
+	_expect(
+		any_result_slot != null
+		and any_result_slot.is_showing_battle_result_statistics()
+		and any_result_slot.card_visual_layer.modulate.r < 1.0
+		and any_result_slot.get_battle_result_stat_row_count() > 0,
+		"恢复后的卡面压暗，并以图标加数字覆盖本局非零统计"
+	)
+	var result_rows := any_result_slot.get("_battle_result_rows") as VBoxContainer
+	var first_result_row := result_rows.get_child(0) as HBoxContainer
+	var result_icon := first_result_row.get_child(0) as TextureRect
+	_expect(
+		result_icon.custom_minimum_size == result_icon.texture.get_size(),
+		"结算统计图标逐张保持原始素材尺寸，不再强制统一缩放"
+	)
+	var defeated_slot := result_state_slots.get(defeated_state) as BoardSlot
+	_expect(
+		defeated_state != null
+		and defeated_slot != null
+		and defeated_slot.has_battle_result_death_mark(),
+		"阵亡卡牌恢复原位后在右上角显示骷髅标识"
+	)
+	var result_log_entries := main.get("_battle_log_entries") as Array
+	if not result_log_entries.is_empty():
+		main._on_battle_log_meta_hover_started(
+			"formula:%d:0" % int(result_log_entries[0].group_id)
+		)
+	_expect(
+		main.formula_popup.visible,
+		"结算页保留日志数值的公式悬停查看能力"
+	)
+	main._on_battle_log_meta_hover_ended("")
 	_expect(main.battle_departure_count > 0, "真实死亡批次调用单一退场入口")
 	_expect(main.restart_battle(), "重新开始入口可执行")
 	await create_timer(main.VIEW_TWEEN_DURATION + 0.05).timeout

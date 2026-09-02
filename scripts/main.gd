@@ -12,6 +12,11 @@ const COLLECTION_DROP_ZONE_SCRIPT: Script = preload("res://scripts/ui/collection
 const BattleSquadState = preload("res://scripts/battle/battle_squad_state.gd")
 const BattleController = preload("res://scripts/battle/battle_controller.gd")
 const BattleRules = preload("res://scripts/battle/battle_rules.gd")
+const BattleElementResolver = preload("res://scripts/battle/battle_element_resolver.gd")
+const BattleLogEntry = preload("res://scripts/battle/battle_log_entry.gd")
+const BattleFormulaPresenter = preload("res://scripts/battle/battle_formula_presenter.gd")
+const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
+const BattleAttackTrailRenderer = preload("res://scripts/battle/battle_attack_trail_renderer.gd")
 const PAGE_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_large.fnt")
 const BATTLE_LOG_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const WOOD_WORLD_TEXTURE: Texture2D = preload("res://assets/stage_6_5/wood_world.png")
@@ -142,8 +147,22 @@ const BATTLE_TIMER_SIZE := Vector2(130, 32) # 战斗计时文字的固定显示�
 const BATTLE_LOG_POSITION := Vector2(12, 448) # 战斗日志位于战场页面左下角的固定位置
 const BATTLE_LOG_SIZE := Vector2(202, 246) # 战斗日志容器的固定显示尺寸
 const BATTLE_LOG_MAX_ENTRIES: int = 100 # 日志最多保留的行动条数，避免长战斗无限增长
-const BATTLE_RESULT_PANEL_POSITION := Vector2(490, 252) # 空结算容器在 1280×720 屏幕中的位置
-const BATTLE_RESULT_PANEL_SIZE := Vector2(300, 200) # 空结算容器的固定显示尺寸
+const FORMULA_POPUP_MIN_WIDTH: float = 210.0 # 短公式弹窗的最小阅读宽度
+const FORMULA_POPUP_MAX_WIDTH: float = 340.0 # 长公式弹窗在换行前允许使用的最大宽度
+const FORMULA_POPUP_MAX_HEIGHT: float = 300.0 # 长公式弹窗无需占满画面的最大高度
+const FORMULA_POPUP_CONTENT_PADDING := Vector2(18.0, 18.0) # 弹窗两侧各 9 像素内边距合计占用的横纵空间
+const FORMULA_POPUP_MOUSE_GAP: float = 10.0 # 弹窗底边与鼠标之间的垂直间距
+const EFFECT_LAYER_Z_INDEX: int = 1200 # 高于三卡堆最高卡面、低于公式弹窗与结算框的元素特效层级
+const EFFECT_FLASH_SECONDS: float = 0.62 # 火灼烧与终结闪烁持续时间（秒）
+const EFFECT_IMPACT_RADIUS := Vector2(24.0, 32.0) # 元素命中目标时菱形脉冲的横纵半径
+const EFFECT_COLOR_NONE := Color("ffffff") # 无有效元素组合时的纯白攻击颜色
+const EFFECT_COLOR_LIGHT := Color("ffd70f") # 光元素的纯黄色攻击颜色
+const EFFECT_COLOR_DARK := Color("b05dff") # 暗元素的纯紫色攻击颜色
+const EFFECT_COLOR_FIRE := Color("e51414") # 火元素的纯红色攻击颜色
+const EFFECT_COLOR_WATER := Color("0095ff") # 水元素的纯蓝色攻击颜色
+const EFFECT_COLOR_WOOD := Color("3ac330") # 木元素的纯绿色攻击颜色
+const BATTLE_RESULT_PANEL_POSITION := Vector2(1096, 184) # 战后入口放在战场右侧空白区，不遮挡四排卡牌
+const BATTLE_RESULT_PANEL_SIZE := Vector2(170, 104) # 参考右侧返回区，只保留结果、统计提示和重开入口
 signal battle_departure_requested(state: BattleSquadState)
 
 enum WorldView { BATTLEFIELDS, COLLECTION }
@@ -187,7 +206,8 @@ var battle_departure_count: int = 0
 var battle_speed_index: int = 0
 var _active_battle_departures: int = 0
 var _pending_battle_result: BattleController.Result = BattleController.Result.NONE
-var _battle_log_entries: Array[String] = []
+var _battle_log_entries: Array[BattleLogEntry] = []
+var _battle_log_by_group: Dictionary = {}
 var _battle_generation: int = 0
 var _completed_battle_departures: Array[Dictionary] = []
 var _battle_departure_flush_queued: bool = false
@@ -206,12 +226,17 @@ var collection_viewport: Control
 var collection_card_row: Control
 var collection_drop_zone: Control
 var card_art_tuner_button: Button
+var battle_lab_button: Button
+var attack_effect_lab_button: Button
 var drag_mode_button: Button
 var enemy_avatar: TextureRect
 var battle_speed_button: Button
 var battle_timer_label: Label
 var battle_log_panel: PanelContainer
 var battle_log_text: RichTextLabel
+var formula_popup: PanelContainer
+var formula_popup_text: RichTextLabel
+var battle_effect_layer: Control
 var player_avatar_button: TextureButton
 var start_battle_button: Button
 var battle_result_panel: Panel
@@ -379,7 +404,8 @@ func _build_battle_hud(parent: Control) -> void:
 	var log_text := RichTextLabel.new()
 	log_text.name = "BattleLogText"
 	log_text.unique_name_in_owner = true
-	log_text.bbcode_enabled = false
+	log_text.bbcode_enabled = true
+	log_text.meta_underlined = true
 	log_text.fit_content = false
 	log_text.scroll_active = true
 	log_text.scroll_following = true
@@ -389,6 +415,15 @@ func _build_battle_hud(parent: Control) -> void:
 	log_text.add_theme_font_size_override("normal_font_size", 8)
 	log_text.add_theme_color_override("default_color", Color("d9e5df"))
 	log_layout.add_child(log_text)
+
+	var effect_layer := Control.new()
+	effect_layer.name = "BattleEffectLayer"
+	effect_layer.unique_name_in_owner = true
+	effect_layer.position = Vector2.ZERO
+	effect_layer.size = Vector2(1280, 720)
+	effect_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	effect_layer.z_index = EFFECT_LAYER_Z_INDEX
+	parent.add_child(effect_layer)
 
 
 func _assign_runtime_owner(node: Node) -> void:
@@ -475,7 +510,7 @@ func _build_board_section(parent: Control, section_name: String, top: float, ene
 
 
 func _build_battle_result_panel() -> void:
-	# 本阶段只提供清晰的结果状态和重开入口，奖励内容留在这个容器后续扩展。
+	# 详细战绩直接覆盖在恢复后的卡牌上，这里只保留不遮挡战场的总结果入口。
 	var panel := Panel.new()
 	panel.name = "BattleResultPanel"
 	panel.unique_name_in_owner = true
@@ -491,17 +526,17 @@ func _build_battle_result_panel() -> void:
 	panel.add_theme_stylebox_override("panel", style)
 	add_child(panel)
 
-	var title := _make_label("结算占位", Vector2(20, 22), Vector2(260, 42))
+	var title := _make_label("战斗结算", Vector2(10, 5), Vector2(150, 30))
 	title.name = "BattleResultLabel"
 	title.unique_name_in_owner = true
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_font_size_override("font_size", 20)
 	panel.add_child(title)
 	var placeholder := _make_label(
-		"奖励与完整结算将在后续阶段加入",
-		Vector2(20, 72),
-		Vector2(260, 28)
+		"卡面显示本局统计",
+		Vector2(10, 36),
+		Vector2(150, 24)
 	)
 	placeholder.name = "BattleResultPlaceholder"
 	placeholder.unique_name_in_owner = true
@@ -510,8 +545,8 @@ func _build_battle_result_panel() -> void:
 	var restart := _make_button(
 		"RestartBattleButton",
 		"重新开始",
-		Vector2(75, 124),
-		Vector2(150, 44),
+		Vector2(25, 70),
+		Vector2(120, 27),
 		true
 	)
 	panel.add_child(restart)
@@ -594,7 +629,9 @@ func _build_collection_section(parent: Control) -> void:
 	elements.size = Vector2(111, 16)
 	elements.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	filter.add_child(elements)
+	filter.add_child(_make_button("AttackEffectLabButton", "攻击特效调试器", Vector2(1110, 248), Vector2(150, 32), true))
 	filter.add_child(_make_button("CardArtTunerButton", "卡面调整器", Vector2(1110, 284), Vector2(150, 32), true))
+	filter.add_child(_make_button("BattleLabButton", "战斗实验室", Vector2(1110, 320), Vector2(150, 32), true))
 	var feedback := _make_label("收藏准备就绪", Vector2(35, 12), Vector2(170, 48))
 	feedback.name = "FeedbackLabel"
 	feedback.unique_name_in_owner = true
@@ -777,9 +814,12 @@ func _ready() -> void:
 	if not has_node("WorldContent"):
 		_build_scene_structure()
 	_bind_scene_nodes()
+	_build_formula_popup()
 	if not _battlefield_has_active_rune_effects():
 		CardView.reset_active_rune_flow()
 	card_art_tuner_button.pressed.connect(_on_card_art_tuner_button_pressed)
+	battle_lab_button.pressed.connect(_on_battle_lab_button_pressed)
+	attack_effect_lab_button.pressed.connect(_on_attack_effect_lab_button_pressed)
 	drag_mode_button.toggled.connect(_on_drag_mode_toggled)
 	player_avatar_button.pressed.connect(_on_player_avatar_button_pressed)
 	search_edit.text_changed.connect(_on_search_text_changed)
@@ -797,6 +837,7 @@ func _ready() -> void:
 	add_child(battle_controller)
 	battle_controller.states_changed.connect(_on_battle_states_changed)
 	battle_controller.action_resolved.connect(_on_battle_action_resolved)
+	battle_controller.effect_resolved.connect(_on_battle_effect_resolved)
 	battle_controller.direct_damage_resolved.connect(_on_battle_direct_damage_resolved)
 	battle_controller.squad_defeated.connect(_request_battle_squad_departure)
 	battle_controller.battle_finished.connect(_on_battle_finished)
@@ -826,13 +867,47 @@ func _bind_scene_nodes() -> void:
 	battle_timer_label = get_node("%BattleTimerLabel") as Label
 	battle_log_panel = get_node("%BattleLogPanel") as PanelContainer
 	battle_log_text = get_node("%BattleLogText") as RichTextLabel
+	battle_effect_layer = get_node("%BattleEffectLayer") as Control
 	collection_viewport = get_node("%CollectionViewport") as Control
 	collection_card_row = get_node("%CollectionCardRow") as Control
 	collection_drop_zone = get_node("%CollectionDropZone") as Control
 	card_art_tuner_button = get_node("%CardArtTunerButton") as Button
+	battle_lab_button = get_node("%BattleLabButton") as Button
+	attack_effect_lab_button = get_node("%AttackEffectLabButton") as Button
 	drag_mode_button = get_node("%DragModeButton") as Button
 	player_avatar_button = get_node("%PlayerAvatarButton") as TextureButton
 	start_battle_button = get_node("%StartBattleButton") as Button
+
+
+func _build_formula_popup() -> void:
+	if is_instance_valid(formula_popup):
+		return
+	formula_popup = PanelContainer.new()
+	formula_popup.name = "BattleFormulaPopup"
+	formula_popup.size = Vector2(FORMULA_POPUP_MIN_WIDTH, 1.0)
+	formula_popup.custom_minimum_size = Vector2.ZERO
+	formula_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	formula_popup.z_index = 2000
+	formula_popup.visible = false
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.025, 0.035, 0.043, 0.97)
+	style.border_color = Color(0.86, 0.73, 0.39, 0.95)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(4)
+	style.set_content_margin_all(9.0)
+	formula_popup.add_theme_stylebox_override("panel", style)
+	add_child(formula_popup)
+	formula_popup_text = RichTextLabel.new()
+	formula_popup_text.name = "FormulaText"
+	formula_popup_text.fit_content = false
+	formula_popup_text.scroll_active = true
+	formula_popup_text.add_theme_font_override("normal_font", BATTLE_LOG_FONT)
+	formula_popup_text.add_theme_font_size_override("normal_font_size", 12)
+	formula_popup_text.add_theme_color_override("default_color", Color("e8eee5"))
+	formula_popup.add_child(formula_popup_text)
+	if not battle_log_text.meta_hover_started.is_connected(_on_battle_log_meta_hover_started):
+		battle_log_text.meta_hover_started.connect(_on_battle_log_meta_hover_started)
+		battle_log_text.meta_hover_ended.connect(_on_battle_log_meta_hover_ended)
 	battle_result_panel = get_node("%BattleResultPanel") as Panel
 	battle_result_label = get_node("%BattleResultLabel") as Label
 	restart_battle_button = get_node("%RestartBattleButton") as Button
@@ -1804,6 +1879,32 @@ func _on_card_art_tuner_button_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/tools/CardArtTuner.tscn")
 
 
+func _on_battle_lab_button_pressed() -> void:
+	_cancel_click_carry()
+	var display_shell := get_tree().get_first_node_in_group(&"game_display_shell")
+	if (
+		is_instance_valid(display_shell)
+		and display_shell.is_ancestor_of(self)
+		and display_shell.has_method("open_battle_lab")
+	):
+		display_shell.call("open_battle_lab")
+		return
+	get_tree().change_scene_to_file("res://scenes/tools/BattleLab.tscn")
+
+
+func _on_attack_effect_lab_button_pressed() -> void:
+	_cancel_click_carry()
+	var display_shell := get_tree().get_first_node_in_group(&"game_display_shell")
+	if (
+		is_instance_valid(display_shell)
+		and display_shell.is_ancestor_of(self)
+		and display_shell.has_method("open_attack_effect_lab")
+	):
+		display_shell.call("open_attack_effect_lab")
+		return
+	get_tree().change_scene_to_file("res://scenes/tools/AttackEffectLab.tscn")
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_DRAG_END and is_node_ready():
 		collection_drop_zone.clear_drop_preview()
@@ -1891,7 +1992,7 @@ func restart_battle() -> bool:
 	_battle_state_slots.clear()
 	current_phase = GamePhase.PREPARE
 	battle_result_panel.visible = false
-	battle_result_label.text = "结算占位"
+	battle_result_label.text = "战斗结算"
 	_update_battle_timer()
 	_update_phase_label()
 	_build_collection_cards()
@@ -1919,7 +2020,8 @@ func _update_phase_label() -> void:
 	start_battle_button.visible = current_phase == GamePhase.PREPARE
 	battle_speed_button.visible = current_phase == GamePhase.BATTLE
 	battle_timer_label.visible = current_phase == GamePhase.BATTLE
-	battle_log_panel.visible = current_phase == GamePhase.BATTLE
+	# 结算页继续复用本场同一份结构化日志，直到玩家点击重新开始。
+	battle_log_panel.visible = current_phase in [GamePhase.BATTLE, GamePhase.RESULT]
 	battle_result_panel.visible = current_phase == GamePhase.RESULT
 	_refresh_drag_availability()
 
@@ -1990,8 +2092,8 @@ func _on_battle_states_changed() -> void:
 		var slot := _battle_state_slots.get(state) as BoardSlot
 		if is_instance_valid(slot):
 			slot.set_battle_status(
-				state.current_health,
-				state.current_armor,
+				state.displayed_health,
+				state.displayed_armor,
 				state.remaining_cooldown,
 				state.get_buff_stacks(BattleRules.FATIGUE_BUFF_ID)
 			)
@@ -2032,25 +2134,17 @@ func _on_battle_action_resolved(
 			else "%s +%d" % [action_name, amount]
 		)
 		target_slot.show_battle_action(target_text, true)
-	var verb := (
-		"造成了"
-		if action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
-		else "提供了"
-	)
-	var value_name := (
-		"伤害"
-		if action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
-		else "治疗" if action_type == CardData.ActionType.HEAL else "护盾"
-	)
-	_append_battle_log(
-		"%s对%s%s%d点%s" % [
-			_format_battle_squad_name(actor),
-			_format_battle_squad_name(target),
-			verb,
-			amount,
-			value_name,
-		]
-	)
+	if (
+		action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
+		and is_instance_valid(actor_slot)
+		and is_instance_valid(target_slot)
+	):
+		_play_action_attack_visual(actor, actor_slot, target_slot, action_type)
+
+
+func _on_battle_effect_resolved(event: BattleEffectEvent) -> void:
+	_append_battle_effect(event)
+	_play_battle_effect_visual(event)
 
 
 func _on_battle_direct_damage_resolved(
@@ -2063,13 +2157,6 @@ func _on_battle_direct_damage_resolved(
 		return
 	var source_name := "疲劳" if source_id == BattleRules.FATIGUE_BUFF_ID else String(source_id)
 	slot.show_battle_action("%s -%d" % [source_name, amount], true)
-	_append_battle_log(
-		"%s使%s受到%d点伤害" % [
-			source_name,
-			_format_battle_squad_name(state),
-			amount,
-		]
-	)
 
 
 func _format_battle_squad_name(state: BattleSquadState) -> String:
@@ -2086,19 +2173,239 @@ func _format_battle_squad_name(state: BattleSquadState) -> String:
 	return result
 
 
-func _append_battle_log(entry: String) -> void:
-	if entry.is_empty() or battle_log_text == null:
+func _append_battle_effect(event: BattleEffectEvent) -> void:
+	if event == null or battle_log_text == null:
 		return
-	_battle_log_entries.append(entry)
+	var entry := _battle_log_by_group.get(event.group_id) as BattleLogEntry
+	if entry == null:
+		entry = BattleLogEntry.new()
+		entry.group_id = event.group_id
+		entry.timestamp = event.timestamp
+		entry.source = event.source
+		_battle_log_by_group[event.group_id] = entry
+		_battle_log_entries.append(entry)
+	entry.add_event(event)
 	while _battle_log_entries.size() > BATTLE_LOG_MAX_ENTRIES:
-		_battle_log_entries.pop_front()
-	battle_log_text.text = "\n".join(_battle_log_entries)
+		var removed: BattleLogEntry = _battle_log_entries.pop_front()
+		_battle_log_by_group.erase(removed.group_id)
+	var lines: Array[String] = []
+	for log_entry: BattleLogEntry in _battle_log_entries:
+		lines.append(log_entry.to_bbcode())
+	battle_log_text.text = "\n".join(lines)
 
 
 func _clear_battle_log() -> void:
 	_battle_log_entries.clear()
+	_battle_log_by_group.clear()
+	if is_instance_valid(formula_popup):
+		formula_popup.visible = false
 	if battle_log_text != null:
 		battle_log_text.text = ""
+
+
+func _on_battle_log_meta_hover_started(meta: Variant) -> void:
+	var parts := String(meta).split(":")
+	if parts.size() != 3 or parts[0] != "formula":
+		return
+	var entry := _battle_log_by_group.get(int(parts[1])) as BattleLogEntry
+	var formula := entry.get_formula(int(parts[2])) if entry != null else null
+	if formula == null:
+		return
+	var popup_content := _format_formula_popup(formula)
+	formula_popup_text.text = popup_content
+	formula_popup.visible = true
+	var mouse := get_viewport().get_mouse_position()
+	var viewport_size := get_viewport_rect().size
+	var desired_size := _measure_formula_popup_size(popup_content)
+	var safe_size := Vector2(minf(desired_size.x, viewport_size.x), minf(desired_size.y, viewport_size.y))
+	formula_popup.size = safe_size
+	formula_popup_text.scroll_active = desired_size.y > safe_size.y
+	var desired := mouse + Vector2(-safe_size.x * 0.5, -safe_size.y - FORMULA_POPUP_MOUSE_GAP)
+	formula_popup.position = Vector2(
+		clampf(desired.x, 0.0, maxf(viewport_size.x - safe_size.x, 0.0)),
+		clampf(desired.y, 0.0, maxf(viewport_size.y - safe_size.y, 0.0))
+	)
+
+
+func _measure_formula_popup_size(popup_content: String) -> Vector2:
+	return BattleFormulaPresenter.measure_popup_size(
+		popup_content,
+		formula_popup_text.get_theme_font("normal_font"),
+		formula_popup_text.get_theme_font_size("normal_font_size"),
+		FORMULA_POPUP_MIN_WIDTH,
+		FORMULA_POPUP_MAX_WIDTH,
+		FORMULA_POPUP_MAX_HEIGHT,
+		FORMULA_POPUP_CONTENT_PADDING
+	)
+
+
+func _on_battle_log_meta_hover_ended(_meta: Variant) -> void:
+	if is_instance_valid(formula_popup):
+		formula_popup.visible = false
+
+
+func _format_formula_popup(formula: BattleFormulaData) -> String:
+	return BattleFormulaPresenter.format_popup(formula)
+
+
+func _play_battle_effect_visual(event: BattleEffectEvent) -> void:
+	if event == null or event.visual_kind == &"" or not is_instance_valid(battle_effect_layer):
+		return
+	var source_slot := _battle_state_slots.get(event.source) as BoardSlot
+	var target_slot := _battle_state_slots.get(event.target) as BoardSlot
+	if event.visual_kind in [&"water_spread", &"dark_repeat", &"wood_pierce", &"light_reflect"] and is_instance_valid(target_slot):
+		var anchor_slot := _battle_state_slots.get(event.anchor) as BoardSlot
+		var visual_source_slot := (
+			source_slot
+			if event.visual_kind == &"dark_repeat" or not is_instance_valid(anchor_slot)
+			else anchor_slot
+		)
+		var from_global := visual_source_slot.get_global_rect().get_center() if is_instance_valid(visual_source_slot) else target_slot.get_global_rect().get_center()
+		var to_global := target_slot.get_global_rect().get_center()
+		var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
+		var from_local := inverse * from_global
+		var to_local := inverse * to_global
+		var points := PackedVector2Array([from_local, to_local])
+		if event.visual_kind == &"dark_repeat":
+			var delta := to_local - from_local
+			var normal := Vector2(-delta.y, delta.x).normalized() if not delta.is_zero_approx() else Vector2.UP
+			var curve_offset := 28.0 + float(event.sequence_index) * 9.0
+			var curve_direction := -1.0 if event.sequence_index % 2 == 1 else 1.0
+			points = PackedVector2Array([from_local, (from_local + to_local) * 0.5 + normal * curve_offset * curve_direction, to_local])
+		var element_color := _element_attack_color(event.element_type)
+		_play_element_line(points, event.visual_kind, element_color, element_color)
+		_play_element_impact(to_local, event.visual_kind, element_color)
+	if event.visual_kind in [&"fire_burn", &"fire_tick", &"fire_finish"] and is_instance_valid(target_slot):
+		var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
+		var global_rect := target_slot.get_global_rect()
+		var flash := ColorRect.new()
+		flash.name = "ElementFlash"
+		flash.position = inverse * global_rect.position
+		flash.size = global_rect.size
+		flash.pivot_offset = flash.size * 0.5
+		flash.scale = Vector2(0.88, 0.88)
+		flash.color = _effect_visual_color(event.visual_kind)
+		flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		battle_effect_layer.add_child(flash)
+		var flash_tween := flash.create_tween()
+		flash_tween.set_parallel(true)
+		flash_tween.tween_property(flash, "scale", Vector2(1.04, 1.04), EFFECT_FLASH_SECONDS)
+		flash_tween.tween_property(flash, "modulate:a", 0.0, EFFECT_FLASH_SECONDS)
+		flash_tween.set_parallel(false)
+		flash_tween.tween_callback(flash.queue_free)
+		_play_element_impact(inverse * global_rect.get_center(), event.visual_kind)
+
+
+func _play_element_line(
+	points: PackedVector2Array,
+	kind: StringName,
+	head_color: Color = EFFECT_COLOR_NONE,
+	tail_color: Color = EFFECT_COLOR_NONE
+) -> void:
+	if not is_instance_valid(battle_effect_layer) or points.size() < 2:
+		return
+	BattleAttackTrailRenderer.play(
+		battle_effect_layer,
+		points,
+		BattleAttackEffectProfiles.get_profile(kind),
+		head_color,
+		tail_color
+	)
+
+
+func _play_action_attack_visual(
+	actor: BattleSquadState,
+	actor_slot: BoardSlot,
+	target_slot: BoardSlot,
+	action_type: CardData.ActionType
+) -> void:
+	var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
+	var from := inverse * actor_slot.get_global_rect().get_center()
+	var to := inverse * target_slot.get_global_rect().get_center()
+	var visual_kind: StringName = &"melee_attack"
+	match action_type:
+		CardData.ActionType.RANGED: visual_kind = &"ranged_attack"
+		CardData.ActionType.MAGIC: visual_kind = &"magic_attack"
+	var colors := _attack_element_colors(actor)
+	_play_element_line(
+		PackedVector2Array([from, to]),
+		visual_kind,
+		colors["head"],
+		colors["tail"]
+	)
+	_play_element_impact(to, visual_kind, colors["head"])
+
+
+func _attack_element_colors(actor: BattleSquadState) -> Dictionary:
+	var result := {"head": EFFECT_COLOR_NONE, "tail": EFFECT_COLOR_NONE}
+	if actor == null or actor.squad_data == null:
+		return result
+	var groups := BattleElementResolver.get_element_groups(
+		actor.squad_data.get_rune_pattern_result()
+	)
+	if groups.is_empty():
+		return result
+	result["head"] = _element_attack_color(int(groups[0]["element"]))
+	result["tail"] = (
+		_element_attack_color(int(groups[1]["element"]))
+		if groups.size() >= 2
+		else result["head"]
+	)
+	return result
+
+
+func _element_attack_color(element_type: int) -> Color:
+	match element_type:
+		CardData.ElementType.LIGHT: return EFFECT_COLOR_LIGHT
+		CardData.ElementType.DARK: return EFFECT_COLOR_DARK
+		CardData.ElementType.FIRE: return EFFECT_COLOR_FIRE
+		CardData.ElementType.WATER: return EFFECT_COLOR_WATER
+		CardData.ElementType.WOOD: return EFFECT_COLOR_WOOD
+		_: return EFFECT_COLOR_NONE
+
+
+func _play_element_impact(
+	center: Vector2,
+	kind: StringName,
+	color_override: Color = Color.TRANSPARENT
+) -> void:
+	var pulse := Node2D.new()
+	pulse.name = "ElementImpact"
+	pulse.position = center
+	pulse.scale = Vector2(0.55, 0.55)
+	var diamond := Line2D.new()
+	diamond.width = 3.0
+	diamond.default_color = color_override if color_override.a > 0.0 else _effect_visual_color(kind)
+	diamond.closed = true
+	diamond.antialiased = false
+	diamond.points = PackedVector2Array([
+		Vector2(0.0, -EFFECT_IMPACT_RADIUS.y),
+		Vector2(EFFECT_IMPACT_RADIUS.x, 0.0),
+		Vector2(0.0, EFFECT_IMPACT_RADIUS.y),
+		Vector2(-EFFECT_IMPACT_RADIUS.x, 0.0),
+	])
+	pulse.add_child(diamond)
+	battle_effect_layer.add_child(pulse)
+	var tween := pulse.create_tween()
+	tween.set_parallel(true)
+	var effect_duration := float(BattleAttackEffectProfiles.get_profile(kind)["duration"])
+	tween.tween_property(pulse, "scale", Vector2(1.2, 1.2), effect_duration)
+	tween.tween_property(pulse, "modulate:a", 0.0, effect_duration)
+	tween.set_parallel(false)
+	tween.tween_callback(pulse.queue_free)
+
+
+func _effect_visual_color(kind: StringName) -> Color:
+	match kind:
+		&"melee_attack": return Color(1.0, 0.30, 0.12, 0.96)
+		&"ranged_attack": return Color(1.0, 0.72, 0.18, 0.96)
+		&"magic_attack": return Color(0.36, 0.52, 1.0, 0.96)
+		&"water_spread": return Color(0.20, 0.72, 1.0, 0.96)
+		&"dark_repeat": return Color(0.72, 0.30, 1.0, 0.96)
+		&"wood_pierce": return Color(0.32, 1.0, 0.40, 0.96)
+		&"light_reflect": return Color(1.0, 0.96, 0.52, 1.0)
+		&"fire_finish": return Color(1.0, 0.88, 0.42, 0.68)
+		_: return Color(1.0, 0.32, 0.12, 0.48)
 
 
 func _request_battle_squad_departure(state: BattleSquadState) -> void:
@@ -2188,6 +2495,7 @@ func _on_battle_finished(result: BattleController.Result) -> void:
 func _show_battle_result(result: BattleController.Result) -> void:
 	_pending_battle_result = BattleController.Result.NONE
 	current_phase = GamePhase.RESULT
+	_restore_battle_result_layout()
 	match result:
 		BattleController.Result.PLAYER_VICTORY:
 			battle_result_label.text = "胜利"
@@ -2196,9 +2504,30 @@ func _show_battle_result(result: BattleController.Result) -> void:
 		BattleController.Result.DRAW:
 			battle_result_label.text = "平局"
 		_:
-			battle_result_label.text = "结算占位"
+			battle_result_label.text = "战斗结算"
 	_update_phase_label()
 	play_area_label.text = "战斗结束：%s" % battle_result_label.text
+
+
+func _restore_battle_result_layout() -> void:
+	# 阵亡动画会把槽从行中移除；结算页按战前快照重建，再按稳定排位映射战绩。
+	_restore_battle_snapshot()
+	_battle_state_slots.clear()
+	for state: BattleSquadState in battle_controller.get_all_states():
+		var row := _row_for_battle_key(state.row_key)
+		if row == null:
+			continue
+		var row_slots := row.get_squads()
+		if state.formation_index < 0 or state.formation_index >= row_slots.size():
+			continue
+		var slot := row_slots[state.formation_index] as BoardSlot
+		_battle_state_slots[state] = slot
+		var action_source := state.get_action_source()
+		slot.show_battle_result_statistics(
+			state.get_battle_statistics(),
+			not state.alive,
+			action_source.action_type if action_source != null else CardData.ActionType.MELEE
+		)
 
 
 func _connect_board_rows() -> void:

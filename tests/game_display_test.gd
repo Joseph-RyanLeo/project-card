@@ -204,6 +204,39 @@ func _test_display_scene() -> void:
 		and display.display_mode_option.visible,
 		"从卡面调整器返回时恢复原 Main，显示菜单与当前界面不被销毁"
 	)
+	main._on_battle_lab_button_pressed()
+	await process_frame
+	_expect(
+		display.is_battle_lab_open()
+		and not main.visible
+		and display.display_mode_option.visible,
+		"进入战斗实验室时复用固定内部画布并保留显示菜单"
+	)
+	var lab := display.design_canvas.get_node("BattleLab") as BattleLab
+	lab.close_requested.emit()
+	await process_frame
+	_expect(
+		not display.is_battle_lab_open()
+		and main.visible,
+		"从战斗实验室返回时恢复原 Main"
+	)
+	main._on_attack_effect_lab_button_pressed()
+	await process_frame
+	await process_frame
+	_expect(
+		display.is_attack_effect_lab_open()
+		and not main.visible
+		and display.display_mode_option.visible,
+		"进入攻击特效调试器时复用固定内部画布并保留显示菜单"
+	)
+	var effect_lab := display.design_canvas.get_node("AttackEffectLab") as AttackEffectLab
+	effect_lab.close_requested.emit()
+	await process_frame
+	_expect(
+		not display.is_attack_effect_lab_open()
+		and main.visible,
+		"从攻击特效调试器返回时恢复原 Main"
+	)
 	display.queue_free()
 	await process_frame
 

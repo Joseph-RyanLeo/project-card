@@ -15,6 +15,8 @@ const DESIGN_SIZE := Vector2i(1280, 720)
 const INTERNAL_RENDER_SIZE := Vector2i(1280, 720) # 1×内部渲染画幅
 const INTEGER_SCALE_EPSILON: float = 0.0001 # 判断客户区是否为等比整数倍率时允许的浮点误差
 const CARD_ART_TUNER_SCENE: PackedScene = preload("res://scenes/tools/CardArtTuner.tscn")
+const BATTLE_LAB_SCENE: PackedScene = preload("res://scenes/tools/BattleLab.tscn")
+const ATTACK_EFFECT_LAB_SCENE: PackedScene = preload("res://scenes/tools/AttackEffectLab.tscn")
 const WINDOW_MODE_TRANSITION_MAX_FRAMES: int = 60 # 等待 macOS 退出全屏的最长帧数
 const WINDOW_SIZE_BY_MODE := {
 	DisplayMode.WINDOW_720P: Vector2i(1280, 720),
@@ -39,6 +41,8 @@ var current_display_mode: DisplayMode = DisplayMode.WINDOW_1080P
 var _window_resize_request_serial: int = 0
 var _window_transition_in_progress: bool = false
 var _card_art_tuner: CardArtTuner
+var _battle_lab: BattleLab
+var _attack_effect_lab: AttackEffectLab
 
 
 func _enter_tree() -> void:
@@ -225,6 +229,50 @@ func close_card_art_tuner() -> void:
 
 func is_card_art_tuner_open() -> bool:
 	return is_instance_valid(_card_art_tuner)
+
+
+func open_battle_lab() -> void:
+	if is_instance_valid(_battle_lab):
+		return
+	_battle_lab = BATTLE_LAB_SCENE.instantiate() as BattleLab
+	_battle_lab.name = "BattleLab"
+	design_canvas.add_child(_battle_lab)
+	_battle_lab.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_battle_lab.close_requested.connect(close_battle_lab)
+	main_screen.visible = false
+
+
+func close_battle_lab() -> void:
+	if is_instance_valid(_battle_lab):
+		_battle_lab.queue_free()
+	_battle_lab = null
+	main_screen.visible = true
+
+
+func is_battle_lab_open() -> bool:
+	return is_instance_valid(_battle_lab)
+
+
+func open_attack_effect_lab() -> void:
+	if is_instance_valid(_attack_effect_lab):
+		return
+	_attack_effect_lab = ATTACK_EFFECT_LAB_SCENE.instantiate() as AttackEffectLab
+	_attack_effect_lab.name = "AttackEffectLab"
+	design_canvas.add_child(_attack_effect_lab)
+	_attack_effect_lab.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_attack_effect_lab.close_requested.connect(close_attack_effect_lab)
+	main_screen.visible = false
+
+
+func close_attack_effect_lab() -> void:
+	if is_instance_valid(_attack_effect_lab):
+		_attack_effect_lab.queue_free()
+	_attack_effect_lab = null
+	main_screen.visible = true
+
+
+func is_attack_effect_lab_open() -> bool:
+	return is_instance_valid(_attack_effect_lab)
 
 
 func _get_windowed_mode_for_size(window_size: Vector2i) -> DisplayMode:
