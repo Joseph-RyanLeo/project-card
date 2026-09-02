@@ -760,6 +760,11 @@ func _test_departure_entry_and_row_recentering() -> void:
 			defeated_state = state
 			break
 	var defeated_slot := main.get("_battle_state_slots").get(defeated_state) as BoardSlot
+	var death_material := (
+		defeated_slot.get("_death_dissolve_material") as ShaderMaterial
+		if is_instance_valid(defeated_slot)
+		else null
+	)
 	_expect(
 		main.battle_departure_count == 1
 		and main.front_row.get_squad_count() == 2
@@ -767,6 +772,16 @@ func _test_departure_entry_and_row_recentering() -> void:
 		and defeated_slot.is_death_dissolving()
 		and defeated_slot.get_death_dissolve_item_count() > 1,
 		"死亡小队经单一入口让多层卡面共用溶解材质，动画期间尚未提前移除"
+	)
+	_expect(
+		death_material != null
+		and death_material.get_shader_parameter("dissolve_fill_color") == SquadView.DEATH_DISSOLVE_FILL_COLOR
+		and death_material.get_shader_parameter("dissolve_outline_color") == SquadView.DEATH_DISSOLVE_OUTLINE_COLOR
+		and is_equal_approx(
+			float(death_material.get_shader_parameter("outline_pixels")),
+			1.0
+		),
+		"死亡侵蚀使用 #86e7ff 半透明填色与固定 1px 实色蓝色描边"
 	)
 	await create_timer(SquadView.DEATH_DISSOLVE_BODY_SECONDS * 0.5).timeout
 	_expect(
@@ -790,7 +805,7 @@ func _test_departure_entry_and_row_recentering() -> void:
 	_expect(
 		SquadView.DEATH_DISSOLVE_EDGE_SECONDS
 		- SquadView.DEATH_DISSOLVE_BODY_SECONDS <= 0.1,
-		"缩短溶解总时长，并用更小的主体/边缘时间差减少绿色边缘面积"
+		"缩短溶解总时长，并用更小的主体/边缘时间差限制蓝色侵蚀区域面积"
 	)
 	main.queue_free()
 	await process_frame

@@ -51,8 +51,10 @@ const BATTLE_ACTION_FEEDBACK_SECONDS: float = 0.7 # 单次行动文字保持可�
 const BATTLE_ACTION_LIFT_PIXELS: float = 6.0 # 小队行动时全部卡牌向上抬起的距离
 const BATTLE_ACTION_LIFT_SECONDS: float = 0.18 # 小队完成抬起并回到原位的总时长（秒）
 const DEATH_DISSOLVE_BODY_SECONDS: float = 0.5 # 阵亡卡牌主体按噪声阈值完全溶解所需时间（秒）
-const DEATH_DISSOLVE_EDGE_SECONDS: float = 0.56 # 绿色溶解边缘仅比主体稍慢退场的总时长（秒）
-const DEATH_DISSOLVE_EDGE_COLOR := Color("63bd4f") # 参考视频中溶解边缘使用的绿色
+const DEATH_DISSOLVE_EDGE_SECONDS: float = 0.56 # 蓝色侵蚀区域仅比主体稍慢退场的总时长（秒）
+const DEATH_DISSOLVE_FILL_COLOR := Color(0.52549, 0.905882, 1.0, 0.42) # #86e7ff 半透明侵蚀填色
+const DEATH_DISSOLVE_OUTLINE_COLOR := Color(0.52549, 0.905882, 1.0, 1.0) # #86e7ff 实色侵蚀描边
+const DEATH_DISSOLVE_OUTLINE_PIXELS: float = 1.0 # 死亡侵蚀实色描边固定为 1px
 const BATTLE_RESULT_CARD_MODULATE := Color(0.30, 0.30, 0.30, 1.0) # 战后卡面进一步压暗，统计图标本身不受影响
 const BATTLE_RESULT_CONTENT_WIDTH: float = 82.0 # 原生图标与卢恩数字在卡面中央占用的宽度
 const BATTLE_RESULT_ROW_HEIGHT: float = 30.0 # 兼容治疗图标原生 28px 高度的统计行高
@@ -317,7 +319,9 @@ func play_death_dissolve(noise_seed: float = 0.0) -> void:
 	material.shader = DEATH_DISSOLVE_SHADER
 	material.set_shader_parameter("dissolve_progress", 0.0)
 	material.set_shader_parameter("edge_progress", 0.0)
-	material.set_shader_parameter("dissolve_edge_color", DEATH_DISSOLVE_EDGE_COLOR)
+	material.set_shader_parameter("dissolve_fill_color", DEATH_DISSOLVE_FILL_COLOR)
+	material.set_shader_parameter("dissolve_outline_color", DEATH_DISSOLVE_OUTLINE_COLOR)
+	material.set_shader_parameter("outline_pixels", DEATH_DISSOLVE_OUTLINE_PIXELS)
 	material.set_shader_parameter("noise_seed", noise_seed)
 	_death_dissolve_material = material
 	_death_dissolve_item_count = 0

@@ -29,6 +29,7 @@ const MASK_NAMES := {&"energy": "宽能量尾迹", &"projectile": "尖头弹体�
 # 调试器按此顺序生成所有数值控件；min/max/step 同时负责保存前的安全钳制。
 const NUMERIC_FIELDS: Array[Dictionary] = [
 	{"key": &"duration", "label": "播放时间", "min": 0.10, "max": 2.00, "step": 0.01, "suffix": " 秒"},
+	{"key": &"speed_variation_strength", "label": "变速强度", "min": 0.0, "max": 1.0, "step": 0.01, "suffix": ""},
 	{"key": &"beam_height", "label": "尾迹高度", "min": 8.0, "max": 160.0, "step": 1.0, "suffix": " px"},
 	{"key": &"end_padding", "label": "首尾延伸", "min": 0.0, "max": 64.0, "step": 1.0, "suffix": " px"},
 	{"key": &"pixel_size", "label": "像素块大小", "min": 1.0, "max": 16.0, "step": 1.0, "suffix": " px"},
@@ -51,6 +52,7 @@ const NUMERIC_FIELDS: Array[Dictionary] = [
 
 const _COMMON_DEFAULTS := {
 	"duration": 0.58,
+	"speed_variation_strength": 0.78, # 三种随机速度曲线相对匀速的变化强度
 	"beam_height": 48.0,
 	"end_padding": 16.0,
 	"pixel_size": 1.0,

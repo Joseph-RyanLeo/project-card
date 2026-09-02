@@ -430,6 +430,7 @@ func _test_formula_popup_ui() -> void:
 	var beam_arrays: Array = beam_mesh.mesh.surface_get_arrays(0) if beam_mesh != null else []
 	var beam_vertices: PackedVector2Array = beam_arrays[Mesh.ARRAY_VERTEX] if not beam_arrays.is_empty() else PackedVector2Array()
 	var water_profile: Dictionary = BattleAttackEffectProfiles.get_profile(&"water_spread")
+	var speed_variant: int = int(beam_segment.get_meta("travel_speed_variant", -1))
 	var middle_vertex_index: int = floori(float(water_profile["curve_segments"]) * 0.5) * 2
 	var ribbon_middle := (
 		(beam_vertices[middle_vertex_index] + beam_vertices[middle_vertex_index + 1]) * 0.5
@@ -463,9 +464,33 @@ func _test_formula_popup_ui() -> void:
 		and is_equal_approx(float(beam_material.get_shader_parameter("warp_strength")), float(water_profile["warp_strength"]))
 		and is_equal_approx(float(beam_material.get_shader_parameter("edge_threshold")), float(water_profile["edge_threshold"]))
 		and is_equal_approx(float(beam_material.get_shader_parameter("edge_softness")), float(water_profile["edge_softness"]))
+		and speed_variant >= 0
+		and speed_variant < BattleAttackTrailRenderer.TRAVEL_SPEED_VARIANT_COUNT
 		and ribbon_middle.distance_to(straight_middle) > 10.0
 		and has_impact,
 		"原图能量遮罩、纯元素色、内部流动、移动短尾巴和贝塞尔弧线建立在三卡堆之上的可见层级"
+	)
+	var speed_strength := float(water_profile["speed_variation_strength"])
+	var all_speed_curves_keep_endpoints := true
+	for variant: int in BattleAttackTrailRenderer.TRAVEL_SPEED_VARIANT_COUNT:
+		all_speed_curves_keep_endpoints = (
+			all_speed_curves_keep_endpoints
+			and is_zero_approx(BattleAttackTrailRenderer.remap_travel_progress(0.0, variant, speed_strength))
+			and is_equal_approx(BattleAttackTrailRenderer.remap_travel_progress(1.0, variant, speed_strength), 1.0)
+		)
+	_expect(
+		all_speed_curves_keep_endpoints
+		and BattleAttackTrailRenderer.remap_travel_progress(
+			0.25,
+			BattleAttackTrailRenderer.TravelSpeedVariant.FAST_THEN_SLOW,
+			speed_strength
+		) > 0.25
+		and BattleAttackTrailRenderer.remap_travel_progress(
+			0.25,
+			BattleAttackTrailRenderer.TravelSpeedVariant.SLOW_THEN_FAST,
+			speed_strength
+		) < 0.25,
+		"三种随机弹道速度曲线保持相同总时间与终点，并分别形成前、中、后段速度峰值"
 	)
 	_expect(
 		BattleAttackTrailRenderer.get_mask_texture(&"projectile") == BattleAttackTrailRenderer.BATTLE_TRAIL_PROJECTILE_TEXTURE

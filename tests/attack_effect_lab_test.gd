@@ -41,6 +41,7 @@ func _run() -> void:
 	var material := beam_mesh.material as ShaderMaterial
 	_expect(
 		is_equal_approx(float(current_profile["warp_strength"]), 0.275)
+		and current_profile.has("speed_variation_strength")
 		and is_equal_approx(float(material.get_shader_parameter("warp_strength")), 0.275)
 		and is_equal_approx(float(material.get_shader_parameter("edge_threshold")), float(current_profile["edge_threshold"]))
 		and is_equal_approx(float(material.get_shader_parameter("edge_softness")), float(current_profile["edge_softness"]))
@@ -65,7 +66,11 @@ func _run() -> void:
 		save_error == OK
 		and load_error == OK
 		and saved_config.has_section(String(BattleAttackEffectProfiles.PROFILE_IDS[0]))
-		and saved_config.has_section_key(String(BattleAttackEffectProfiles.PROFILE_IDS[0]), "warp_strength"),
+		and saved_config.has_section_key(String(BattleAttackEffectProfiles.PROFILE_IDS[0]), "warp_strength")
+		and saved_config.has_section_key(
+			String(BattleAttackEffectProfiles.PROFILE_IDS[0]),
+			"speed_variation_strength"
+		),
 		"统一配置可以写入并重新读取 ConfigFile"
 	)
 	lab.queue_free()

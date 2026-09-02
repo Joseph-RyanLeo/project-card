@@ -8,6 +8,14 @@ const BATTLE_ENERGY_BEAM_SHADER: Shader = preload("res://shaders/battle_energy_b
 const BATTLE_TRAIL_ENERGY_TEXTURE: Texture2D = preload("res://assets/effects/battle_trail_energy.png")
 const BATTLE_TRAIL_PROJECTILE_TEXTURE: Texture2D = preload("res://assets/effects/battle_trail_projectile.png")
 
+enum TravelSpeedVariant {
+	FAST_THEN_SLOW,
+	ACCELERATE_THEN_SLOW,
+	SLOW_THEN_FAST,
+}
+
+const TRAVEL_SPEED_VARIANT_COUNT: int = 3
+
 
 static func play(
 	parent: CanvasItem,
@@ -56,15 +64,67 @@ static func play(
 	material.set_shader_parameter("travel_progress", 0.0)
 	beam_mesh.material = material
 	effect_root.add_child(beam_mesh)
+	var speed_variant := randi_range(0, TRAVEL_SPEED_VARIANT_COUNT - 1)
+	var terminal_progress := (
+		1.0
+		+ float(profile["trail_length"])
+		+ float(profile["trail_softness"])
+	)
+	effect_root.set_meta("travel_speed_variant", speed_variant)
 	var tween := effect_root.create_tween()
-	tween.tween_property(
-		material,
-		"shader_parameter/travel_progress",
-		1.0 + float(profile["trail_length"]) + float(profile["trail_softness"]),
+	tween.tween_method(
+		_apply_travel_progress.bind(
+			material,
+			terminal_progress,
+			speed_variant,
+			float(profile.get("speed_variation_strength", 0.78))
+		),
+		0.0,
+		1.0,
 		float(profile["duration"])
-	).from(0.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	)
 	tween.tween_callback(effect_root.queue_free)
 	return effect_root
+
+
+static func remap_travel_progress(
+	time_progress: float,
+	speed_variant: int,
+	variation_strength: float
+) -> float:
+	## 三条曲线都是速度函数积分后的累计位移：首尾固定为 0/1，
+	## 因此改变的是飞行过程中的瞬时速度，而不是配置的总播放时间。
+	var t := clampf(time_progress, 0.0, 1.0)
+	var shaped_progress := t
+	match speed_variant:
+		TravelSpeedVariant.FAST_THEN_SLOW:
+			# 速度峰值靠前：12t(1-t)^2 的积分。
+			shaped_progress = 6.0 * t * t - 8.0 * pow(t, 3.0) + 3.0 * pow(t, 4.0)
+		TravelSpeedVariant.ACCELERATE_THEN_SLOW:
+			# 速度峰值在中间：30t^2(1-t)^2 的积分。
+			shaped_progress = 10.0 * pow(t, 3.0) - 15.0 * pow(t, 4.0) + 6.0 * pow(t, 5.0)
+		TravelSpeedVariant.SLOW_THEN_FAST:
+			# 速度峰值靠后：12t^2(1-t) 的积分。
+			shaped_progress = 4.0 * pow(t, 3.0) - 3.0 * pow(t, 4.0)
+		_:
+			shaped_progress = t
+	return lerpf(t, shaped_progress, clampf(variation_strength, 0.0, 1.0))
+
+
+static func _apply_travel_progress(
+	time_progress: float,
+	material: ShaderMaterial,
+	terminal_progress: float,
+	speed_variant: int,
+	variation_strength: float
+) -> void:
+	if not is_instance_valid(material):
+		return
+	material.set_shader_parameter(
+		"travel_progress",
+		remap_travel_progress(time_progress, speed_variant, variation_strength)
+		* terminal_progress
+	)
 
 
 static func sample_curve(

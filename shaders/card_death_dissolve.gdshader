@@ -3,7 +3,9 @@ render_mode unshaded;
 
 uniform float dissolve_progress : hint_range(0.0, 1.0) = 0.0;
 uniform float edge_progress : hint_range(0.0, 1.0) = 0.0;
-uniform vec4 dissolve_edge_color : source_color = vec4(0.38, 0.78, 0.28, 1.0);
+uniform vec4 dissolve_fill_color : source_color = vec4(0.52549, 0.905882, 1.0, 0.42);
+uniform vec4 dissolve_outline_color : source_color = vec4(0.52549, 0.905882, 1.0, 1.0);
+uniform float outline_pixels : hint_range(1.0, 4.0) = 1.0;
 uniform float noise_scale : hint_range(1.0, 24.0) = 7.0;
 uniform float noise_seed = 0.0;
 
@@ -43,8 +45,16 @@ void fragment() {
 	float noise_value = layered_noise(FRAGCOORD.xy / 128.0);
 	float body_mask = step(dissolve_progress, noise_value);
 	float edge_visible_mask = step(edge_progress, noise_value);
-	float edge_mask = edge_visible_mask * (1.0 - body_mask);
-	vec3 output_rgb = mix(source.rgb, dissolve_edge_color.rgb, edge_mask);
-	float output_alpha = source.a * max(body_mask, edge_visible_mask);
+	float dissolve_fill_mask = edge_visible_mask * (1.0 - body_mask);
+	// 把噪声阈值变化换算为屏幕像素宽度，使描边在不同卡面尺寸下仍保持 1px。
+	float noise_per_pixel = max(length(vec2(dFdx(noise_value), dFdy(noise_value))), 0.00001);
+	float outline_width = noise_per_pixel * outline_pixels;
+	float outline_mask = step(dissolve_progress - outline_width, noise_value)
+		* (1.0 - body_mask)
+		* edge_visible_mask;
+	vec3 output_rgb = mix(source.rgb, dissolve_fill_color.rgb, dissolve_fill_mask);
+	output_rgb = mix(output_rgb, dissolve_outline_color.rgb, outline_mask);
+	float dissolve_alpha = mix(dissolve_fill_color.a, dissolve_outline_color.a, outline_mask);
+	float output_alpha = source.a * (body_mask + dissolve_fill_mask * dissolve_alpha);
 	COLOR = vec4(output_rgb, output_alpha);
 }
