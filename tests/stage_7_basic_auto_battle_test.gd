@@ -575,6 +575,7 @@ func _test_main_battle_loop_and_restart() -> void:
 	main._on_battle_states_changed()
 	var vitals_view := first_slot.get_card_view(first_state.get_vitals_source())
 	var action_view := first_slot.get_card_view(first_state.get_action_source())
+	await create_timer(CardView.BATTLE_NUMBER_TWEEN_DURATION + 0.03).timeout
 	_expect(
 		first_slot != null
 		and not first_slot.battle_status_label.visible

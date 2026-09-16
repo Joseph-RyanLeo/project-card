@@ -10,6 +10,7 @@ const BattleFormulaData = preload("res://scripts/battle/battle_formula_data.gd")
 const BattleElementResolver = preload("res://scripts/battle/battle_element_resolver.gd")
 const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
 const BattleProjectileTiming = preload("res://scripts/battle/battle_projectile_timing.gd")
+const BattleEffectRuntime = preload("res://scripts/battle/effects/battle_effect_runtime.gd")
 
 signal states_changed
 signal action_resolved(actor: BattleSquadState, target: BattleSquadState, action_type: CardData.ActionType, amount: int)
@@ -20,6 +21,7 @@ signal kill_resolved(killer: BattleSquadState, target: BattleSquadState, event: 
 signal squad_defeated(state: BattleSquadState)
 signal buff_stacks_changed(state: BattleSquadState, buff_id: StringName, stacks: int)
 signal direct_damage_resolved(state: BattleSquadState, source_id: StringName, amount: int)
+signal effect_trace_emitted(entry: BattleEffectTraceEntry)
 signal battle_finished(result: Result)
 
 enum Result { NONE, PLAYER_VICTORY, PLAYER_DEFEAT, DRAW }
@@ -34,6 +36,8 @@ var batch_count: int = 0
 var battle_speed_multiplier: float = 1.0
 var use_projectile_timing: bool = false
 var active_continuous_effects: Array[Dictionary] = []
+var battle_seed: int = 0
+var effect_runtime := BattleEffectRuntime.new()
 
 var _random := RandomNumberGenerator.new()
 var _running: bool = false
@@ -45,6 +49,7 @@ var _pending_projectile_contexts: Dictionary = {}
 var _pending_projectile_batch_counts: Dictionary = {}
 var _next_projectile_batch_id: int = 1
 var _next_projectile_launch_sequence: int = 1
+var _next_state_runtime_id: int = 1
 
 
 func _ready() -> void:
@@ -58,6 +63,7 @@ func _process(delta: float) -> void:
 func start_battle(player_formation: Array[Dictionary], enemy_formation: Array[Dictionary], random_seed: int = -1, auto_run: bool = true) -> void:
 	stop_battle()
 	_release_current_states()
+	_next_state_runtime_id = 1
 	player_states = _create_states(player_formation, BattleSquadState.Side.PLAYER)
 	enemy_states = _create_states(enemy_formation, BattleSquadState.Side.ENEMY)
 	current_result = Result.NONE
@@ -71,9 +77,14 @@ func start_battle(player_formation: Array[Dictionary], enemy_formation: Array[Di
 	_next_fatigue_stack_seconds = BattleRules.FATIGUE_START_SECONDS
 	_next_fatigue_damage_seconds = BattleRules.FATIGUE_START_SECONDS
 	if random_seed >= 0:
+		battle_seed = random_seed
 		_random.seed = random_seed
 	else:
 		_random.randomize()
+		battle_seed = _random.seed
+	effect_runtime.initialize(self, battle_seed)
+	if not effect_runtime.trace_emitted.is_connected(_on_effect_trace_emitted):
+		effect_runtime.trace_emitted.connect(_on_effect_trace_emitted)
 	_running = true
 	recalculate_logical_layout()
 	set_process(auto_run)
@@ -99,9 +110,11 @@ func clear_battle() -> void:
 	_next_group_id = 1
 	_next_projectile_batch_id = 1
 	_next_projectile_launch_sequence = 1
+	_next_state_runtime_id = 1
 	_next_fatigue_stack_seconds = BattleRules.FATIGUE_START_SECONDS
 	_next_fatigue_damage_seconds = BattleRules.FATIGUE_START_SECONDS
 	_random = RandomNumberGenerator.new()
+	effect_runtime.initialize(self, 0)
 
 
 func _release_current_states() -> void:
@@ -255,7 +268,15 @@ func _create_states(formation: Array[Dictionary], side: int) -> Array[BattleSqua
 		if squad == null or not squad.is_valid():
 			continue
 		var state := BattleSquadState.new()
-		state.initialize(squad, side, StringName(entry.get("row_key", &"")), int(entry.get("formation_index", states.size())))
+		state.runtime_id = _next_state_runtime_id
+		_next_state_runtime_id += 1
+		state.initialize(
+			squad,
+			side,
+			StringName(entry.get("row_key", &"")),
+			int(entry.get("formation_index", states.size())),
+			float(entry.get("base_cooldown_override", -1.0))
+		)
 		state.integer_settlement_committed.connect(_on_integer_settlement_committed)
 		states.append(state)
 	return states
@@ -271,6 +292,9 @@ func _get_next_cooldown() -> float:
 
 func _get_next_event_delay() -> float:
 	var next_time := _get_next_cooldown()
+	var next_effect_time := effect_runtime.get_next_event_time_seconds()
+	if is_finite(next_effect_time):
+		next_time = minf(next_time, maxf(next_effect_time - elapsed_seconds, 0.0))
 	for event_value: Variant in _pending_projectile_contexts:
 		var event := event_value as BattleEffectEvent
 		next_time = minf(next_time, maxf(event.impact_time - elapsed_seconds, 0.0))
@@ -284,10 +308,11 @@ func _get_next_event_delay() -> float:
 func _decrease_living_cooldowns(amount: float) -> void:
 	for state: BattleSquadState in get_all_states():
 		if state.alive:
-			state.remaining_cooldown = maxf(state.remaining_cooldown - amount, 0.0)
+			state.advance_action_cooldown(amount)
 
 
 func _resolve_ready_batch() -> void:
+	effect_runtime.process_due(elapsed_seconds)
 	if use_projectile_timing:
 		_resolve_ready_projectile_batch()
 		return
@@ -519,7 +544,7 @@ func _select_base_actions(actors: Array[BattleSquadState], living_snapshot: Arra
 			var pierces := not groups.is_empty() and int(groups[0]["element"]) == CardData.ElementType.WOOD and int(groups[0]["count"]) == 5 and source.action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
 			action["base_event"] = _make_value_event(action, target, 1.0, 0, true, pierces)
 			actions.append(action)
-		actor.remaining_cooldown = BattleRules.get_effective_cooldown(source.cooldown_seconds)
+		actor.reset_action_cooldown()
 	return actions
 
 
@@ -564,8 +589,25 @@ func _make_value_event(action: Dictionary, target: BattleSquadState, element_mul
 	event.uses_attack_type_multiplier = event.effect_kind == BattleEffectEvent.EffectKind.DAMAGE
 	event.is_base_action = base_action
 	event.pierces_armor = pierces
-	event.exact_amount = float(source.base_value) * BattleRules.get_pattern_multiplier(pattern.pattern_type) * element_multiplier
-	event.formula = BattleFormulaData.create(_value_name_for_action(action_type), action_type, float(source.base_value), BattleRules.get_pattern_multiplier(pattern.pattern_type), element_multiplier, actor, target)
+	var additions: Array[Dictionary] = []
+	var action_bonus := actor.modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)
+	var reinforcement := actor.modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT)
+	if not is_zero_approx(action_bonus):
+		additions.append({"name": "效果数值修正", "value": action_bonus})
+	if not is_zero_approx(reinforcement):
+		additions.append({"name": "强化", "value": reinforcement})
+	event.formula = BattleFormulaData.create(
+		_value_name_for_action(action_type),
+		action_type,
+		float(source.base_value),
+		BattleRules.get_pattern_multiplier(pattern.pattern_type),
+		element_multiplier,
+		actor,
+		target,
+		[],
+		additions
+	)
+	event.exact_amount = event.formula.exact_result
 	return event
 
 
@@ -789,6 +831,15 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 	match event.effect_kind:
 		BattleEffectEvent.EffectKind.DAMAGE:
 			_apply_attack_type_multiplier(event)
+			var incoming_multiplier := event.target.modifiers.get_multiplier(BattleModifier.Stat.INCOMING_DAMAGE)
+			var incoming_addition := event.target.modifiers.get_additive(BattleModifier.Stat.INCOMING_DAMAGE)
+			if event.formula != null and not is_equal_approx(incoming_multiplier, 1.0):
+				event.formula.other_multipliers.append({"name": "承伤修正", "value": incoming_multiplier})
+			if event.formula != null and not is_zero_approx(incoming_addition):
+				event.formula.final_flat_bonus += incoming_addition
+			if event.formula != null:
+				event.formula.exact_result = maxf(event.formula.calculate_result(), 0.0)
+				event.exact_amount = event.formula.exact_result
 			var split := event.target.apply_damage_exact(event.exact_amount, event.source, event, event.pierces_armor)
 			event.armor_amount = float(split["armor_damage"])
 			event.health_amount = float(split["health_damage"])
@@ -796,6 +847,15 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 		BattleEffectEvent.EffectKind.HEALING:
 			event.effective_amount = event.target.apply_healing_exact(event.exact_amount, event.source, event)
 		BattleEffectEvent.EffectKind.ARMOR:
+			var armor_multiplier := event.target.modifiers.get_multiplier(BattleModifier.Stat.ARMOR_GAIN)
+			var armor_addition := event.target.modifiers.get_additive(BattleModifier.Stat.ARMOR_GAIN)
+			if event.formula != null and not is_equal_approx(armor_multiplier, 1.0):
+				event.formula.other_multipliers.append({"name": "获得护甲乘法修正", "value": armor_multiplier})
+			if event.formula != null and not is_zero_approx(armor_addition):
+				event.formula.final_flat_bonus += armor_addition
+			if event.formula != null:
+				event.formula.exact_result = maxf(event.formula.calculate_result(), 0.0)
+				event.exact_amount = event.formula.exact_result
 			event.effective_amount = event.target.apply_armor_exact(event.exact_amount, event.source, event)
 		BattleEffectEvent.EffectKind.PLACEHOLDER:
 			event.effective_amount = 0.0
@@ -803,6 +863,8 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 	effect_resolved.emit(event)
 	if event.is_base_action:
 		action_resolved.emit(event.source, event.target, event.action_type, roundi(event.effective_amount))
+		effect_runtime.notify_action_after(event.source)
+		effect_runtime.process_due(elapsed_seconds)
 
 
 func _apply_attack_type_multiplier(event: BattleEffectEvent) -> void:
@@ -956,6 +1018,9 @@ func _finalize_batch() -> void:
 	recalculate_logical_layout()
 	for state: BattleSquadState in defeated:
 		squad_defeated.emit(state)
+		effect_runtime.notify_source_defeated(state)
+	effect_runtime.recheck_continuous_conditions()
+	effect_runtime.process_due(elapsed_seconds)
 
 
 func _kind_for_action(action_type: CardData.ActionType) -> BattleEffectEvent.EffectKind:
@@ -1008,6 +1073,10 @@ func _on_integer_settlement_committed(event: Dictionary) -> void:
 	integer_settlement_resolved.emit(event)
 
 
+func _on_effect_trace_emitted(entry: BattleEffectTraceEntry) -> void:
+	effect_trace_emitted.emit(entry)
+
+
 func _check_battle_result() -> void:
 	if current_result != Result.NONE:
 		return
@@ -1021,6 +1090,8 @@ func _check_battle_result() -> void:
 		current_result = Result.PLAYER_VICTORY
 	else:
 		current_result = Result.PLAYER_DEFEAT
+	effect_runtime.notify_battle_end()
+	effect_runtime.process_due(elapsed_seconds)
 	stop_battle()
 	for state: BattleSquadState in get_all_states():
 		state.force_boundary_sync()

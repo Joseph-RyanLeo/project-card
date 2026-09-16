@@ -71,6 +71,11 @@ func _ready() -> void:
 
 
 func apply_display_mode(mode: DisplayMode) -> void:
+	if Engine.is_embedded_in_editor():
+		display_mode_option.disabled = true
+		display_mode_feedback.text = "编辑器嵌入模式：关闭“下次运行游戏时嵌入”后重新运行"
+		display_mode_feedback.visible = true
+		return
 	current_display_mode = mode
 	_window_resize_request_serial += 1
 	_window_transition_in_progress = true
@@ -127,7 +132,12 @@ func _apply_windowed_size(mode: DisplayMode, request_serial: int, attempt: int) 
 	var window := get_window()
 	if window.mode != Window.MODE_WINDOWED:
 		if attempt < WINDOW_MODE_TRANSITION_MAX_FRAMES:
-			call_deferred("_apply_windowed_size", mode, request_serial, attempt + 1)
+			await get_tree().process_frame
+			_apply_windowed_size(mode, request_serial, attempt + 1)
+		else:
+			_window_transition_in_progress = false
+			display_mode_feedback.text = "退出全屏未完成，请稍后重试"
+			display_mode_feedback.visible = true
 		return
 	window.size = WINDOW_SIZE_BY_MODE[mode]
 	_window_transition_in_progress = false
@@ -146,13 +156,14 @@ func _verify_fullscreen_mode(request_serial: int, attempt: int) -> void:
 		display_mode_feedback.visible = false
 		return
 	if attempt < WINDOW_MODE_TRANSITION_MAX_FRAMES:
-		call_deferred("_verify_fullscreen_mode", request_serial, attempt + 1)
+		await get_tree().process_frame
+		_verify_fullscreen_mode(request_serial, attempt + 1)
 		return
-	# 嵌入式游戏无法控制宿主编辑器窗口；恢复真实窗口档位并明确提示原因。
+	# 原生窗口请求未被系统接受时，恢复真实档位，不把请求当作成功。
 	_window_transition_in_progress = false
 	current_display_mode = _get_windowed_mode_for_size(window.size)
 	_select_option_without_signal(current_display_mode)
-	display_mode_feedback.text = "全屏失败：请重启 Godot 载入原生窗口设置"
+	display_mode_feedback.text = "系统尚未进入全屏，请稍后重试"
 	display_mode_feedback.visible = true
 
 

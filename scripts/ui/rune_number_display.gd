@@ -107,6 +107,8 @@ func get_rendered_size() -> Vector2:
 func _draw_cooldown() -> void:
 	var parts := text.split(".", false, 1)
 	if parts.size() != 2:
+		# 10秒及以上只显示紧贴的中号整数，不再要求必须存在小数点。
+		_draw_digit_run(text, MEDIUM_TEXTURE, MEDIUM_GLYPH_RECTS, Vector2.ZERO)
 		return
 	var integer_text := parts[0]
 	var fraction_text := parts[1]
@@ -132,7 +134,7 @@ func _draw_cooldown() -> void:
 func _measure_cooldown() -> Vector2:
 	var parts := text.split(".", false, 1)
 	if parts.size() != 2:
-		return Vector2.ZERO
+		return Vector2(_measure_digit_run(text, MEDIUM_GLYPH_RECTS), MEDIUM_HEIGHT)
 	var integer_width := _measure_digit_run(parts[0], MEDIUM_GLYPH_RECTS)
 	var fraction_width := _measure_digit_run(parts[1], SMALL_GLYPH_RECTS)
 	return Vector2(integer_width + 1.0 + fraction_width, MEDIUM_HEIGHT)

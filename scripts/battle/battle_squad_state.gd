@@ -16,6 +16,7 @@ const CHANNEL_HEALING: StringName = &"healing"
 const CHANNEL_ARMOR_GAIN: StringName = &"armor_gain"
 
 var squad_data: SquadData
+var runtime_id: int = 0 # 本场战斗内的稳定实例编号，不作为跨战斗收藏身份
 var side: int = Side.PLAYER
 var row_key: StringName = &""
 var formation_index: int = 0
@@ -31,9 +32,16 @@ var current_armor = 0:
 			displayed_armor = clampi(roundi(value), 0, CardData.MAXIMUM_ARMOR)
 var displayed_health: int = 0
 var displayed_armor: int = 0
-var remaining_cooldown: float = 0.0
+var cooldown_progress: float = 0.0 # 0表示刚重置，1表示普通行动已经就绪
+var remaining_cooldown: float = 0.0:
+	set(value):
+		remaining_cooldown = maxf(value, 0.0)
+		if not _syncing_cooldown:
+			var interval := get_action_interval()
+			cooldown_progress = clampf(1.0 - remaining_cooldown / interval, 0.0, 1.0) if interval > 0.0 else 1.0
 var alive: bool = true
 var buff_stacks: Dictionary = {} # 本场战斗的临时 Buff 层数，键使用稳定标识
+var modifiers := BattleModifierContainer.new()
 var fractional_accumulators: Dictionary = {
 	CHANNEL_HEALTH_DAMAGE: 0.0,
 	CHANNEL_ARMOR_DAMAGE: 0.0,
@@ -45,26 +53,36 @@ var pending_kill_event: BattleEffectEvent
 var logical_left: float = 0.0
 var logical_right: float = 0.0
 var logical_center: float = 0.0
+var runtime_base_cooldown_override: float = -1.0 # 负数表示使用卡牌基础冷却；战斗实验室可注入最长99秒的测试值
 var battle_damage_dealt: float = 0.0
 var battle_damage_taken: float = 0.0
 var battle_healing_done: float = 0.0
 var battle_armor_granted: float = 0.0
 
 var _precise_write: bool = false
+var _syncing_cooldown: bool = false
 
 
-func initialize(value: SquadData, battle_side: int, row: StringName, index: int) -> void:
+func initialize(
+	value: SquadData,
+	battle_side: int,
+	row: StringName,
+	index: int,
+	base_cooldown_override: float = -1.0
+) -> void:
 	squad_data = value
 	side = battle_side
 	row_key = row
 	formation_index = index
+	runtime_base_cooldown_override = base_cooldown_override
 	var vitals_source := value.get_vitals_source() if value != null else null
-	var action_source := value.get_action_source() if value != null else null
 	_set_exact_health(clampi(vitals_source.max_health, 0, CardData.MAXIMUM_HEALTH) if vitals_source != null else 0)
 	_set_exact_armor(clampi(vitals_source.armor, 0, CardData.MAXIMUM_ARMOR) if vitals_source != null else 0)
 	displayed_health = clampi(roundi(current_health), 0, get_max_health())
 	displayed_armor = clampi(roundi(current_armor), 0, CardData.MAXIMUM_ARMOR)
-	remaining_cooldown = BattleRules.get_effective_cooldown(action_source.cooldown_seconds) if action_source != null else BattleRules.MINIMUM_COOLDOWN_SECONDS
+	cooldown_progress = 0.0
+	modifiers.clear()
+	reset_action_cooldown()
 	alive = current_health > 0.0
 	buff_stacks.clear()
 	clear_precise_runtime()
@@ -108,23 +126,84 @@ func get_effect_source() -> CardData:
 
 func get_max_health() -> int:
 	var source := get_vitals_source()
-	return clampi(source.max_health, 0, CardData.MAXIMUM_HEALTH) if source != null else 0
+	var base := float(source.max_health) if source != null else 0.0
+	return clampi(roundi(base + modifiers.get_additive(BattleModifier.Stat.MAX_HEALTH)), 0, CardData.MAXIMUM_HEALTH)
 
 
 func get_target_weight() -> int:
 	var source := get_action_source()
-	return maxi(source.get_base_target_priority(), 1) if source != null else 1
+	var base := float(source.get_base_target_priority()) if source != null else 1.0
+	return maxi(roundi(base + modifiers.get_additive(BattleModifier.Stat.TARGET_PRIORITY)), 1)
 
 
 func get_exact_action_amount() -> float:
 	var source := get_action_source()
 	if source == null or squad_data == null:
 		return 0.0
-	return BattleRules.calculate_exact_action_amount(source.base_value, squad_data.get_rune_pattern_result().pattern_type)
+	var modified_base := clampi(
+		roundi(float(source.base_value) + modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)),
+		0,
+		CardData.MAXIMUM_BASE_VALUE
+	)
+	return BattleRules.calculate_exact_action_amount(modified_base, squad_data.get_rune_pattern_result().pattern_type)
 
 
 func get_action_amount() -> int:
 	return roundi(get_exact_action_amount())
+
+
+func get_display_action_value() -> int:
+	var source := get_action_source()
+	if source == null:
+		return 0
+	# 卡面显示“这次普通行动的基础数值”，包含效果修正与尚未消费的强化；牌型倍率仍在结算公式中展示。
+	return clampi(roundi(
+		float(source.base_value)
+		+ modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)
+		+ modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT)
+	), 0, 999)
+
+
+func get_zeal_layers() -> int:
+	return roundi(modifiers.get_additive(BattleModifier.Stat.ZEAL))
+
+
+func get_action_interval() -> float:
+	var source := get_action_source()
+	var uses_override := runtime_base_cooldown_override >= 0.0
+	var base_cooldown := (
+		runtime_base_cooldown_override
+		if uses_override
+		else (source.cooldown_seconds if source != null else BattleRules.MINIMUM_COOLDOWN_SECONDS)
+	)
+	return BattleRules.get_action_interval(
+		base_cooldown,
+		get_zeal_layers(),
+		BattleRules.MAXIMUM_ACTION_INTERVAL_SECONDS if uses_override else BattleRules.MAXIMUM_COOLDOWN_SECONDS
+	)
+
+
+func reset_action_cooldown() -> void:
+	cooldown_progress = 0.0
+	_sync_remaining_cooldown()
+
+
+func advance_action_cooldown(seconds: float) -> void:
+	var interval := get_action_interval()
+	if interval <= 0.0:
+		cooldown_progress = 1.0
+	else:
+		cooldown_progress = clampf(cooldown_progress + maxf(seconds, 0.0) / interval, 0.0, 1.0)
+	_sync_remaining_cooldown()
+
+
+func refresh_cooldown_after_modifier_change() -> void:
+	# 进度不变，只把剩余显示时间换算到新的行动间隔。
+	_sync_remaining_cooldown()
+
+
+func is_action_ready(epsilon: float = 0.0001) -> bool:
+	return remaining_cooldown <= epsilon or cooldown_progress >= 1.0 - epsilon
 
 
 func apply_damage_exact(amount: float, source_state: BattleSquadState = null, event: BattleEffectEvent = null, pierces_armor: bool = false) -> Dictionary:
@@ -226,6 +305,12 @@ func add_buff_stacks(buff_id: StringName, amount: int = 1) -> int:
 
 func get_buff_stacks(buff_id: StringName) -> int:
 	return int(buff_stacks.get(buff_id, 0))
+
+
+func _sync_remaining_cooldown() -> void:
+	_syncing_cooldown = true
+	remaining_cooldown = maxf((1.0 - cooldown_progress) * get_action_interval(), 0.0)
+	_syncing_cooldown = false
 
 
 func _accumulate(channel: StringName, amount: float, source_state: BattleSquadState, event: BattleEffectEvent) -> void:

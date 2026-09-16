@@ -21,6 +21,7 @@ const RUNE_WATER_TEXTURE: Texture2D = preload("res://assets/runes/rune_water.png
 const RUNE_WOOD_TEXTURE: Texture2D = preload("res://assets/runes/rune_wood.png")
 const RUNE_LIGHT_TEXTURE: Texture2D = preload("res://assets/runes/rune_light.png")
 const RUNE_DARK_TEXTURE: Texture2D = preload("res://assets/runes/rune_dark.png")
+const BattleRules = preload("res://scripts/battle/battle_rules.gd")
 const RUNE_ACTIVE_FLOW_SHEET: Texture2D = preload(
 	"res://assets/runes/rune_active_flow_sheet.png"
 )
@@ -77,6 +78,7 @@ const CARD_NAME_FRAME_TEXTURE: Texture2D = preload(
 const CARD_TEXT_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const LAYOUT_TWEEN_DURATION: float = 0.15 # 卡牌让位、归位和飞入目标位置的动画时长（秒）
 const INTERACTION_TWEEN_DURATION: float = 0.10 # 悬停、按压时阴影移动的动画时长（秒）
+const BATTLE_NUMBER_TWEEN_DURATION: float = 0.24 # 战斗数值从旧值快速起跳、减速抵达新值的时长（秒）
 const HOVER_PUNCH_ANGLE: float = 5.0 # 鼠标进入实体卡左/右半边时，同方向轻晃的最大角度
 const HOVER_PUNCH_DURATION: float = 0.16 # 悬停单方向轻晃并复位的总时长（秒）
 const COLLECTION_HOVER_LIFT_OFFSET: float = 7.0 # 收藏悬停时向上抽出的像素距离
@@ -100,6 +102,7 @@ const ACTION_VALUE_POSITIONS := {
 	&"single_other": Vector2(0, 7),
 	&"single_one": Vector2(1, 7),
 	&"double": Vector2(-5, 7),
+	&"triple": Vector2(-10, 7),
 } # 行动数值按位数和数字1使用的绝对卡面坐标
 const HEALTH_VALUE_POSITIONS := {
 	1: [Vector2(89, 88), Vector2(90, 88)],
@@ -190,6 +193,10 @@ var _battle_current_health: int = 0
 var _battle_current_armor: int = 0
 var _battle_cooldown_active: bool = false
 var _battle_remaining_cooldown: float = 0.0
+var _battle_action_value_active: bool = false
+var _battle_action_value: int = 0
+var _battle_number_tweens: Dictionary = {} # 生命、护甲、冷却与行动值各自只保留一条数值动画
+var _battle_number_targets: Dictionary = {} # 保存每项动画的最终目标，避免逐帧状态刷新反复重启动画
 
 # 所有真实卡共享一条静态时间轴；新加入的符文等到下一轮再同步开始。
 static var _active_rune_flow_epoch_msec: int = -1
@@ -710,14 +717,41 @@ func set_card_data(value: CardData) -> void:
 
 
 func set_battle_vitals(current_health: int, current_armor: int) -> void:
+	var was_active := _battle_vitals_active
 	_battle_vitals_active = true
-	_battle_current_health = clampi(current_health, 0, CardData.MAXIMUM_HEALTH)
-	_battle_current_armor = clampi(current_armor, 0, CardData.MAXIMUM_ARMOR)
-	if is_node_ready():
-		_refresh_vitals_text()
+	var target_health := clampi(current_health, 0, CardData.MAXIMUM_HEALTH)
+	var target_armor := clampi(current_armor, 0, CardData.MAXIMUM_ARMOR)
+	if not was_active or not is_node_ready():
+		_set_battle_number_target(&"health", float(target_health))
+		_set_battle_number_target(&"armor", float(target_armor))
+		_battle_current_health = target_health
+		_battle_current_armor = target_armor
+		if is_node_ready():
+			_refresh_vitals_text()
+		return
+	_animate_battle_number(
+		&"health",
+		float(_battle_current_health),
+		float(target_health),
+		func(value: float) -> void:
+			_battle_current_health = clampi(roundi(value), 0, CardData.MAXIMUM_HEALTH)
+			_refresh_vitals_text()
+	)
+	_animate_battle_number(
+		&"armor",
+		float(_battle_current_armor),
+		float(target_armor),
+		func(value: float) -> void:
+			_battle_current_armor = clampi(roundi(value), 0, CardData.MAXIMUM_ARMOR)
+			_refresh_vitals_text()
+	)
 
 
 func clear_battle_vitals() -> void:
+	_kill_battle_number_tween(&"health")
+	_kill_battle_number_tween(&"armor")
+	_battle_number_targets.erase(&"health")
+	_battle_number_targets.erase(&"armor")
 	_battle_vitals_active = false
 	if is_node_ready():
 		_refresh_vitals_text()
@@ -728,17 +762,32 @@ func has_battle_vitals() -> bool:
 
 
 func set_battle_remaining_cooldown(remaining_cooldown: float) -> void:
+	var was_active := _battle_cooldown_active
 	_battle_cooldown_active = true
-	_battle_remaining_cooldown = clampf(
+	var target_cooldown := clampf(
 		remaining_cooldown,
 		0.0,
-		CardData.MAXIMUM_COOLDOWN_SECONDS
+		BattleRules.MAXIMUM_ACTION_INTERVAL_SECONDS
 	)
-	if is_node_ready():
-		_refresh_cooldown_text()
+	if not was_active or not is_node_ready():
+		_set_battle_number_target(&"cooldown", target_cooldown)
+		_battle_remaining_cooldown = target_cooldown
+		if is_node_ready():
+			_refresh_cooldown_text()
+		return
+	_animate_battle_number(
+		&"cooldown",
+		_battle_remaining_cooldown,
+		target_cooldown,
+		func(value: float) -> void:
+			_battle_remaining_cooldown = clampf(value, 0.0, BattleRules.MAXIMUM_ACTION_INTERVAL_SECONDS)
+			_refresh_cooldown_text()
+	)
 
 
 func clear_battle_remaining_cooldown() -> void:
+	_kill_battle_number_tween(&"cooldown")
+	_battle_number_targets.erase(&"cooldown")
 	_battle_cooldown_active = false
 	if is_node_ready():
 		_refresh_cooldown_text()
@@ -746,6 +795,72 @@ func clear_battle_remaining_cooldown() -> void:
 
 func has_battle_remaining_cooldown() -> bool:
 	return _battle_cooldown_active
+
+
+func set_battle_action_value(action_value: int) -> void:
+	var was_active := _battle_action_value_active
+	_battle_action_value_active = true
+	var target_value := clampi(action_value, 0, 999)
+	if not was_active or not is_node_ready():
+		_set_battle_number_target(&"action_value", float(target_value))
+		_battle_action_value = target_value
+		if is_node_ready():
+			_refresh_action_value_text()
+		return
+	_animate_battle_number(
+		&"action_value",
+		float(_battle_action_value),
+		float(target_value),
+		func(value: float) -> void:
+			_battle_action_value = clampi(roundi(value), 0, 999)
+			_refresh_action_value_text()
+	)
+
+
+func clear_battle_action_value() -> void:
+	_kill_battle_number_tween(&"action_value")
+	_battle_number_targets.erase(&"action_value")
+	_battle_action_value_active = false
+	if is_node_ready():
+		_refresh_action_value_text()
+
+
+func _animate_battle_number(
+	key: StringName,
+	from_value: float,
+	to_value: float,
+	apply_value: Callable
+) -> void:
+	if not _set_battle_number_target(key, to_value):
+		return
+	_kill_battle_number_tween(key)
+	if is_equal_approx(from_value, to_value):
+		apply_value.call(to_value)
+		return
+	var tween := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_battle_number_tweens[key] = tween
+	tween.tween_method(apply_value, from_value, to_value, BATTLE_NUMBER_TWEEN_DURATION)
+	tween.finished.connect(func() -> void:
+		if _battle_number_tweens.get(key) == tween:
+			_battle_number_tweens.erase(key)
+	)
+
+
+func _set_battle_number_target(key: StringName, target_value: float) -> bool:
+	if (
+		_battle_number_targets.has(key)
+		and is_equal_approx(float(_battle_number_targets[key]), target_value)
+	):
+		return false
+	_battle_number_targets[key] = target_value
+	return true
+
+
+func _kill_battle_number_tween(key: StringName) -> void:
+	var tween := _battle_number_tweens.get(key) as Tween
+	if tween != null and tween.is_valid():
+		tween.kill()
+	_battle_number_tweens.erase(key)
 
 
 func set_rune_pattern_highlights(
@@ -823,8 +938,7 @@ func _refresh() -> void:
 
 	_set_card_name(card_data.display_name)
 	action_icon.texture = _get_action_texture(card_data.action_type)
-	value_label.text = str(card_data.base_value)
-	_apply_action_layout(card_data.action_type)
+	_refresh_action_value_text()
 	_refresh_card_type_visuals()
 	_refresh_vitals_text()
 	_refresh_cooldown_text()
@@ -834,6 +948,16 @@ func _refresh() -> void:
 	_refresh_art()
 	_refresh_race_icon()
 	_refresh_bottom_text()
+
+
+func _refresh_action_value_text() -> void:
+	if card_data == null:
+		value_label.text = ""
+		return
+	value_label.text = str(
+		_battle_action_value if _battle_action_value_active else card_data.base_value
+	)
+	_apply_action_layout(card_data.action_type)
 
 
 func _refresh_vitals_text() -> void:
@@ -880,6 +1004,8 @@ func _refresh_cooldown_text() -> void:
 
 
 static func format_cooldown_seconds(seconds: float) -> String:
+	if seconds >= 10.0:
+		return str(floori(minf(seconds, BattleRules.MAXIMUM_ACTION_INTERVAL_SECONDS)))
 	# 显示层向上保留一位小数；减去极小误差，避免精确 3.0 因浮点误差显示 3.1。
 	var tenths := clampi(
 		ceili(maxf(seconds, 0.0) * 10.0 - 0.0001),
@@ -1688,6 +1814,8 @@ static func get_armor_value_position(value: int) -> Vector2:
 
 
 static func _get_action_value_position(value_text: String) -> Vector2:
+	if value_text.length() >= 3:
+		return ACTION_VALUE_POSITIONS[&"triple"] as Vector2
 	if value_text.length() >= 2:
 		return ACTION_VALUE_POSITIONS[&"double"] as Vector2
 	if value_text == "1":

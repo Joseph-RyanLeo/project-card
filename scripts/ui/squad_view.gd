@@ -180,7 +180,8 @@ func set_battle_status(
 	current_health: int,
 	current_armor: int,
 	remaining_cooldown: float,
-	fatigue_stacks: int = 0
+	fatigue_stacks: int = 0,
+	action_value: int = -1
 ) -> void:
 	if not is_node_ready():
 		return
@@ -190,8 +191,13 @@ func set_battle_status(
 	for card_view: CardView in get_card_views():
 		if card_view.card_data == action_source:
 			card_view.set_battle_remaining_cooldown(remaining_cooldown)
+			if action_value >= 0:
+				card_view.set_battle_action_value(action_value)
+			else:
+				card_view.clear_battle_action_value()
 		else:
 			card_view.clear_battle_remaining_cooldown()
+			card_view.clear_battle_action_value()
 		if card_view.card_data == vitals_source:
 			card_view.set_battle_vitals(current_health, current_armor)
 		else:
@@ -210,6 +216,7 @@ func clear_battle_status() -> void:
 	for card_view: CardView in get_card_views():
 		card_view.clear_battle_vitals()
 		card_view.clear_battle_remaining_cooldown()
+		card_view.clear_battle_action_value()
 	if _battle_action_tween != null and _battle_action_tween.is_valid():
 		_battle_action_tween.kill()
 	if _battle_action_lift_tween != null and _battle_action_lift_tween.is_valid():

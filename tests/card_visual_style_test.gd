@@ -27,8 +27,9 @@ func _run() -> void:
 		CardView.format_cooldown_seconds(3.4) == "3.4"
 		and CardView.format_cooldown_seconds(4.0) == "4.0"
 		and CardView.format_cooldown_seconds(2.96) == "3.0"
-		and CardView.format_cooldown_seconds(12.0) == "9.9",
-		"冷却始终显示一位小数、向上取到0.1秒且最高9.9"
+		and CardView.format_cooldown_seconds(10.9) == "10"
+		and CardView.format_cooldown_seconds(98.1) == "98",
+		"10秒以下向上显示一位小数，达到10秒后舍去小数且允许显示到99"
 	)
 	if card != null:
 		_expect(
@@ -83,6 +84,45 @@ func _run() -> void:
 			),
 			"准备阶段直接显示 CardData 基础冷却秒数"
 		)
+		card.set_battle_vitals(20, 5)
+		card.set_battle_remaining_cooldown(20.0)
+		card.set_battle_action_value(10)
+		card.set_battle_vitals(13, 1)
+		card.set_battle_remaining_cooldown(13.0)
+		card.set_battle_action_value(16)
+		_expect(
+			card.health_label.text == "20"
+			and card.armor_label.text == "5"
+			and card.cooldown_label.text == "20"
+			and card.cooldown_label.get_rendered_size() == Vector2(16, 12)
+			and card.value_label.text == "10",
+			"战斗数值不会同帧跳变，且两位整数冷却使用紧贴的中号数字正常显示"
+		)
+		await create_timer(0.09).timeout
+		var middle_health := int(card.health_label.text)
+		var middle_action := int(card.value_label.text)
+		_expect(
+			middle_health <= 20 and middle_health >= 13
+			and middle_action >= 10 and middle_action <= 16
+			and (middle_health < 20 or middle_action > 10),
+			"生命与强化后的行动值按减速曲线朝目标推进且不会越界"
+		)
+		# 实验室播放时会逐帧推送同一个最新状态；重复目标不能让Tween每帧重新开始。
+		for _index: int in 15:
+			card.set_battle_vitals(13, 1)
+			card.set_battle_remaining_cooldown(13.0)
+			card.set_battle_action_value(16)
+			await create_timer(0.02).timeout
+		_expect(
+			card.health_label.text == "13"
+			and card.armor_label.text == "1"
+			and card.cooldown_label.text == "13"
+			and card.value_label.text == "16",
+			"逐帧重复刷新不会重启动画，生命、护甲、冷却与行动值仍实时抵达结算值"
+		)
+		card.clear_battle_vitals()
+		card.clear_battle_remaining_cooldown()
+		card.clear_battle_action_value()
 		_expect(
 			card.value_label.number_style == RuneNumberDisplay.NumberStyle.LARGE
 			and card.health_label.number_style == RuneNumberDisplay.NumberStyle.LARGE

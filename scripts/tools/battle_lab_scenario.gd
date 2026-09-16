@@ -6,6 +6,8 @@ extends Resource
 
 const SIDE_SLOT_COUNT: int = 4 # 实验室每一方最多同时配置的小队数量
 const MAX_VISIBLE_RUNES: int = 5 # 当前牌型系统允许进入结算的最大可见符文数
+const BattleLabEffectLibrary = preload("res://scripts/tools/battle_lab_effect_library.gd")
+const BattleRules = preload("res://scripts/battle/battle_rules.gd")
 const ACTION_VISUAL_TEMPLATES: Array[CardData] = [
 	preload("res://resources/cards/ember_squire.tres"),
 	preload("res://resources/cards/tide_archer.tres"),
@@ -87,7 +89,7 @@ func build_enemy_formation() -> Array[Dictionary]:
 
 func to_dictionary() -> Dictionary:
 	return {
-		"version": 1,
+		"version": 2,
 		"scenario_name": scenario_name,
 		"random_seed": random_seed,
 		"speed_multiplier": speed_multiplier,
@@ -121,6 +123,11 @@ static func _build_formation(specs: Array[Dictionary], side_prefix: String) -> A
 			"squad_data": _build_squad(spec, "%s_%d" % [side_prefix, slot_index]),
 			"row_key": StringName("%s_%s" % [side_prefix, row_suffix]),
 			"formation_index": int(spec.get("position", slot_index)),
+			"base_cooldown_override": clampf(
+				float(spec.get("cooldown", 2.0)),
+				BattleRules.MINIMUM_COOLDOWN_SECONDS,
+				BattleRules.MAXIMUM_ACTION_INTERVAL_SECONDS
+			),
 		})
 	return formation
 
@@ -157,9 +164,17 @@ static func _build_card(spec: Dictionary, stable_id: String) -> CardData:
 	card.race_type = visual_template.race_type
 	card.rarity = visual_template.rarity
 	card.base_value = int(spec.get("base_value", 10))
-	card.cooldown_seconds = float(spec.get("cooldown", 2.0))
+	var requested_cooldown := clampf(
+		float(spec.get("cooldown", 2.0)),
+		BattleRules.MINIMUM_COOLDOWN_SECONDS,
+		BattleRules.MAXIMUM_ACTION_INTERVAL_SECONDS
+	)
+	card.cooldown_seconds = requested_cooldown
+	# CardData继续遵守正式卡牌9.9秒上限；该元数据只让实验室配置预览显示其运行时测试值。
+	card.set_meta("battle_lab_cooldown_seconds", requested_cooldown)
 	card.max_health = int(spec.get("health", 100))
 	card.armor = int(spec.get("armor", 0))
+	card.effect_text = BattleLabEffectLibrary.get_description(StringName(spec.get("effect_card", BattleLabEffectLibrary.NONE)))
 	return card
 
 
@@ -214,4 +229,5 @@ static func _squad_spec(name_value: String, enabled: bool, row: String, position
 		"health": health,
 		"armor": armor,
 		"runes": runes.duplicate(),
+		"effect_card": String(BattleLabEffectLibrary.NONE),
 	}

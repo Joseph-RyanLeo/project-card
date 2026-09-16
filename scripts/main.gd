@@ -2100,7 +2100,8 @@ func _on_battle_states_changed() -> void:
 				state.displayed_health,
 				state.displayed_armor,
 				state.remaining_cooldown,
-				state.get_buff_stacks(BattleRules.FATIGUE_BUFF_ID)
+				state.get_buff_stacks(BattleRules.FATIGUE_BUFF_ID),
+				state.get_display_action_value()
 			)
 
 
@@ -3402,7 +3403,9 @@ func _animate_collection_card_entry(
 	var resting_z_index := card_view.z_index
 	card_view.set_resting_z_index(CardDragPreview.DRAG_PREVIEW_Z_INDEX)
 	card_view.animate_from_global_position(entry_global_position)
-	await get_tree().create_timer(CardView.LAYOUT_TWEEN_DURATION).timeout
+	# 层级跟随真实动画状态，不能用独立计时器猜测 Tween 的结束帧。
+	while is_instance_valid(card_view) and card_view.is_layout_animating():
+		await get_tree().process_frame
 
 	if is_instance_valid(card_view) and not card_view.is_queued_for_deletion():
 		card_view.set_resting_z_index(resting_z_index)

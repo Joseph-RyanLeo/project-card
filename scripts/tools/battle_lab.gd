@@ -7,9 +7,13 @@ extends Control
 signal close_requested
 
 const BattleLabScenario = preload("res://scripts/tools/battle_lab_scenario.gd")
+const BattleLabEffectLibrary = preload("res://scripts/tools/battle_lab_effect_library.gd")
 const BattleController = preload("res://scripts/battle/battle_controller.gd")
 const BattleLogEntry = preload("res://scripts/battle/battle_log_entry.gd")
 const BattleFormulaPresenter = preload("res://scripts/battle/battle_formula_presenter.gd")
+const BattleElementResolver = preload("res://scripts/battle/battle_element_resolver.gd")
+const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
+const BattleAttackTrailRenderer = preload("res://scripts/battle/battle_attack_trail_renderer.gd")
 const BOARD_SLOT_SCENE: PackedScene = preload("res://scenes/ui/BoardSlot.tscn")
 const BATTLE_LOG_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const SCENARIO_SAVE_PATH := "user://battle_lab_scenario.json"
@@ -18,14 +22,26 @@ const ELEMENT_NAMES: Array[String] = ["火", "水", "木", "光", "暗"]
 const PRESET_IDS: Array[StringName] = [&"light_water", &"wood_fire", &"fire_heal", &"water_boundary", &"light_targets"]
 const PRESET_NAMES: Array[String] = ["3光＋2水", "2木＋2火", "五火治疗", "五水边界", "五光目标不足"]
 const SPEED_VALUES: Array[float] = [1.0, 2.0, 3.0] # 实验室连续播放可选择的战斗时间倍率
-const SIDE_PANEL_WIDTH: float = 278.0 # 敌我配置栏各自占用的固定宽度
-const CARD_PREVIEW_SCALE: float = 0.50 # 正式卡面缩放到实验室四排都能同时观察、文字仍较易辨认的比例
+const SIDE_DRAWER_WIDTH: float = 282.0 # 左右配置抽屉展开后的宽度，不再永久挤占中央战场
+const CARD_PREVIEW_SCALE: float = 1.0 # 战斗实验室按正式卡牌原始尺寸显示，便于读取图标与数值
 const CARD_PREVIEW_CONTENT_HEIGHT: float = 150.0 # 含 136 像素卡面与牌型标签的正式小队视觉高度
+const OUTPUT_DRAWER_HEIGHT: float = 245.0 # 底部日志抽屉展开后的高度
+const DRAWER_TOP_OFFSET: float = 56.0 # 侧抽屉避开顶部工具栏的距离
+const DRAWER_EDGE_MARGIN: float = 12.0 # 弹出抽屉与画布边缘之间的间距
 const FORMULA_POPUP_MIN_WIDTH: float = 210.0 # 实验室公式弹窗的最小阅读宽度
 const FORMULA_POPUP_MAX_WIDTH: float = 340.0 # 实验室公式弹窗允许的最大内容宽度
 const FORMULA_POPUP_MAX_HEIGHT: float = 300.0 # 实验室公式弹窗允许的最大内容高度
 const FORMULA_POPUP_CONTENT_PADDING := Vector2(18.0, 18.0) # 弹窗两侧各 9 像素内边距的合计尺寸
 const FORMULA_POPUP_MOUSE_GAP: float = 10.0 # 公式弹窗与鼠标之间的垂直间距
+const EFFECT_LAYER_Z_INDEX: int = 1200 # 战斗特效覆盖卡面，但仍位于配置抽屉与公式弹窗之下
+const EFFECT_FLASH_SECONDS: float = 0.62 # 火焰持续效果命中时的卡位闪烁时长（秒）
+const EFFECT_IMPACT_RADIUS := Vector2(24.0, 32.0) # 命中菱形脉冲的横纵半径
+const EFFECT_COLOR_NONE := Color("ffffff") # 无元素组合时的攻击颜色
+const EFFECT_COLOR_LIGHT := Color("ffd70f") # 光元素攻击颜色
+const EFFECT_COLOR_DARK := Color("b05dff") # 暗元素攻击颜色
+const EFFECT_COLOR_FIRE := Color("e51414") # 火元素攻击颜色
+const EFFECT_COLOR_WATER := Color("0095ff") # 水元素攻击颜色
+const EFFECT_COLOR_WOOD := Color("3ac330") # 木元素攻击颜色
 
 var scenario: BattleLabScenario
 var battle_controller: BattleController
@@ -38,6 +54,8 @@ var _speed_index: int = 0
 var _log_entries: Array[BattleLogEntry] = []
 var _log_by_group: Dictionary = {}
 var _trace_lines: Array[String] = []
+var _battle_state_slots: Dictionary = {}
+var _visuals_enabled: bool = true
 
 var scenario_name_edit: LineEdit
 var preset_option: OptionButton
@@ -54,6 +72,13 @@ var report_text: RichTextLabel
 var state_rows: Dictionary = {}
 var formula_popup: PanelContainer
 var formula_popup_text: RichTextLabel
+var player_drawer: Control
+var enemy_drawer: Control
+var output_drawer: Control
+var player_drawer_button: Button
+var enemy_drawer_button: Button
+var output_drawer_button: Button
+var battle_effect_layer: Control
 
 
 func _ready() -> void:
@@ -66,7 +91,11 @@ func _ready() -> void:
 	battle_controller.name = "BattleLabController"
 	add_child(battle_controller)
 	battle_controller.states_changed.connect(_on_states_changed)
+	battle_controller.action_resolved.connect(_on_action_resolved)
+	battle_controller.projectile_launched.connect(_on_projectile_launched)
 	battle_controller.effect_resolved.connect(_on_effect_resolved)
+	battle_controller.direct_damage_resolved.connect(_on_direct_damage_resolved)
+	battle_controller.effect_trace_emitted.connect(_on_effect_trace_emitted)
 	battle_controller.battle_finished.connect(_on_battle_finished)
 	scenario = BattleLabScenario.create_default()
 	_load_scenario_into_controls()
@@ -103,14 +132,16 @@ func _build_interface() -> void:
 	margin.add_child(root_layout)
 	root_layout.add_child(_build_top_bar())
 
-	var body := HBoxContainer.new()
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 8)
-	body.add_child(_build_side_editor("player", "我方阵容"))
-	body.add_child(_build_battle_observer())
-	body.add_child(_build_side_editor("enemy", "敌方阵容"))
-	root_layout.add_child(body)
-	root_layout.add_child(_build_output_tabs())
+	var observer := _build_battle_observer()
+	observer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root_layout.add_child(observer)
+	battle_effect_layer = Control.new()
+	battle_effect_layer.name = "BattleEffectLayer"
+	battle_effect_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	battle_effect_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	battle_effect_layer.z_index = EFFECT_LAYER_Z_INDEX
+	add_child(battle_effect_layer)
+	_build_drawers()
 	_build_formula_popup()
 
 
@@ -119,21 +150,21 @@ func _build_top_bar() -> Control:
 	bar.custom_minimum_size.y = 38.0
 	bar.add_theme_constant_override("separation", 7)
 	var back := Button.new()
-	back.text = "← 返回主界面"
-	back.custom_minimum_size.x = 132.0
+	back.text = "← 返回"
+	back.custom_minimum_size.x = 92.0
 	back.pressed.connect(func() -> void: close_requested.emit())
 	bar.add_child(back)
 	var title := Label.new()
 	title.text = "战斗实验室"
 	title.add_theme_font_size_override("font_size", 22)
-	title.custom_minimum_size.x = 132.0
+	title.custom_minimum_size.x = 104.0
 	bar.add_child(title)
 	scenario_name_edit = LineEdit.new()
 	scenario_name_edit.placeholder_text = "场景名称"
-	scenario_name_edit.custom_minimum_size.x = 165.0
+	scenario_name_edit.custom_minimum_size.x = 126.0
 	bar.add_child(scenario_name_edit)
 	preset_option = OptionButton.new()
-	preset_option.custom_minimum_size.x = 132.0
+	preset_option.custom_minimum_size.x = 108.0
 	for index: int in PRESET_NAMES.size():
 		preset_option.add_item(PRESET_NAMES[index], index)
 	bar.add_child(preset_option)
@@ -149,15 +180,88 @@ func _build_top_bar() -> Control:
 	load_button.text = "载入配置"
 	load_button.pressed.connect(_load_saved_scenario)
 	bar.add_child(load_button)
+	player_drawer_button = _make_drawer_button("我方配置")
+	player_drawer_button.toggled.connect(func(open: bool) -> void: _set_drawer_open("player", open))
+	bar.add_child(player_drawer_button)
+	enemy_drawer_button = _make_drawer_button("敌方配置")
+	enemy_drawer_button.toggled.connect(func(open: bool) -> void: _set_drawer_open("enemy", open))
+	bar.add_child(enemy_drawer_button)
+	output_drawer_button = _make_drawer_button("日志与轨迹")
+	output_drawer_button.toggled.connect(func(open: bool) -> void: _set_drawer_open("output", open))
+	bar.add_child(output_drawer_button)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(spacer)
 	return bar
 
 
+func _make_drawer_button(label_text: String) -> Button:
+	var button := Button.new()
+	button.text = label_text
+	button.toggle_mode = true
+	return button
+
+
+func _build_drawers() -> void:
+	player_drawer = _build_side_editor("player", "我方阵容")
+	_configure_side_drawer(player_drawer, true)
+	add_child(player_drawer)
+	enemy_drawer = _build_side_editor("enemy", "敌方阵容")
+	_configure_side_drawer(enemy_drawer, false)
+	add_child(enemy_drawer)
+	output_drawer = _build_output_tabs()
+	output_drawer.anchor_left = 0.0
+	output_drawer.anchor_right = 1.0
+	output_drawer.anchor_top = 1.0
+	output_drawer.anchor_bottom = 1.0
+	output_drawer.offset_left = DRAWER_EDGE_MARGIN
+	output_drawer.offset_right = -DRAWER_EDGE_MARGIN
+	output_drawer.offset_top = -OUTPUT_DRAWER_HEIGHT - DRAWER_EDGE_MARGIN
+	output_drawer.offset_bottom = -DRAWER_EDGE_MARGIN
+	output_drawer.z_index = 2000
+	output_drawer.visible = false
+	add_child(output_drawer)
+
+
+func _configure_side_drawer(drawer: Control, on_left: bool) -> void:
+	drawer.anchor_left = 0.0 if on_left else 1.0
+	drawer.anchor_right = 0.0 if on_left else 1.0
+	drawer.anchor_top = 0.0
+	drawer.anchor_bottom = 1.0
+	if on_left:
+		drawer.offset_left = DRAWER_EDGE_MARGIN
+		drawer.offset_right = DRAWER_EDGE_MARGIN + SIDE_DRAWER_WIDTH
+	else:
+		drawer.offset_left = -DRAWER_EDGE_MARGIN - SIDE_DRAWER_WIDTH
+		drawer.offset_right = -DRAWER_EDGE_MARGIN
+	drawer.offset_top = DRAWER_TOP_OFFSET
+	drawer.offset_bottom = -DRAWER_EDGE_MARGIN
+	drawer.z_index = 2100
+	drawer.visible = false
+
+
+func _set_drawer_open(drawer_key: String, open: bool) -> void:
+	var drawer: Control
+	var button: Button
+	match drawer_key:
+		"player":
+			drawer = player_drawer
+			button = player_drawer_button
+		"enemy":
+			drawer = enemy_drawer
+			button = enemy_drawer_button
+		_:
+			drawer = output_drawer
+			button = output_drawer_button
+	if drawer != null:
+		drawer.visible = open
+	if button != null and button.button_pressed != open:
+		button.set_pressed_no_signal(open)
+
+
 func _build_side_editor(side_key: String, title_text: String) -> Control:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size.x = SIDE_PANEL_WIDTH
+	panel.custom_minimum_size.x = SIDE_DRAWER_WIDTH
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("19232d")
 	style.border_color = Color("425466")
@@ -202,11 +306,24 @@ func _build_side_editor(side_key: String, title_text: String) -> Control:
 		action_option.add_item(ACTION_NAMES[index], index)
 	layout.add_child(_labeled_row("行动方式", action_option))
 	var base_spin := _make_spin(0.0, 99.0, 1.0)
-	var cooldown_spin := _make_spin(0.5, 9.9, 0.1)
+	var cooldown_spin := _make_spin(
+		BattleRules.MINIMUM_COOLDOWN_SECONDS,
+		BattleRules.MAXIMUM_ACTION_INTERVAL_SECONDS,
+		0.1
+	)
 	layout.add_child(_double_spin_row("基础", base_spin, "冷却", cooldown_spin))
 	var health_spin := _make_spin(1.0, 999.0, 1.0)
 	var armor_spin := _make_spin(0.0, 999.0, 1.0)
 	layout.add_child(_double_spin_row("生命", health_spin, "护甲", armor_spin))
+	var effect_option := OptionButton.new()
+	for preset: Dictionary in BattleLabEffectLibrary.PRESETS:
+		effect_option.add_item(String(preset["name"]))
+	layout.add_child(_labeled_row("测试效果", effect_option))
+	var effect_description := Label.new()
+	effect_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	effect_description.custom_minimum_size.y = 34.0
+	effect_description.add_theme_color_override("font_color", Color("d9c878"))
+	layout.add_child(effect_description)
 
 	var rune_caption := Label.new()
 	rune_caption.text = "可见符文顺序（无会被压缩）"
@@ -241,6 +358,8 @@ func _build_side_editor(side_key: String, title_text: String) -> Control:
 		"cooldown": cooldown_spin,
 		"health": health_spin,
 		"armor": armor_spin,
+		"effect": effect_option,
+		"effect_description": effect_description,
 		"runes": rune_options,
 		"summary": summary,
 	}
@@ -252,6 +371,7 @@ func _build_side_editor(side_key: String, title_text: String) -> Control:
 	action_option.item_selected.connect(func(_value: int) -> void: _on_editor_changed(side_key))
 	for spin: SpinBox in [base_spin, cooldown_spin, health_spin, armor_spin]:
 		spin.value_changed.connect(func(_value: float) -> void: _on_editor_changed(side_key))
+	effect_option.item_selected.connect(func(_value: int) -> void: _on_editor_changed(side_key))
 	for option: OptionButton in rune_options:
 		option.item_selected.connect(func(_value: int) -> void: _on_editor_changed(side_key))
 	return panel
@@ -265,13 +385,14 @@ func _build_battle_observer() -> Control:
 	style.border_color = Color("695d37")
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(5)
-	style.set_content_margin_all(8.0)
+	style.set_content_margin_all(4.0)
 	panel.add_theme_stylebox_override("panel", style)
 	var layout := VBoxContainer.new()
-	layout.add_theme_constant_override("separation", 5)
+	layout.add_theme_constant_override("separation", 2)
 	panel.add_child(layout)
 
-	var setup_row := HBoxContainer.new()
+	var toolbar := HBoxContainer.new()
+	toolbar.add_theme_constant_override("separation", 4)
 	seed_spin = _make_spin(0.0, 999999999.0, 1.0)
 	seed_spin.custom_minimum_size.x = 118.0
 	max_batches_spin = _make_spin(1.0, 999.0, 1.0)
@@ -281,16 +402,14 @@ func _build_battle_observer() -> Control:
 	expected_option.add_item("预期我方胜利", BattleController.Result.PLAYER_VICTORY)
 	expected_option.add_item("预期我方失败", BattleController.Result.PLAYER_DEFEAT)
 	expected_option.add_item("预期平局", BattleController.Result.DRAW)
-	setup_row.add_child(_fixed_label("种子", 38.0))
-	setup_row.add_child(seed_spin)
-	setup_row.add_child(_fixed_label("批次上限", 64.0))
-	setup_row.add_child(max_batches_spin)
-	expected_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	setup_row.add_child(expected_option)
-	layout.add_child(setup_row)
+	toolbar.add_child(_fixed_label("种子", 38.0))
+	toolbar.add_child(seed_spin)
+	toolbar.add_child(_fixed_label("批次上限", 64.0))
+	toolbar.add_child(max_batches_spin)
+	expected_option.custom_minimum_size.x = 120.0
+	toolbar.add_child(expected_option)
 
-	var controls := HBoxContainer.new()
-	controls.add_theme_constant_override("separation", 5)
+	var controls := toolbar
 	for button_data: Dictionary in [
 		{"text": "开始", "call": _start_battle},
 		{"text": "重置同种子", "call": _start_battle},
@@ -320,18 +439,21 @@ func _build_battle_observer() -> Control:
 	matrix.text = "批量组合"
 	matrix.pressed.connect(_run_combination_matrix)
 	controls.add_child(matrix)
-	layout.add_child(controls)
 
 	status_label = Label.new()
 	status_label.text = "尚未开始"
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status_label.add_theme_font_size_override("font_size", 16)
-	layout.add_child(status_label)
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	controls.add_child(status_label)
 	validation_label = Label.new()
 	validation_label.text = "配置就绪"
 	validation_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	validation_label.add_theme_color_override("font_color", Color("9fd6ac"))
-	layout.add_child(validation_label)
+	validation_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	validation_label.visible = false
+	controls.add_child(validation_label)
+	layout.add_child(toolbar)
 
 	for row_key: String in ["enemy_back", "enemy_front", "player_front", "player_back"]:
 		var row_panel := PanelContainer.new()
@@ -339,7 +461,7 @@ func _build_battle_observer() -> Control:
 		var row_style := StyleBoxFlat.new()
 		row_style.bg_color = Color("1a2833") if row_key.begins_with("enemy") else Color("1b2d2a")
 		row_style.set_corner_radius_all(3)
-		row_style.set_content_margin_all(4.0)
+		row_style.set_content_margin_all(0.0)
 		row_panel.add_theme_stylebox_override("panel", row_style)
 		var row_layout := HBoxContainer.new()
 		row_layout.add_theme_constant_override("separation", 4)
@@ -361,7 +483,7 @@ func _build_battle_observer() -> Control:
 
 func _build_output_tabs() -> Control:
 	var tabs := TabContainer.new()
-	tabs.custom_minimum_size.y = 205.0
+	tabs.custom_minimum_size.y = OUTPUT_DRAWER_HEIGHT
 	battle_log_text = _make_output_text("结构化日志")
 	trace_text = _make_output_text("分层轨迹")
 	report_text = _make_output_text("自动校验")
@@ -430,6 +552,9 @@ func _load_editor(side_key: String) -> void:
 	(controls["cooldown"] as SpinBox).value = float(spec.get("cooldown", 2.0))
 	(controls["health"] as SpinBox).value = int(spec.get("health", 100))
 	(controls["armor"] as SpinBox).value = int(spec.get("armor", 0))
+	var effect_id := StringName(spec.get("effect_card", BattleLabEffectLibrary.NONE))
+	(controls["effect"] as OptionButton).select(BattleLabEffectLibrary.get_option_index(effect_id))
+	(controls["effect_description"] as Label).text = BattleLabEffectLibrary.get_description(effect_id)
 	var runes: Array = spec.get("runes", []) as Array
 	var rune_options := controls["runes"] as Array[OptionButton]
 	for index: int in rune_options.size():
@@ -458,6 +583,7 @@ func _commit_editor(side_key: String) -> void:
 		"cooldown": (controls["cooldown"] as SpinBox).value,
 		"health": roundi((controls["health"] as SpinBox).value),
 		"armor": roundi((controls["armor"] as SpinBox).value),
+		"effect_card": String(BattleLabEffectLibrary.get_preset_id((controls["effect"] as OptionButton).selected)),
 		"runes": runes,
 	}
 	_get_side_specs(side_key)[int(_selected_slot[side_key])] = spec
@@ -499,6 +625,8 @@ func _refresh_editor_summary(side_key: String) -> void:
 	for rune: CardData.ElementType in pattern.visible_runes:
 		rune_names.append(ELEMENT_NAMES[rune])
 	(controls["summary"] as Label).text = "牌型：%s　可见：%s　堆叠：%d 卡" % [pattern.get_pattern_name(), "".join(rune_names) if not rune_names.is_empty() else "无", squad.get_card_count()]
+	var effect_id := StringName(spec.get("effect_card", BattleLabEffectLibrary.NONE))
+	(controls["effect_description"] as Label).text = BattleLabEffectLibrary.get_description(effect_id)
 
 
 func _validate_current_scenario() -> bool:
@@ -507,9 +635,11 @@ func _validate_current_scenario() -> bool:
 	var errors := scenario.validate()
 	if errors.is_empty():
 		validation_label.text = "配置就绪：正式规则可运行"
+		validation_label.visible = false
 		validation_label.add_theme_color_override("font_color", Color("9fd6ac"))
 		return true
 	validation_label.text = "；".join(errors)
+	validation_label.visible = true
 	validation_label.add_theme_color_override("font_color", Color("f19a8a"))
 	return false
 
@@ -519,11 +649,14 @@ func _start_battle() -> void:
 	if not _validate_current_scenario():
 		return
 	_clear_outputs()
+	battle_controller.use_projectile_timing = true
+	battle_controller.set_battle_speed_multiplier(SPEED_VALUES[_speed_index])
 	battle_controller.start_battle(scenario.build_player_formation(), scenario.build_enemy_formation(), scenario.random_seed, false)
+	_register_effect_test_cards()
 	_playing = true
 	_paused = false
 	pause_button.text = "暂停"
-	_refresh_state_view()
+	_update_live_state_visuals()
 	_refresh_status()
 
 
@@ -533,6 +666,7 @@ func _toggle_pause() -> void:
 		return
 	_paused = not _paused
 	pause_button.text = "继续" if _paused else "暂停"
+	_set_effect_flights_paused(_paused)
 	_refresh_status()
 
 
@@ -542,8 +676,16 @@ func _step_batch() -> void:
 	_paused = true
 	pause_button.text = "继续"
 	if battle_controller.is_running():
-		battle_controller.resolve_next_batch()
-	_refresh_state_view()
+		var starting_batch := battle_controller.batch_count
+		var event_steps := 0
+		while (
+			battle_controller.is_running()
+			and battle_controller.batch_count == starting_batch
+			and event_steps < 8
+		):
+			battle_controller.resolve_next_batch()
+			event_steps += 1
+	_update_live_state_visuals()
 	_refresh_status()
 
 
@@ -552,6 +694,11 @@ func _cycle_speed() -> void:
 	speed_button.text = "速度 %d×" % int(SPEED_VALUES[_speed_index])
 	if scenario != null:
 		scenario.speed_multiplier = SPEED_VALUES[_speed_index]
+	if battle_controller != null:
+		battle_controller.set_battle_speed_multiplier(SPEED_VALUES[_speed_index])
+	if is_instance_valid(battle_effect_layer):
+		for child: Node in battle_effect_layer.get_children():
+			BattleAttackTrailRenderer.set_flight_speed(child, SPEED_VALUES[_speed_index])
 
 
 func _use_new_seed() -> void:
@@ -572,29 +719,34 @@ func _save_scenario() -> void:
 	var file := FileAccess.open(SCENARIO_SAVE_PATH, FileAccess.WRITE)
 	if file == null:
 		validation_label.text = "保存失败：无法写入用户目录"
+		validation_label.visible = true
 		return
 	file.store_string(JSON.stringify(scenario.to_dictionary(), "\t"))
 	validation_label.text = "已保存：%s" % SCENARIO_SAVE_PATH
+	validation_label.visible = true
 	validation_label.add_theme_color_override("font_color", Color("9fd6ac"))
 
 
 func _load_saved_scenario() -> void:
 	if not FileAccess.file_exists(SCENARIO_SAVE_PATH):
 		validation_label.text = "尚未保存过实验室配置"
+		validation_label.visible = true
 		return
 	var file := FileAccess.open(SCENARIO_SAVE_PATH, FileAccess.READ)
 	var parsed: Variant = JSON.parse_string(file.get_as_text()) if file != null else null
 	if not (parsed is Dictionary):
 		validation_label.text = "载入失败：配置文件格式无效"
+		validation_label.visible = true
 		return
 	scenario = BattleLabScenario.from_dictionary(parsed as Dictionary)
 	_load_scenario_into_controls()
 	_clear_outputs()
 	validation_label.text = "已载入：%s" % scenario.scenario_name
+	validation_label.visible = true
 
 
 func _on_states_changed() -> void:
-	_refresh_state_view()
+	_update_live_state_visuals()
 	_refresh_status()
 
 
@@ -611,13 +763,270 @@ func _on_effect_resolved(event: BattleEffectEvent) -> void:
 	_trace_lines.append(_format_trace_line(event))
 	_refresh_log_text()
 	trace_text.text = "\n".join(_trace_lines)
+	if _visuals_enabled and event.visual_kind in [&"fire_burn", &"fire_tick", &"fire_finish"]:
+		_play_effect_visual(event)
+
+
+func _on_action_resolved(
+	actor: BattleSquadState,
+	target: BattleSquadState,
+	action_type: CardData.ActionType,
+	amount: int
+) -> void:
+	if not _visuals_enabled:
+		return
+	var actor_slot := _battle_state_slots.get(actor) as BoardSlot
+	var target_slot := _battle_state_slots.get(target) as BoardSlot
+	var action_source := actor.get_action_source() if actor != null else null
+	var target_source := target.get_effect_source() if target != null else null
+	var action_name := action_source.get_action_type_name() if action_source != null else "行动"
+	var target_name := target_source.display_name if target_source != null else "目标"
+	if is_instance_valid(actor_slot):
+		actor_slot.show_battle_action("%s → %s  %d" % [action_name, target_name, amount])
+	if is_instance_valid(target_slot):
+		var target_text := (
+			"受到 %d" % amount
+			if action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
+			else "%s +%d" % [action_name, amount]
+		)
+		target_slot.show_battle_action(target_text, true)
+
+
+func _on_direct_damage_resolved(
+	state: BattleSquadState,
+	source_id: StringName,
+	amount: int
+) -> void:
+	if not _visuals_enabled:
+		return
+	var slot := _battle_state_slots.get(state) as BoardSlot
+	if not is_instance_valid(slot):
+		return
+	var source_name := "疲劳" if source_id == BattleRules.FATIGUE_BUFF_ID else String(source_id)
+	slot.show_battle_action("%s -%d" % [source_name, amount], true)
+
+
+func _on_projectile_launched(event: BattleEffectEvent) -> void:
+	if not _visuals_enabled or event == null or battle_controller == null:
+		return
+	var source_slot := _battle_state_slots.get(event.source) as BoardSlot
+	var target_slot := _battle_state_slots.get(event.target) as BoardSlot
+	if not is_instance_valid(target_slot) or not is_instance_valid(battle_effect_layer):
+		return
+	var visual_source_slot := source_slot
+	if not event.is_base_action and event.visual_kind != &"dark_repeat":
+		var anchor_slot := _battle_state_slots.get(event.anchor) as BoardSlot
+		if is_instance_valid(anchor_slot):
+			visual_source_slot = anchor_slot
+	if not is_instance_valid(visual_source_slot):
+		return
+	if event.is_base_action:
+		visual_source_slot.play_battle_action_lift(battle_controller.battle_speed_multiplier)
+	var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
+	var from_local := inverse * visual_source_slot.get_global_rect().get_center()
+	var to_local := inverse * target_slot.get_global_rect().get_center()
+	var points := PackedVector2Array([from_local, to_local])
+	if visual_source_slot == target_slot:
+		points = PackedVector2Array([
+			from_local + Vector2(-18.0, 4.0),
+			from_local + Vector2(0.0, -54.0),
+			to_local,
+		])
+	if event.visual_kind == &"dark_repeat":
+		var delta := to_local - from_local
+		var normal := Vector2(-delta.y, delta.x).normalized() if not delta.is_zero_approx() else Vector2.UP
+		var curve_offset := 28.0 + float(event.sequence_index) * 9.0
+		var curve_direction := -1.0 if event.sequence_index % 2 == 1 else 1.0
+		points = PackedVector2Array([
+			from_local,
+			(from_local + to_local) * 0.5 + normal * curve_offset * curve_direction,
+			to_local,
+		])
+	var visual_kind := event.visual_kind if event.visual_kind != &"" else _action_visual_kind(event.action_type)
+	var colors := _attack_element_colors(event.source) if event.is_base_action else {
+		"head": _element_attack_color(event.element_type),
+		"tail": _element_attack_color(event.element_type),
+	}
+	BattleAttackTrailRenderer.play(
+		battle_effect_layer,
+		points,
+		BattleAttackEffectProfiles.get_profile(visual_kind),
+		colors["head"],
+		colors["tail"],
+		func() -> void: _play_element_impact(to_local, visual_kind, colors["head"]),
+		battle_controller.battle_speed_multiplier,
+		event.projectile_speed_variant,
+		event.projectile_impact_delay
+	)
+
+
+func _play_effect_visual(event: BattleEffectEvent) -> void:
+	if event == null or not is_instance_valid(battle_effect_layer):
+		return
+	var target_slot := _battle_state_slots.get(event.target) as BoardSlot
+	if not is_instance_valid(target_slot):
+		return
+	var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
+	var global_rect := target_slot.get_global_rect()
+	var flash := ColorRect.new()
+	flash.name = "ElementFlash"
+	flash.position = inverse * global_rect.position
+	flash.size = global_rect.size
+	flash.pivot_offset = flash.size * 0.5
+	flash.scale = Vector2(0.88, 0.88)
+	flash.color = _effect_visual_color(event.visual_kind)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	battle_effect_layer.add_child(flash)
+	var tween := flash.create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(flash, "scale", Vector2(1.04, 1.04), EFFECT_FLASH_SECONDS)
+	tween.tween_property(flash, "modulate:a", 0.0, EFFECT_FLASH_SECONDS)
+	tween.set_parallel(false)
+	tween.tween_callback(flash.queue_free)
+	_play_element_impact(inverse * global_rect.get_center(), event.visual_kind)
+
+
+func _action_visual_kind(action_type: CardData.ActionType) -> StringName:
+	match action_type:
+		CardData.ActionType.RANGED: return &"ranged_attack"
+		CardData.ActionType.MAGIC: return &"magic_attack"
+		CardData.ActionType.HEAL: return &"heal_action"
+		CardData.ActionType.DEFENSE: return &"defense_action"
+		_: return &"melee_attack"
+
+
+func _attack_element_colors(actor: BattleSquadState) -> Dictionary:
+	var result := {"head": EFFECT_COLOR_NONE, "tail": EFFECT_COLOR_NONE}
+	if actor == null or actor.squad_data == null:
+		return result
+	var groups := BattleElementResolver.get_element_groups(actor.squad_data.get_rune_pattern_result())
+	if groups.is_empty():
+		return result
+	result["head"] = _element_attack_color(int(groups[0]["element"]))
+	result["tail"] = (
+		_element_attack_color(int(groups[1]["element"]))
+		if groups.size() >= 2
+		else result["head"]
+	)
+	return result
+
+
+func _element_attack_color(element_type: int) -> Color:
+	match element_type:
+		CardData.ElementType.LIGHT: return EFFECT_COLOR_LIGHT
+		CardData.ElementType.DARK: return EFFECT_COLOR_DARK
+		CardData.ElementType.FIRE: return EFFECT_COLOR_FIRE
+		CardData.ElementType.WATER: return EFFECT_COLOR_WATER
+		CardData.ElementType.WOOD: return EFFECT_COLOR_WOOD
+		_: return EFFECT_COLOR_NONE
+
+
+func _play_element_impact(
+	center: Vector2,
+	kind: StringName,
+	color_override: Color = Color.TRANSPARENT
+) -> void:
+	if not is_instance_valid(battle_effect_layer):
+		return
+	var pulse := Node2D.new()
+	pulse.name = "ElementImpact"
+	pulse.position = center
+	pulse.scale = Vector2(0.55, 0.55)
+	var diamond := Line2D.new()
+	diamond.width = 3.0
+	diamond.default_color = color_override if color_override.a > 0.0 else _effect_visual_color(kind)
+	diamond.closed = true
+	diamond.antialiased = false
+	diamond.points = PackedVector2Array([
+		Vector2(0.0, -EFFECT_IMPACT_RADIUS.y),
+		Vector2(EFFECT_IMPACT_RADIUS.x, 0.0),
+		Vector2(0.0, EFFECT_IMPACT_RADIUS.y),
+		Vector2(-EFFECT_IMPACT_RADIUS.x, 0.0),
+	])
+	pulse.add_child(diamond)
+	battle_effect_layer.add_child(pulse)
+	var tween := pulse.create_tween()
+	tween.set_parallel(true)
+	var duration := float(BattleAttackEffectProfiles.get_profile(kind)["duration"])
+	tween.tween_property(pulse, "scale", Vector2(1.2, 1.2), duration)
+	tween.tween_property(pulse, "modulate:a", 0.0, duration)
+	tween.set_parallel(false)
+	tween.tween_callback(pulse.queue_free)
+
+
+func _effect_visual_color(kind: StringName) -> Color:
+	match kind:
+		&"melee_attack": return Color(1.0, 0.30, 0.12, 0.96)
+		&"ranged_attack": return Color(1.0, 0.72, 0.18, 0.96)
+		&"magic_attack": return Color(0.36, 0.52, 1.0, 0.96)
+		&"water_spread": return Color(0.20, 0.72, 1.0, 0.96)
+		&"dark_repeat": return Color(0.72, 0.30, 1.0, 0.96)
+		&"wood_pierce": return Color(0.32, 1.0, 0.40, 0.96)
+		&"light_reflect": return Color(1.0, 0.96, 0.52, 1.0)
+		&"fire_finish": return Color(1.0, 0.88, 0.42, 0.68)
+		_: return Color(1.0, 0.32, 0.12, 0.48)
+
+
+func _set_effect_flights_paused(paused: bool) -> void:
+	if not is_instance_valid(battle_effect_layer):
+		return
+	for child: Node in battle_effect_layer.get_children():
+		BattleAttackTrailRenderer.set_flight_paused(child, paused)
+
+
+func _on_effect_trace_emitted(entry: BattleEffectTraceEntry) -> void:
+	var source_name := _runtime_state_name(entry.source_runtime_id)
+	var target_name := _runtime_state_name(entry.target_runtime_id)
+	_trace_lines.append("[效果][t=%.3f] %s → %s　%s/%s　%s" % [
+		BattleEventQueue.us_to_seconds(entry.logical_time_us),
+		source_name,
+		target_name,
+		entry.effect_id,
+		entry.phase,
+		entry.result if entry.detail.is_empty() else "%s（%s）" % [entry.result, entry.detail],
+	])
+	trace_text.text = "\n".join(_trace_lines)
+
+
+func _register_effect_test_cards() -> void:
+	for side_key: String in ["player", "enemy"]:
+		var specs := _get_side_specs(side_key)
+		var states := battle_controller.player_states if side_key == "player" else battle_controller.enemy_states
+		var state_index := 0
+		for spec: Dictionary in specs:
+			if not bool(spec.get("enabled", false)):
+				continue
+			if state_index >= states.size():
+				break
+			var source := states[state_index] as BattleSquadState
+			var preset_id := StringName(spec.get("effect_card", BattleLabEffectLibrary.NONE))
+			for definition: BattleEffectDefinition in BattleLabEffectLibrary.create_definitions(preset_id):
+				battle_controller.effect_runtime.register_definition(
+					definition,
+					BattleEffectOwnerRef.for_state(source, BattleEffectDefinition.OwnerKind.MINION_CARD_INSTANCE)
+				)
+			state_index += 1
+	if battle_controller.effect_runtime.bindings.is_empty():
+		return
+	battle_controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+	battle_controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS)
+	battle_controller.effect_runtime.process_due(battle_controller.elapsed_seconds)
+
+
+func _runtime_state_name(runtime_id: int) -> String:
+	if runtime_id <= 0:
+		return "系统"
+	for state: BattleSquadState in battle_controller.get_all_states():
+		if state.runtime_id == runtime_id:
+			return state.get_action_source().display_name
+	return "#%d" % runtime_id
 
 
 func _on_battle_finished(_result: BattleController.Result) -> void:
 	_playing = false
 	_paused = true
 	pause_button.text = "继续"
-	_refresh_state_view()
+	_update_live_state_visuals()
 	_refresh_status()
 
 
@@ -637,6 +1046,7 @@ func _refresh_status() -> void:
 
 
 func _refresh_state_view() -> void:
+	_battle_state_slots.clear()
 	for row_value: Variant in state_rows.values():
 		_clear_children(row_value as Control)
 	if scenario == null:
@@ -679,22 +1089,77 @@ func _make_squad_visual(squad: SquadData, state: BattleSquadState = null) -> Con
 	wrapper.add_child(slot)
 	if state == null:
 		wrapper.tooltip_text = _format_configuration_tooltip(squad)
+		var action_source := squad.get_action_source()
+		var vitals_source := squad.get_vitals_source()
+		var preview_cooldown := float(action_source.get_meta(
+			"battle_lab_cooldown_seconds",
+			action_source.cooldown_seconds
+		))
+		slot.call_deferred(
+			"set_battle_status",
+			vitals_source.max_health,
+			vitals_source.armor,
+			preview_cooldown,
+			0,
+			action_source.base_value
+		)
 		return wrapper
+	_battle_state_slots[state] = slot
 	var continuous_count := 0
 	for status: Dictionary in battle_controller.active_continuous_effects:
 		if status.get("target") == state:
 			continuous_count += 1
+	var runtime_effect_count := 0
+	for instance: BattleEffectInstance in battle_controller.effect_runtime.active_instances:
+		if instance.active and instance.target == state:
+			runtime_effect_count += 1
 	wrapper.tooltip_text = _format_state_tooltip(state, continuous_count)
+	wrapper.tooltip_text += "\nD2-3实例 %d　热诚 %d　强化 %.1f" % [runtime_effect_count, state.get_zeal_layers(), state.modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT)]
 	if not state.alive:
 		slot.modulate = Color(1.0, 0.42, 0.42, 0.62)
-	slot.call_deferred("set_battle_status", state.displayed_health, state.displayed_armor, state.remaining_cooldown, state.get_buff_stacks(BattleRules.FATIGUE_BUFF_ID))
+	slot.call_deferred(
+		"set_battle_status",
+		state.displayed_health,
+		state.displayed_armor,
+		state.remaining_cooldown,
+		state.get_buff_stacks(BattleRules.FATIGUE_BUFF_ID),
+		state.get_display_action_value()
+	)
 	return wrapper
+
+
+func _update_live_state_visuals() -> void:
+	if battle_controller == null:
+		return
+	var states := battle_controller.get_all_states()
+	if states.is_empty():
+		_refresh_state_view()
+		return
+	if _battle_state_slots.size() != states.size():
+		_refresh_state_view()
+		return
+	for state: BattleSquadState in states:
+		var slot := _battle_state_slots.get(state) as BoardSlot
+		if not is_instance_valid(slot):
+			_refresh_state_view()
+			return
+		slot.set_battle_status(
+			state.displayed_health,
+			state.displayed_armor,
+			state.remaining_cooldown,
+			state.get_buff_stacks(BattleRules.FATIGUE_BUFF_ID),
+			state.get_display_action_value()
+		)
 
 
 func _format_configuration_tooltip(squad: SquadData) -> String:
 	var action_source := squad.get_action_source()
 	var vitals_source := squad.get_vitals_source()
-	return "%s｜%s｜%d 卡｜实际宽度 %d\n基础 %d　冷却 %.1f　生命 %d　护甲 %d" % [action_source.display_name, ACTION_NAMES[action_source.action_type], squad.get_card_count(), squad.get_display_width(), action_source.base_value, action_source.cooldown_seconds, vitals_source.max_health, vitals_source.armor]
+	var preview_cooldown := float(action_source.get_meta(
+		"battle_lab_cooldown_seconds",
+		action_source.cooldown_seconds
+	))
+	return "%s｜%s｜%d 卡｜实际宽度 %d\n基础 %d　冷却 %.1f　生命 %d　护甲 %d\n测试效果：%s" % [action_source.display_name, ACTION_NAMES[action_source.action_type], squad.get_card_count(), squad.get_display_width(), action_source.base_value, preview_cooldown, vitals_source.max_health, vitals_source.armor, action_source.effect_text]
 
 
 func _format_state_tooltip(state: BattleSquadState, continuous_count: int) -> String:
@@ -718,19 +1183,28 @@ func _run_assertion() -> void:
 	if not _playing:
 		return
 	_paused = true
-	var executed := 0
-	while battle_controller.is_running() and executed < scenario.max_batches:
+	_visuals_enabled = false
+	var event_steps := 0
+	var maximum_event_steps := scenario.max_batches * 8
+	while (
+		battle_controller.is_running()
+		and battle_controller.batch_count < scenario.max_batches
+		and event_steps < maximum_event_steps
+	):
 		battle_controller.resolve_next_batch()
-		executed += 1
+		event_steps += 1
 	var problems := _collect_invariant_problems(battle_controller)
-	if battle_controller.is_running():
+	if battle_controller.is_running() and battle_controller.batch_count >= scenario.max_batches:
 		problems.append("达到 %d 批次上限后仍未结束" % scenario.max_batches)
+	elif battle_controller.is_running():
+		problems.append("弹道事件步数异常：%d" % event_steps)
 	if scenario.expected_result >= 0 and battle_controller.current_result != scenario.expected_result:
 		problems.append("预期%s，实际%s" % [_result_name(scenario.expected_result), _result_name(battle_controller.current_result)])
 	var heading := "[color=#9fd6ac]PASS[/color]" if problems.is_empty() else "[color=#f19a8a]FAIL[/color]"
-	report_text.text = "%s　%s\n执行批次：%d　最终时间：%.2f\n%s" % [heading, scenario.scenario_name, executed, battle_controller.elapsed_seconds, "未发现状态异常" if problems.is_empty() else "\n".join(problems)]
+	report_text.text = "%s　%s\n执行批次：%d　最终时间：%.2f\n%s" % [heading, scenario.scenario_name, battle_controller.batch_count, battle_controller.elapsed_seconds, "未发现状态异常" if problems.is_empty() else "\n".join(problems)]
 	_playing = false
-	_refresh_state_view()
+	_visuals_enabled = true
+	_update_live_state_visuals()
 	_refresh_status()
 
 
@@ -815,6 +1289,9 @@ func _clear_outputs() -> void:
 	trace_text.text = ""
 	report_text.text = ""
 	formula_popup.visible = false
+	if is_instance_valid(battle_effect_layer):
+		for child: Node in battle_effect_layer.get_children():
+			child.queue_free()
 
 
 func _format_trace_line(event: BattleEffectEvent) -> String:

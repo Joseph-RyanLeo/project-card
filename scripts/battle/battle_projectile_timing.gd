@@ -11,7 +11,7 @@ enum TravelSpeedVariant {
 }
 
 const TRAVEL_SPEED_VARIANT_COUNT: int = 3
-const SOLVER_STEPS: int = 24 # 二分求解命中时刻的迭代次数，越高越接近视觉曲线
+const SOLVER_STEPS: int = 26 # 二分求解命中时刻的迭代次数，越高越接近视觉曲线
 
 
 static func remap_travel_progress(

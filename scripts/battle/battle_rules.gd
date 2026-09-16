@@ -5,6 +5,10 @@ extends RefCounted
 
 const MINIMUM_COOLDOWN_SECONDS: float = CardData.MINIMUM_COOLDOWN_SECONDS # 所有基础值和后续冷却修正结算后的最低有效冷却（秒）
 const MAXIMUM_COOLDOWN_SECONDS: float = CardData.MAXIMUM_COOLDOWN_SECONDS # 所有基础值和后续冷却修正结算后的最高有效冷却（秒）
+const ZEAL_SPEED_PER_LAYER: float = 0.05 # 每层热诚提供的普通行动冷却速度
+const MINIMUM_ACTION_SPEED: float = 0.30 # 汇总全部热诚后允许的最低普通行动速度
+const MINIMUM_ACTION_INTERVAL_SECONDS: float = 0.5 # 热诚结算后的普通行动最短间隔
+const MAXIMUM_ACTION_INTERVAL_SECONDS: float = 99.0 # 热诚结算后的普通行动最长间隔
 const FATIGUE_BUFF_ID: StringName = &"fatigue" # 疲劳在统一战斗 Buff 容器中的稳定标识
 const FATIGUE_START_SECONDS: float = 30.0 # 战斗经过多少秒后首次获得疲劳并立即承受疲劳伤害
 const FATIGUE_STACK_INTERVAL_SECONDS: float = 2.0 # 疲劳开始后每隔多少秒增加一层
@@ -126,6 +130,31 @@ static func get_effective_cooldown(cooldown_seconds: float) -> float:
 		MINIMUM_COOLDOWN_SECONDS,
 		MAXIMUM_COOLDOWN_SECONDS
 	)
+
+
+static func get_action_speed(zeal_layers: int) -> float:
+	return maxf(MINIMUM_ACTION_SPEED, 1.0 + float(zeal_layers) * ZEAL_SPEED_PER_LAYER)
+
+
+static func get_action_interval(
+	cooldown_seconds: float,
+	zeal_layers: int = 0,
+	maximum_base_cooldown: float = MAXIMUM_COOLDOWN_SECONDS
+) -> float:
+	# 正式卡牌仍受9.9秒基础冷却上限约束；实验室可显式放宽到实际行动间隔上限99秒。
+	var base_cooldown := clampf(cooldown_seconds, MINIMUM_COOLDOWN_SECONDS, maximum_base_cooldown)
+	return clampf(
+		base_cooldown / get_action_speed(zeal_layers),
+		MINIMUM_ACTION_INTERVAL_SECONDS,
+		MAXIMUM_ACTION_INTERVAL_SECONDS
+	)
+
+
+static func format_action_cooldown(cooldown_seconds: float) -> String:
+	# 卡面达到10秒后舍去小数；只改变显示，不改变逻辑计时。
+	if cooldown_seconds >= 10.0:
+		return str(floori(cooldown_seconds))
+	return String.num(cooldown_seconds, 1)
 
 
 static func calculate_exact_action_amount(
