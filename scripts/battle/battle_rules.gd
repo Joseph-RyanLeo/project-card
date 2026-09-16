@@ -14,6 +14,12 @@ const LOGICAL_ROW_WIDTH: float = 832.0 # 每排用于投影、邻接和遮挡的
 const LOGICAL_SQUAD_GAP: float = 18.0 # 逻辑小队之间的固定间距，不能读取动画坐标
 const FRONT_COVER_THRESHOLD: float = 0.5 # 后排宽度被前排实体覆盖超过该比例才降低权重
 
+const ATTACK_TYPE_MULTIPLIERS: Dictionary = {
+	CardData.ActionType.MELEE: {"armored": 0.7, "unarmored": 1.5},
+	CardData.ActionType.RANGED: {"armored": 1.3, "unarmored": 0.8},
+	CardData.ActionType.MAGIC: {"armored": 1.2, "unarmored": 1.2},
+} # 近战、远程、法术在命中前有甲／无甲时的整体伤害倍率
+
 const BASE_ELEMENT_EFFECTS: Dictionary = {
 	CardData.ElementType.FIRE: {"enabled": false, "action_value_per_rune": 0.0, "benefit_target": &"leftmost"},
 	CardData.ElementType.WATER: {"enabled": false, "cooldown_ratio_per_rune": 0.0, "benefit_target": &"leftmost"},
@@ -89,6 +95,16 @@ const PATTERN_MULTIPLIERS: Dictionary = {
 
 static func get_pattern_multiplier(pattern_type: RunePatternResult.PatternType) -> float:
 	return float(PATTERN_MULTIPLIERS.get(pattern_type, 1.0))
+
+
+static func get_attack_type_multiplier(
+	action_type: CardData.ActionType,
+	target_has_armor: bool
+) -> float:
+	var config := ATTACK_TYPE_MULTIPLIERS.get(action_type, {}) as Dictionary
+	if config.is_empty():
+		return 1.0
+	return float(config["armored" if target_has_armor else "unarmored"])
 
 
 static func calculate_action_amount(

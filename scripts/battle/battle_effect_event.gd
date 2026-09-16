@@ -25,6 +25,14 @@ var is_base_action: bool = false
 var is_continuous: bool = false
 var is_finisher: bool = false
 var can_trigger_element_chain: bool = true
+var missed: bool = false
+var uses_attack_type_multiplier: bool = false
+var attack_type_multiplier: float = 1.0
+var target_had_armor_on_impact: bool = false
+var launch_sequence: int = -1
+var projectile_speed_variant: int = 0
+var projectile_impact_delay: float = 0.0
+var impact_time: float = 0.0
 var formula: BattleFormulaData
 var visual_kind: StringName = &""
 var log_qualifier: String = ""

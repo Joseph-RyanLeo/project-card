@@ -6,6 +6,7 @@ const BattleController = preload("res://scripts/battle/battle_controller.gd")
 const BattleSquadState = preload("res://scripts/battle/battle_squad_state.gd")
 const BattleEffectEvent = preload("res://scripts/battle/battle_effect_event.gd")
 const BattleFormulaData = preload("res://scripts/battle/battle_formula_data.gd")
+const BattleFormulaPresenter = preload("res://scripts/battle/battle_formula_presenter.gd")
 const BattleLogEntry = preload("res://scripts/battle/battle_log_entry.gd")
 const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
 const BattleAttackTrailRenderer = preload("res://scripts/battle/battle_attack_trail_renderer.gd")
@@ -25,6 +26,10 @@ func _run() -> void:
 	BattleAttackEffectProfiles.reload(false)
 	_test_config_and_element_groups()
 	_test_precise_channels_and_attribution()
+	await _test_attack_type_multipliers_and_formula()
+	await _test_projectile_timed_resolution()
+	await _test_projectile_clock_determinism()
+	await _test_healing_ratio_target()
 	await _test_all_element_tiers()
 	await _test_all_action_modes()
 	await _test_straight_and_same_element_two_pair()
@@ -148,7 +153,7 @@ func _test_straight_and_same_element_two_pair() -> void:
 	same_pair.resolve_next_batch()
 	_expect(
 		same_pair_base.size() == 1
-		and is_equal_approx(same_pair_base[0].exact_amount, 20.0)
+		and is_equal_approx(same_pair_base[0].exact_amount, 30.0)
 		and same_pair.active_continuous_effects.size() == 1
 		and int(same_pair.active_continuous_effects[0]["ticks_remaining"]) == 3
 		and is_equal_approx(float(same_pair.active_continuous_effects[0]["element_multiplier"]), 0.20),
@@ -219,13 +224,224 @@ func _test_fire_independent_statuses() -> void:
 	kill_target.current_health = 0.1
 	kill_target.displayed_health = 1
 	controller.advance_time(1.0)
-	_expect(not kill_events.is_empty() and kill_events[0][0] == source, "DOT来源死亡后仍由原施加卡取得击杀归属")
+	_expect(kill_events.is_empty(), "DOT来源在荣耀判定前已死亡时不取得击杀归属")
 	for status: Dictionary in controller.active_continuous_effects:
 		var target := status["target"] as BattleSquadState
 		target.current_health = 0
 		target.alive = false
 	controller.advance_time(1.0)
 	_expect(controller.active_continuous_effects.is_empty(), "五火目标提前死亡时剩余DOT与终结全部取消")
+	await _dispose(controller)
+
+
+func _test_projectile_timed_resolution() -> void:
+	var controller := BattleController.new()
+	test_root.add_child(controller)
+	controller.use_projectile_timing = true
+	var players: Array[Dictionary] = [
+		_entry(_single_squad(CardData.ActionType.MELEE, 3, 20, 0, 1.0), &"player_front", 0),
+		_entry(_single_squad(CardData.ActionType.MELEE, 4, 20, 0, 1.0), &"player_front", 1),
+	]
+	var enemies: Array[Dictionary] = [
+		_entry(_single_squad(CardData.ActionType.HEAL, 5, 20, 2, 9.9), &"enemy_front", 0),
+	]
+	var launches: Array[BattleEffectEvent] = []
+	var resolved_attacks: Array[BattleEffectEvent] = []
+	controller.projectile_launched.connect(func(event: BattleEffectEvent) -> void: launches.append(event))
+	controller.effect_resolved.connect(func(event: BattleEffectEvent) -> void:
+		if event.is_base_action and event.effect_kind == BattleEffectEvent.EffectKind.DAMAGE:
+			resolved_attacks.append(event)
+	)
+	controller.start_battle(players, enemies, 8251, false)
+	controller.resolve_next_batch()
+	_expect(
+		launches.size() == 2
+		and controller.enemy_states[0].current_health == 20
+		and controller.enemy_states[0].current_armor == 2
+		and controller.batch_count == 0
+		and is_equal_approx(controller.player_states[0].remaining_cooldown, 1.0),
+		"同冷却行动同时发射且发射时重置冷却，弹道到达前不写入数值"
+	)
+	var common_impact_time := controller.elapsed_seconds + 0.25
+	for event: BattleEffectEvent in launches:
+		event.impact_time = common_impact_time
+	controller.advance_time(0.24)
+	_expect(
+		is_equal_approx(controller.elapsed_seconds, 1.24)
+		and is_equal_approx(controller.player_states[0].remaining_cooldown, 0.76)
+		and controller.enemy_states[0].current_health == 20,
+		"弹道飞行期间战斗时钟与已重置冷却继续推进，但数值仍等待命中"
+	)
+	controller.advance_time(0.01)
+	_expect(
+		is_equal_approx(float(controller.enemy_states[0].current_armor), 0.0)
+		and is_equal_approx(float(controller.enemy_states[0].current_health), 13.9)
+		and resolved_attacks.size() == 2
+		and resolved_attacks[0].launch_sequence < resolved_attacks[1].launch_sequence
+		and is_equal_approx(resolved_attacks[0].attack_type_multiplier, 0.7)
+		and is_equal_approx(resolved_attacks[1].attack_type_multiplier, 1.5),
+		"同刻命中按发射序号结算：第一击读取有甲并打空，第二击重新读取无甲"
+	)
+	await _dispose(controller)
+
+
+func _test_projectile_clock_determinism() -> void:
+	var controllers: Array[BattleController] = []
+	var launch_sets: Array[Array] = []
+	var resolution_sets: Array[Array] = []
+	for _run_index: int in 3:
+		var controller := BattleController.new()
+		test_root.add_child(controller)
+		controller.use_projectile_timing = true
+		var launches: Array[BattleEffectEvent] = []
+		var resolutions: Array[BattleEffectEvent] = []
+		controller.projectile_launched.connect(
+			func(event: BattleEffectEvent) -> void: launches.append(event)
+		)
+		controller.effect_resolved.connect(
+			func(event: BattleEffectEvent) -> void:
+				if event.is_base_action:
+					resolutions.append(event)
+		)
+		controller.start_battle(
+			[
+				_entry(_single_squad(CardData.ActionType.MELEE, 3, 20, 0, 1.0), &"player_front", 0),
+				_entry(_single_squad(CardData.ActionType.RANGED, 4, 20, 0, 1.0), &"player_back", 0),
+			],
+			[_entry(_single_squad(CardData.ActionType.HEAL, 1, 30, 2, 9.9), &"enemy_front", 0)],
+			8351,
+			false
+		)
+		controller.resolve_next_batch()
+		controllers.append(controller)
+		launch_sets.append(launches)
+		resolution_sets.append(resolutions)
+
+	var launch_timing_matches := true
+	for run_index: int in range(1, controllers.size()):
+		if launch_sets[run_index].size() != launch_sets[0].size():
+			launch_timing_matches = false
+			continue
+		for event_index: int in launch_sets[0].size():
+			var baseline := launch_sets[0][event_index] as BattleEffectEvent
+			var comparison := launch_sets[run_index][event_index] as BattleEffectEvent
+			launch_timing_matches = (
+				launch_timing_matches
+				and baseline.launch_sequence == comparison.launch_sequence
+				and baseline.projectile_speed_variant == comparison.projectile_speed_variant
+				and is_equal_approx(baseline.impact_time, comparison.impact_time)
+			)
+	_expect(launch_timing_matches, "相同战前输入与种子生成相同弹道变体、发射序号和逻辑命中时刻")
+
+	var final_impact_time := controllers[0].elapsed_seconds
+	for event: BattleEffectEvent in launch_sets[0]:
+		final_impact_time = maxf(final_impact_time, event.impact_time)
+	var flight_time := final_impact_time - controllers[0].elapsed_seconds + 0.001
+	controllers[0].advance_time(flight_time)
+
+	var paused_time := controllers[1].elapsed_seconds
+	var paused_health := float(controllers[1].enemy_states[0].current_health)
+	await process_frame
+	await process_frame
+	var stayed_paused := (
+		is_equal_approx(controllers[1].elapsed_seconds, paused_time)
+		and is_equal_approx(float(controllers[1].enemy_states[0].current_health), paused_health)
+	)
+	controllers[1].advance_time(flight_time * 0.25)
+	controllers[1].advance_time(flight_time * 0.75)
+
+	controllers[2].set_battle_speed_multiplier(2.0)
+	controllers[2]._process(flight_time * 0.5)
+	var final_state_matches := stayed_paused
+	for run_index: int in range(1, controllers.size()):
+		final_state_matches = (
+			final_state_matches
+			and is_equal_approx(
+				float(controllers[run_index].enemy_states[0].current_health),
+				float(controllers[0].enemy_states[0].current_health)
+			)
+			and is_equal_approx(
+				float(controllers[run_index].enemy_states[0].current_armor),
+				float(controllers[0].enemy_states[0].current_armor)
+			)
+			and resolution_sets[run_index].size() == resolution_sets[0].size()
+		)
+		for event_index: int in mini(
+			resolution_sets[run_index].size(),
+			resolution_sets[0].size()
+		):
+			final_state_matches = (
+				final_state_matches
+				and (resolution_sets[run_index][event_index] as BattleEffectEvent).launch_sequence
+				== (resolution_sets[0][event_index] as BattleEffectEvent).launch_sequence
+			)
+	_expect(
+		final_state_matches,
+		"暂停不推进逻辑；拆帧与 2× 现实时间换算不改变命中顺序和最终数值"
+	)
+	for controller: BattleController in controllers:
+		await _dispose(controller)
+
+
+func _test_attack_type_multipliers_and_formula() -> void:
+	var attack_types: Array[int] = [
+		CardData.ActionType.MELEE,
+		CardData.ActionType.RANGED,
+		CardData.ActionType.MAGIC,
+	]
+	var armored_multipliers: Array[float] = [0.7, 1.3, 1.2]
+	var unarmored_multipliers: Array[float] = [1.5, 0.8, 1.2]
+	for attack_index: int in attack_types.size():
+		for starting_armor: int in [0, 2]:
+			var controller := BattleController.new()
+			test_root.add_child(controller)
+			var events: Array[BattleEffectEvent] = []
+			controller.effect_resolved.connect(func(event: BattleEffectEvent) -> void:
+				if event.is_base_action:
+					events.append(event)
+			)
+			controller.start_battle(
+				[_entry(_single_squad(attack_types[attack_index], 10, 20, 0, 1.0), &"player_front", 0)],
+				[_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, starting_armor, 9.9), &"enemy_front", 0)],
+				8300 + attack_index * 10 + starting_armor,
+				false
+			)
+			controller.resolve_next_batch()
+			var expected_multiplier := armored_multipliers[attack_index] if starting_armor > 0 else unarmored_multipliers[attack_index]
+			var expected_amount := 10.0 * expected_multiplier
+			var popup := BattleFormulaPresenter.format_popup(events[0].formula) if not events.is_empty() else ""
+			_expect(
+				events.size() == 1
+				and is_equal_approx(events[0].exact_amount, expected_amount)
+				and is_equal_approx(events[0].attack_type_multiplier, expected_multiplier)
+				and popup.contains("攻击类型（%s）" % ("有护甲" if starting_armor > 0 else "无护甲"))
+				and popup.contains("×%s" % BattleLogEntry.format_number(expected_multiplier)),
+				"攻击类型有甲／无甲倍率进入精确伤害与可解释公式"
+			)
+			await _dispose(controller)
+
+
+func _test_healing_ratio_target() -> void:
+	var controller := BattleController.new()
+	test_root.add_child(controller)
+	var players: Array[Dictionary] = [
+		_entry(_single_squad(CardData.ActionType.HEAL, 2, 20, 0, 1.0), &"player_front", 0),
+		_entry(_single_squad(CardData.ActionType.MELEE, 1, 10, 0, 9.0), &"player_front", 1),
+		_entry(_single_squad(CardData.ActionType.MELEE, 1, 20, 0, 9.0), &"player_front", 2),
+	]
+	var enemies: Array[Dictionary] = [
+		_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.0), &"enemy_front", 0),
+	]
+	controller.start_battle(players, enemies, 8252, false)
+	controller.player_states[1].current_health = 2
+	controller.player_states[2].current_health = 5
+	var healed_targets: Array[BattleSquadState] = []
+	controller.action_resolved.connect(func(_actor, target, action_type, _amount) -> void:
+		if action_type == CardData.ActionType.HEAL:
+			healed_targets.append(target)
+	)
+	controller.resolve_next_batch()
+	_expect(not healed_targets.is_empty() and healed_targets[0] == controller.player_states[1], "治疗优先选择已损失生命值百分比最高的友军")
 	await _dispose(controller)
 
 
@@ -239,7 +455,7 @@ func _test_water_dark_light_wood_targets() -> void:
 	_expect(water_targets.size() <= 4 and water_targets.duplicate().all(func(value): return water_targets.count(value) == 1), "五水左右各最多两个且同层不重复")
 	await _dispose(spread)
 
-	var dark := await _controller_for_element(CardData.ElementType.DARK, 5, CardData.ActionType.MELEE, 4102, 7, 25)
+	var dark := await _controller_for_element(CardData.ElementType.DARK, 5, CardData.ActionType.MELEE, 4102, 7, 40)
 	var dark_events: Array[BattleEffectEvent] = []
 	dark.effect_resolved.connect(func(event: BattleEffectEvent) -> void:
 		if event.element_type == CardData.ElementType.DARK: dark_events.append(event)
@@ -307,7 +523,7 @@ func _test_combinations_and_layering() -> void:
 			secondary_amounts.append(event.exact_amount)
 	)
 	controller.resolve_next_batch()
-	var expected := 10.0 * BattleRules.get_pattern_multiplier(RunePatternResult.PatternType.FULL_HOUSE) * 0.30 * 0.40
+	var expected := 10.0 * BattleRules.get_pattern_multiplier(RunePatternResult.PatternType.FULL_HOUSE) * 0.30 * 0.40 * 1.5
 	_expect(layers.has(1) and layers.has(2) and not secondary_amounts.is_empty() and is_equal_approx(secondary_amounts[0], expected), "3光+2水按三层流程继续乘当前浮点值")
 	await _dispose(controller)
 
@@ -323,7 +539,7 @@ func _test_combinations_and_layering() -> void:
 	)
 	fire_water.resolve_next_batch()
 	fire_water.advance_time(1.0)
-	var fire_water_expected := 10.0 * BattleRules.get_pattern_multiplier(RunePatternResult.PatternType.FULL_HOUSE) * 0.20 * 0.40
+	var fire_water_expected := 10.0 * BattleRules.get_pattern_multiplier(RunePatternResult.PatternType.FULL_HOUSE) * 0.20 * 0.40 * 1.5
 	_expect(not chained_water.is_empty() and is_equal_approx(chained_water[0].exact_amount, fire_water_expected), "3火+2水让副元素跟随每次真实DOT并继续乘火、水倍率")
 	await _dispose(fire_water)
 

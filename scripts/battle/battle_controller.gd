@@ -8,9 +8,12 @@ const BattleSquadState = preload("res://scripts/battle/battle_squad_state.gd")
 const BattleEffectEvent = preload("res://scripts/battle/battle_effect_event.gd")
 const BattleFormulaData = preload("res://scripts/battle/battle_formula_data.gd")
 const BattleElementResolver = preload("res://scripts/battle/battle_element_resolver.gd")
+const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
+const BattleProjectileTiming = preload("res://scripts/battle/battle_projectile_timing.gd")
 
 signal states_changed
 signal action_resolved(actor: BattleSquadState, target: BattleSquadState, action_type: CardData.ActionType, amount: int)
+signal projectile_launched(event: BattleEffectEvent)
 signal effect_resolved(event: BattleEffectEvent)
 signal integer_settlement_resolved(event: Dictionary)
 signal kill_resolved(killer: BattleSquadState, target: BattleSquadState, event: BattleEffectEvent)
@@ -29,6 +32,7 @@ var current_result: Result = Result.NONE
 var elapsed_seconds: float = 0.0
 var batch_count: int = 0
 var battle_speed_multiplier: float = 1.0
+var use_projectile_timing: bool = false
 var active_continuous_effects: Array[Dictionary] = []
 
 var _random := RandomNumberGenerator.new()
@@ -37,6 +41,10 @@ var _next_fatigue_stack_seconds: float = BattleRules.FATIGUE_START_SECONDS
 var _next_fatigue_damage_seconds: float = BattleRules.FATIGUE_START_SECONDS
 var _next_group_id: int = 1
 var _continuous_followups: Dictionary = {}
+var _pending_projectile_contexts: Dictionary = {}
+var _pending_projectile_batch_counts: Dictionary = {}
+var _next_projectile_batch_id: int = 1
+var _next_projectile_launch_sequence: int = 1
 
 
 func _ready() -> void:
@@ -56,6 +64,8 @@ func start_battle(player_formation: Array[Dictionary], enemy_formation: Array[Di
 	elapsed_seconds = 0.0
 	batch_count = 0
 	_next_group_id = 1
+	_next_projectile_batch_id = 1
+	_next_projectile_launch_sequence = 1
 	active_continuous_effects.clear()
 	_continuous_followups.clear()
 	_next_fatigue_stack_seconds = BattleRules.FATIGUE_START_SECONDS
@@ -74,6 +84,8 @@ func start_battle(player_formation: Array[Dictionary], enemy_formation: Array[Di
 func stop_battle() -> void:
 	_running = false
 	set_process(false)
+	_pending_projectile_contexts.clear()
+	_pending_projectile_batch_counts.clear()
 
 
 func clear_battle() -> void:
@@ -85,6 +97,8 @@ func clear_battle() -> void:
 	elapsed_seconds = 0.0
 	batch_count = 0
 	_next_group_id = 1
+	_next_projectile_batch_id = 1
+	_next_projectile_launch_sequence = 1
 	_next_fatigue_stack_seconds = BattleRules.FATIGUE_START_SECONDS
 	_next_fatigue_damage_seconds = BattleRules.FATIGUE_START_SECONDS
 	_random = RandomNumberGenerator.new()
@@ -250,13 +264,16 @@ func _create_states(formation: Array[Dictionary], side: int) -> Array[BattleSqua
 func _get_next_cooldown() -> float:
 	var next_time := INF
 	for state: BattleSquadState in get_all_states():
-		if state.alive:
+		if state.alive and state.current_health > 0.0:
 			next_time = minf(next_time, maxf(state.remaining_cooldown, 0.0))
 	return next_time
 
 
 func _get_next_event_delay() -> float:
 	var next_time := _get_next_cooldown()
+	for event_value: Variant in _pending_projectile_contexts:
+		var event := event_value as BattleEffectEvent
+		next_time = minf(next_time, maxf(event.impact_time - elapsed_seconds, 0.0))
 	next_time = minf(next_time, maxf(_next_fatigue_stack_seconds - elapsed_seconds, 0.0))
 	next_time = minf(next_time, maxf(_next_fatigue_damage_seconds - elapsed_seconds, 0.0))
 	for status: Dictionary in active_continuous_effects:
@@ -271,12 +288,19 @@ func _decrease_living_cooldowns(amount: float) -> void:
 
 
 func _resolve_ready_batch() -> void:
+	if use_projectile_timing:
+		_resolve_ready_projectile_batch()
+		return
 	recalculate_logical_layout()
-	var living_snapshot := get_all_states().filter(func(state: BattleSquadState) -> bool: return state.alive)
+	var living_snapshot := get_all_states().filter(
+		func(state: BattleSquadState) -> bool:
+			return state.alive and state.current_health > 0.0
+	)
 	var actors: Array[BattleSquadState] = []
 	for state: BattleSquadState in living_snapshot:
 		if state.remaining_cooldown <= COOLDOWN_EPSILON:
 			actors.append(state)
+	actors.sort_custom(_is_actor_before)
 	var actions := _select_base_actions(actors, living_snapshot)
 	var layer_zero: Array[BattleEffectEvent] = _collect_due_continuous_events()
 	var fatigue_events := _prepare_fatigue_events(living_snapshot)
@@ -319,6 +343,149 @@ func _resolve_ready_batch() -> void:
 	_check_battle_result()
 
 
+func _resolve_ready_projectile_batch() -> void:
+	## 固定逻辑时轴先处理已到达弹道，再处理同刻计时事件和新行动。
+	recalculate_logical_layout()
+	_resolve_due_projectile_impacts()
+	if not _running:
+		return
+	var living_snapshot := get_all_states().filter(
+		func(state: BattleSquadState) -> bool:
+			return state.alive and state.current_health > 0.0
+	)
+	var actors: Array[BattleSquadState] = []
+	for state: BattleSquadState in living_snapshot:
+		if state.remaining_cooldown <= COOLDOWN_EPSILON:
+			actors.append(state)
+	actors.sort_custom(_is_actor_before)
+	var actions := _select_base_actions(actors, living_snapshot)
+	var immediate_events: Array[BattleEffectEvent] = _collect_due_continuous_events()
+	var fatigue_events := _prepare_fatigue_events(living_snapshot)
+	immediate_events.append_array(fatigue_events)
+	if actions.is_empty() and immediate_events.is_empty():
+		return
+	_resolve_effect_layer(immediate_events)
+	for event: BattleEffectEvent in fatigue_events:
+		direct_damage_resolved.emit(event.target, BattleRules.FATIGUE_BUFF_ID, roundi(event.effective_amount))
+	if actions.is_empty():
+		_finalize_batch()
+		batch_count += 1
+		states_changed.emit()
+		_check_battle_result()
+		return
+	var projectile_batch_id := _next_projectile_batch_id
+	_next_projectile_batch_id += 1
+	_pending_projectile_batch_counts[projectile_batch_id] = 0
+	var base_events: Array[BattleEffectEvent] = []
+	for action: Dictionary in actions:
+		var event := action["base_event"] as BattleEffectEvent
+		_register_projectile(event, action, 0, projectile_batch_id)
+		base_events.append(event)
+	if base_events.is_empty():
+		_complete_projectile_batch(projectile_batch_id)
+		return
+	_launch_registered_projectiles(base_events)
+
+
+func _resolve_projectile_impact(event: BattleEffectEvent) -> void:
+	if not _pending_projectile_contexts.has(event):
+		return
+	var context := _pending_projectile_contexts[event] as Dictionary
+	var projectile_batch_id := int(context["projectile_batch_id"])
+	_pending_projectile_contexts.erase(event)
+	_pending_projectile_batch_counts[projectile_batch_id] = int(_pending_projectile_batch_counts[projectile_batch_id]) - 1
+	event.timestamp = elapsed_seconds
+	_resolve_arrived_event(event)
+	var followups := _build_projectile_followups(event, context)
+	for followup: BattleEffectEvent in followups:
+		_register_projectile(
+			followup,
+			context["action"] as Dictionary,
+			int(context["next_group_index"]) + 1,
+			projectile_batch_id
+		)
+	if not followups.is_empty():
+		_launch_registered_projectiles(followups)
+	if int(_pending_projectile_batch_counts.get(projectile_batch_id, 0)) <= 0:
+		_complete_projectile_batch(projectile_batch_id)
+
+
+func _resolve_due_projectile_impacts() -> void:
+	var due_events: Array[BattleEffectEvent] = []
+	for event_value: Variant in _pending_projectile_contexts:
+		var event := event_value as BattleEffectEvent
+		if event.impact_time <= elapsed_seconds + COOLDOWN_EPSILON:
+			due_events.append(event)
+	due_events.sort_custom(func(left: BattleEffectEvent, right: BattleEffectEvent) -> bool:
+		if not is_equal_approx(left.impact_time, right.impact_time):
+			return left.impact_time < right.impact_time
+		return left.launch_sequence < right.launch_sequence
+	)
+	for event: BattleEffectEvent in due_events:
+		_resolve_projectile_impact(event)
+
+
+func _register_projectile(event: BattleEffectEvent, action: Dictionary, next_group_index: int, projectile_batch_id: int) -> void:
+	event.launch_sequence = _next_projectile_launch_sequence
+	_next_projectile_launch_sequence += 1
+	event.projectile_speed_variant = _random.randi_range(
+		0,
+		BattleProjectileTiming.TRAVEL_SPEED_VARIANT_COUNT - 1
+	)
+	var profile := BattleAttackEffectProfiles.get_profile(_visual_kind_for_event(event))
+	event.projectile_impact_delay = BattleProjectileTiming.calculate_impact_delay(
+		profile,
+		event.projectile_speed_variant
+	)
+	event.impact_time = elapsed_seconds + event.projectile_impact_delay
+	_pending_projectile_contexts[event] = {
+		"action": action,
+		"next_group_index": next_group_index,
+		"projectile_batch_id": projectile_batch_id,
+	}
+	_pending_projectile_batch_counts[projectile_batch_id] = int(_pending_projectile_batch_counts.get(projectile_batch_id, 0)) + 1
+
+
+func _launch_registered_projectiles(events: Array[BattleEffectEvent]) -> void:
+	for event: BattleEffectEvent in events:
+		if event.effect_kind == BattleEffectEvent.EffectKind.PLACEHOLDER:
+			_resolve_projectile_impact(event)
+		else:
+			projectile_launched.emit(event)
+
+
+func _resolve_arrived_event(event: BattleEffectEvent) -> void:
+	# 生命归零、正式退场或放逐都会让已锁定的主效果命中空位；元素链仍以原锚点继续判断。
+	if event.target == null or not event.target.alive or event.target.current_health <= 0.0:
+		event.missed = true
+		event.effective_amount = 0.0
+		effect_resolved.emit(event)
+		if event.is_base_action:
+			action_resolved.emit(event.source, event.target, event.action_type, 0)
+		return
+	_apply_effect_event(event)
+
+
+func _build_projectile_followups(event: BattleEffectEvent, context: Dictionary) -> Array[BattleEffectEvent]:
+	var action := context["action"] as Dictionary
+	var group_index := int(context["next_group_index"])
+	var groups := action["element_groups"] as Array
+	if group_index < groups.size():
+		return _build_element_events(action, event, groups[group_index], group_index + 1)
+	if group_index == 0 and (action["pattern"] as RunePatternResult).pattern_type == RunePatternResult.PatternType.STRAIGHT:
+		return _build_straight_bonus_events(action, event, 1)
+	return []
+
+
+func _complete_projectile_batch(projectile_batch_id: int) -> void:
+	_pending_projectile_batch_counts.erase(projectile_batch_id)
+	_finalize_batch()
+	batch_count += 1
+	states_changed.emit()
+	if _pending_projectile_contexts.is_empty():
+		_check_battle_result()
+
+
 func _select_base_actions(actors: Array[BattleSquadState], living_snapshot: Array) -> Array[Dictionary]:
 	var actions: Array[Dictionary] = []
 	for actor: BattleSquadState in actors:
@@ -336,7 +503,13 @@ func _select_base_actions(actors: Array[BattleSquadState], living_snapshot: Arra
 				if candidate.current_health < float(candidate.get_max_health()):
 					wounded.append(candidate)
 			if not wounded.is_empty():
-				candidates = wounded
+				var largest_missing_ratio := -1.0
+				for candidate: BattleSquadState in wounded:
+					largest_missing_ratio = maxf(largest_missing_ratio, _missing_health_ratio(candidate))
+				candidates.clear()
+				for candidate: BattleSquadState in wounded:
+					if is_equal_approx(_missing_health_ratio(candidate), largest_missing_ratio):
+						candidates.append(candidate)
 		var target := choose_weighted_target(candidates)
 		if target != null:
 			var pattern := actor.squad_data.get_rune_pattern_result()
@@ -348,6 +521,22 @@ func _select_base_actions(actors: Array[BattleSquadState], living_snapshot: Arra
 			actions.append(action)
 		actor.remaining_cooldown = BattleRules.get_effective_cooldown(source.cooldown_seconds)
 	return actions
+
+
+func _missing_health_ratio(state: BattleSquadState) -> float:
+	if state == null or state.get_max_health() <= 0:
+		return 0.0
+	return clampf(1.0 - state.current_health / float(state.get_max_health()), 0.0, 1.0)
+
+
+func _is_actor_before(left: BattleSquadState, right: BattleSquadState) -> bool:
+	if left.side != right.side:
+		return left.side == BattleSquadState.Side.PLAYER
+	var left_back := is_back_row(left.row_key)
+	var right_back := is_back_row(right.row_key)
+	if left_back != right_back:
+		return not left_back
+	return left.formation_index < right.formation_index
 
 
 func _is_base_candidate(actor: BattleSquadState, candidate: BattleSquadState, action_type: CardData.ActionType) -> bool:
@@ -372,6 +561,7 @@ func _make_value_event(action: Dictionary, target: BattleSquadState, element_mul
 	event.anchor = target
 	event.action_type = action_type
 	event.effect_kind = _kind_for_action(action_type)
+	event.uses_attack_type_multiplier = event.effect_kind == BattleEffectEvent.EffectKind.DAMAGE
 	event.is_base_action = base_action
 	event.pierces_armor = pierces
 	event.exact_amount = float(source.base_value) * BattleRules.get_pattern_multiplier(pattern.pattern_type) * element_multiplier
@@ -598,6 +788,7 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 		return
 	match event.effect_kind:
 		BattleEffectEvent.EffectKind.DAMAGE:
+			_apply_attack_type_multiplier(event)
 			var split := event.target.apply_damage_exact(event.exact_amount, event.source, event, event.pierces_armor)
 			event.armor_amount = float(split["armor_damage"])
 			event.health_amount = float(split["health_damage"])
@@ -612,6 +803,22 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 	effect_resolved.emit(event)
 	if event.is_base_action:
 		action_resolved.emit(event.source, event.target, event.action_type, roundi(event.effective_amount))
+
+
+func _apply_attack_type_multiplier(event: BattleEffectEvent) -> void:
+	if not event.uses_attack_type_multiplier or event.formula == null:
+		return
+	event.target_had_armor_on_impact = event.target.current_armor > 0.0
+	event.attack_type_multiplier = BattleRules.get_attack_type_multiplier(
+		event.action_type,
+		event.target_had_armor_on_impact
+	)
+	event.formula.other_multipliers.append({
+		"name": "攻击类型（%s）" % ("有护甲" if event.target_had_armor_on_impact else "无护甲"),
+		"value": event.attack_type_multiplier,
+	})
+	event.formula.exact_result = event.formula.calculate_result()
+	event.exact_amount = event.formula.exact_result
 
 
 func _record_battle_statistics(event: BattleEffectEvent) -> void:
@@ -686,6 +893,7 @@ func _make_continuous_event(status: Dictionary, group_id: int, finisher: bool) -
 	event.anchor = target
 	event.action_type = action_type
 	event.effect_kind = _kind_for_action(action_type)
+	event.uses_attack_type_multiplier = event.effect_kind == BattleEffectEvent.EffectKind.DAMAGE
 	event.element_type = CardData.ElementType.FIRE
 	event.element_count = int(status["element_count"])
 	event.is_continuous = true
@@ -738,7 +946,12 @@ func _finalize_batch() -> void:
 			state.alive = false
 			state.force_boundary_sync()
 			defeated.append(state)
-			if state.pending_kill_event != null and state.pending_kill_source != null:
+			if (
+				state.pending_kill_event != null
+				and state.pending_kill_source != null
+				and state.pending_kill_source.alive
+				and state.pending_kill_source.current_health > 0.0
+			):
 				kill_resolved.emit(state.pending_kill_source, state, state.pending_kill_event)
 	recalculate_logical_layout()
 	for state: BattleSquadState in defeated:
@@ -759,6 +972,22 @@ func _value_name_for_action(action_type: CardData.ActionType) -> String:
 	if action_type == CardData.ActionType.DEFENSE:
 		return "护甲"
 	return "%s伤害" % ["近战", "远程", "法术"][action_type]
+
+
+func _visual_kind_for_event(event: BattleEffectEvent) -> StringName:
+	if event.visual_kind != &"":
+		return event.visual_kind
+	match event.action_type:
+		CardData.ActionType.RANGED:
+			return &"ranged_attack"
+		CardData.ActionType.MAGIC:
+			return &"magic_attack"
+		CardData.ActionType.HEAL:
+			return &"heal_action"
+		CardData.ActionType.DEFENSE:
+			return &"defense_action"
+		_:
+			return &"melee_attack"
 
 
 func _front_row_for_side(side: int) -> StringName:

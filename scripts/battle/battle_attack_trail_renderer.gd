@@ -8,13 +8,9 @@ const BATTLE_ENERGY_BEAM_SHADER: Shader = preload("res://shaders/battle_energy_b
 const BATTLE_TRAIL_ENERGY_TEXTURE: Texture2D = preload("res://assets/effects/battle_trail_energy.png")
 const BATTLE_TRAIL_PROJECTILE_TEXTURE: Texture2D = preload("res://assets/effects/battle_trail_projectile.png")
 
-enum TravelSpeedVariant {
-	FAST_THEN_SLOW,
-	ACCELERATE_THEN_SLOW,
-	SLOW_THEN_FAST,
-}
-
-const TRAVEL_SPEED_VARIANT_COUNT: int = 3
+const BattleProjectileTiming = preload("res://scripts/battle/battle_projectile_timing.gd")
+const TravelSpeedVariant = BattleProjectileTiming.TravelSpeedVariant
+const TRAVEL_SPEED_VARIANT_COUNT: int = BattleProjectileTiming.TRAVEL_SPEED_VARIANT_COUNT
 
 
 static func play(
@@ -22,7 +18,11 @@ static func play(
 	control_points: PackedVector2Array,
 	profile: Dictionary,
 	head_color: Color,
-	tail_color: Color
+	tail_color: Color,
+	impact_callback: Callable = Callable(),
+	speed_scale: float = 1.0,
+	speed_variant: int = -1,
+	logical_impact_delay: float = -1.0
 ) -> Node2D:
 	if not is_instance_valid(parent) or control_points.size() < 2:
 		return null
@@ -31,6 +31,7 @@ static func play(
 		return null
 	var effect_root := Node2D.new()
 	effect_root.name = "ElementEnergyBeam"
+	effect_root.process_mode = Node.PROCESS_MODE_PAUSABLE
 	parent.add_child(effect_root)
 	var beam_mesh := MeshInstance2D.new()
 	beam_mesh.name = "BeamMesh"
@@ -64,25 +65,52 @@ static func play(
 	material.set_shader_parameter("travel_progress", 0.0)
 	beam_mesh.material = material
 	effect_root.add_child(beam_mesh)
-	var speed_variant := randi_range(0, TRAVEL_SPEED_VARIANT_COUNT - 1)
+	var resolved_speed_variant := (
+		randi_range(0, TRAVEL_SPEED_VARIANT_COUNT - 1)
+		if speed_variant < 0
+		else clampi(speed_variant, 0, TRAVEL_SPEED_VARIANT_COUNT - 1)
+	)
 	var terminal_progress := (
 		1.0
 		+ float(profile["trail_length"])
 		+ float(profile["trail_softness"])
 	)
-	effect_root.set_meta("travel_speed_variant", speed_variant)
+	var impact_progress := nearest_polyline_progress(path_points, control_points[-1])
+	if logical_impact_delay >= 0.0 and float(profile["duration"]) > 0.0:
+		var logical_time_progress := clampf(
+			logical_impact_delay / float(profile["duration"]),
+			0.0,
+			1.0
+		)
+		var remapped_at_impact := remap_travel_progress(
+			logical_time_progress,
+			resolved_speed_variant,
+			float(profile.get("speed_variation_strength", 0.78))
+		)
+		if remapped_at_impact > 0.0:
+			# 实际曲线会因卡位距离和首尾延伸改变目标点比例；
+			# 调整播放终点，使可见弹头仍在控制器确定的逻辑时刻抵达。
+			terminal_progress = impact_progress / remapped_at_impact
+	effect_root.set_meta("travel_speed_variant", resolved_speed_variant)
+	effect_root.set_meta("impact_emitted", false)
 	var tween := effect_root.create_tween()
+	tween.set_speed_scale(clampf(speed_scale, 0.01, 3.0))
+	effect_root.set_meta("flight_tween", tween)
 	tween.tween_method(
 		_apply_travel_progress.bind(
 			material,
 			terminal_progress,
-			speed_variant,
-			float(profile.get("speed_variation_strength", 0.78))
+			resolved_speed_variant,
+			float(profile.get("speed_variation_strength", 0.78)),
+			effect_root,
+			impact_progress,
+			impact_callback
 		),
 		0.0,
 		1.0,
 		float(profile["duration"])
 	)
+	tween.tween_callback(_emit_impact_once.bind(effect_root, impact_callback))
 	tween.tween_callback(effect_root.queue_free)
 	return effect_root
 
@@ -92,23 +120,11 @@ static func remap_travel_progress(
 	speed_variant: int,
 	variation_strength: float
 ) -> float:
-	## 三条曲线都是速度函数积分后的累计位移：首尾固定为 0/1，
-	## 因此改变的是飞行过程中的瞬时速度，而不是配置的总播放时间。
-	var t := clampf(time_progress, 0.0, 1.0)
-	var shaped_progress := t
-	match speed_variant:
-		TravelSpeedVariant.FAST_THEN_SLOW:
-			# 速度峰值靠前：12t(1-t)^2 的积分。
-			shaped_progress = 6.0 * t * t - 8.0 * pow(t, 3.0) + 3.0 * pow(t, 4.0)
-		TravelSpeedVariant.ACCELERATE_THEN_SLOW:
-			# 速度峰值在中间：30t^2(1-t)^2 的积分。
-			shaped_progress = 10.0 * pow(t, 3.0) - 15.0 * pow(t, 4.0) + 6.0 * pow(t, 5.0)
-		TravelSpeedVariant.SLOW_THEN_FAST:
-			# 速度峰值靠后：12t^2(1-t) 的积分。
-			shaped_progress = 4.0 * pow(t, 3.0) - 3.0 * pow(t, 4.0)
-		_:
-			shaped_progress = t
-	return lerpf(t, shaped_progress, clampf(variation_strength, 0.0, 1.0))
+	return BattleProjectileTiming.remap_travel_progress(
+		time_progress,
+		speed_variant,
+		variation_strength
+	)
 
 
 static func _apply_travel_progress(
@@ -116,15 +132,48 @@ static func _apply_travel_progress(
 	material: ShaderMaterial,
 	terminal_progress: float,
 	speed_variant: int,
-	variation_strength: float
+	variation_strength: float,
+	effect_root: Node2D,
+	impact_progress: float,
+	impact_callback: Callable
 ) -> void:
 	if not is_instance_valid(material):
 		return
-	material.set_shader_parameter(
-		"travel_progress",
+	var visual_progress := (
 		remap_travel_progress(time_progress, speed_variant, variation_strength)
 		* terminal_progress
 	)
+	material.set_shader_parameter("travel_progress", visual_progress)
+	if visual_progress + 0.0001 >= impact_progress:
+		_emit_impact_once(effect_root, impact_callback)
+
+
+static func _emit_impact_once(effect_root: Node2D, impact_callback: Callable) -> void:
+	if not is_instance_valid(effect_root) or bool(effect_root.get_meta("impact_emitted", false)):
+		return
+	effect_root.set_meta("impact_emitted", true)
+	if impact_callback.is_valid():
+		impact_callback.call()
+
+
+static func set_flight_speed(effect_root: Node, speed_scale: float) -> void:
+	if not is_instance_valid(effect_root):
+		return
+	var tween := effect_root.get_meta("flight_tween", null) as Tween
+	if tween != null and tween.is_valid():
+		tween.set_speed_scale(clampf(speed_scale, 0.01, 3.0))
+
+
+static func set_flight_paused(effect_root: Node, paused: bool) -> void:
+	if not is_instance_valid(effect_root):
+		return
+	var tween := effect_root.get_meta("flight_tween", null) as Tween
+	if tween == null or not tween.is_valid():
+		return
+	if paused:
+		tween.pause()
+	else:
+		tween.play()
 
 
 static func sample_curve(
@@ -165,6 +214,31 @@ static func polyline_length(points: PackedVector2Array) -> float:
 	for point_index: int in range(1, points.size()):
 		result += points[point_index - 1].distance_to(points[point_index])
 	return result
+
+
+static func nearest_polyline_progress(points: PackedVector2Array, target: Vector2) -> float:
+	## 返回目标点在实际采样路径上的累计长度比例，使数值命中与可见弹头重合。
+	var total := polyline_length(points)
+	if points.size() < 2 or total <= 0.0:
+		return 1.0
+	var traversed := 0.0
+	var best_distance := INF
+	var best_length := total
+	for index: int in range(points.size() - 1):
+		var start := points[index]
+		var finish := points[index + 1]
+		var delta := finish - start
+		var segment_length := delta.length()
+		if segment_length <= 0.0:
+			continue
+		var t := clampf((target - start).dot(delta) / delta.length_squared(), 0.0, 1.0)
+		var projected := start + delta * t
+		var distance := projected.distance_squared_to(target)
+		if distance < best_distance:
+			best_distance = distance
+			best_length = traversed + segment_length * t
+		traversed += segment_length
+	return clampf(best_length / total, 0.0, 1.0)
 
 
 static func build_ribbon(path_points: PackedVector2Array, ribbon_height: float) -> ArrayMesh:

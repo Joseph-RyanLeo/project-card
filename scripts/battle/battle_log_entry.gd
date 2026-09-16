@@ -28,6 +28,12 @@ func to_bbcode() -> String:
 	var clauses: Array[String] = []
 	for index: int in events.size():
 		var event := events[index]
+		if event.missed:
+			clauses.append("对%s的%s落空" % [
+				_format_state_name(event.target),
+				event.log_qualifier if not event.log_qualifier.is_empty() else "行动",
+			])
+			continue
 		if event.effect_kind == BattleEffectEvent.EffectKind.PLACEHOLDER:
 			clauses.append(_placeholder_clause(event))
 			continue

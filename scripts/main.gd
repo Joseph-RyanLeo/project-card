@@ -834,8 +834,10 @@ func _ready() -> void:
 	battle_speed_button.pressed.connect(cycle_battle_speed)
 	battle_controller = BattleController.new() as BattleController
 	battle_controller.name = "BattleController"
+	battle_controller.use_projectile_timing = true
 	add_child(battle_controller)
 	battle_controller.states_changed.connect(_on_battle_states_changed)
+	battle_controller.projectile_launched.connect(_on_battle_projectile_launched)
 	battle_controller.action_resolved.connect(_on_battle_action_resolved)
 	battle_controller.effect_resolved.connect(_on_battle_effect_resolved)
 	battle_controller.direct_damage_resolved.connect(_on_battle_direct_damage_resolved)
@@ -954,6 +956,9 @@ func _apply_battle_speed() -> void:
 		battle_speed_button.text = "速度 %d×" % int(multiplier)
 	if battle_controller != null:
 		battle_controller.set_battle_speed_multiplier(multiplier)
+	if is_instance_valid(battle_effect_layer):
+		for child: Node in battle_effect_layer.get_children():
+			BattleAttackTrailRenderer.set_flight_speed(child, multiplier)
 
 
 func set_world_view(view: WorldView, animate: bool = true) -> void:
@@ -1970,7 +1975,7 @@ func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
 	_update_battle_timer()
 	_on_battle_states_changed()
 	if battle_controller.current_result == BattleController.Result.NONE:
-		play_area_label.text = "自动战斗开始：同冷却时间点按统一批次结算"
+		play_area_label.text = "自动战斗开始：同冷却同时发射，弹道命中时结算"
 	return true
 
 
@@ -2121,11 +2126,6 @@ func _on_battle_action_resolved(
 	var action_name := actor.get_action_source().get_action_type_name()
 	var target_name := target.get_effect_source().display_name
 	if is_instance_valid(actor_slot):
-		actor_slot.play_battle_action_lift(
-			battle_controller.battle_speed_multiplier
-			if battle_controller != null
-			else 1.0
-		)
 		actor_slot.show_battle_action("%s → %s  %d" % [action_name, target_name, amount])
 	if is_instance_valid(target_slot):
 		var target_text := (
@@ -2134,17 +2134,62 @@ func _on_battle_action_resolved(
 			else "%s +%d" % [action_name, amount]
 		)
 		target_slot.show_battle_action(target_text, true)
-	if (
-		action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
-		and is_instance_valid(actor_slot)
-		and is_instance_valid(target_slot)
-	):
-		_play_action_attack_visual(actor, actor_slot, target_slot, action_type)
 
 
 func _on_battle_effect_resolved(event: BattleEffectEvent) -> void:
 	_append_battle_effect(event)
-	_play_battle_effect_visual(event)
+	if event.visual_kind in [&"fire_burn", &"fire_tick", &"fire_finish"]:
+		_play_battle_effect_visual(event)
+
+
+func _on_battle_projectile_launched(event: BattleEffectEvent) -> void:
+	if event == null or battle_controller == null:
+		return
+	var source_slot := _battle_state_slots.get(event.source) as BoardSlot
+	var target_slot := _battle_state_slots.get(event.target) as BoardSlot
+	if not is_instance_valid(target_slot) or not is_instance_valid(battle_effect_layer):
+		return
+	var visual_source_slot := source_slot
+	if not event.is_base_action and event.visual_kind != &"dark_repeat":
+		var anchor_slot := _battle_state_slots.get(event.anchor) as BoardSlot
+		if is_instance_valid(anchor_slot):
+			visual_source_slot = anchor_slot
+	if not is_instance_valid(visual_source_slot):
+		return
+	if event.is_base_action:
+		visual_source_slot.play_battle_action_lift(battle_controller.battle_speed_multiplier)
+	var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
+	var from_local := inverse * visual_source_slot.get_global_rect().get_center()
+	var to_local := inverse * target_slot.get_global_rect().get_center()
+	var points := PackedVector2Array([from_local, to_local])
+	if visual_source_slot == target_slot:
+		# 自疗与自我防御也沿一条短弧线回到自身，不能因起终点重合而跳过弹道。
+		points = PackedVector2Array([
+			from_local + Vector2(-18.0, 4.0),
+			from_local + Vector2(0.0, -54.0),
+			to_local,
+		])
+	if event.visual_kind == &"dark_repeat":
+		var delta := to_local - from_local
+		var normal := Vector2(-delta.y, delta.x).normalized() if not delta.is_zero_approx() else Vector2.UP
+		var curve_offset := 28.0 + float(event.sequence_index) * 9.0
+		var curve_direction := -1.0 if event.sequence_index % 2 == 1 else 1.0
+		points = PackedVector2Array([from_local, (from_local + to_local) * 0.5 + normal * curve_offset * curve_direction, to_local])
+	var visual_kind := event.visual_kind if event.visual_kind != &"" else _action_visual_kind(event.action_type)
+	var colors := _attack_element_colors(event.source) if event.is_base_action else {
+		"head": _element_attack_color(event.element_type),
+		"tail": _element_attack_color(event.element_type),
+	}
+	_play_element_line(
+		points,
+		visual_kind,
+		colors["head"],
+		colors["tail"],
+		func() -> void:
+			_play_element_impact(to_local, visual_kind, colors["head"]),
+		event.projectile_speed_variant,
+		event.projectile_impact_delay
+	)
 
 
 func _on_battle_direct_damage_resolved(
@@ -2251,30 +2296,7 @@ func _format_formula_popup(formula: BattleFormulaData) -> String:
 func _play_battle_effect_visual(event: BattleEffectEvent) -> void:
 	if event == null or event.visual_kind == &"" or not is_instance_valid(battle_effect_layer):
 		return
-	var source_slot := _battle_state_slots.get(event.source) as BoardSlot
 	var target_slot := _battle_state_slots.get(event.target) as BoardSlot
-	if event.visual_kind in [&"water_spread", &"dark_repeat", &"wood_pierce", &"light_reflect"] and is_instance_valid(target_slot):
-		var anchor_slot := _battle_state_slots.get(event.anchor) as BoardSlot
-		var visual_source_slot := (
-			source_slot
-			if event.visual_kind == &"dark_repeat" or not is_instance_valid(anchor_slot)
-			else anchor_slot
-		)
-		var from_global := visual_source_slot.get_global_rect().get_center() if is_instance_valid(visual_source_slot) else target_slot.get_global_rect().get_center()
-		var to_global := target_slot.get_global_rect().get_center()
-		var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
-		var from_local := inverse * from_global
-		var to_local := inverse * to_global
-		var points := PackedVector2Array([from_local, to_local])
-		if event.visual_kind == &"dark_repeat":
-			var delta := to_local - from_local
-			var normal := Vector2(-delta.y, delta.x).normalized() if not delta.is_zero_approx() else Vector2.UP
-			var curve_offset := 28.0 + float(event.sequence_index) * 9.0
-			var curve_direction := -1.0 if event.sequence_index % 2 == 1 else 1.0
-			points = PackedVector2Array([from_local, (from_local + to_local) * 0.5 + normal * curve_offset * curve_direction, to_local])
-		var element_color := _element_attack_color(event.element_type)
-		_play_element_line(points, event.visual_kind, element_color, element_color)
-		_play_element_impact(to_local, event.visual_kind, element_color)
 	if event.visual_kind in [&"fire_burn", &"fire_tick", &"fire_finish"] and is_instance_valid(target_slot):
 		var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
 		var global_rect := target_slot.get_global_rect()
@@ -2300,40 +2322,33 @@ func _play_element_line(
 	points: PackedVector2Array,
 	kind: StringName,
 	head_color: Color = EFFECT_COLOR_NONE,
-	tail_color: Color = EFFECT_COLOR_NONE
-) -> void:
+	tail_color: Color = EFFECT_COLOR_NONE,
+	impact_callback: Callable = Callable(),
+	speed_variant: int = -1,
+	logical_impact_delay: float = -1.0
+) -> Node2D:
 	if not is_instance_valid(battle_effect_layer) or points.size() < 2:
-		return
-	BattleAttackTrailRenderer.play(
+		return null
+	return BattleAttackTrailRenderer.play(
 		battle_effect_layer,
 		points,
 		BattleAttackEffectProfiles.get_profile(kind),
 		head_color,
-		tail_color
+		tail_color,
+		impact_callback,
+		battle_controller.battle_speed_multiplier if battle_controller != null else 1.0,
+		speed_variant,
+		logical_impact_delay
 	)
 
 
-func _play_action_attack_visual(
-	actor: BattleSquadState,
-	actor_slot: BoardSlot,
-	target_slot: BoardSlot,
-	action_type: CardData.ActionType
-) -> void:
-	var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
-	var from := inverse * actor_slot.get_global_rect().get_center()
-	var to := inverse * target_slot.get_global_rect().get_center()
-	var visual_kind: StringName = &"melee_attack"
+func _action_visual_kind(action_type: CardData.ActionType) -> StringName:
 	match action_type:
-		CardData.ActionType.RANGED: visual_kind = &"ranged_attack"
-		CardData.ActionType.MAGIC: visual_kind = &"magic_attack"
-	var colors := _attack_element_colors(actor)
-	_play_element_line(
-		PackedVector2Array([from, to]),
-		visual_kind,
-		colors["head"],
-		colors["tail"]
-	)
-	_play_element_impact(to, visual_kind, colors["head"])
+		CardData.ActionType.RANGED: return &"ranged_attack"
+		CardData.ActionType.MAGIC: return &"magic_attack"
+		CardData.ActionType.HEAL: return &"heal_action"
+		CardData.ActionType.DEFENSE: return &"defense_action"
+		_: return &"melee_attack"
 
 
 func _attack_element_colors(actor: BattleSquadState) -> Dictionary:

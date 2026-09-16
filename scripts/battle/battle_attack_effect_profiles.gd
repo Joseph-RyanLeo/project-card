@@ -9,6 +9,8 @@ const PROFILE_IDS: Array[StringName] = [
 	&"melee_attack",
 	&"ranged_attack",
 	&"magic_attack",
+	&"heal_action",
+	&"defense_action",
 	&"water_spread",
 	&"dark_repeat",
 	&"wood_pierce",
@@ -18,6 +20,8 @@ const PROFILE_NAMES := {
 	&"melee_attack": "近战攻击",
 	&"ranged_attack": "远程攻击",
 	&"magic_attack": "法术攻击",
+	&"heal_action": "治疗行动",
+	&"defense_action": "防御行动",
 	&"water_spread": "水·扩散",
 	&"dark_repeat": "暗·连击",
 	&"wood_pierce": "木·穿刺",
@@ -98,6 +102,10 @@ static func get_default_profile(profile_id: StringName) -> Dictionary:
 			profile.merge({"mask_kind": &"projectile", "arc_height": -30.0, "flow_speed": 3.36, "flow_frequency": 7.2, "flow_strength": 0.360, "warp_speed": -1.40, "warp_frequency": 6.0, "twirl_frequency": 5.0, "warp_strength": 0.05}, true)
 		&"magic_attack":
 			profile.merge({"mask_kind": &"energy", "arc_height": 78.0, "flow_speed": 2.16, "flow_frequency": 6.9, "flow_strength": 0.528, "warp_speed": -0.80, "warp_frequency": 5.0, "twirl_frequency": 4.0, "warp_strength": 0.18}, true)
+		&"heal_action":
+			profile.merge({"mask_kind": &"energy", "arc_height": 44.0, "flow_speed": 1.80, "flow_frequency": 5.2, "flow_strength": 0.36, "warp_speed": -0.55, "warp_frequency": 4.0, "twirl_frequency": 3.0, "warp_strength": 0.08}, true)
+		&"defense_action":
+			profile.merge({"mask_kind": &"energy", "arc_height": -38.0, "flow_speed": 1.65, "flow_frequency": 4.8, "flow_strength": 0.32, "warp_speed": -0.45, "warp_frequency": 3.5, "twirl_frequency": 2.5, "warp_strength": 0.07}, true)
 		_:
 			profile.merge({"mask_kind": &"energy", "arc_height": 24.0}, true)
 	return _clamp_profile(profile)

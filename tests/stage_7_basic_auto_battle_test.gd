@@ -173,6 +173,8 @@ func _test_weighted_targeting_and_five_actions() -> void:
 		CardData.ActionType.MAGIC,
 	]:
 		var attack_name: String = ["近战", "远程", "法术"][attack_type]
+		var expected_armor: Array[float] = [0.2, 0.0, 0.0]
+		var expected_health: Array[float] = [20.0, 17.8, 18.2]
 		var attack_controller := await _create_controller(
 			[_formation_entry(_single_squad(attack_type, 4, 20, 0, 1.0), &"player_front", 0)],
 			[_formation_entry(_single_squad(CardData.ActionType.HEAL, 1, 20, 3, 100.0), &"enemy_front", 0)],
@@ -181,8 +183,9 @@ func _test_weighted_targeting_and_five_actions() -> void:
 		attack_controller.resolve_next_batch()
 		var target := attack_controller.enemy_states[0]
 		_expect(
-			target.current_armor == 0 and target.current_health == 19,
-			"%s造成基础伤害，并先扣 3 点护甲再扣 1 点生命" % attack_name
+			is_equal_approx(float(target.current_armor), expected_armor[attack_type])
+			and is_equal_approx(float(target.current_health), expected_health[attack_type]),
+			"%s按命中前有甲倍率结算，破甲溢出不再乘第二次倍率" % attack_name
 		)
 		await _dispose_controller(attack_controller)
 
@@ -310,30 +313,30 @@ func _test_timeline_batches_and_results() -> void:
 		"同冷却时间点双方都基于批次开始存活状态行动，同时全灭判为平局"
 	)
 	_expect(
-		is_equal_approx(draw.player_states[0].battle_damage_dealt, 5.0)
-		and is_equal_approx(draw.player_states[0].battle_damage_taken, 5.0)
-		and is_equal_approx(draw.enemy_states[0].battle_damage_dealt, 5.0)
-		and is_equal_approx(draw.enemy_states[0].battle_damage_taken, 5.0),
+		is_equal_approx(draw.player_states[0].battle_damage_dealt, 7.5)
+		and is_equal_approx(draw.player_states[0].battle_damage_taken, 7.5)
+		and is_equal_approx(draw.enemy_states[0].battle_damage_dealt, 7.5)
+		and is_equal_approx(draw.enemy_states[0].battle_damage_taken, 7.5),
 		"每个战斗状态分别累计实际造成伤害与承受伤害"
 	)
 	await _dispose_controller(draw)
 
 	var heal_after_damage := await _create_controller(
-		[_formation_entry(_single_squad(CardData.ActionType.MELEE, 7, 30, 0, 1.0), &"player_front", 0)],
+		[_formation_entry(_single_squad(CardData.ActionType.MELEE, 5, 30, 0, 1.0), &"player_front", 0)],
 		[_formation_entry(_single_squad(CardData.ActionType.HEAL, 4, 5, 0, 1.0), &"enemy_front", 0)],
 		903
 	)
 	heal_after_damage.enemy_states[0].current_health = 4
 	heal_after_damage.resolve_next_batch()
 	_expect(
-		heal_after_damage.enemy_states[0].current_health == 1
+		is_equal_approx(heal_after_damage.enemy_states[0].current_health, 0.5)
 		and heal_after_damage.enemy_states[0].alive
 		and heal_after_damage.current_result == BattleController.Result.NONE,
-		"受伤治疗者同批次先伤害到 -3，再治疗 4 回到 1，最后统一判定仍存活"
+		"受伤治疗者同批次先受到 7.5 伤害，再治疗 4 回到 0.5，最后统一判定仍存活"
 	)
 	_expect(
-		is_equal_approx(heal_after_damage.player_states[0].battle_damage_dealt, 7.0)
-		and is_equal_approx(heal_after_damage.enemy_states[0].battle_damage_taken, 7.0)
+		is_equal_approx(heal_after_damage.player_states[0].battle_damage_dealt, 7.5)
+		and is_equal_approx(heal_after_damage.enemy_states[0].battle_damage_taken, 7.5)
 		and is_equal_approx(heal_after_damage.enemy_states[0].battle_healing_done, 4.0),
 		"伤害与实际生效治疗分别归属到正确来源和目标"
 	)
@@ -346,7 +349,7 @@ func _test_timeline_batches_and_results() -> void:
 	)
 	armor_after_damage.resolve_next_batch()
 	_expect(
-		armor_after_damage.enemy_states[0].current_health == -1
+		is_equal_approx(armor_after_damage.enemy_states[0].current_health, -2.5)
 		and armor_after_damage.enemy_states[0].current_armor == 5
 		and not armor_after_damage.enemy_states[0].alive,
 		"同批次护甲在伤害后增加，不能倒流抵挡已经结算的伤害"
@@ -598,6 +601,16 @@ func _test_main_battle_loop_and_restart() -> void:
 	)
 	main.battle_controller.resolve_next_batch()
 	await process_frame
+	var action_beam := main.battle_effect_layer.get_node_or_null("ElementEnergyBeam") as Node2D
+	var action_beam_mesh := action_beam.get_node_or_null("BeamMesh") as MeshInstance2D if action_beam != null else null
+	var action_beam_material := action_beam_mesh.material as ShaderMaterial if action_beam_mesh != null else null
+	_expect(
+		action_beam_material != null
+		and action_beam_material.shader.resource_path == "res://shaders/battle_energy_beam.gdshader",
+		"近战、远程、法术、治疗或防御行动会在来源与目标之间生成弹道"
+	)
+	main.battle_controller.resolve_next_batch()
+	await process_frame
 	_expect(
 		not main.battle_log_text.text.is_empty()
 		and main.battle_log_text.text.contains("点")
@@ -606,14 +619,6 @@ func _test_main_battle_loop_and_restart() -> void:
 			or main.battle_log_text.text.contains("提供了")
 		),
 		"真实行动把敌我名称、实际数值和伤害/治疗/护盾类型写入左下角日志"
-	)
-	var action_beam := main.battle_effect_layer.get_node_or_null("ElementEnergyBeam") as Node2D
-	var action_beam_mesh := action_beam.get_node_or_null("BeamMesh") as MeshInstance2D if action_beam != null else null
-	var action_beam_material := action_beam_mesh.material as ShaderMaterial if action_beam_mesh != null else null
-	_expect(
-		action_beam_material != null
-		and action_beam_material.shader.resource_path == "res://shaders/battle_energy_beam.gdshader",
-		"近战、远程或法术行动会在攻击卡牌与目标之间生成弧线像素能量束"
 	)
 	_expect(
 		_main_formation_signature(main) != {}
@@ -626,6 +631,7 @@ func _test_main_battle_loop_and_restart() -> void:
 		and guard < 200
 	):
 		main.battle_controller.resolve_next_batch()
+		await process_frame
 		guard += 1
 	_expect(
 		guard < 200
@@ -753,7 +759,11 @@ func _test_departure_entry_and_row_recentering() -> void:
 	await process_frame
 	_expect(main.start_battle(1108, false), "建立真实死亡退场与同行居中测试战斗")
 	main.battle_controller.resolve_next_batch()
-	await process_frame
+	var impact_guard := 0
+	while main.battle_departure_count == 0 and impact_guard < 120:
+		main.battle_controller.resolve_next_batch()
+		await process_frame
+		impact_guard += 1
 	var defeated_state: BattleSquadState
 	for state: BattleSquadState in main.battle_controller.player_states:
 		if not state.alive:
@@ -795,7 +805,11 @@ func _test_departure_entry_and_row_recentering() -> void:
 		- SquadView.DEATH_DISSOLVE_BODY_SECONDS * 0.5
 		+ 0.05
 	).timeout
-	var survivor: BoardSlot = first if is_instance_valid(first) and first.get_parent() != null else second
+	var survivor: BoardSlot
+	for state: BattleSquadState in main.battle_controller.player_states:
+		if state.alive:
+			survivor = main.get("_battle_state_slots").get(state) as BoardSlot
+			break
 	_expect(
 		main.front_row.get_squad_count() == 1
 		and is_instance_valid(survivor)
