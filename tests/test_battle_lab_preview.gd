@@ -57,7 +57,7 @@ func test_preview_applies_and_recalculates_militia_commander_aura() -> void:
 	assert_eq(controller.player_states[2].displayed_health, 2, "精灵不应成为民兵指挥官的光环目标")
 
 
-func test_preview_does_not_trigger_gold_battlecry() -> void:
+func test_preview_does_not_trigger_gold_rush() -> void:
 	var controller := track(BattleControllerScript.new()) as BattleController
 	controller.prepare_battle_preview(
 		[_entry(_card("baggage_muleteer"), 0)],
@@ -66,18 +66,18 @@ func test_preview_does_not_trigger_gold_battlecry() -> void:
 	)
 	assert_true(
 		controller.run_reward_ledger.get_entries().is_empty(),
-		"配置预览不能把战吼金币写入待结算账本"
+		"配置预览不能把突击金币写入待结算账本"
 	)
 
 
-func test_gold_battlecry_records_once_and_reads_do_not_reapply() -> void:
+func test_gold_rush_records_once_and_reads_do_not_reapply() -> void:
 	var controller := track(BattleControllerScript.new()) as BattleController
 	var players: Array[Dictionary] = [_entry(_card("baggage_muleteer"), 0)]
 	var enemies: Array[Dictionary] = [_entry(_plain_enemy(), 0)]
 	controller.start_battle(players, enemies, 114514, false)
 	var first_read := controller.run_reward_ledger.get_entries()
 	var second_read := controller.run_reward_ledger.get_entries()
-	assert_eq(first_read.size(), 1, "辎重驮夫的基础战吼应只生成一条金币记录")
+	assert_eq(first_read.size(), 1, "辎重驮夫的基础突击应只生成一条金币记录")
 	assert_eq(second_read, first_read, "结算界面式的重复读取不能生成新奖励")
 	controller.start_battle(players, enemies, 114514, false)
 	assert_eq(

@@ -511,7 +511,7 @@ func _test_main_preparation_aura_preview() -> void:
 		and initial_views[0]._battle_action_value == 5
 		and initial_views[1]._battle_action_value == 4
 		and initial_views[2]._battle_action_value == 3,
-		"主战场备战态立即把民兵指挥官与外交官光环结果覆盖到三张卡面，且不触发战吼奖励"
+		"主战场备战态立即把民兵指挥官与外交官光环结果覆盖到三张卡面，且不触发突击奖励"
 	)
 	main.front_row.remove_squad_slot(main.front_row.get_squads()[2])
 	await process_frame

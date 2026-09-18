@@ -22,7 +22,7 @@ class ZealMigrationTest(unittest.TestCase):
         self.assertEqual(M["convert_text"](text), text)
 
     def test_rich_text_style_preserved(self):
-        value = [{"type": "text", "text": "战吼：", "segmentStyle": {"bold": True}}, {"type": "text", "text": "相邻友军冷却缩短20%。", "segmentStyle": {"bold": False}}]
+        value = [{"type": "text", "text": "突击：", "segmentStyle": {"bold": True}}, {"type": "text", "text": "相邻友军冷却缩短20%。", "segmentStyle": {"bold": False}}]
         old = copy.deepcopy(value)
         new = M["replace_rich"](value, M["convert_text"])
         self.assertEqual(value, old)

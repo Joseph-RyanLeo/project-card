@@ -2,7 +2,7 @@ class_name BattleRunRewardLedger
 extends RefCounted
 
 ## D2-4 的本局奖励待结算边界。
-## 战吼只记录已经确认产生的金币或随机卡请求，不会同时修改玩家余额或收藏。
+## 突击只记录已经确认产生的金币或随机卡请求，不会同时修改玩家余额或收藏。
 ## D2-5 在正常战后结合收藏、唯一性与本局卡池消费每条记录一次；中途重试
 ## 不会提前污染真实本局数据，也不会因结算界面读取这些记录而重复发放。
 
@@ -24,7 +24,8 @@ func record(
 	effect_id: StringName,
 	source_runtime_id: int,
 	logical_time_us: int,
-	parameters: Dictionary = {}
+	parameters: Dictionary = {},
+	battle_instance_id: StringName = &""
 ) -> bool:
 	if (
 		owner == null
@@ -34,7 +35,10 @@ func record(
 		or amount <= 0
 	):
 		return false
+	var entry_index := _entries.size()
 	_entries.append({
+		"entry_id": StringName("%s:reward:%d" % [battle_instance_id, entry_index]),
+		"battle_instance_id": battle_instance_id,
 		"kind": kind,
 		"amount": amount,
 		"side": owner.state.side,

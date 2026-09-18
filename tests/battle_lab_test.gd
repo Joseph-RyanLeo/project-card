@@ -45,11 +45,11 @@ func _test_effect_test_card_library() -> void:
 				triggers[definition.trigger] = true
 	_expect(valid_count == BattleLabEffectLibrary.PRESETS.size() - 1, "合成测试卡与灰烬真实卡全部生成严格效果定义")
 	_expect(
-		triggers.has(BattleEffectDefinition.Trigger.BATTLECRY)
+		triggers.has(BattleEffectDefinition.Trigger.RUSH)
 		and triggers.has(BattleEffectDefinition.Trigger.CONTINUOUS)
 		and triggers.has(BattleEffectDefinition.Trigger.ELAPSED_BATTLE_TIME)
 		and triggers.has(BattleEffectDefinition.Trigger.OTHER_ALLY_ACTION_AFTER),
-		"测试卡覆盖战吼、持续、定时与友军行动后触发器"
+		"测试卡覆盖突击、持续、定时与友军行动后触发器"
 	)
 
 
@@ -183,7 +183,7 @@ func _test_visual_lab_flow() -> void:
 		aura_healths == [8, 10, 8]
 		and not lab.battle_controller.is_running()
 		and lab.battle_controller.run_reward_ledger.get_entries().is_empty(),
-		"配置预览只结算持续光环：三个相邻人类立即显示8/10/8生命，不触发战吼奖励"
+		"配置预览只结算持续光环：三个相邻人类立即显示8/10/8生命，不触发突击奖励"
 	)
 	var middle_slot := lab._battle_state_slots[lab.battle_controller.player_states[1]] as BoardSlot
 	_expect(middle_slot.get_primary_card_view().health_label.text == "10", "民兵指挥官生命光环直接显示在战场卡面")

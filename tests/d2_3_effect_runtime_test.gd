@@ -98,7 +98,7 @@ func _test_seeded_target_and_preapply_revalidation() -> void:
 	var second := _make_controller(32001, 3)
 	var definition := _synthetic_definition(
 		"synthetic.seeded",
-		"battlecry",
+		"rush",
 		["always", "target_has_armor"],
 		"all_friendly_combat_units",
 		"add_zeal",
@@ -113,7 +113,7 @@ func _test_seeded_target_and_preapply_revalidation() -> void:
 			definition,
 			BattleEffectOwnerRef.for_state(controller.player_states[0], BattleEffectDefinition.OwnerKind.MINION_CARD_INSTANCE)
 		)
-		controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+		controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH)
 		# 先处理根触发与目标选择，故意把真正执行留在队列中。
 		controller.effect_runtime.process_next_due_us(0)
 		controller.effect_runtime.process_next_due_us(0)
@@ -140,7 +140,7 @@ func _test_same_name_takeover_and_battle_cleanup() -> void:
 	var controller := _make_controller(32002, 3)
 	var definition := _synthetic_definition(
 		"synthetic.nonstacking",
-		"battlecry",
+		"rush",
 		["always"],
 		"granted_effect_holder",
 		"add_zeal",
@@ -156,7 +156,7 @@ func _test_same_name_takeover_and_battle_cleanup() -> void:
 			definition,
 			BattleEffectOwnerRef.for_state(controller.player_states[source_index], BattleEffectDefinition.OwnerKind.MINION_CARD_INSTANCE)
 		)
-	controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY, {"holder": target})
+	controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH, {"holder": target})
 	controller.effect_runtime.process_due(0.0)
 	var active_count := 0
 	var suppressed_count := 0
@@ -181,10 +181,10 @@ func _test_same_name_takeover_and_battle_cleanup() -> void:
 func _test_timed_action_and_condition_lifecycles() -> void:
 	var timed := _make_controller(32003, 2)
 	var timed_definition := _synthetic_definition(
-		"synthetic.timed", "battlecry", ["always"], "source_combat_unit", "add_zeal", 2.0,
+		"synthetic.timed", "rush", ["always"], "source_combat_unit", "add_zeal", 2.0,
 		{"kind": "seconds", "amount": 2.0}, {"kind": "independent_by_source"}, {}, ["持续时间到期", "战斗结束"]
 	)
-	_register_and_fire(timed, timed_definition, timed.player_states[0], BattleEffectDefinition.Trigger.BATTLECRY)
+	_register_and_fire(timed, timed_definition, timed.player_states[0], BattleEffectDefinition.Trigger.RUSH)
 	_expect(timed.player_states[0].get_zeal_layers() == 2, "固定秒数效果安装运行实例")
 	timed.effect_runtime.process_due(1.999)
 	_expect(timed.player_states[0].get_zeal_layers() == 2, "固定秒数到期前保持生效")
@@ -194,10 +194,10 @@ func _test_timed_action_and_condition_lifecycles() -> void:
 
 	var action := _make_controller(32004, 2)
 	var action_definition := _synthetic_definition(
-		"synthetic.until_action", "battlecry", ["always"], "source_combat_unit", "add_reinforcement", 3.0,
+		"synthetic.until_action", "rush", ["always"], "source_combat_unit", "add_reinforcement", 3.0,
 		{"kind": "until_consumed_by_action"}, {"kind": "additive"}, {}, ["指定行动后", "战斗结束"]
 	)
-	_register_and_fire(action, action_definition, action.player_states[0], BattleEffectDefinition.Trigger.BATTLECRY)
+	_register_and_fire(action, action_definition, action.player_states[0], BattleEffectDefinition.Trigger.RUSH)
 	var unreinforced_value := action.player_states[0].get_action_source().base_value
 	_expect(
 		is_equal_approx(action.player_states[0].modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT), 3.0)
@@ -234,12 +234,12 @@ func _test_timed_action_and_condition_lifecycles() -> void:
 func _test_refresh_and_capped_stacking() -> void:
 	var refresh := _make_controller(32006, 2)
 	var refresh_definition := _synthetic_definition(
-		"synthetic.refresh", "battlecry", ["always"], "source_combat_unit", "add_zeal", 1.0,
+		"synthetic.refresh", "rush", ["always"], "source_combat_unit", "add_zeal", 1.0,
 		{"kind": "seconds", "amount": 2.0}, {"kind": "refresh"}, {}, ["持续时间到期", "战斗结束"]
 	)
-	_register_and_fire(refresh, refresh_definition, refresh.player_states[0], BattleEffectDefinition.Trigger.BATTLECRY)
+	_register_and_fire(refresh, refresh_definition, refresh.player_states[0], BattleEffectDefinition.Trigger.RUSH)
 	refresh.elapsed_seconds = 1.0
-	refresh.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+	refresh.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH)
 	refresh.effect_runtime.process_due(1.0)
 	refresh.effect_runtime.process_due(2.1)
 	_expect(refresh.player_states[0].get_zeal_layers() == 1 and _has_trace_result(refresh.effect_runtime, &"refreshed"), "刷新只重置持续时间，不增加层数")
@@ -249,12 +249,12 @@ func _test_refresh_and_capped_stacking() -> void:
 
 	var capped := _make_controller(32007, 2)
 	var capped_definition := _synthetic_definition(
-		"synthetic.capped", "battlecry", ["always"], "source_combat_unit", "add_zeal", 2.0,
+		"synthetic.capped", "rush", ["always"], "source_combat_unit", "add_zeal", 2.0,
 		{"kind": "battle"}, {"kind": "capped_additive", "cap": 5.0}, {}, ["战斗结束"]
 	)
 	capped.effect_runtime.register_definition(capped_definition, BattleEffectOwnerRef.for_state(capped.player_states[0]))
 	for _index: int in 3:
-		capped.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+		capped.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH)
 		capped.effect_runtime.process_due(0.0)
 	_expect(capped.player_states[0].get_zeal_layers() == 5, "封顶叠加限制本效果贡献，不影响其他来源")
 	_dispose_controller(capped)
@@ -263,11 +263,11 @@ func _test_refresh_and_capped_stacking() -> void:
 func _test_shared_group_limit_and_recursion_guard() -> void:
 	var grouped := _make_controller(32009, 2)
 	var first := _synthetic_definition(
-		"synthetic.group_a", "battlecry", ["always"], "source_combat_unit", "add_zeal", 1.0,
+		"synthetic.group_a", "rush", ["always"], "source_combat_unit", "add_zeal", 1.0,
 		{"kind": "battle"}, {"kind": "additive"}, {}, ["战斗结束"]
 	)
 	var second := _synthetic_definition(
-		"synthetic.group_b", "battlecry", ["always"], "source_combat_unit", "add_zeal", 1.0,
+		"synthetic.group_b", "rush", ["always"], "source_combat_unit", "add_zeal", 1.0,
 		{"kind": "battle"}, {"kind": "additive"}, {}, ["战斗结束"]
 	)
 	second.effect_group = first.effect_group
@@ -277,7 +277,7 @@ func _test_shared_group_limit_and_recursion_guard() -> void:
 		definition.trigger_limit.counter_key = &"synthetic.shared_group"
 		grouped.effect_runtime.register_definition(definition, BattleEffectOwnerRef.for_state(grouped.player_states[0]))
 	for _index: int in 3:
-		grouped.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+		grouped.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH)
 		grouped.effect_runtime.process_due(0.0)
 	_expect(
 		grouped.player_states[0].get_zeal_layers() == 4
@@ -336,11 +336,11 @@ func _test_runtime_clock_determinism() -> void:
 	for _index: int in 3:
 		var controller := _make_controller(32011, 3, 9.0)
 		var definition := _synthetic_definition(
-			"synthetic.clock", "battlecry", ["always"], "all_friendly_combat_units", "add_zeal", 4.0,
+			"synthetic.clock", "rush", ["always"], "all_friendly_combat_units", "add_zeal", 4.0,
 			{"kind": "seconds", "amount": 2.0}, {"kind": "independent_by_source"}, {"selection": "random_one"}, ["持续时间到期", "战斗结束"]
 		)
 		controller.effect_runtime.register_definition(definition, BattleEffectOwnerRef.for_state(controller.player_states[0]))
-		controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+		controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH)
 		controller.effect_runtime.process_due(0.0)
 		controllers.append(controller)
 

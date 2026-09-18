@@ -40,10 +40,10 @@ terms={r['fields']['词条']:r['record_id'] for r in allrows[term]}
 for i,row in enumerate(src,1):
     if i<3 or not row[2]: continue
     name,raw,note=flat(row[2]),flat(row[3]),flat(row[4])
-    q={'月亮':'护甲+8是否为基础加成、影蔽重新获得的计时边界待确认。','星星':'亡语传递的新星星是否继续具有传播亡语、数值增益如何叠加待确认。','血鸦':'同名随从与本指示物分开；最低生命值平局选择规则待确认。','福金':'属性增减持续时间、负数下限及无合法目标时处理待确认。','雾尼':'纹章施加对象、符文目标范围、遮蔽持续时间及无合法目标时处理待确认。'}.get(name)
+    q={'月亮':'护甲+8是否为基础加成、影蔽重新获得的计时边界待确认。','星星':'遗愿传递的新星星是否继续具有传播遗愿、数值增益如何叠加待确认。','血鸦':'同名随从与本指示物分开；最低生命值平局选择规则待确认。','福金':'属性增减持续时间、负数下限及无合法目标时处理待确认。','雾尼':'纹章施加对象、符文目标范围、遮蔽持续时间及无合法目标时处理待确认。'}.get(name)
     detail='指示物而非纹章，不占纹章槽。'+note
     if name=='太阳': detail+='影响敌我双方；所有太阳携带者保留耀眼，其他单位失去耀眼。'
-    fields={'名称':name,'内容类型':'指示物','原始描述':raw,'规范描述':raw+'\n规则：'+detail,'来源':f'纹章和伤势/指示物!C{i}:E{i}','标准词条':[terms[w] for w in ['指示物','耀眼','亡语','影蔽','护甲'] if w=='指示物' or w in raw],'审阅状态':'初版待确认' if q else '已整理','待确认事项':q}
+    fields={'名称':name,'内容类型':'指示物','原始描述':raw,'规范描述':raw+'\n规则：'+detail,'来源':f'纹章和伤势/指示物!C{i}:E{i}','标准词条':[terms[w] for w in ['指示物','耀眼','遗愿','影蔽','护甲'] if w=='指示物' or w in raw],'审阅状态':'初版待确认' if q else '已整理','待确认事项':q}
     matches=[r for r in allrows[sup] if r['fields'].get('名称')==name and r['fields'].get('内容类型')=='指示物']
     if matches: update(sup,matches[0],fields)
     else: creates.append({'fields':fields})

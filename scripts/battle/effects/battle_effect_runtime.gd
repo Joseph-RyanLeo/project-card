@@ -497,7 +497,7 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 			if controller == null or not controller.has_method("revive_state_at_original_position"):
 				return false
 			if not controller.revive_state_at_original_position(target, instance.applied_value):
-				_trace(event, definition, instance.source, target, &"revive", &"original_position_unavailable", "原位置已有存活单位，本次亡语结束")
+				_trace(event, definition, instance.source, target, &"revive", &"original_position_unavailable", "原位置已有存活单位，本次遗愿结束")
 				return true
 			_trace(event, definition, instance.source, target, &"revive", &"applied", "恢复生命=%.2f 基础护甲=%d" % [target.current_health, target.displayed_armor])
 		BattleEffectDefinition.Operation.PERMANENTLY_ADD_BASE_VALUE, BattleEffectDefinition.Operation.PERMANENTLY_ADD_ARMOR:
@@ -964,8 +964,8 @@ func _has_living_same_race_neighbors_on_both_sides(source_state: BattleSquadStat
 
 func _binding_matches_event_actor(binding: BattleEffectBinding, event: BattleRuntimeEvent) -> bool:
 	var actor := event.payload.get("actor") as BattleSquadState
-	if event.trigger == BattleEffectDefinition.Trigger.DEATHRATTLE:
-		# 亡语必须明确携带这次真正阵亡的单位；缺少 actor 时不能广播触发。
+	if event.trigger == BattleEffectDefinition.Trigger.LAST_WISH:
+		# 遗愿必须明确携带这次真正阵亡的单位；缺少 actor 时不能广播触发。
 		return actor != null and binding.source != null and binding.source.state == actor
 	if event.trigger in [
 		BattleEffectDefinition.Trigger.ECHO,

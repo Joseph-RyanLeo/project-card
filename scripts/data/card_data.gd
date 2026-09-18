@@ -108,8 +108,8 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export_range(-9.9, 9.9, 0.1) var equipment_cooldown_delta: float = 0.0 # 装备对基础冷却秒数的临时占位变化量
 @export_range(0, 99, 1) var equipment_health_delta: int = 0 # 装备对生命值的临时占位加成
 @export_range(0, 99, 1) var equipment_armor_delta: int = 0 # 装备对护甲值的临时占位加成
-@export_range(0, 99, 1) var wound_slot_count: int = 0 # 伤势槽位数量；D2-5 前只保存数据
-@export_range(0, 99, 1) var emblem_slot_count: int = 0 # 纹章槽位数量；D2-5 前只保存数据
+@export_range(0, 99, 1) var wound_slot_count: int = 0 # 共享定义只保存槽位数量；实际伤势属于OwnedCard实例
+@export_range(0, 99, 1) var emblem_slot_count: int = 0 # 共享定义只保存槽位数量；实际纹章属于OwnedCard实例
 
 ## 卡面美术字段：人物偏移只改变取景，不改变 99×136 卡牌逻辑尺寸。
 @export var background_texture: Texture2D # 立绘透明区域下方的临时背景

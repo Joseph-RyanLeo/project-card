@@ -7,7 +7,7 @@ extends RefCounted
 const EFFECT_DATA_PATH: String = "res://data/demo2/ash_ledger_effect_samples.json"
 
 const NONE: StringName = &"none"
-const BATTLECRY_ZEAL: StringName = &"battlecry_zeal"
+const RUSH_ZEAL: StringName = &"rush_zeal"
 const ARMORED_SLOW: StringName = &"armored_slow"
 const TIMED_ARMOR: StringName = &"timed_armor"
 const ACTION_REINFORCEMENT: StringName = &"action_reinforcement"
@@ -18,32 +18,32 @@ const CAPPED_CHANT: StringName = &"capped_chant"
 
 const PRESETS: Array[Dictionary] = [
 	{"id": NONE, "name": "无 D2-3 效果", "description": "只测试基础行动与元素规则。"},
-	{"id": BATTLECRY_ZEAL, "name": "战吼·热诚", "description": "战吼：自身获得4层热诚，持续5秒。"},
+	{"id": RUSH_ZEAL, "name": "突击·热诚", "description": "突击：自身获得4层热诚，持续5秒。"},
 	{"id": ARMORED_SLOW, "name": "持续·重甲迟缓", "description": "持续：自身有护甲时热诚-4；失去护甲后撤销，恢复护甲后重新生效。"},
 	{"id": TIMED_ARMOR, "name": "定时·整备护甲", "description": "战斗到3秒时：自身获得10点护甲，只触发一次。"},
-	{"id": ACTION_REINFORCEMENT, "name": "战吼·蓄势", "description": "战吼：自身获得3点强化，在下一次普通行动结算后移除。"},
+	{"id": ACTION_REINFORCEMENT, "name": "突击·蓄势", "description": "突击：自身获得3点强化，在下一次普通行动结算后移除。"},
 	{"id": ALLY_REFRESH, "name": "友军行动·刷新热诚", "description": "其他友军行动后：自身获得2层热诚，持续3秒；再次触发只刷新时间。"},
-	{"id": RANDOM_BANNER, "name": "战吼·随机鼓舞", "description": "战吼：随机一名友军获得4层热诚，持续整场战斗。"},
+	{"id": RANDOM_BANNER, "name": "突击·随机鼓舞", "description": "突击：随机一名友军获得4层热诚，持续整场战斗。"},
 	{"id": NONSTACKING_BANNER, "name": "持续·同名旗帜", "description": "持续：所有友军获得2层热诚；同名效果不叠加，最早来源退场后由下一来源接替。"},
 	{"id": CAPPED_CHANT, "name": "友军行动·封顶战歌", "description": "其他友军行动后：自身获得2层热诚，可相加但本效果最多贡献6层。"},
 	{"id": &"old_wolf_kaspar", "name": "灰烬·“老狼”卡斯帕", "description": "真实效果：友方乡邻效果额外触发一次。"},
 	{"id": &"anvil_margaret", "name": "灰烬·“铁砧”玛格丽特", "description": "真实效果：友军获得护甲×2；有护甲时热诚-4。"},
-	{"id": &"heavy_knight", "name": "灰烬·重装骑士", "description": "真实效果：战吼获得等同于当前护甲的强化。"},
-	{"id": &"mudleg_brothers", "name": "灰烬·泥腿三兄弟", "description": "真实效果：无法堆叠；亡语遮蔽符文并重新入场。复活依赖仍未实现。"},
+	{"id": &"heavy_knight", "name": "灰烬·重装骑士", "description": "真实效果：突击获得等同于当前护甲的强化。"},
+	{"id": &"mudleg_brothers", "name": "灰烬·泥腿三兄弟", "description": "真实效果：无法堆叠；遗愿遮蔽符文并重新入场。复活依赖仍未实现。"},
 	{"id": &"rune_engraver", "name": "灰烬·符文刻匠", "description": "真实效果：有护甲的友军行动倍率+0.1。"},
 	{"id": &"militia_commander", "name": "灰烬·民兵指挥官", "description": "真实效果：友方人类按相邻人类数量获得生命。"},
-	{"id": &"recruiter", "name": "灰烬·征召官", "description": "真实效果：战吼随机获得随从。加卡系统依赖仍未实现。"},
+	{"id": &"recruiter", "name": "灰烬·征召官", "description": "真实效果：突击随机获得随从。加卡系统依赖仍未实现。"},
 	{"id": &"diplomat", "name": "灰烬·外交官", "description": "真实效果：所有非精灵友军数值+1。"},
 	{"id": &"berserker_vanguard", "name": "灰烬·狂战先锋", "description": "真实效果：累计损失生命后永久成长。永久写回依赖仍未实现。"},
 	{"id": &"shieldwall_private", "name": "灰烬·盾墙列兵", "description": "真实效果：乡邻生效时，每次获得护甲额外+1。"},
-	{"id": &"fireman", "name": "灰烬·伙夫", "description": "真实效果：战吼按双方生效火符文增加本场生命。"},
+	{"id": &"fireman", "name": "灰烬·伙夫", "description": "真实效果：突击按双方生效火符文增加本场生命。"},
 	{"id": &"field_medic", "name": "灰烬·随军医者", "description": "真实效果：治疗后遮蔽目标伤势5秒。伤势依赖仍未实现。"},
 	{"id": &"war_drum_musician", "name": "灰烬·战鼓乐师", "description": "真实效果：回响使同排友军获得强化1。"},
 	{"id": &"timid_infantry", "name": "灰烬·胆怯的步兵", "description": "真实效果：其他友军行动后获得强化1，本效果最多累计5。"},
 	{"id": &"armorsmith", "name": "灰烬·铸甲师", "description": "真实效果：相邻友军被消灭后永久护甲+1。永久写回依赖仍未实现。"},
-	{"id": &"baggage_muleteer", "name": "灰烬·辎重驮夫", "description": "真实效果：战吼获得金币，乡邻额外获得金币。金币依赖仍未实现。"},
+	{"id": &"baggage_muleteer", "name": "灰烬·辎重驮夫", "description": "真实效果：突击获得金币，乡邻额外获得金币。金币依赖仍未实现。"},
 	{"id": &"militia", "name": "灰烬·民兵", "description": "真实效果：乡邻使自身和相邻人类小队本场数值+1。"},
-	{"id": &"javelin_skirmisher", "name": "灰烬·标枪散兵", "description": "真实效果：战吼执行数值+2的远程行动，发射后转为近战。"},
+	{"id": &"javelin_skirmisher", "name": "灰烬·标枪散兵", "description": "真实效果：突击执行数值+2的远程行动，发射后转为近战。"},
 	{"id": &"musketeer", "name": "灰烬·火枪手", "description": "真实效果：乡邻使自身受击优先级-3。"},
 	{"id": &"elegy_poet", "name": "灰烬·悲歌诗人", "description": "真实效果：非衍生友军死亡后，本场数值与护甲成长。"},
 ]
@@ -72,9 +72,9 @@ static func create_definitions(preset_id: StringName) -> Array[BattleEffectDefin
 	var definitions: Array[BattleEffectDefinition] = []
 	var data: Dictionary = {}
 	match preset_id:
-		BATTLECRY_ZEAL:
+		RUSH_ZEAL:
 			data = _base_definition(
-				"battle_lab.battlecry_zeal", "battlecry", ["always"], "source_combat_unit",
+				"battle_lab.rush_zeal", "rush", ["always"], "source_combat_unit",
 				"add_zeal", 4.0, {"kind": "seconds", "amount": 5.0}, {"kind": "additive"},
 				{}, ["持续时间到期", "战斗结束"]
 			)
@@ -92,7 +92,7 @@ static func create_definitions(preset_id: StringName) -> Array[BattleEffectDefin
 			)
 		ACTION_REINFORCEMENT:
 			data = _base_definition(
-				"battle_lab.action_reinforcement", "battlecry", ["always"], "source_combat_unit",
+				"battle_lab.action_reinforcement", "rush", ["always"], "source_combat_unit",
 				"add_reinforcement", 3.0, {"kind": "until_consumed_by_action"}, {"kind": "additive"},
 				{}, ["指定行动后", "战斗结束"]
 			)
@@ -104,7 +104,7 @@ static func create_definitions(preset_id: StringName) -> Array[BattleEffectDefin
 			)
 		RANDOM_BANNER:
 			data = _base_definition(
-				"battle_lab.random_banner", "battlecry", ["always"], "all_friendly_combat_units",
+				"battle_lab.random_banner", "rush", ["always"], "all_friendly_combat_units",
 				"add_zeal", 4.0, {"kind": "battle"}, {"kind": "independent_by_source"},
 				{"selection": "random_one"}, ["战斗结束"]
 			)

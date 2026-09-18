@@ -167,7 +167,7 @@ def make_plan(folder, include_extra=False):
         for row in table["records"]:
             f = row["fields"]
             name = f.get("卡牌名", f.get("名称"))
-            if name not in CARD_NAMES | TRAIT_NAMES | {"法术傀儡·战吼选项2"}:
+            if name not in CARD_NAMES | TRAIT_NAMES | {"法术傀儡·突击选项2"}:
                 continue
             fields = {}
             for k in TEXT_FIELDS:
@@ -212,7 +212,7 @@ def make_plan(folder, include_extra=False):
         ("铁壁铭刻", "J14"): "散兵阵", ("铁壁铭刻", "J40"): "雷暴步兵",
         ("铁壁铭刻", "B92"): "连珠铳", ("铁壁铭刻", "F92"): "黑铁法杖",
         ("银月之章", "F66"): "星月豹", ("银月之章", "J105"): "日月护符",
-        ("莉丝忒·碎星", "J59"): "法术傀儡·战吼选项2",
+        ("莉丝忒·碎星", "J59"): "法术傀儡·突击选项2",
     }
     for address in ["O6", "O13", "O14", "O16", "O17", "O18", "O21", "G36", "G37"]:
         known[("纹章和伤势", address)] = "纹章伤势"

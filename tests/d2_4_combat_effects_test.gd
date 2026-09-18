@@ -16,7 +16,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_test_action_multiplier_and_continuous_recheck()
-	_test_fireman_battlecry_health_growth()
+	_test_fireman_rush_health_growth()
 	_test_armor_gain_and_echo_events()
 	_test_other_and_adjacent_ally_death_events()
 	_test_dynamic_attribute_auras()
@@ -24,8 +24,8 @@ func _run() -> void:
 	_test_other_ally_action_reinforcement()
 	_test_armor_multiplier_before_neighbor_addition()
 	_test_old_wolf_neighbor_extra_execution()
-	_test_javelin_battlecry_action_switch()
-	_test_mudleg_deathrattle_masks_active_rune()
+	_test_javelin_rush_action_switch()
+	_test_mudleg_last_wish_masks_active_rune()
 	_test_mudleg_reentry_position_conflict()
 	_test_recruiter_pending_random_card_request()
 	_test_baggage_muleteer_pending_gold()
@@ -65,7 +65,7 @@ func _test_action_multiplier_and_continuous_recheck() -> void:
 	_dispose(controller)
 
 
-func _test_fireman_battlecry_health_growth() -> void:
+func _test_fireman_rush_health_growth() -> void:
 	var controller := _controller_with(
 		[
 			_entry(_card("fireman"), &"player_back", 0),
@@ -339,7 +339,7 @@ func _test_old_wolf_neighbor_extra_execution() -> void:
 	_dispose(musketeer_controller)
 
 
-func _test_javelin_battlecry_action_switch() -> void:
+func _test_javelin_rush_action_switch() -> void:
 	var controller := BattleControllerScript.new() as BattleController
 	root.add_child(controller)
 	controller.use_projectile_timing = true
@@ -370,7 +370,7 @@ func _test_javelin_battlecry_action_switch() -> void:
 		and launch_event.action_type == CardData.ActionType.RANGED
 		and int(launches[0]["action_type_at_launch"]) == CardData.ActionType.RANGED
 		and has_plus_two,
-		"标枪散兵战吼只发射一次数值+2的远程普通行动"
+		"标枪散兵突击只发射一次数值+2的远程普通行动"
 	)
 	_expect(
 		skirmisher.get_effective_action_type() == CardData.ActionType.MELEE
@@ -382,14 +382,14 @@ func _test_javelin_battlecry_action_switch() -> void:
 	var health_before := float(enemy.current_health)
 	if launch_event != null:
 		controller.advance_time(maxf(launch_event.impact_time - controller.elapsed_seconds, 0.0) + 0.01)
-	_expect(float(enemy.current_health) < health_before, "标枪战吼弹道随后按正式命中流程造成伤害")
+	_expect(float(enemy.current_health) < health_before, "标枪突击弹道随后按正式命中流程造成伤害")
 	var next_actions := controller._select_base_actions([skirmisher], controller.get_all_states())
 	var next_event := next_actions[0]["base_event"] as BattleEffectEvent if next_actions.size() == 1 else null
 	_expect(
 		next_event != null
 		and next_event.action_type == CardData.ActionType.MELEE
 		and next_event.formula.additive_terms.all(func(term: Dictionary) -> bool: return term.get("name") != "即时行动数值修正"),
-		"标枪散兵之后的普通行动使用近战且不再获得战吼+2"
+		"标枪散兵之后的普通行动使用近战且不再获得突击+2"
 	)
 	if next_event != null:
 		controller._apply_effect_event(next_event)
@@ -399,7 +399,7 @@ func _test_javelin_battlecry_action_switch() -> void:
 	_expect(
 		float(damage_by_action.get(CardData.ActionType.RANGED, 0.0)) > 0.0
 		and float(damage_by_action.get(CardData.ActionType.MELEE, 0.0)) > 0.0,
-		"标枪散兵的战吼远程伤害与后续近战伤害分别写入结算统计"
+		"标枪散兵的突击远程伤害与后续近战伤害分别写入结算统计"
 	)
 	controller.effect_runtime.notify_battle_end()
 	controller.effect_runtime.process_due(controller.elapsed_seconds)
@@ -407,7 +407,7 @@ func _test_javelin_battlecry_action_switch() -> void:
 	_dispose(controller)
 
 
-func _test_mudleg_deathrattle_masks_active_rune() -> void:
+func _test_mudleg_last_wish_masks_active_rune() -> void:
 	var mudleg := (_card("mudleg_brothers").duplicate(true) as CardData)
 	mudleg.armor = 3
 	mudleg.runes.assign([
@@ -429,7 +429,7 @@ func _test_mudleg_deathrattle_masks_active_rune() -> void:
 	)
 	controller.enemy_states[0].current_health = 0.0
 	controller._finalize_batch()
-	_expect(state.masked_rune_slots.is_empty(), "其他单位阵亡不会误触发泥腿三兄弟的来源限定亡语")
+	_expect(state.masked_rune_slots.is_empty(), "其他单位阵亡不会误触发泥腿三兄弟的来源限定遗愿")
 	state.current_armor = 0.0
 	var first_lethal_hit := BattleEffectEvent.new()
 	first_lethal_hit.source = controller.enemy_states[0]
@@ -446,14 +446,14 @@ func _test_mudleg_deathrattle_masks_active_rune() -> void:
 		and state.get_active_runes().size() == 2
 		and state.get_rune_pattern_result().pattern_type == RunePatternResult.PatternType.PAIR
 		and is_equal_approx(state.get_exact_action_amount(), 6.0),
-		"亡语随机遮蔽一枚当前生效符文，并立即重算二连牌型与行动值"
+		"遗愿随机遮蔽一枚当前生效符文，并立即重算二连牌型与行动值"
 	)
 	_expect(
 		state.alive
 		and is_equal_approx(state.current_health, float(state.get_max_health()))
 		and is_equal_approx(state.current_armor, 3.0)
 		and state.life_generation == 1,
-		"同一次亡语在原位置满生命重新入场，并恢复卡牌基础护甲"
+		"同一次遗愿在原位置满生命重新入场，并恢复卡牌基础护甲"
 	)
 	_expect(
 		is_equal_approx(state.battle_damage_taken, first_lethal_hit.effective_amount)
@@ -504,7 +504,7 @@ func _test_mudleg_deathrattle_masks_active_rune() -> void:
 		and state.get_active_runes().size() == 1
 		and is_equal_approx(state.current_health, float(state.get_max_health()))
 		and is_equal_approx(state.current_armor, 3.0),
-		"第二次亡语继续遮蔽另一枚生效符文，并完成第二次重新入场"
+		"第二次遗愿继续遮蔽另一枚生效符文，并完成第二次重新入场"
 	)
 	state.current_health = 0.0
 	controller._finalize_batch()
@@ -512,7 +512,7 @@ func _test_mudleg_deathrattle_masks_active_rune() -> void:
 		not state.alive
 		and state.life_generation == 2
 		and state.masked_rune_slots.size() == 2,
-		"亡语组共享每场两次额度，第三次阵亡不再遮蔽或重新入场"
+		"遗愿组共享每场两次额度，第三次阵亡不再遮蔽或重新入场"
 	)
 	controller.effect_runtime.notify_battle_end()
 	controller.effect_runtime.process_due(controller.elapsed_seconds)
@@ -549,7 +549,7 @@ func _test_mudleg_reentry_position_conflict() -> void:
 		not mudleg_state.alive
 		and mudleg_state.life_generation == 0
 		and unavailable_trace_found,
-		"原位置被存活单位占用时结束本次亡语，并保留可审计失败轨迹"
+		"原位置被存活单位占用时结束本次遗愿，并保留可审计失败轨迹"
 	)
 	_dispose(controller)
 
@@ -629,9 +629,9 @@ func _test_recruiter_pending_random_card_request() -> void:
 		and bool(parameters.get("owned_unique_exclusion", false)),
 		"征召官只记录带完整筛选参数的随机随从请求，等待D2-5按收藏与卡池结算"
 	)
-	controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+	controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH)
 	controller.effect_runtime.process_due(controller.elapsed_seconds)
-	_expect(controller.run_reward_ledger.get_entries().size() == 1, "征召官重新触发战吼也不会突破每场一次")
+	_expect(controller.run_reward_ledger.get_entries().size() == 1, "征召官重新触发突击也不会突破每场一次")
 	controller.effect_runtime.notify_battle_end()
 	controller.effect_runtime.process_due(controller.elapsed_seconds)
 	_expect(controller.run_reward_ledger.get_entries().size() == 1, "随机卡请求保留到正常战后，等待本局系统消费")

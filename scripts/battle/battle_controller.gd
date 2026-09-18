@@ -14,6 +14,7 @@ const BattleEffectRuntime = preload("res://scripts/battle/effects/battle_effect_
 const BattleEffectCatalog = preload("res://scripts/battle/effects/battle_effect_catalog.gd")
 const BattlePermanentGrowthLedger = preload("res://scripts/battle/battle_permanent_growth_ledger.gd")
 const BattleRunRewardLedger = preload("res://scripts/battle/battle_run_reward_ledger.gd")
+const BattleOwnedCardChangeLedger = preload("res://scripts/battle/battle_owned_card_change_ledger.gd")
 
 const EFFECT_DATA_PATH: String = "res://data/demo2/ash_ledger_effect_samples.json"
 
@@ -30,6 +31,7 @@ signal direct_damage_resolved(state: BattleSquadState, source_id: StringName, am
 signal effect_trace_emitted(entry: BattleEffectTraceEntry)
 signal permanent_growth_recorded(entry: Dictionary)
 signal pending_run_reward_recorded(entry: Dictionary)
+signal pending_owned_card_change_recorded(entry: Dictionary)
 signal battle_finished(result: Result)
 
 enum Result { NONE, PLAYER_VICTORY, PLAYER_DEFEAT, DRAW }
@@ -45,10 +47,12 @@ var battle_speed_multiplier: float = 1.0
 var use_projectile_timing: bool = false
 var active_continuous_effects: Array[Dictionary] = []
 var battle_seed: int = 0
+var battle_instance_id: StringName = &"" # 一次战前快照对应的稳定身份；战后账本与防重复提交共用
 var effect_runtime := BattleEffectRuntime.new()
 var effect_catalog: BattleEffectCatalog
 var permanent_growth_ledger := BattlePermanentGrowthLedger.new()
 var run_reward_ledger := BattleRunRewardLedger.new()
+var owned_card_change_ledger := BattleOwnedCardChangeLedger.new()
 
 var _random := RandomNumberGenerator.new()
 var _running: bool = false
@@ -61,6 +65,7 @@ var _pending_projectile_batch_counts: Dictionary = {}
 var _next_projectile_batch_id: int = 1
 var _next_projectile_launch_sequence: int = 1
 var _next_state_runtime_id: int = 1
+var _next_local_battle_sequence: int = 1
 
 
 func _ready() -> void:
@@ -71,10 +76,17 @@ func _process(delta: float) -> void:
 	advance_time(delta * battle_speed_multiplier)
 
 
-func start_battle(player_formation: Array[Dictionary], enemy_formation: Array[Dictionary], random_seed: int = -1, auto_run: bool = true) -> void:
+func start_battle(
+	player_formation: Array[Dictionary],
+	enemy_formation: Array[Dictionary],
+	random_seed: int = -1,
+	auto_run: bool = true,
+	requested_battle_instance_id: StringName = &""
+) -> void:
+	battle_instance_id = _resolve_battle_instance_id(requested_battle_instance_id)
 	_initialize_battle_state(player_formation, enemy_formation, random_seed)
 	if not effect_runtime.bindings.is_empty():
-		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH)
 		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS)
 		effect_runtime.process_due(elapsed_seconds)
 	_running = true
@@ -85,7 +97,8 @@ func start_battle(player_formation: Array[Dictionary], enemy_formation: Array[Di
 
 
 func prepare_battle_preview(player_formation: Array[Dictionary], enemy_formation: Array[Dictionary], random_seed: int = -1) -> void:
-	## 只建立站位并结算持续光环；不会触发战吼、推进时间或产生战斗结果。
+	## 只建立站位并结算持续光环；不会触发突击、推进时间或产生战斗结果。
+	battle_instance_id = &""
 	_initialize_battle_state(player_formation, enemy_formation, random_seed)
 	if not effect_runtime.bindings.is_empty():
 		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS)
@@ -111,6 +124,7 @@ func _initialize_battle_state(player_formation: Array[Dictionary], enemy_formati
 	_continuous_followups.clear()
 	permanent_growth_ledger.clear()
 	run_reward_ledger.clear()
+	owned_card_change_ledger.clear()
 	_next_fatigue_stack_seconds = BattleRules.FATIGUE_START_SECONDS
 	_next_fatigue_damage_seconds = BattleRules.FATIGUE_START_SECONDS
 	if random_seed >= 0:
@@ -171,8 +185,10 @@ func clear_battle() -> void:
 	_next_fatigue_damage_seconds = BattleRules.FATIGUE_START_SECONDS
 	_random = RandomNumberGenerator.new()
 	effect_runtime.initialize(self, 0)
+	battle_instance_id = &""
 	permanent_growth_ledger.clear()
 	run_reward_ledger.clear()
+	owned_card_change_ledger.clear()
 
 
 func _release_current_states() -> void:
@@ -249,7 +265,8 @@ func record_pending_permanent_growth(
 		amount,
 		effect_id,
 		source_runtime_id,
-		logical_time_us
+		logical_time_us,
+		battle_instance_id
 	):
 		return false
 	var entries := permanent_growth_ledger.get_entries()
@@ -273,12 +290,69 @@ func record_pending_run_reward(
 		effect_id,
 		source_runtime_id,
 		logical_time_us,
-		parameters
+		parameters,
+		battle_instance_id
 	):
 		return false
 	var entries := run_reward_ledger.get_entries()
 	pending_run_reward_recorded.emit(entries[-1])
 	return true
+
+
+func record_pending_owned_card_slot_change(
+	owner: BattleEffectOwnerRef,
+	kind: StringName,
+	slot_index: int,
+	slot_state: Dictionary,
+	effect_id: StringName,
+	source_runtime_id: int,
+	logical_time_us: int
+) -> bool:
+	if not owned_card_change_ledger.record_slot_change(
+		owner,
+		kind,
+		slot_index,
+		slot_state,
+		effect_id,
+		source_runtime_id,
+		logical_time_us,
+		battle_instance_id
+	):
+		return false
+	var entries := owned_card_change_ledger.get_entries()
+	pending_owned_card_change_recorded.emit(entries[-1])
+	return true
+
+
+func record_pending_emblem_progress(
+	owner: BattleEffectOwnerRef,
+	emblem_instance_id: StringName,
+	amount: int,
+	effect_id: StringName,
+	source_runtime_id: int,
+	logical_time_us: int
+) -> bool:
+	if not owned_card_change_ledger.record_emblem_progress(
+		owner,
+		emblem_instance_id,
+		amount,
+		effect_id,
+		source_runtime_id,
+		logical_time_us,
+		battle_instance_id
+	):
+		return false
+	var entries := owned_card_change_ledger.get_entries()
+	pending_owned_card_change_recorded.emit(entries[-1])
+	return true
+
+
+func _resolve_battle_instance_id(requested_id: StringName) -> StringName:
+	if not requested_id.is_empty():
+		return requested_id
+	var result := StringName("controller_battle_%06d" % _next_local_battle_sequence)
+	_next_local_battle_sequence += 1
+	return result
 
 
 func advance_time(delta: float) -> void:
@@ -1237,7 +1311,7 @@ func _finalize_batch() -> void:
 	recalculate_logical_layout()
 	for state: BattleSquadState in defeated:
 		squad_defeated.emit(state)
-		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.DEATHRATTLE, {"actor": state})
+		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.LAST_WISH, {"actor": state})
 		effect_runtime.notify_source_defeated(state)
 		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.ADJACENT_ALLY_DESTROYED, {"actor": state})
 		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.OTHER_ALLY_DESTROYED, {"actor": state})

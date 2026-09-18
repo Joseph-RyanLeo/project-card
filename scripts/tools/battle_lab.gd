@@ -997,7 +997,7 @@ func _on_effect_trace_emitted(entry: BattleEffectTraceEntry) -> void:
 	trace_text.text = "\n".join(_trace_lines)
 
 
-func _register_effect_test_cards(include_battlecry: bool) -> void:
+func _register_effect_test_cards(include_rush: bool) -> void:
 	for side_key: String in ["player", "enemy"]:
 		var specs := _get_side_specs(side_key)
 		var states := battle_controller.player_states if side_key == "player" else battle_controller.enemy_states
@@ -1017,8 +1017,8 @@ func _register_effect_test_cards(include_battlecry: bool) -> void:
 			state_index += 1
 	if battle_controller.effect_runtime.bindings.is_empty():
 		return
-	if include_battlecry:
-		battle_controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+	if include_rush:
+		battle_controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH)
 	battle_controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS)
 	battle_controller.effect_runtime.process_due(battle_controller.elapsed_seconds)
 

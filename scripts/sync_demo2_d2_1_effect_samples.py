@@ -20,7 +20,7 @@ _bridge_api = None
 
 TRIGGERS = {
     "continuous": "持续检查", "armor_gain_before_apply": "获得护甲量写入前",
-    "battlecry": "战吼", "deathrattle": "亡语", "pending": "待确认",
+    "rush": "突击", "last_wish": "遗愿", "pending": "待确认",
     "source_health_lost_accumulated": "自身累计失去生命", "source_armor_gained": "自身获得护甲时",
     "after_basic_heal": "基础治疗完成后", "echo": "回响", "other_ally_action_after": "其他友军行动后",
     "adjacent_ally_destroyed": "相邻友军被消灭", "other_ally_destroyed": "其他友军被消灭",

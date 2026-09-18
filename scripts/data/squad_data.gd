@@ -5,6 +5,8 @@ extends Resource
 ## horizontal_cards 决定左右位置，layer_cards 决定遮挡层级，
 ## two_card_layout 决定双卡间距；显示节点只能据此绘制，不能另存一套顺序。
 
+const OwnedCard = preload("res://scripts/data/owned_card.gd")
+
 enum TwoCardLayout {
 	COMPACT,
 	EXPANDED,
@@ -22,6 +24,7 @@ const FORBID_STACKING_KEYWORD: StringName = &"forbid_stacking" # 带此固有关
 @export var horizontal_cards: Array[CardData] = [] # 小队从左到右的卡牌顺序
 @export var layer_cards: Array[CardData] = [] # 从最上层到最下层保存，第一项提供卡牌效果
 @export var two_card_layout: TwoCardLayout = TwoCardLayout.EXPANDED # 双卡使用紧密或展开吸附布局
+var _owned_cards_by_card: Dictionary = {} # CardData引用→本局唯一OwnedCard；显示层仍可沿用CardData
 
 
 static func from_card(card_data: CardData) -> SquadData:
@@ -30,6 +33,13 @@ static func from_card(card_data: CardData) -> SquadData:
 	if card_data != null:
 		squad.horizontal_cards.append(card_data)
 		squad.layer_cards.append(card_data)
+	return squad
+
+
+static func from_owned_card(owned_card: OwnedCard) -> SquadData:
+	var squad := from_card(owned_card.card_data if owned_card != null else null)
+	if owned_card != null:
+		squad.bind_owned_card(owned_card.card_data, owned_card)
 	return squad
 
 
@@ -54,7 +64,74 @@ func duplicate_squad() -> SquadData:
 	copy.horizontal_cards.assign(horizontal_cards)
 	copy.layer_cards.assign(layer_cards)
 	copy.two_card_layout = two_card_layout
+	copy._owned_cards_by_card = _owned_cards_by_card.duplicate()
 	return copy
+
+
+func bind_owned_card(card_data: CardData, owned_card: OwnedCard) -> bool:
+	if (
+		card_data == null
+		or owned_card == null
+		or owned_card.card_data != card_data
+		or not contains(card_data)
+	):
+		return false
+	_owned_cards_by_card[card_data] = owned_card
+	return true
+
+
+func get_owned_card(card_data: CardData) -> OwnedCard:
+	return _owned_cards_by_card.get(card_data) as OwnedCard
+
+
+func get_action_source_instance() -> OwnedCard:
+	return get_owned_card(get_action_source())
+
+
+func get_vitals_source_instance() -> OwnedCard:
+	return get_owned_card(get_vitals_source())
+
+
+func get_effect_source_instance() -> OwnedCard:
+	return get_owned_card(get_effect_source())
+
+
+func get_effective_action_base_value() -> int:
+	var owned_card := get_action_source_instance()
+	var source := get_action_source()
+	return (
+		owned_card.get_effective_base_value()
+		if owned_card != null
+		else (source.base_value if source != null else 0)
+	)
+
+
+func get_effective_max_health() -> int:
+	var owned_card := get_vitals_source_instance()
+	var source := get_vitals_source()
+	return (
+		owned_card.get_effective_max_health()
+		if owned_card != null
+		else (source.max_health if source != null else 0)
+	)
+
+
+func get_effective_base_armor() -> int:
+	var owned_card := get_vitals_source_instance()
+	var source := get_vitals_source()
+	return (
+		owned_card.get_effective_base_armor()
+		if owned_card != null
+		else (source.armor if source != null else 0)
+	)
+
+
+func get_effective_action_type() -> CardData.ActionType:
+	var owned_card := get_action_source_instance()
+	var source := get_action_source()
+	if owned_card != null and owned_card.resolved_action_type >= 0:
+		return owned_card.resolved_action_type as CardData.ActionType
+	return source.action_type if source != null else CardData.ActionType.MELEE
 
 
 func is_valid() -> bool:
@@ -308,6 +385,9 @@ func merge_compact_double_with_single(
 	else:
 		result.horizontal_cards.append(single_card)
 	result.layer_cards.append(single_card)
+	var single_owned_card := single_squad.get_owned_card(single_card)
+	if single_owned_card != null:
+		result.bind_owned_card(single_card, single_owned_card)
 	result.two_card_layout = TwoCardLayout.EXPANDED
 	result._normalize()
 	return result if result.is_valid() else null
@@ -322,6 +402,7 @@ func remove_card(card_data: CardData) -> bool:
 	var removed_horizontal_index := horizontal_cards.find(card_data)
 	horizontal_cards.erase(card_data)
 	layer_cards.erase(card_data)
+	_owned_cards_by_card.erase(card_data)
 	if old_count == 3 and horizontal_cards.size() == 2:
 		two_card_layout = (
 			TwoCardLayout.EXPANDED
@@ -363,6 +444,9 @@ func _normalize() -> void:
 	for card_data: CardData in horizontal_cards:
 		if not layer_cards.has(card_data):
 			layer_cards.append(card_data)
+	for mapped_card: Variant in _owned_cards_by_card.keys():
+		if not horizontal_cards.has(mapped_card):
+			_owned_cards_by_card.erase(mapped_card)
 	if horizontal_cards.size() != 2:
 		two_card_layout = TwoCardLayout.EXPANDED
 	_ensure_three_card_visibility()

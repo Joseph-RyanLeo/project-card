@@ -6,8 +6,8 @@ extends RefCounted
 
 enum Trigger {
 	CONTINUOUS,
-	BATTLECRY,
-	DEATHRATTLE,
+	RUSH,
+	LAST_WISH,
 	BATTLE_START_SPELL,
 	ELAPSED_BATTLE_TIME,
 	OTHER_ALLY_ACTION_AFTER,
@@ -123,8 +123,11 @@ enum EndRelation { ANY, ALL }
 
 const TRIGGER_BY_NAME: Dictionary = {
 	"continuous": Trigger.CONTINUOUS,
-	"battlecry": Trigger.BATTLECRY,
-	"deathrattle": Trigger.DEATHRATTLE,
+	"rush": Trigger.RUSH,
+	"last_wish": Trigger.LAST_WISH,
+	# 仅用于读取迁移前的旧存档/旧导出；新资源与运行时一律写 rush / last_wish。
+	"battlecry": Trigger.RUSH,
+	"deathrattle": Trigger.LAST_WISH,
 	"battle_start_spell": Trigger.BATTLE_START_SPELL,
 	"elapsed_battle_time": Trigger.ELAPSED_BATTLE_TIME,
 	"other_ally_action_after": Trigger.OTHER_ALLY_ACTION_AFTER,

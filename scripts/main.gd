@@ -19,6 +19,13 @@ const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_e
 const BattleAttackTrailRenderer = preload("res://scripts/battle/battle_attack_trail_renderer.gd")
 const BattlePermanentGrowthLedger = preload("res://scripts/battle/battle_permanent_growth_ledger.gd")
 const BattleRunRewardLedger = preload("res://scripts/battle/battle_run_reward_ledger.gd")
+const BattlePreparationSnapshot = preload("res://scripts/data/battle_preparation_snapshot.gd")
+const OwnedCard = preload("res://scripts/data/owned_card.gd")
+const OwnedCardCollection = preload("res://scripts/data/owned_card_collection.gd")
+const RunSettlementJournal = preload("res://scripts/data/run_settlement_journal.gd")
+const RunRewardState = preload("res://scripts/data/run_reward_state.gd")
+const BattleSettlementService = preload("res://scripts/data/battle_settlement_service.gd")
+const RunSaveService = preload("res://scripts/data/run_save_service.gd")
 const PAGE_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_large.fnt")
 const BATTLE_LOG_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const WOOD_WORLD_TEXTURE: Texture2D = preload("res://assets/stage_6_5/wood_world.png")
@@ -221,7 +228,7 @@ var _card_type_tab_tween: Tween
 var _recent_bookmark_tween: Tween
 var _recent_bookmark_shake_tween: Tween
 var _page_turn_overlay: Control
-var _battle_snapshot: Dictionary = {}
+var _battle_snapshot: BattlePreparationSnapshot
 var _battle_state_slots: Dictionary = {}
 var battle_departure_count: int = 0
 var battle_speed_index: int = 0
@@ -232,8 +239,18 @@ var _battle_log_by_group: Dictionary = {}
 var _battle_generation: int = 0
 var _completed_battle_departures: Array[Dictionary] = []
 var _battle_departure_flush_queued: bool = false
+var _next_battle_instance_sequence: int = 1
+var _resume_battle_instance_id: StringName = &"" # 战斗中退出读档后，下一次开战复用原战斗身份
 
-@export var collection_cards: Array[CardData] = [] # 真实收藏成员；显示顺序固定按稀有度 V→I 派生
+var owned_card_collection := OwnedCardCollection.new()
+var settlement_journal := RunSettlementJournal.new()
+var run_reward_state := RunRewardState.new()
+var battle_settlement_service := BattleSettlementService.new()
+var run_save_service := RunSaveService.new()
+var _last_battle_settlement_result: Dictionary = {}
+var _last_run_persistence_result: Dictionary = {}
+
+@export var collection_cards: Array[CardData] = [] # 场景初始定义及旧UI派生数组；可变所有权以OwnedCardCollection为准
 @export var collection_card_scale: float = 1.0 # 收藏区域中卡牌的基础缩放倍率
 
 var phase_label: Label
@@ -896,6 +913,7 @@ func _ready() -> void:
 	if not has_node("WorldContent"):
 		_build_scene_structure()
 	_bind_scene_nodes()
+	_initialize_owned_card_collection()
 	_build_formula_popup()
 	if not _battlefield_has_active_rune_effects():
 		CardView.reset_active_rune_flow()
@@ -940,6 +958,55 @@ func _ready() -> void:
 	_update_phase_label()
 	_on_drag_mode_toggled(drag_mode_button.button_pressed)
 	_refresh_preparation_effect_preview.call_deferred()
+
+
+func _initialize_owned_card_collection() -> void:
+	# Main.tscn 目前仍以 CardData 数组提供初始内容；入树时只转换一次，
+	# 此后 OwnedCardCollection 才是可变归属的权威容器。
+	if owned_card_collection.size() > 0:
+		return
+	for card_data: CardData in collection_cards:
+		owned_card_collection.create_card(card_data)
+
+
+func _sync_legacy_collection_cards() -> void:
+	# 收藏 UI 的实例化与筛选仍读取 CardData。本小步只保留这层派生数组，
+	# 不允许它拥有永久状态；后续 UI 迁移到 OwnedCard 时可删除此兼容入口。
+	collection_cards.clear()
+	for owned_card: OwnedCard in owned_card_collection.get_cards():
+		collection_cards.append(owned_card.card_data)
+
+
+func _bind_owned_cards_to_player_squads() -> void:
+	# 同一实例即使换排、换位或拆队，SquadData 中的绑定仍随卡保留。
+	# 对尚未绑定的旧场景数据按收藏获得顺序补齐；已被其他小队占用的实例不会复用。
+	var claimed_instance_ids: Dictionary = {}
+	for row: BattlefieldRow in [front_row, back_row]:
+		for slot: BoardSlot in row.get_squads():
+			var squad := slot.get_squad_data()
+			if squad == null:
+				continue
+			for card_data: CardData in squad.horizontal_cards:
+				var owned_card := squad.get_owned_card(card_data)
+				if owned_card == null:
+					owned_card = owned_card_collection.find_first_by_definition(
+						card_data,
+						claimed_instance_ids
+					)
+					if owned_card != null:
+						squad.bind_owned_card(card_data, owned_card)
+				if owned_card != null:
+					claimed_instance_ids[owned_card.instance_id] = true
+
+
+func _take_next_battle_instance_id() -> StringName:
+	if not _resume_battle_instance_id.is_empty():
+		var resumed_id := _resume_battle_instance_id
+		_resume_battle_instance_id = &""
+		return resumed_id
+	var result := StringName("run_battle_%06d" % _next_battle_instance_sequence)
+	_next_battle_instance_sequence += 1
+	return result
 
 
 func _bind_scene_nodes() -> void:
@@ -2024,7 +2091,15 @@ func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
 	if current_phase != GamePhase.PREPARE or battle_controller == null:
 		return false
 	_cancel_click_carry()
-	_battle_snapshot = _capture_battle_snapshot()
+	_bind_owned_cards_to_player_squads()
+	var resolved_seed := (
+		random_seed
+		if random_seed >= 0
+		else clampi(roundi(battle_seed_spin.value), 0, BATTLE_SEED_MAX)
+	)
+	var battle_instance_id := _take_next_battle_instance_id()
+	_battle_snapshot = _capture_battle_snapshot(battle_instance_id, resolved_seed)
+	_last_battle_settlement_result.clear()
 	_battle_state_slots.clear()
 	_clear_battle_log()
 	_battle_generation += 1
@@ -2040,17 +2115,13 @@ func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
 	current_phase = GamePhase.BATTLE
 	battle_result_panel.visible = false
 	_update_phase_label()
-	var resolved_seed := (
-		random_seed
-		if random_seed >= 0
-		else clampi(roundi(battle_seed_spin.value), 0, BATTLE_SEED_MAX)
-	)
 	battle_seed_spin.value = resolved_seed
 	battle_controller.start_battle(
 		player_formation,
 		enemy_formation,
 		resolved_seed,
-		auto_run
+		auto_run,
+		battle_instance_id
 	)
 	_map_battle_states_to_slots(battle_controller.player_states, player_formation)
 	_map_battle_states_to_slots(battle_controller.enemy_states, enemy_formation)
@@ -2066,7 +2137,7 @@ func _on_restart_battle_button_pressed() -> void:
 
 
 func restart_battle() -> bool:
-	if _battle_snapshot.is_empty() or battle_controller == null:
+	if _battle_snapshot == null or _battle_snapshot.is_empty() or battle_controller == null:
 		return false
 	battle_controller.clear_battle()
 	_clear_battle_log()
@@ -2075,7 +2146,10 @@ func restart_battle() -> bool:
 	_battle_departure_flush_queued = false
 	_active_battle_departures = 0
 	_pending_battle_result = BattleController.Result.NONE
-	_restore_battle_snapshot()
+	_last_battle_settlement_result.clear()
+	_restore_battle_snapshot(
+		not settlement_journal.is_committed(_battle_snapshot.battle_instance_id)
+	)
 	_battle_state_slots.clear()
 	current_phase = GamePhase.PREPARE
 	battle_result_panel.visible = false
@@ -2120,13 +2194,24 @@ func _update_phase_label() -> void:
 	_refresh_drag_availability()
 
 
-func _capture_battle_snapshot() -> Dictionary:
-	return {
-		"player_front": _duplicate_row_squads(front_row),
-		"player_back": _duplicate_row_squads(back_row),
-		"enemy_front": _duplicate_row_squads(enemy_front_row),
-		"enemy_back": _duplicate_row_squads(enemy_back_row),
-	}
+func _capture_battle_snapshot(
+	battle_instance_id: StringName,
+	battle_seed: int
+) -> BattlePreparationSnapshot:
+	var snapshot := BattlePreparationSnapshot.new()
+	if not snapshot.initialize(
+		battle_instance_id,
+		battle_seed,
+		owned_card_collection,
+		{
+			&"player_front": _duplicate_row_squads(front_row),
+			&"player_back": _duplicate_row_squads(back_row),
+			&"enemy_front": _duplicate_row_squads(enemy_front_row),
+			&"enemy_back": _duplicate_row_squads(enemy_back_row),
+		}
+	):
+		return null
+	return snapshot
 
 
 func _duplicate_row_squads(row: BattlefieldRow) -> Array[SquadData]:
@@ -2136,11 +2221,17 @@ func _duplicate_row_squads(row: BattlefieldRow) -> Array[SquadData]:
 	return squads
 
 
-func _restore_battle_snapshot() -> void:
-	_restore_row_from_snapshot(front_row, _battle_snapshot.get("player_front", []))
-	_restore_row_from_snapshot(back_row, _battle_snapshot.get("player_back", []))
-	_restore_row_from_snapshot(enemy_front_row, _battle_snapshot.get("enemy_front", []))
-	_restore_row_from_snapshot(enemy_back_row, _battle_snapshot.get("enemy_back", []))
+func _restore_battle_snapshot(restore_collection_state: bool = true) -> void:
+	if _battle_snapshot == null:
+		return
+	if restore_collection_state and not _battle_snapshot.restore_collection(owned_card_collection):
+		return
+	battle_seed_spin.value = _battle_snapshot.battle_seed
+	_sync_legacy_collection_cards()
+	_restore_row_from_snapshot(front_row, _battle_snapshot.get_row_squads(&"player_front"))
+	_restore_row_from_snapshot(back_row, _battle_snapshot.get_row_squads(&"player_back"))
+	_restore_row_from_snapshot(enemy_front_row, _battle_snapshot.get_row_squads(&"enemy_front"))
+	_restore_row_from_snapshot(enemy_back_row, _battle_snapshot.get_row_squads(&"enemy_back"))
 
 
 func _restore_row_from_snapshot(row: BattlefieldRow, snapshot_value: Variant) -> void:
@@ -2152,6 +2243,137 @@ func _restore_row_from_snapshot(row: BattlefieldRow, snapshot_value: Variant) ->
 			var slot := row.add_squad(squad.duplicate_squad(), row.get_squad_count())
 			if slot != null:
 				slot.clear_battle_status()
+
+
+func save_run_to_path(path: String) -> Error:
+	var use_battle_snapshot := (
+		_battle_snapshot != null
+		and not _battle_snapshot.is_empty()
+		and current_phase != GamePhase.PREPARE
+		and not settlement_journal.is_committed(_battle_snapshot.battle_instance_id)
+	)
+	var collection_state := (
+		_battle_snapshot.get_collection_state_for_save()
+		if use_battle_snapshot
+		else owned_card_collection.capture_state()
+	)
+	var rows := _snapshot_rows_for_save() if use_battle_snapshot else _current_rows_for_save()
+	var saved_seed := (
+		_battle_snapshot.battle_seed
+		if use_battle_snapshot
+		else clampi(roundi(battle_seed_spin.value), 0, BATTLE_SEED_MAX)
+	)
+	var pending_battle_id := (
+		_battle_snapshot.battle_instance_id
+		if use_battle_snapshot
+		else &""
+	)
+	var checkpoint := run_save_service.create_checkpoint(
+		collection_state,
+		rows,
+		saved_seed,
+		pending_battle_id,
+		_next_battle_instance_sequence,
+		run_reward_state,
+		settlement_journal,
+		current_phase
+	)
+	var error := run_save_service.save_checkpoint(path, checkpoint)
+	_last_run_persistence_result = {
+		"success": error == OK,
+		"error": error,
+		"path": path,
+		"pending_battle_instance_id": pending_battle_id,
+	}
+	return error
+
+
+func load_run_from_path(path: String) -> bool:
+	var load_result := run_save_service.load_checkpoint(path)
+	if not bool(load_result.get("success", false)):
+		_last_run_persistence_result = load_result
+		return false
+	var restore_result := run_save_service.restore_checkpoint(
+		load_result.get("checkpoint", {}) as Dictionary,
+		owned_card_collection,
+		run_reward_state,
+		settlement_journal,
+		_build_card_definition_registry()
+	)
+	if not bool(restore_result.get("success", false)):
+		_last_run_persistence_result = restore_result
+		return false
+
+	_cancel_click_carry()
+	if battle_controller != null:
+		battle_controller.clear_battle()
+	_clear_battle_log()
+	_battle_generation += 1
+	_completed_battle_departures.clear()
+	_battle_departure_flush_queued = false
+	_active_battle_departures = 0
+	_pending_battle_result = BattleController.Result.NONE
+	_last_battle_settlement_result.clear()
+	_battle_snapshot = null
+	_battle_state_slots.clear()
+	_next_battle_instance_sequence = int(restore_result.get("next_battle_instance_sequence", 1))
+	_resume_battle_instance_id = restore_result.get("pending_battle_instance_id", &"") as StringName
+	battle_seed_spin.value = int(restore_result.get("battle_seed", 0))
+	_sync_legacy_collection_cards()
+	var restored_rows := restore_result.get("rows", {}) as Dictionary
+	_restore_row_from_snapshot(front_row, restored_rows.get(&"player_front", []))
+	_restore_row_from_snapshot(back_row, restored_rows.get(&"player_back", []))
+	_restore_row_from_snapshot(enemy_front_row, restored_rows.get(&"enemy_front", []))
+	_restore_row_from_snapshot(enemy_back_row, restored_rows.get(&"enemy_back", []))
+	current_phase = GamePhase.PREPARE
+	battle_result_panel.visible = false
+	battle_result_label.text = "战斗结算"
+	battle_result_summary_label.text = "卡面：本局统计\n永久成长：无\n本场奖励：无"
+	_update_battle_timer()
+	_update_phase_label()
+	_build_collection_cards()
+	_refresh_preparation_effect_preview.call_deferred()
+	play_area_label.text = "已从本局存档恢复到安全的战前准备状态"
+	_last_run_persistence_result = {
+		"success": true,
+		"path": path,
+		"pending_battle_instance_id": _resume_battle_instance_id,
+	}
+	return true
+
+
+func _current_rows_for_save() -> Dictionary:
+	return {
+		&"player_front": _duplicate_row_squads(front_row),
+		&"player_back": _duplicate_row_squads(back_row),
+		&"enemy_front": _duplicate_row_squads(enemy_front_row),
+		&"enemy_back": _duplicate_row_squads(enemy_back_row),
+	}
+
+
+func _snapshot_rows_for_save() -> Dictionary:
+	return {
+		&"player_front": _battle_snapshot.get_row_squads(&"player_front"),
+		&"player_back": _battle_snapshot.get_row_squads(&"player_back"),
+		&"enemy_front": _battle_snapshot.get_row_squads(&"enemy_front"),
+		&"enemy_back": _battle_snapshot.get_row_squads(&"enemy_back"),
+	}
+
+
+func _build_card_definition_registry() -> Dictionary:
+	var registry: Dictionary = {}
+	for owned_card: OwnedCard in owned_card_collection.get_cards():
+		if owned_card.card_data != null:
+			registry[owned_card.card_data.id] = owned_card.card_data
+	for row: BattlefieldRow in [front_row, back_row, enemy_front_row, enemy_back_row]:
+		for slot: BoardSlot in row.get_squads():
+			var squad := slot.get_squad_data()
+			if squad == null:
+				continue
+			for card_data: CardData in squad.horizontal_cards:
+				if card_data != null:
+					registry[card_data.id] = card_data
+	return registry
 
 
 func _build_battle_formation(
@@ -2201,7 +2423,7 @@ func _on_battle_states_changed() -> void:
 func _refresh_preparation_effect_preview() -> void:
 	if current_phase != GamePhase.PREPARE or battle_controller == null:
 		return
-	# 备战态复用正式战斗的状态初始化与持续效果系统，但不会触发战吼、推进时间或写入奖励账本。
+	# 备战态复用正式战斗的状态初始化与持续效果系统，但不会触发突击、推进时间或写入奖励账本。
 	var player_formation := _build_battle_formation(front_row, &"player_front")
 	player_formation.append_array(_build_battle_formation(back_row, &"player_back"))
 	var enemy_formation := _build_battle_formation(enemy_front_row, &"enemy_front")
@@ -2636,6 +2858,7 @@ func _show_battle_result(result: BattleController.Result) -> void:
 	_pending_battle_result = BattleController.Result.NONE
 	current_phase = GamePhase.RESULT
 	_restore_battle_result_layout()
+	_last_battle_settlement_result = settle_current_battle()
 	match result:
 		BattleController.Result.PLAYER_VICTORY:
 			battle_result_label.text = "胜利"
@@ -2655,14 +2878,19 @@ func _refresh_battle_result_summary() -> void:
 		return
 	battle_result_summary_label.text = _format_battle_result_summary(
 		battle_controller.permanent_growth_ledger.get_entries(),
-		battle_controller.run_reward_ledger.get_entries()
+		battle_controller.run_reward_ledger.get_entries(),
+		_last_battle_settlement_result.get("status") in [
+			BattleSettlementService.STATUS_COMMITTED,
+			BattleSettlementService.STATUS_ALREADY_COMMITTED,
+		]
 	)
 	battle_result_summary_label.scroll_to_line(0)
 
 
 func _format_battle_result_summary(
 	growth_entries: Array[Dictionary],
-	reward_entries: Array[Dictionary]
+	reward_entries: Array[Dictionary],
+	settled: bool = false
 ) -> String:
 	var lines: Array[String] = ["卡面：本局统计"]
 	var growth_totals: Dictionary = {}
@@ -2694,7 +2922,7 @@ func _format_battle_result_summary(
 	if growth_order.is_empty():
 		lines.append("永久成长：无")
 	else:
-		lines.append("永久成长（待写回）")
+		lines.append("永久成长" if settled else "永久成长（待写回）")
 		for key: String in growth_order:
 			var total := growth_totals[key] as Dictionary
 			var stat_name := (
@@ -2721,12 +2949,34 @@ func _format_battle_result_summary(
 	if gold_total <= 0 and random_card_total <= 0:
 		lines.append("本场奖励：无")
 	else:
-		lines.append("本场奖励（待写回）")
+		lines.append("本场奖励" if settled else "本场奖励（待写回）")
 		if gold_total > 0:
 			lines.append("• 金币 +%d" % gold_total)
 		if random_card_total > 0:
-			lines.append("• 待抽取随从 +%d" % random_card_total)
+			lines.append(
+				"• 随机随从请求已进入待解析队列 +%d" % random_card_total
+				if settled
+				else "• 待抽取随从 +%d" % random_card_total
+			)
 	return "\n".join(lines)
+
+
+func settle_current_battle() -> Dictionary:
+	if _battle_snapshot == null or battle_controller == null:
+		return {
+			"success": false,
+			"status": BattleSettlementService.STATUS_FAILED,
+			"reason": "missing_main_battle_context",
+		}
+	return battle_settlement_service.settle(
+		_battle_snapshot,
+		battle_controller.permanent_growth_ledger.get_entries(),
+		battle_controller.run_reward_ledger.get_entries(),
+		owned_card_collection,
+		run_reward_state,
+		settlement_journal,
+		battle_controller.owned_card_change_ledger.get_entries()
+	)
 
 
 func _format_positive_result_amount(amount: float) -> String:

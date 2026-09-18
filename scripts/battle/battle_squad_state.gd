@@ -85,9 +85,8 @@ func initialize(
 	row_key = row
 	formation_index = index
 	runtime_base_cooldown_override = base_cooldown_override
-	var vitals_source := value.get_vitals_source() if value != null else null
-	_set_exact_health(clampi(vitals_source.max_health, 0, CardData.MAXIMUM_HEALTH) if vitals_source != null else 0)
-	_set_exact_armor(clampi(vitals_source.armor, 0, CardData.MAXIMUM_ARMOR) if vitals_source != null else 0)
+	_set_exact_health(value.get_effective_max_health() if value != null else 0)
+	_set_exact_armor(value.get_effective_base_armor() if value != null else 0)
 	displayed_health = clampi(roundi(current_health), 0, get_max_health())
 	displayed_armor = clampi(roundi(current_armor), 0, CardData.MAXIMUM_ARMOR)
 	cooldown_progress = 0.0
@@ -123,14 +122,13 @@ func clear_battle_statistics() -> void:
 func revive_at_current_maximum(health_amount: float) -> bool:
 	# 重新入场只恢复已确认的生命与基础护甲；冷却、强化和符文遮蔽
 	# 保持本场当前状态，避免替未确认规则擅自重置。
-	var vitals_source := get_vitals_source()
-	if vitals_source == null:
+	if get_vitals_source() == null or squad_data == null:
 		return false
 	var restored_health := minf(maxf(health_amount, 0.0), float(get_max_health()))
 	if restored_health <= 0.0:
 		return false
 	_set_exact_health(restored_health)
-	_set_exact_armor(float(vitals_source.armor))
+	_set_exact_armor(float(squad_data.get_effective_base_armor()))
 	displayed_health = clampi(roundi(current_health), 0, get_max_health())
 	displayed_armor = clampi(roundi(current_armor), 0, CardData.MAXIMUM_ARMOR)
 	for channel: StringName in fractional_accumulators:
@@ -167,8 +165,7 @@ func get_effect_source() -> CardData:
 func get_effective_action_type() -> CardData.ActionType:
 	if runtime_action_type_override >= 0:
 		return runtime_action_type_override as CardData.ActionType
-	var source := get_action_source()
-	return source.action_type if source != null else CardData.ActionType.MELEE
+	return squad_data.get_effective_action_type() if squad_data != null else CardData.ActionType.MELEE
 
 
 func set_runtime_action_type(value: CardData.ActionType) -> void:
@@ -180,8 +177,7 @@ func clear_runtime_action_type() -> void:
 
 
 func get_max_health() -> int:
-	var source := get_vitals_source()
-	var base := float(source.max_health) if source != null else 0.0
+	var base := float(squad_data.get_effective_max_health()) if squad_data != null else 0.0
 	return clampi(roundi(base + modifiers.get_additive(BattleModifier.Stat.MAX_HEALTH)), 0, CardData.MAXIMUM_HEALTH)
 
 
@@ -192,11 +188,10 @@ func get_target_weight() -> int:
 
 
 func get_exact_action_amount() -> float:
-	var source := get_action_source()
-	if source == null or squad_data == null:
+	if get_action_source() == null or squad_data == null:
 		return 0.0
 	var modified_base := clampi(
-		roundi(float(source.base_value) + modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)),
+		roundi(float(squad_data.get_effective_action_base_value()) + modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)),
 		0,
 		CardData.MAXIMUM_BASE_VALUE
 	)
@@ -317,12 +312,11 @@ func get_action_amount() -> int:
 
 
 func get_display_action_value() -> int:
-	var source := get_action_source()
-	if source == null:
+	if get_action_source() == null or squad_data == null:
 		return 0
 	# 卡面显示“这次普通行动的基础数值”，包含效果修正与尚未消费的强化；牌型倍率仍在结算公式中展示。
 	return clampi(roundi(
-		float(source.base_value)
+		float(squad_data.get_effective_action_base_value())
 		+ modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)
 		+ modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT)
 	), 0, 999)
