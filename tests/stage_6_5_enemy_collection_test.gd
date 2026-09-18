@@ -190,12 +190,18 @@ func _test_collection_pages_filters_and_transactions() -> void:
 		and main.element_buttons.position == main.ELEMENT_FILTER_POSITION
 		and first_rarity_button.texture_normal is AtlasTexture
 		and (first_rarity_button.texture_normal as AtlasTexture).region == main.RARITY_FILTER_REGIONS[0]
+		and (first_rarity_button.texture_normal as AtlasTexture).atlas == main.RARITY_FILTER_TEXTURE
+		and first_rarity_button.texture_pressed is AtlasTexture
+		and (first_rarity_button.texture_pressed as AtlasTexture).region == main.RARITY_FILTER_SELECTED_REGIONS[0]
 		and first_element_button.texture_normal is AtlasTexture
 		and (first_element_button.texture_normal as AtlasTexture).region == main.ELEMENT_FILTER_REGIONS[0]
+		and (first_element_button.texture_normal as AtlasTexture).atlas == main.ELEMENT_FILTER_TEXTURE
+		and first_element_button.texture_pressed is AtlasTexture
+		and (first_element_button.texture_pressed as AtlasTexture).region == main.ELEMENT_FILTER_SELECTED_REGIONS[0]
 		and first_rarity_button.position == Vector2.ZERO
 		and first_element_button.position == Vector2.ZERO
-		and first_rarity_button.has_node("SelectedMark"),
-		"稀有度与元素的每枚图集裁片都由自己的 TextureButton 显示并点击"
+		and not first_rarity_button.has_node("SelectedMark"),
+		"稀有度与元素按钮分别使用暗版常态和亮版选中裁片，不再叠加文字勾选标记"
 	)
 	var first_type_tab := main.card_type_filter_tabs.get_child(0) as TextureButton
 	_expect(
@@ -537,9 +543,9 @@ func _test_collection_pages_filters_and_transactions() -> void:
 	_expect(
 		main.active_rarity_filters == [CardData.Rarity.III]
 		and rarity_filtered.all(func(card: CardData) -> bool: return card.rarity == CardData.Rarity.III)
-		and not (main.rarity_buttons.get_child(CardData.Rarity.I).get_node("SelectedMark") as Label).visible
-		and (main.rarity_buttons.get_child(CardData.Rarity.III).get_node("SelectedMark") as Label).visible,
-		"稀有度互斥选择，只保留新选择及其勾标记"
+		and not (main.rarity_buttons.get_child(CardData.Rarity.I) as BaseButton).button_pressed
+		and (main.rarity_buttons.get_child(CardData.Rarity.III) as BaseButton).button_pressed,
+		"稀有度互斥选择，只保留新选择并切换到对应亮版图标"
 	)
 	var selected_actions: Array[int] = []
 	for card: CardData in rarity_filtered:

@@ -19,6 +19,7 @@ const BATTLE_LOG_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const SCENARIO_SAVE_PATH := "user://battle_lab_scenario.json"
 const ACTION_NAMES: Array[String] = ["近战", "远程", "法术", "治疗", "防御"]
 const ELEMENT_NAMES: Array[String] = ["火", "水", "木", "光", "暗"]
+const RACE_NAMES: Array[String] = ["人类", "精灵", "矮人", "造物", "元素", "亡灵", "魔族", "野兽", "植物"]
 const PRESET_IDS: Array[StringName] = [&"light_water", &"wood_fire", &"fire_heal", &"water_boundary", &"light_targets"]
 const PRESET_NAMES: Array[String] = ["3光＋2水", "2木＋2火", "五火治疗", "五水边界", "五光目标不足"]
 const SPEED_VALUES: Array[float] = [1.0, 2.0, 3.0] # 实验室连续播放可选择的战斗时间倍率
@@ -292,7 +293,7 @@ func _build_side_editor(side_key: String, title_text: String) -> Control:
 	var row_option := OptionButton.new()
 	row_option.add_item("前排", 0)
 	row_option.add_item("后排", 1)
-	var position_spin := _make_spin(0.0, 3.0, 1.0)
+	var position_spin := _make_spin(0.0, float(BattleLabScenario.SIDE_SLOT_COUNT - 1), 1.0)
 	var row_line := HBoxContainer.new()
 	row_line.add_child(_fixed_label("排与位置", 72.0))
 	row_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -305,6 +306,10 @@ func _build_side_editor(side_key: String, title_text: String) -> Control:
 	for index: int in ACTION_NAMES.size():
 		action_option.add_item(ACTION_NAMES[index], index)
 	layout.add_child(_labeled_row("行动方式", action_option))
+	var race_option := OptionButton.new()
+	for index: int in RACE_NAMES.size():
+		race_option.add_item(RACE_NAMES[index], index)
+	layout.add_child(_labeled_row("种族", race_option))
 	var base_spin := _make_spin(0.0, 99.0, 1.0)
 	var cooldown_spin := _make_spin(
 		BattleRules.MINIMUM_COOLDOWN_SECONDS,
@@ -354,6 +359,7 @@ func _build_side_editor(side_key: String, title_text: String) -> Control:
 		"row": row_option,
 		"position": position_spin,
 		"action": action_option,
+		"race": race_option,
 		"base": base_spin,
 		"cooldown": cooldown_spin,
 		"health": health_spin,
@@ -369,6 +375,7 @@ func _build_side_editor(side_key: String, title_text: String) -> Control:
 	row_option.item_selected.connect(func(_value: int) -> void: _on_editor_changed(side_key))
 	position_spin.value_changed.connect(func(_value: float) -> void: _on_editor_changed(side_key))
 	action_option.item_selected.connect(func(_value: int) -> void: _on_editor_changed(side_key))
+	race_option.item_selected.connect(func(_value: int) -> void: _on_editor_changed(side_key))
 	for spin: SpinBox in [base_spin, cooldown_spin, health_spin, armor_spin]:
 		spin.value_changed.connect(func(_value: float) -> void: _on_editor_changed(side_key))
 	effect_option.item_selected.connect(func(_value: int) -> void: _on_editor_changed(side_key))
@@ -535,7 +542,7 @@ func _load_scenario_into_controls() -> void:
 	_load_editor("player")
 	_load_editor("enemy")
 	_validate_current_scenario()
-	_refresh_state_view()
+	_return_to_configuration_preview()
 
 
 func _load_editor(side_key: String) -> void:
@@ -548,6 +555,7 @@ func _load_editor(side_key: String) -> void:
 	(controls["row"] as OptionButton).select(1 if String(spec.get("row", "front")) == "back" else 0)
 	(controls["position"] as SpinBox).value = int(spec.get("position", 0))
 	_select_option_by_id(controls["action"] as OptionButton, int(spec.get("action", CardData.ActionType.MELEE)))
+	_select_option_by_id(controls["race"] as OptionButton, int(spec.get("race", CardData.RaceType.HUMAN)))
 	(controls["base"] as SpinBox).value = int(spec.get("base_value", 10))
 	(controls["cooldown"] as SpinBox).value = float(spec.get("cooldown", 2.0))
 	(controls["health"] as SpinBox).value = int(spec.get("health", 100))
@@ -579,6 +587,7 @@ func _commit_editor(side_key: String) -> void:
 		"row": "back" if (controls["row"] as OptionButton).selected == 1 else "front",
 		"position": roundi((controls["position"] as SpinBox).value),
 		"action": (controls["action"] as OptionButton).get_selected_id(),
+		"race": (controls["race"] as OptionButton).get_selected_id(),
 		"base_value": roundi((controls["base"] as SpinBox).value),
 		"cooldown": (controls["cooldown"] as SpinBox).value,
 		"health": roundi((controls["health"] as SpinBox).value),
@@ -652,7 +661,7 @@ func _start_battle() -> void:
 	battle_controller.use_projectile_timing = true
 	battle_controller.set_battle_speed_multiplier(SPEED_VALUES[_speed_index])
 	battle_controller.start_battle(scenario.build_player_formation(), scenario.build_enemy_formation(), scenario.random_seed, false)
-	_register_effect_test_cards()
+	_register_effect_test_cards(true)
 	_playing = true
 	_paused = false
 	pause_button.text = "暂停"
@@ -899,7 +908,7 @@ func _attack_element_colors(actor: BattleSquadState) -> Dictionary:
 	var result := {"head": EFFECT_COLOR_NONE, "tail": EFFECT_COLOR_NONE}
 	if actor == null or actor.squad_data == null:
 		return result
-	var groups := BattleElementResolver.get_element_groups(actor.squad_data.get_rune_pattern_result())
+	var groups := BattleElementResolver.get_element_groups(actor.get_rune_pattern_result())
 	if groups.is_empty():
 		return result
 	result["head"] = _element_attack_color(int(groups[0]["element"]))
@@ -988,7 +997,7 @@ func _on_effect_trace_emitted(entry: BattleEffectTraceEntry) -> void:
 	trace_text.text = "\n".join(_trace_lines)
 
 
-func _register_effect_test_cards() -> void:
+func _register_effect_test_cards(include_battlecry: bool) -> void:
 	for side_key: String in ["player", "enemy"]:
 		var specs := _get_side_specs(side_key)
 		var states := battle_controller.player_states if side_key == "player" else battle_controller.enemy_states
@@ -1008,7 +1017,8 @@ func _register_effect_test_cards() -> void:
 			state_index += 1
 	if battle_controller.effect_runtime.bindings.is_empty():
 		return
-	battle_controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+	if include_battlecry:
+		battle_controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
 	battle_controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS)
 	battle_controller.effect_runtime.process_due(battle_controller.elapsed_seconds)
 
@@ -1168,14 +1178,22 @@ func _format_state_tooltip(state: BattleSquadState, continuous_count: int) -> St
 
 
 func _return_to_configuration_preview() -> void:
-	if battle_controller != null and not battle_controller.get_all_states().is_empty():
-		battle_controller.clear_battle()
-		_playing = false
-		_paused = true
-		pause_button.text = "暂停"
-		_clear_outputs()
-		status_label.text = "配置已修改，等待开始"
+	if battle_controller == null or scenario == null:
+		_refresh_state_view()
+		return
+	_playing = false
+	_paused = true
+	pause_button.text = "暂停"
+	battle_controller.prepare_battle_preview(
+		scenario.build_player_formation(),
+		scenario.build_enemy_formation(),
+		scenario.random_seed
+	)
+	_register_effect_test_cards(false)
+	_clear_outputs()
 	_refresh_state_view()
+	_update_live_state_visuals()
+	status_label.text = "配置预览（持续光环已重算）"
 
 
 func _run_assertion() -> void:
@@ -1251,8 +1269,9 @@ func _collect_invariant_problems(controller: BattleController) -> Array[String]:
 			problems.append("%s 出现非有限生命或护甲" % state.get_action_source().display_name)
 		if float(state.current_armor) < -0.0001 or float(state.current_armor) > CardData.MAXIMUM_ARMOR + 0.0001:
 			problems.append("%s 护甲越界：%s" % [state.get_action_source().display_name, state.current_armor])
-		if float(state.current_health) > state.get_max_health() + 0.0001:
-			problems.append("%s 生命超过上限" % state.get_action_source().display_name)
+		# 生命上限加成丢失后，当前生命允许暂时高于新上限。
+		if float(state.current_health) > CardData.MAXIMUM_HEALTH + 0.0001:
+			problems.append("%s 生命超过全局数值上限" % state.get_action_source().display_name)
 	return problems
 
 

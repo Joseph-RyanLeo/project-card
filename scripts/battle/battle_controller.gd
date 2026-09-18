@@ -11,6 +11,11 @@ const BattleElementResolver = preload("res://scripts/battle/battle_element_resol
 const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
 const BattleProjectileTiming = preload("res://scripts/battle/battle_projectile_timing.gd")
 const BattleEffectRuntime = preload("res://scripts/battle/effects/battle_effect_runtime.gd")
+const BattleEffectCatalog = preload("res://scripts/battle/effects/battle_effect_catalog.gd")
+const BattlePermanentGrowthLedger = preload("res://scripts/battle/battle_permanent_growth_ledger.gd")
+const BattleRunRewardLedger = preload("res://scripts/battle/battle_run_reward_ledger.gd")
+
+const EFFECT_DATA_PATH: String = "res://data/demo2/ash_ledger_effect_samples.json"
 
 signal states_changed
 signal action_resolved(actor: BattleSquadState, target: BattleSquadState, action_type: CardData.ActionType, amount: int)
@@ -19,9 +24,12 @@ signal effect_resolved(event: BattleEffectEvent)
 signal integer_settlement_resolved(event: Dictionary)
 signal kill_resolved(killer: BattleSquadState, target: BattleSquadState, event: BattleEffectEvent)
 signal squad_defeated(state: BattleSquadState)
+signal squad_revived(state: BattleSquadState)
 signal buff_stacks_changed(state: BattleSquadState, buff_id: StringName, stacks: int)
 signal direct_damage_resolved(state: BattleSquadState, source_id: StringName, amount: int)
 signal effect_trace_emitted(entry: BattleEffectTraceEntry)
+signal permanent_growth_recorded(entry: Dictionary)
+signal pending_run_reward_recorded(entry: Dictionary)
 signal battle_finished(result: Result)
 
 enum Result { NONE, PLAYER_VICTORY, PLAYER_DEFEAT, DRAW }
@@ -38,6 +46,9 @@ var use_projectile_timing: bool = false
 var active_continuous_effects: Array[Dictionary] = []
 var battle_seed: int = 0
 var effect_runtime := BattleEffectRuntime.new()
+var effect_catalog: BattleEffectCatalog
+var permanent_growth_ledger := BattlePermanentGrowthLedger.new()
+var run_reward_ledger := BattleRunRewardLedger.new()
 
 var _random := RandomNumberGenerator.new()
 var _running: bool = false
@@ -61,6 +72,30 @@ func _process(delta: float) -> void:
 
 
 func start_battle(player_formation: Array[Dictionary], enemy_formation: Array[Dictionary], random_seed: int = -1, auto_run: bool = true) -> void:
+	_initialize_battle_state(player_formation, enemy_formation, random_seed)
+	if not effect_runtime.bindings.is_empty():
+		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.BATTLECRY)
+		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS)
+		effect_runtime.process_due(elapsed_seconds)
+	_running = true
+	recalculate_logical_layout()
+	set_process(auto_run)
+	states_changed.emit()
+	_check_battle_result()
+
+
+func prepare_battle_preview(player_formation: Array[Dictionary], enemy_formation: Array[Dictionary], random_seed: int = -1) -> void:
+	## 只建立站位并结算持续光环；不会触发战吼、推进时间或产生战斗结果。
+	_initialize_battle_state(player_formation, enemy_formation, random_seed)
+	if not effect_runtime.bindings.is_empty():
+		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS)
+		effect_runtime.process_due(elapsed_seconds)
+	stop_battle()
+	recalculate_logical_layout()
+	states_changed.emit()
+
+
+func _initialize_battle_state(player_formation: Array[Dictionary], enemy_formation: Array[Dictionary], random_seed: int) -> void:
 	stop_battle()
 	_release_current_states()
 	_next_state_runtime_id = 1
@@ -74,6 +109,8 @@ func start_battle(player_formation: Array[Dictionary], enemy_formation: Array[Di
 	_next_projectile_launch_sequence = 1
 	active_continuous_effects.clear()
 	_continuous_followups.clear()
+	permanent_growth_ledger.clear()
+	run_reward_ledger.clear()
 	_next_fatigue_stack_seconds = BattleRules.FATIGUE_START_SECONDS
 	_next_fatigue_damage_seconds = BattleRules.FATIGUE_START_SECONDS
 	if random_seed >= 0:
@@ -85,11 +122,30 @@ func start_battle(player_formation: Array[Dictionary], enemy_formation: Array[Di
 	effect_runtime.initialize(self, battle_seed)
 	if not effect_runtime.trace_emitted.is_connected(_on_effect_trace_emitted):
 		effect_runtime.trace_emitted.connect(_on_effect_trace_emitted)
-	_running = true
+	_register_formation_card_effects()
 	recalculate_logical_layout()
-	set_process(auto_run)
-	states_changed.emit()
-	_check_battle_result()
+
+
+func _register_formation_card_effects() -> void:
+	if effect_catalog == null:
+		effect_catalog = BattleEffectCatalog.load_from_file(EFFECT_DATA_PATH)
+	if not effect_catalog.is_valid():
+		for error: String in effect_catalog.errors:
+			push_error(error)
+		return
+	for state: BattleSquadState in get_all_states():
+		var card := state.get_effect_source()
+		if card == null or not card.is_available:
+			continue
+		for effect_id: StringName in card.effect_ids:
+			var definition := effect_catalog.get_definition(effect_id)
+			if definition == null:
+				push_error("卡牌 %s 绑定了效果目录中不存在的效果：%s" % [card.id, effect_id])
+				continue
+			effect_runtime.register_definition(
+				definition,
+				BattleEffectOwnerRef.for_state(state, definition.source_owner)
+			)
 
 
 func stop_battle() -> void:
@@ -115,6 +171,8 @@ func clear_battle() -> void:
 	_next_fatigue_damage_seconds = BattleRules.FATIGUE_START_SECONDS
 	_random = RandomNumberGenerator.new()
 	effect_runtime.initialize(self, 0)
+	permanent_growth_ledger.clear()
+	run_reward_ledger.clear()
 
 
 func _release_current_states() -> void:
@@ -123,6 +181,8 @@ func _release_current_states() -> void:
 		state.clear_precise_runtime()
 		if state.integer_settlement_committed.is_connected(_on_integer_settlement_committed):
 			state.integer_settlement_committed.disconnect(_on_integer_settlement_committed)
+		if state.health_lost_accumulated.is_connected(_on_health_lost_accumulated):
+			state.health_lost_accumulated.disconnect(_on_health_lost_accumulated)
 	player_states.clear()
 	enemy_states.clear()
 
@@ -149,6 +209,76 @@ func get_living_states(side: int) -> Array[BattleSquadState]:
 		if state.alive:
 			living.append(state)
 	return living
+
+
+func revive_state_at_original_position(
+	state: BattleSquadState,
+	health_amount: float
+) -> bool:
+	if state == null or state.alive or state.current_health > 0.0:
+		return false
+	for candidate: BattleSquadState in get_all_states():
+		if (
+			candidate != state
+			and candidate.alive
+			and candidate.side == state.side
+			and candidate.row_key == state.row_key
+			and candidate.formation_index == state.formation_index
+		):
+			return false
+	if not state.revive_at_current_maximum(health_amount):
+		return false
+	recalculate_logical_layout()
+	effect_runtime.recheck_continuous_conditions()
+	squad_revived.emit(state)
+	states_changed.emit()
+	return true
+
+
+func record_pending_permanent_growth(
+	owner: BattleEffectOwnerRef,
+	stat: StringName,
+	amount: float,
+	effect_id: StringName,
+	source_runtime_id: int,
+	logical_time_us: int
+) -> bool:
+	if not permanent_growth_ledger.record(
+		owner,
+		stat,
+		amount,
+		effect_id,
+		source_runtime_id,
+		logical_time_us
+	):
+		return false
+	var entries := permanent_growth_ledger.get_entries()
+	permanent_growth_recorded.emit(entries[-1])
+	return true
+
+
+func record_pending_run_reward(
+	owner: BattleEffectOwnerRef,
+	kind: StringName,
+	amount: int,
+	effect_id: StringName,
+	source_runtime_id: int,
+	logical_time_us: int,
+	parameters: Dictionary = {}
+) -> bool:
+	if not run_reward_ledger.record(
+		owner,
+		kind,
+		amount,
+		effect_id,
+		source_runtime_id,
+		logical_time_us,
+		parameters
+	):
+		return false
+	var entries := run_reward_ledger.get_entries()
+	pending_run_reward_recorded.emit(entries[-1])
+	return true
 
 
 func advance_time(delta: float) -> void:
@@ -199,8 +329,11 @@ func choose_weighted_target(candidates: Array[BattleSquadState], forced_roll: in
 
 
 func get_effective_target_weight(state: BattleSquadState) -> int:
+	var base_weight := state.get_target_weight()
+	if base_weight <= 0:
+		return 0
 	var penalty := 1 if is_back_row(state.row_key) and get_front_cover_ratio(state) > BattleRules.FRONT_COVER_THRESHOLD else 0
-	return maxi(state.get_target_weight() - penalty, 1)
+	return maxi(base_weight - penalty, 1)
 
 
 func recalculate_logical_layout() -> void:
@@ -278,6 +411,7 @@ func _create_states(formation: Array[Dictionary], side: int) -> Array[BattleSqua
 			float(entry.get("base_cooldown_override", -1.0))
 		)
 		state.integer_settlement_committed.connect(_on_integer_settlement_committed)
+		state.health_lost_accumulated.connect(_on_health_lost_accumulated)
 		states.append(state)
 	return states
 
@@ -477,6 +611,9 @@ func _launch_registered_projectiles(events: Array[BattleEffectEvent]) -> void:
 			_resolve_projectile_impact(event)
 		else:
 			projectile_launched.emit(event)
+			if event.is_base_action:
+				effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.ECHO, {"actor": event.source})
+				effect_runtime.process_due(elapsed_seconds)
 
 
 func _resolve_arrived_event(event: BattleEffectEvent) -> void:
@@ -514,38 +651,102 @@ func _complete_projectile_batch(projectile_batch_id: int) -> void:
 func _select_base_actions(actors: Array[BattleSquadState], living_snapshot: Array) -> Array[Dictionary]:
 	var actions: Array[Dictionary] = []
 	for actor: BattleSquadState in actors:
-		var source := actor.get_action_source()
-		if source == null:
-			continue
-		var candidates: Array[BattleSquadState] = []
-		for value: Variant in living_snapshot:
-			var candidate := value as BattleSquadState
-			if _is_base_candidate(actor, candidate, source.action_type):
-				candidates.append(candidate)
-		if source.action_type == CardData.ActionType.HEAL:
-			var wounded: Array[BattleSquadState] = []
-			for candidate: BattleSquadState in candidates:
-				if candidate.current_health < float(candidate.get_max_health()):
-					wounded.append(candidate)
-			if not wounded.is_empty():
-				var largest_missing_ratio := -1.0
-				for candidate: BattleSquadState in wounded:
-					largest_missing_ratio = maxf(largest_missing_ratio, _missing_health_ratio(candidate))
-				candidates.clear()
-				for candidate: BattleSquadState in wounded:
-					if is_equal_approx(_missing_health_ratio(candidate), largest_missing_ratio):
-						candidates.append(candidate)
-		var target := choose_weighted_target(candidates)
-		if target != null:
-			var pattern := actor.squad_data.get_rune_pattern_result()
-			var action := {"actor": actor, "target": target, "action_type": source.action_type, "pattern": pattern, "group_id": _take_group_id()}
-			var groups := BattleElementResolver.get_element_groups(pattern)
-			action["element_groups"] = groups
-			var pierces := not groups.is_empty() and int(groups[0]["element"]) == CardData.ElementType.WOOD and int(groups[0]["count"]) == 5 and source.action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
-			action["base_event"] = _make_value_event(action, target, 1.0, 0, true, pierces)
+		var action := _build_action(actor, living_snapshot, actor.get_effective_action_type())
+		if not action.is_empty():
 			actions.append(action)
 		actor.reset_action_cooldown()
 	return actions
+
+
+func execute_immediate_action(
+	actor: BattleSquadState,
+	action_type: CardData.ActionType,
+	action_value_delta: float = 0.0
+) -> bool:
+	if actor == null or not actor.alive or actor.current_health <= 0.0:
+		return false
+	var living_snapshot := get_all_states().filter(
+		func(state: BattleSquadState) -> bool:
+			return state.alive and state.current_health > 0.0
+	)
+	var action := _build_action(actor, living_snapshot, action_type, action_value_delta)
+	if action.is_empty():
+		return false
+	actor.reset_action_cooldown()
+	var base_event := action["base_event"] as BattleEffectEvent
+	if use_projectile_timing:
+		var projectile_batch_id := _next_projectile_batch_id
+		_next_projectile_batch_id += 1
+		_pending_projectile_batch_counts[projectile_batch_id] = 0
+		_register_projectile(base_event, action, 0, projectile_batch_id)
+		_launch_registered_projectiles([base_event])
+		return true
+	# 无弹道计时时仍发出“已发射”信号，再同步结算命中，保持事件语义一致。
+	projectile_launched.emit(base_event)
+	effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.ECHO, {"actor": actor})
+	effect_runtime.process_due(elapsed_seconds)
+	_resolve_effect_layer([base_event])
+	var carriers: Array[BattleEffectEvent] = [base_event]
+	var groups := action["element_groups"] as Array
+	for group_index: int in 2:
+		var layer_events: Array[BattleEffectEvent] = []
+		if group_index < groups.size():
+			for carrier: BattleEffectEvent in carriers:
+				layer_events.append_array(_build_element_events(action, carrier, groups[group_index], group_index + 1))
+		elif group_index == 0 and (action["pattern"] as RunePatternResult).pattern_type == RunePatternResult.PatternType.STRAIGHT:
+			layer_events.append_array(_build_straight_bonus_events(action, base_event, 1))
+		_resolve_effect_layer(layer_events)
+		carriers.assign(layer_events)
+	_finalize_batch()
+	batch_count += 1
+	states_changed.emit()
+	_check_battle_result()
+	return true
+
+
+func _build_action(
+	actor: BattleSquadState,
+	living_snapshot: Array,
+	action_type: CardData.ActionType,
+	action_value_delta: float = 0.0
+) -> Dictionary:
+	if actor.get_action_source() == null:
+		return {}
+	var candidates: Array[BattleSquadState] = []
+	for value: Variant in living_snapshot:
+		var candidate := value as BattleSquadState
+		if _is_base_candidate(actor, candidate, action_type):
+			candidates.append(candidate)
+	if action_type == CardData.ActionType.HEAL:
+		var wounded: Array[BattleSquadState] = []
+		for candidate: BattleSquadState in candidates:
+			if candidate.current_health < float(candidate.get_max_health()):
+				wounded.append(candidate)
+		if not wounded.is_empty():
+			var largest_missing_ratio := -1.0
+			for candidate: BattleSquadState in wounded:
+				largest_missing_ratio = maxf(largest_missing_ratio, _missing_health_ratio(candidate))
+			candidates.clear()
+			for candidate: BattleSquadState in wounded:
+				if is_equal_approx(_missing_health_ratio(candidate), largest_missing_ratio):
+					candidates.append(candidate)
+	var target := choose_weighted_target(candidates)
+	if target == null:
+		return {}
+	var pattern := actor.get_rune_pattern_result()
+	var action := {
+		"actor": actor,
+		"target": target,
+		"action_type": action_type,
+		"pattern": pattern,
+		"group_id": _take_group_id(),
+		"action_value_delta": action_value_delta,
+	}
+	var groups := BattleElementResolver.get_element_groups(pattern)
+	action["element_groups"] = groups
+	var pierces := not groups.is_empty() and int(groups[0]["element"]) == CardData.ElementType.WOOD and int(groups[0]["count"]) == 5 and action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
+	action["base_event"] = _make_value_event(action, target, 1.0, 0, true, pierces)
+	return action
 
 
 func _missing_health_ratio(state: BattleSquadState) -> float:
@@ -592,10 +793,13 @@ func _make_value_event(action: Dictionary, target: BattleSquadState, element_mul
 	var additions: Array[Dictionary] = []
 	var action_bonus := actor.modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)
 	var reinforcement := actor.modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT)
+	var immediate_action_delta := float(action.get("action_value_delta", 0.0))
 	if not is_zero_approx(action_bonus):
 		additions.append({"name": "效果数值修正", "value": action_bonus})
 	if not is_zero_approx(reinforcement):
 		additions.append({"name": "强化", "value": reinforcement})
+	if not is_zero_approx(immediate_action_delta):
+		additions.append({"name": "即时行动数值修正", "value": immediate_action_delta})
 	event.formula = BattleFormulaData.create(
 		_value_name_for_action(action_type),
 		action_type,
@@ -604,7 +808,7 @@ func _make_value_event(action: Dictionary, target: BattleSquadState, element_mul
 		element_multiplier,
 		actor,
 		target,
-		[],
+		_action_multipliers(actor),
 		additions
 	)
 	event.exact_amount = event.formula.exact_result
@@ -846,9 +1050,17 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 			event.effective_amount = float(split["total"])
 		BattleEffectEvent.EffectKind.HEALING:
 			event.effective_amount = event.target.apply_healing_exact(event.exact_amount, event.source, event)
+			if event.is_base_action:
+				effect_runtime.emit_trigger(
+					BattleEffectDefinition.Trigger.AFTER_BASIC_HEAL,
+					{"actor": event.source, "healed_target": event.target}
+				)
 		BattleEffectEvent.EffectKind.ARMOR:
 			var armor_multiplier := event.target.modifiers.get_multiplier(BattleModifier.Stat.ARMOR_GAIN)
 			var armor_addition := event.target.modifiers.get_additive(BattleModifier.Stat.ARMOR_GAIN)
+			var effect_adjustments := effect_runtime.resolve_armor_gain_modifiers(event.target)
+			armor_multiplier *= float(effect_adjustments["multiplier"])
+			armor_addition += float(effect_adjustments["addition"])
 			if event.formula != null and not is_equal_approx(armor_multiplier, 1.0):
 				event.formula.other_multipliers.append({"name": "获得护甲乘法修正", "value": armor_multiplier})
 			if event.formula != null and not is_zero_approx(armor_addition):
@@ -857,9 +1069,16 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 				event.formula.exact_result = maxf(event.formula.calculate_result(), 0.0)
 				event.exact_amount = event.formula.exact_result
 			event.effective_amount = event.target.apply_armor_exact(event.exact_amount, event.source, event)
+			if event.effective_amount > 0.0:
+				effect_runtime.emit_trigger(
+					BattleEffectDefinition.Trigger.SOURCE_ARMOR_GAINED,
+					{"actor": event.target, "amount": event.effective_amount}
+				)
 		BattleEffectEvent.EffectKind.PLACEHOLDER:
 			event.effective_amount = 0.0
 	_record_battle_statistics(event)
+	effect_runtime.recheck_continuous_conditions()
+	effect_runtime.process_due(elapsed_seconds)
 	effect_resolved.emit(event)
 	if event.is_base_action:
 		action_resolved.emit(event.source, event.target, event.action_type, roundi(event.effective_amount))
@@ -890,9 +1109,9 @@ func _record_battle_statistics(event: BattleEffectEvent) -> void:
 		return
 	match event.effect_kind:
 		BattleEffectEvent.EffectKind.DAMAGE:
-			event.target.battle_damage_taken += effective
-			if event.source != null:
-				event.source.battle_damage_dealt += effective
+			# 伤害统计由 BattleSquadState.apply_damage_exact 的实际扣减入口统一记录，
+			# 这里不再重复累计；治疗与护甲仍在各自控制器事件中归属来源。
+			pass
 		BattleEffectEvent.EffectKind.HEALING:
 			if event.source != null:
 				event.source.battle_healing_done += effective
@@ -1018,9 +1237,20 @@ func _finalize_batch() -> void:
 	recalculate_logical_layout()
 	for state: BattleSquadState in defeated:
 		squad_defeated.emit(state)
+		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.DEATHRATTLE, {"actor": state})
 		effect_runtime.notify_source_defeated(state)
+		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.ADJACENT_ALLY_DESTROYED, {"actor": state})
+		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.OTHER_ALLY_DESTROYED, {"actor": state})
 	effect_runtime.recheck_continuous_conditions()
 	effect_runtime.process_due(elapsed_seconds)
+
+
+func _action_multipliers(actor: BattleSquadState) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var multiplier_bonus := actor.modifiers.get_additive(BattleModifier.Stat.ACTION_MULTIPLIER)
+	if not is_zero_approx(multiplier_bonus):
+		result.append({"name": "行动倍率修正", "value": maxf(0.0, 1.0 + multiplier_bonus)})
+	return result
 
 
 func _kind_for_action(action_type: CardData.ActionType) -> BattleEffectEvent.EffectKind:
@@ -1071,6 +1301,22 @@ func _take_group_id() -> int:
 
 func _on_integer_settlement_committed(event: Dictionary) -> void:
 	integer_settlement_resolved.emit(event)
+
+
+func _on_health_lost_accumulated(event: Dictionary) -> void:
+	var state := event.get("state") as BattleSquadState
+	if state == null:
+		return
+	effect_runtime.emit_trigger(
+		BattleEffectDefinition.Trigger.SOURCE_HEALTH_LOST_ACCUMULATED,
+		{
+			"actor": state,
+			"amount": float(event.get("amount", 0.0)),
+			"accumulated_health_loss": float(event.get("accumulated_health_loss", 0.0)),
+			"damage_source": event.get("source"),
+			"effect_event": event.get("effect_event"),
+		}
+	)
 
 
 func _on_effect_trace_emitted(entry: BattleEffectTraceEntry) -> void:

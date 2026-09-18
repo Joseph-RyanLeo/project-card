@@ -814,7 +814,7 @@ func _build_merge_intent(
 				card_index = original_index
 	if (
 		target_slot != source_slot
-		and not target_squad.can_accept_external_card_at(card_index)
+		and not target_squad.can_accept_card_at(card_data, card_index)
 	):
 		return {}
 	var layout: SquadData.TwoCardLayout = (
@@ -911,8 +911,16 @@ func _intent_fits_capacity(intent: Dictionary, data: Dictionary) -> bool:
 	if (
 		is_instance_valid(target_slot)
 		and target_slot != source_slot
-		and not target_slot.get_squad_data().can_accept_external_card_at(
-			int(intent.get("card_index", 0))
+		and (
+			kind == &"card"
+			and not target_slot.get_squad_data().can_accept_card_at(
+				card_data,
+				int(intent.get("card_index", 0))
+			)
+			or kind != &"card"
+			and not target_slot.get_squad_data().can_accept_external_card_at(
+				int(intent.get("card_index", 0))
+			)
 		)
 	):
 		return false

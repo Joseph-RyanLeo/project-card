@@ -75,6 +75,12 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 ## 基础规则字段：由 .tres 卡牌资源编辑，运行时 UI 只读取。
 @export var id: StringName = &"" # 卡牌数据的稳定标识，不使用显示名称代替
 @export var display_name: String = "" # 卡面显示名称
+@export var pack_id: StringName = &"" # 所属卡包稳定标识；开发测试卡使用独立标识，避免混入正式卡池
+@export var is_available: bool = true # 是否进入当前可用卡池；停用卡仍可保留资源与美术
+@export var effect_ids: Array[StringName] = [] # 绑定到通用效果目录的原子效果 ID
+@export var keywords: Array[StringName] = [] # 卡牌关键词；由对应权威规则读取，不在这里直接运行战斗结算
+@export var deferred_effect_hooks: Dictionary = {} # 尚未实现系统的严格后续钩子；运行时不得提前触发
+@export var is_derived: bool = false # 是否为战斗衍生卡；死亡触发与奖励池会读取
 @export var card_type: CardType = CardType.MINION # 卡牌大类，当前 Demo 主要使用随从
 @export var action_type: ActionType = ActionType.MELEE # 行动图标与行动方式
 @export_range(0, MAXIMUM_BASE_VALUE, 1) var base_value: int = 1: # 行动的基础数值
@@ -102,6 +108,8 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export_range(-9.9, 9.9, 0.1) var equipment_cooldown_delta: float = 0.0 # 装备对基础冷却秒数的临时占位变化量
 @export_range(0, 99, 1) var equipment_health_delta: int = 0 # 装备对生命值的临时占位加成
 @export_range(0, 99, 1) var equipment_armor_delta: int = 0 # 装备对护甲值的临时占位加成
+@export_range(0, 99, 1) var wound_slot_count: int = 0 # 伤势槽位数量；D2-5 前只保存数据
+@export_range(0, 99, 1) var emblem_slot_count: int = 0 # 纹章槽位数量；D2-5 前只保存数据
 
 ## 卡面美术字段：人物偏移只改变取景，不改变 99×136 卡牌逻辑尺寸。
 @export var background_texture: Texture2D # 立绘透明区域下方的临时背景
@@ -113,7 +121,16 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 
 func get_action_type_name() -> String:
 	# 枚举到中文的转换集中在数据层，避免每个 UI 重复维护同一张表。
-	match action_type:
+	return get_action_type_name_for(action_type)
+
+
+func has_keyword(keyword: StringName) -> bool:
+	# 关键词判断集中在卡牌数据层，避免编队、战斗和 UI 各自比较不同字符串。
+	return keywords.has(keyword)
+
+
+static func get_action_type_name_for(value: ActionType) -> String:
+	match value:
 		ActionType.MELEE:
 			return "近战"
 		ActionType.RANGED:
@@ -142,7 +159,11 @@ func get_equipment_type_name() -> String:
 
 func get_base_target_priority() -> int:
 	# 受击权重只由行动方式决定，避免卡牌资源与规则表形成双重权威。
-	match action_type:
+	return get_base_target_priority_for_action(action_type)
+
+
+static func get_base_target_priority_for_action(value: ActionType) -> int:
+	match value:
 		ActionType.MELEE:
 			return 4
 		ActionType.RANGED:

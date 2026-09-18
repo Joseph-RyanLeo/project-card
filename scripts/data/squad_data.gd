@@ -17,6 +17,7 @@ const EXPANDED_DOUBLE_UNIT_COUNT: int = 5 # 展开双卡小队占用的战场单
 const TRIPLE_UNIT_COUNT: int = 5 # 三卡小队占用的战场单元数
 const CARD_WIDTH: int = 99 # 每张完整随从卡保持的固定裸卡宽度
 const RUNE_SLOT_CENTER_X: Array[float] = [19.5, 49.5, 79.5] # 三个符文槽相对裸卡左边缘的中心 X
+const FORBID_STACKING_KEYWORD: StringName = &"forbid_stacking" # 带此固有关键词的卡只能独立组成单卡小队
 
 @export var horizontal_cards: Array[CardData] = [] # 小队从左到右的卡牌顺序
 @export var layer_cards: Array[CardData] = [] # 从最上层到最下层保存，第一项提供卡牌效果
@@ -67,6 +68,8 @@ func is_valid() -> bool:
 			return false
 		if layer_cards.count(card_data) != 1:
 			return false
+	if horizontal_cards.size() > 1 and contains_stacking_forbidden_card():
+		return false
 	return true
 
 
@@ -76,6 +79,13 @@ func get_card_count() -> int:
 
 func contains(card_data: CardData) -> bool:
 	return horizontal_cards.has(card_data)
+
+
+func contains_stacking_forbidden_card() -> bool:
+	for card_data: CardData in horizontal_cards:
+		if card_data != null and card_data.has_keyword(FORBID_STACKING_KEYWORD):
+			return true
+	return false
 
 
 func get_unit_count() -> int:
@@ -216,6 +226,20 @@ func can_accept_external_card_at(horizontal_index: int) -> bool:
 	return true
 
 
+func can_accept_card_at(card_data: CardData, horizontal_index: int) -> bool:
+	# “无法堆叠”是卡牌固有规则：无论它作为来牌还是已在目标小队中，
+	# 都不能与另一张牌形成小队，也不依赖战斗中的效果是否被沉默。
+	if card_data == null or contains(card_data):
+		return false
+	if horizontal_cards.is_empty():
+		return can_accept_external_card_at(horizontal_index)
+	if card_data.has_keyword(FORBID_STACKING_KEYWORD):
+		return false
+	if contains_stacking_forbidden_card():
+		return false
+	return can_accept_external_card_at(horizontal_index)
+
+
 func get_action_source() -> CardData:
 	# 最左卡提供小队行动类型与行动值。
 	return horizontal_cards[0] if not horizontal_cards.is_empty() else null
@@ -240,7 +264,7 @@ func insert_card(
 	if (
 		card_data == null
 		or contains(card_data)
-		or horizontal_cards.size() >= MAX_CARD_COUNT
+		or not can_accept_card_at(card_data, horizontal_index)
 	):
 		return false
 
@@ -270,6 +294,8 @@ func merge_compact_double_with_single(
 		or get_visible_runes().size() != COMPACT_DOUBLE_UNIT_COUNT
 		or single_squad == null
 		or single_squad.get_card_count() != 1
+		or contains_stacking_forbidden_card()
+		or single_squad.contains_stacking_forbidden_card()
 	):
 		return null
 	var single_card := single_squad.horizontal_cards[0]

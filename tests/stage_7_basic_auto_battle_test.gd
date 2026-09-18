@@ -7,6 +7,8 @@ const MAIN_SCENE: PackedScene = preload("res://scenes/Main.tscn")
 const BattleController = preload("res://scripts/battle/battle_controller.gd")
 const BattleSquadState = preload("res://scripts/battle/battle_squad_state.gd")
 const BattleRules = preload("res://scripts/battle/battle_rules.gd")
+const BattlePermanentGrowthLedger = preload("res://scripts/battle/battle_permanent_growth_ledger.gd")
+const BattleRunRewardLedger = preload("res://scripts/battle/battle_run_reward_ledger.gd")
 
 var _failure_count: int = 0
 var _card_serial: int = 0
@@ -22,8 +24,10 @@ func _run() -> void:
 	await _test_weighted_targeting_and_five_actions()
 	await _test_timeline_batches_and_results()
 	await _test_fatigue_buff_and_battle_speed()
+	await _test_main_preparation_aura_preview()
 	await _test_main_battle_loop_and_restart()
 	await _test_departure_entry_and_row_recentering()
+	await _test_reentry_cancels_obsolete_departure()
 	if _failure_count == 0:
 		print("Stage 7 integration checks passed.")
 	else:
@@ -474,6 +478,92 @@ func _test_fatigue_buff_and_battle_speed() -> void:
 	await _dispose_controller(speed_controller)
 
 
+func _test_main_preparation_aura_preview() -> void:
+	var main = MAIN_SCENE.instantiate()
+	root.add_child(main)
+	await process_frame
+	main.front_row.clear_squads()
+	main.back_row.clear_squads()
+	main.front_row.add_squad(
+		SquadData.from_card(load("res://resources/cards/militia_commander.tres")),
+		0
+	)
+	main.front_row.add_squad(
+		SquadData.from_card(load("res://resources/cards/heavy_knight.tres")),
+		1
+	)
+	main.front_row.add_squad(
+		SquadData.from_card(load("res://resources/cards/diplomat.tres")),
+		2
+	)
+	await process_frame
+	await create_timer(CardView.BATTLE_NUMBER_TWEEN_DURATION + 0.03).timeout
+	var initial_views: Array[CardView] = []
+	for slot: BoardSlot in main.front_row.get_squads():
+		initial_views.append(slot.get_primary_card_view())
+	_expect(
+		main.battle_controller.player_states.size() == 3
+		and not main.battle_controller.is_running()
+		and main.battle_controller.run_reward_ledger.get_entries().is_empty()
+		and initial_views[0]._battle_current_health == 8
+		and initial_views[1]._battle_current_health == 8
+		and initial_views[2]._battle_current_health == 8
+		and initial_views[0]._battle_action_value == 5
+		and initial_views[1]._battle_action_value == 4
+		and initial_views[2]._battle_action_value == 3,
+		"主战场备战态立即把民兵指挥官与外交官光环结果覆盖到三张卡面，且不触发战吼奖励"
+	)
+	main.front_row.remove_squad_slot(main.front_row.get_squads()[2])
+	await process_frame
+	await create_timer(CardView.BATTLE_NUMBER_TWEEN_DURATION + 0.03).timeout
+	var recalculated_views: Array[CardView] = []
+	for slot: BoardSlot in main.front_row.get_squads():
+		recalculated_views.append(slot.get_primary_card_view())
+	_expect(
+		main.battle_controller.player_states.size() == 2
+		and recalculated_views[0]._battle_action_value == 4
+		and recalculated_views[1]._battle_action_value == 3,
+		"移除外交官后主战场重新建立预览状态，并立刻撤销对应行动值光环"
+	)
+	main.front_row.clear_squads()
+	main.front_row.add_squad(
+		SquadData.from_card(load("res://resources/cards/javelin_skirmisher.tres")),
+		0
+	)
+	main.front_row.add_squad(
+		SquadData.from_card(load("res://resources/cards/militia.tres")),
+		1
+	)
+	main.front_row.add_squad(
+		SquadData.from_card(load("res://resources/cards/timid_infantry.tres")),
+		2
+	)
+	await process_frame
+	await create_timer(CardView.BATTLE_NUMBER_TWEEN_DURATION + 0.03).timeout
+	var neighbor_views: Array[CardView] = []
+	for slot: BoardSlot in main.front_row.get_squads():
+		neighbor_views.append(slot.get_primary_card_view())
+	_expect(
+		neighbor_views[0]._battle_action_value == 3
+		and neighbor_views[1]._battle_action_value == 2
+		and neighbor_views[2]._battle_action_value == 1,
+		"民兵左右都有同种族单位时，备战卡面立即给自身与两侧人类单兵显示数值+1"
+	)
+	main.front_row.remove_squad_slot(main.front_row.get_squads()[2])
+	await process_frame
+	await create_timer(CardView.BATTLE_NUMBER_TWEEN_DURATION + 0.03).timeout
+	neighbor_views.clear()
+	for slot: BoardSlot in main.front_row.get_squads():
+		neighbor_views.append(slot.get_primary_card_view())
+	_expect(
+		neighbor_views[0]._battle_action_value == 2
+		and neighbor_views[1]._battle_action_value == 1,
+		"民兵任意一侧缺少同种族单位后，备战卡面立即撤销全部乡邻数值"
+	)
+	main.queue_free()
+	await process_frame
+
+
 func _test_main_battle_loop_and_restart() -> void:
 	var main = MAIN_SCENE.instantiate()
 	root.add_child(main)
@@ -485,6 +575,41 @@ func _test_main_battle_loop_and_restart() -> void:
 		and main.get_node("%BattleResultPlaceholder") != null
 		and main.restart_battle_button.text == "重新开始",
 		"正式开始战斗按钮、战后统计提示和重新开始按钮均存在"
+	)
+	var growth_card := CardData.new()
+	growth_card.id = &"settlement_growth_card"
+	growth_card.display_name = "结算成长卡"
+	var growth_entries: Array[Dictionary] = [{
+		"card_data": growth_card,
+		"card_id": growth_card.id,
+		"side": BattleSquadState.Side.PLAYER,
+		"owner_runtime_id": 1,
+		"card_index": 0,
+		"stat": BattlePermanentGrowthLedger.STAT_BASE_VALUE,
+		"amount": 1.0,
+	}, {
+		"card_data": growth_card,
+		"card_id": growth_card.id,
+		"side": BattleSquadState.Side.PLAYER,
+		"owner_runtime_id": 1,
+		"card_index": 0,
+		"stat": BattlePermanentGrowthLedger.STAT_BASE_VALUE,
+		"amount": 1.0,
+	}]
+	var reward_entries: Array[Dictionary] = [{
+		"side": BattleSquadState.Side.PLAYER,
+		"kind": BattleRunRewardLedger.KIND_GOLD,
+		"amount": 5,
+	}]
+	var result_summary: String = main._format_battle_result_summary(
+		growth_entries,
+		reward_entries
+	)
+	_expect(
+		result_summary.contains("永久成长（待写回）")
+		and result_summary.contains("结算成长卡：行动 +2")
+		and result_summary.contains("金币 +5"),
+		"结算摘要按实际获得卡汇总永久成长，并同时显示待写回金币"
 	)
 	_expect(
 		main.battle_speed_button != null
@@ -498,6 +623,15 @@ func _test_main_battle_loop_and_restart() -> void:
 		and main.battle_timer_label.text == "战斗 00:00.0"
 		and main.battle_timer_label.position == main.BATTLE_TIMER_POSITION,
 		"准备阶段已建立战场中线靠左的逻辑计时，并默认归零隐藏"
+	)
+	_expect(
+		main.battle_seed_panel != null
+		and main.battle_seed_panel.position == main.BATTLE_SEED_PANEL_POSITION
+		and main.battle_seed_spin.value >= 0.0
+		and main.battle_seed_spin.value <= float(main.BATTLE_SEED_MAX)
+		and main.battle_seed_spin.get_line_edit().editable
+		and not main.battle_seed_random_button.disabled,
+		"准备阶段已生成可手动修改的战斗种子，并把种子器放在计时器下方"
 	)
 	_expect(
 		main.battle_log_panel != null
@@ -539,12 +673,18 @@ func _test_main_battle_loop_and_restart() -> void:
 	)
 	var formation_before := _main_formation_signature(main)
 	var cards_before := _card_resource_signature(main.collection_cards)
-	_expect(main.start_battle(1007, false), "正式入口可使用固定随机种子开始战斗")
+	main.battle_seed_spin.value = 1007
+	_expect(main.start_battle(-1, false), "正式入口可读取种子器中的固定随机种子开始战斗")
 	_expect(
 		main.current_phase == main.GamePhase.BATTLE
 		and main.current_world_view == main.WorldView.BATTLEFIELDS
 		and main.battle_speed_button.visible
 		and main.battle_timer_label.visible
+		and main.battle_seed_panel.visible
+		and main.battle_controller.battle_seed == 1007
+		and roundi(main.battle_seed_spin.value) == 1007
+		and not main.battle_seed_spin.get_line_edit().editable
+		and main.battle_seed_random_button.disabled
 		and main.battle_log_panel.visible
 		and not main.front_row.can_receive_card_drag({
 			"source_type": &"collection",
@@ -581,8 +721,8 @@ func _test_main_battle_loop_and_restart() -> void:
 		and not first_slot.battle_status_label.visible
 		and first_slot.battle_status_label.text.is_empty()
 		and vitals_view.has_battle_vitals()
-		and vitals_view.health_label.text == str(first_state.current_health)
-		and vitals_view.armor_label.text == str(first_state.current_armor)
+		and vitals_view.health_label.text == str(first_state.displayed_health)
+		and vitals_view.armor_label.text == str(first_state.displayed_armor)
 		and action_view.has_battle_remaining_cooldown()
 		and action_view.cooldown_label.text == CardView.format_cooldown_seconds(
 			first_state.remaining_cooldown
@@ -647,7 +787,9 @@ func _test_main_battle_loop_and_restart() -> void:
 		and main.battle_result_panel.visible
 		and main.battle_log_panel.visible
 		and not main.battle_log_text.text.is_empty()
-		and main.battle_result_label.text in ["胜利", "失败", "平局"],
+		and main.battle_result_label.text in ["胜利", "失败", "平局"]
+		and main.battle_result_summary_label.text.contains("永久成长")
+		and main.battle_result_summary_label.text.contains("本场奖励"),
 		"阵亡溶解完成后进入结算页，并保留本场战斗日志供玩家查看"
 	)
 	var result_states: Array[BattleSquadState] = main.battle_controller.get_all_states()
@@ -705,10 +847,15 @@ func _test_main_battle_loop_and_restart() -> void:
 		and not main.battle_result_panel.visible
 		and not main.battle_speed_button.visible
 		and not main.battle_timer_label.visible
+		and main.battle_seed_spin.get_line_edit().editable
+		and not main.battle_seed_random_button.disabled
 		and not main.battle_log_panel.visible
 		and main.battle_log_text.text.is_empty()
 		and main.battle_timer_label.text == "战斗 00:00.0"
-		and main.battle_controller.get_all_states().is_empty()
+		and not main.battle_controller.is_running()
+		and main.battle_controller.player_states.size() == (
+			main.front_row.get_squad_count() + main.back_row.get_squad_count()
+		)
 		and _main_formation_signature(main) == formation_before
 		and _card_resource_signature(main.collection_cards) == cards_before,
 		"重新开始清空临时战斗/随机状态，并精确恢复战前阵容和准备默认视图"
@@ -821,6 +968,41 @@ func _test_departure_entry_and_row_recentering() -> void:
 		SquadView.DEATH_DISSOLVE_EDGE_SECONDS
 		- SquadView.DEATH_DISSOLVE_BODY_SECONDS <= 0.1,
 		"缩短溶解总时长，并用更小的主体/边缘时间差限制蓝色侵蚀区域面积"
+	)
+	main.queue_free()
+	await process_frame
+
+
+func _test_reentry_cancels_obsolete_departure() -> void:
+	var main = MAIN_SCENE.instantiate()
+	root.add_child(main)
+	await process_frame
+	for row: BattlefieldRow in [main.front_row, main.back_row, main.enemy_front_row, main.enemy_back_row]:
+		row.clear_squads()
+	var mudleg := load("res://resources/cards/mudleg_brothers.tres") as CardData
+	var revived_slot: BoardSlot = main.front_row.add_squad(SquadData.from_card(mudleg), 0)
+	main.enemy_front_row.add_squad(
+		_single_squad(CardData.ActionType.MELEE, 0, 100, 0, 9.0),
+		0
+	)
+	await process_frame
+	_expect(main.start_battle(1109, false), "建立泥腿三兄弟重新入场视觉测试战斗")
+	var state: BattleSquadState = main.battle_controller.player_states[0]
+	state.current_health = 0.0
+	main.battle_controller._finalize_batch()
+	await process_frame
+	_expect(
+		state.alive
+		and main.front_row.get_squad_count() == 1
+		and main.get("_battle_state_slots").get(state) == revived_slot
+		and not revived_slot.is_death_dissolving(),
+		"重新入场同帧取消阵亡溶解，并继续复用原位置卡面"
+	)
+	await create_timer(SquadView.DEATH_DISSOLVE_EDGE_SECONDS + 0.05).timeout
+	_expect(
+		main.front_row.get_squad_count() == 1
+		and main.get("_battle_state_slots").get(state) == revived_slot,
+		"已经失效的旧退场动画结束后不会误删复活卡牌"
 	)
 	main.queue_free()
 	await process_frame

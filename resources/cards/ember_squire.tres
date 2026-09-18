@@ -13,4 +13,4 @@ armor = 2
 runes = Array[int]([0, 0, 1])
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-1, 26)
-effect_text = "行动时造成近战伤害。demo 测试卡，用来验证随从卡数据结构。"
+effect_text = ""

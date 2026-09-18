@@ -37,10 +37,13 @@ func _test_effect_test_card_library() -> void:
 		if preset_id == BattleLabEffectLibrary.NONE:
 			continue
 		var definitions := BattleLabEffectLibrary.create_definitions(preset_id)
-		if definitions.size() == 1 and definitions[0] != null:
+		if not definitions.is_empty() and definitions.all(
+			func(definition: BattleEffectDefinition) -> bool: return definition != null
+		):
 			valid_count += 1
-			triggers[definitions[0].trigger] = true
-	_expect(valid_count == BattleLabEffectLibrary.PRESETS.size() - 1, "D2-3固定测试卡全部生成严格效果定义")
+			for definition: BattleEffectDefinition in definitions:
+				triggers[definition.trigger] = true
+	_expect(valid_count == BattleLabEffectLibrary.PRESETS.size() - 1, "合成测试卡与灰烬真实卡全部生成严格效果定义")
 	_expect(
 		triggers.has(BattleEffectDefinition.Trigger.BATTLECRY)
 		and triggers.has(BattleEffectDefinition.Trigger.CONTINUOUS)
@@ -54,6 +57,7 @@ func _test_scenario_round_trip_and_formation() -> void:
 	var scenario: BattleLabScenario = BattleLabScenario.create_preset(&"light_water")
 	scenario.player_squads[0]["effect_card"] = String(BattleLabEffectLibrary.RANDOM_BANNER)
 	scenario.player_squads[0]["cooldown"] = 42.0
+	scenario.player_squads[0]["race"] = CardData.RaceType.ELF
 	_expect(scenario.validate().is_empty(), "内置实验预设可直接运行")
 	var player_formation := scenario.build_player_formation()
 	var enemy_formation := scenario.build_enemy_formation()
@@ -65,6 +69,12 @@ func _test_scenario_round_trip_and_formation() -> void:
 		"实验场景生成敌我正式 formation 输入，并允许测试最长99秒行动间隔"
 	)
 	_expect(squad.get_visible_runes() == [CardData.ElementType.LIGHT, CardData.ElementType.LIGHT, CardData.ElementType.LIGHT, CardData.ElementType.WATER, CardData.ElementType.WATER], "五个编辑槽生成完全相同顺序的合法可见符文堆叠")
+	_expect(
+		BattleLabScenario.SIDE_SLOT_COUNT == 6
+		and scenario.player_squads.size() == 6
+		and squad.get_effect_source().race_type == CardData.RaceType.ELF,
+		"实验室每方可配置六个小队，且种族字段进入正式CardData"
+	)
 	_expect(squad.get_effect_source().effect_text.contains("随机一名友军"), "测试效果说明进入正式CardData卡面")
 	var restored: BattleLabScenario = BattleLabScenario.from_dictionary(scenario.to_dictionary())
 	_expect(restored.to_dictionary() == scenario.to_dictionary(), "场景名称、阵容、种子与断言可以无损保存载入")
@@ -78,6 +88,11 @@ func _test_visual_lab_flow() -> void:
 	_expect(
 		is_equal_approx(((lab._side_controls["player"] as Dictionary)["cooldown"] as SpinBox).max_value, 99.0),
 		"实验室冷却编辑器使用最新版99秒测试上限"
+	)
+	_expect(
+		((lab._side_controls["player"] as Dictionary)["slot"] as OptionButton).item_count == 6
+		and ((lab._side_controls["player"] as Dictionary)["race"] as OptionButton).item_count == CardData.RaceType.size(),
+		"双方编辑器提供六个小队槽与完整种族选择"
 	)
 	_expect(
 		not lab.player_drawer.visible
@@ -143,6 +158,51 @@ func _test_visual_lab_flow() -> void:
 	_expect(int(player_wrapper.get_meta("unscaled_squad_width")) == 129, "编辑第五枚符文后立即从展开双卡刷新为紧密双卡")
 	player_runes[4].select(CardData.ElementType.WATER + 1)
 	lab._on_editor_changed("player")
+
+	var aura_scenario := BattleLabScenario.create_default()
+	for spec: Dictionary in aura_scenario.player_squads:
+		spec["enabled"] = false
+	for index: int in 3:
+		var spec := aura_scenario.player_squads[index]
+		spec["enabled"] = true
+		spec["row"] = "front"
+		spec["position"] = index
+		spec["name"] = "人类%d" % (index + 1)
+		spec["health"] = 6
+		spec["race"] = CardData.RaceType.HUMAN
+	aura_scenario.player_squads[0]["name"] = "民兵指挥官"
+	aura_scenario.player_squads[0]["effect_card"] = "militia_commander"
+	lab.scenario = aura_scenario
+	lab._load_scenario_into_controls()
+	await process_frame
+	await process_frame
+	var aura_healths: Array[int] = []
+	for state: BattleSquadState in lab.battle_controller.player_states:
+		aura_healths.append(state.displayed_health)
+	_expect(
+		aura_healths == [8, 10, 8]
+		and not lab.battle_controller.is_running()
+		and lab.battle_controller.run_reward_ledger.get_entries().is_empty(),
+		"配置预览只结算持续光环：三个相邻人类立即显示8/10/8生命，不触发战吼奖励"
+	)
+	var middle_slot := lab._battle_state_slots[lab.battle_controller.player_states[1]] as BoardSlot
+	_expect(middle_slot.get_primary_card_view().health_label.text == "10", "民兵指挥官生命光环直接显示在战场卡面")
+
+	((lab._side_controls["player"] as Dictionary)["slot"] as OptionButton).select(2)
+	lab._on_slot_selected(2, "player")
+	var player_race_option := (lab._side_controls["player"] as Dictionary)["race"] as OptionButton
+	player_race_option.select(CardData.RaceType.ELF)
+	lab._on_editor_changed("player")
+	await process_frame
+	await process_frame
+	aura_healths.clear()
+	for state: BattleSquadState in lab.battle_controller.player_states:
+		aura_healths.append(state.displayed_health)
+	_expect(aura_healths == [8, 8, 6], "把第三张牌改为精灵后，种族邻接光环立即移除旧加成并重新计算")
+
+	lab.scenario = BattleLabScenario.create_default()
+	lab._load_scenario_into_controls()
+	player_effect_option = (lab._side_controls["player"] as Dictionary)["effect"] as OptionButton
 	player_effect_option.select(BattleLabEffectLibrary.get_option_index(BattleLabEffectLibrary.ACTION_REINFORCEMENT))
 	lab._on_editor_changed("player")
 	lab._start_battle()

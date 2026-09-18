@@ -18,6 +18,8 @@ Thumbs.db
 *.tmp
 *.temp
 *~
+__pycache__/
+*.pyc
 
 # Locally exported playable builds
 builds/

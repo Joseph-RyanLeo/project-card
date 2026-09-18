@@ -17,6 +17,8 @@ const BattleLogEntry = preload("res://scripts/battle/battle_log_entry.gd")
 const BattleFormulaPresenter = preload("res://scripts/battle/battle_formula_presenter.gd")
 const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
 const BattleAttackTrailRenderer = preload("res://scripts/battle/battle_attack_trail_renderer.gd")
+const BattlePermanentGrowthLedger = preload("res://scripts/battle/battle_permanent_growth_ledger.gd")
+const BattleRunRewardLedger = preload("res://scripts/battle/battle_run_reward_ledger.gd")
 const PAGE_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_large.fnt")
 const BATTLE_LOG_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const WOOD_WORLD_TEXTURE: Texture2D = preload("res://assets/stage_6_5/wood_world.png")
@@ -33,6 +35,8 @@ const RECENT_CARDS_RIGHT_PAGE_TEXTURE: Texture2D = preload("res://assets/stage_6
 const CHARACTER_SHEET_TEXTURE: Texture2D = preload("res://assets/stage_6_5/character_front_back.png")
 const ACTION_TABS_TEXTURE: Texture2D = preload("res://assets/stage_6_5/page_tabs.png")
 const CARD_TYPE_TABS_TEXTURE: Texture2D = preload("res://assets/stage_6_5/card_type_tabs.png")
+const RARITY_FILTER_TEXTURE: Texture2D = preload("res://assets/stage_6_5/rarity_filter_icons.png")
+const ELEMENT_FILTER_TEXTURE: Texture2D = preload("res://assets/stage_6_5/element_filter_icons.png")
 const ACTION_FILTER_TEXTURES: Array[Texture2D] = [
 	preload("res://assets/actions/action_melee.png"),
 	preload("res://assets/actions/action_ranged.png"),
@@ -59,19 +63,33 @@ const CARD_TYPE_FILTER_TYPES: Array[int] = [
 ] # 书签视觉顺序：随从、法术、装备、资源
 const CARD_TYPE_FILTER_NAMES: Array[String] = ["随从", "法术", "装备", "资源"] # 卡牌种类书签提示文字
 const RARITY_FILTER_REGIONS: Array[Rect2] = [
-	Rect2(192, 9, 16, 16),
-	Rect2(216, 9, 16, 16),
-	Rect2(240, 9, 16, 16),
-	Rect2(263, 9, 16, 16),
-	Rect2(287, 9, 16, 16),
-] # I～V 五个当前可用的稀有度筛选图标
+	Rect2(0, 23, 13, 18),
+	Rect2(21, 23, 13, 18),
+	Rect2(42, 23, 13, 18),
+	Rect2(63, 23, 15, 18),
+	Rect2(86, 23, 15, 18),
+] # I～V 五个未选中暗版稀有度图标
+const RARITY_FILTER_SELECTED_REGIONS: Array[Rect2] = [
+	Rect2(0, 0, 13, 18),
+	Rect2(21, 0, 13, 18),
+	Rect2(42, 0, 13, 18),
+	Rect2(63, 0, 15, 18),
+	Rect2(86, 0, 15, 18),
+] # I～V 五个选中亮版稀有度图标
 const ELEMENT_FILTER_REGIONS: Array[Rect2] = [
-	Rect2(330, 9, 16, 16),
-	Rect2(354, 9, 16, 16),
-	Rect2(378, 9, 16, 16),
-	Rect2(401, 9, 16, 16),
-	Rect2(425, 9, 16, 16),
-] # 水、木、火、光、暗五个元素筛选图标
+	Rect2(0, 21, 16, 16),
+	Rect2(24, 21, 16, 16),
+	Rect2(48, 21, 16, 16),
+	Rect2(71, 21, 16, 16),
+	Rect2(95, 21, 16, 16),
+] # 水、木、火、光、暗五个未选中暗版元素筛选图标
+const ELEMENT_FILTER_SELECTED_REGIONS: Array[Rect2] = [
+	Rect2(0, 0, 16, 16),
+	Rect2(24, 0, 16, 16),
+	Rect2(48, 0, 16, 16),
+	Rect2(71, 0, 16, 16),
+	Rect2(95, 0, 16, 16),
+] # 水、木、火、光、暗五个选中亮版元素筛选图标
 const ELEMENT_FILTER_TYPES: Array[int] = [
 	CardData.ElementType.WATER,
 	CardData.ElementType.WOOD,
@@ -144,6 +162,9 @@ const BATTLE_SPEED_BUTTON_SIZE := Vector2(82, 30) # 1×/2×/3×循环按钮的�
 const BATTLE_SPEED_MULTIPLIERS: Array[float] = [1.0, 2.0, 3.0] # 可循环选择的现实播放速度
 const BATTLE_TIMER_POSITION := Vector2(54, 343) # 战斗逻辑计时位于战场中线靠左位置
 const BATTLE_TIMER_SIZE := Vector2(130, 32) # 战斗计时文字的固定显示区域
+const BATTLE_SEED_PANEL_POSITION := Vector2(12, 380) # 种子器位于战斗计时下方，方便按阵容截图复现同一场战斗
+const BATTLE_SEED_PANEL_SIZE := Vector2(202, 62) # 一行标题与一行可编辑种子、随机按钮的固定区域
+const BATTLE_SEED_MAX: int = 999999999 # 与战斗实验室统一使用九位非负种子，便于手工抄录
 const BATTLE_LOG_POSITION := Vector2(12, 448) # 战斗日志位于战场页面左下角的固定位置
 const BATTLE_LOG_SIZE := Vector2(202, 246) # 战斗日志容器的固定显示尺寸
 const BATTLE_LOG_MAX_ENTRIES: int = 100 # 日志最多保留的行动条数，避免长战斗无限增长
@@ -162,7 +183,7 @@ const EFFECT_COLOR_FIRE := Color("e51414") # 火元素的纯红色攻击颜色
 const EFFECT_COLOR_WATER := Color("0095ff") # 水元素的纯蓝色攻击颜色
 const EFFECT_COLOR_WOOD := Color("3ac330") # 木元素的纯绿色攻击颜色
 const BATTLE_RESULT_PANEL_POSITION := Vector2(1096, 184) # 战后入口放在战场右侧空白区，不遮挡四排卡牌
-const BATTLE_RESULT_PANEL_SIZE := Vector2(170, 104) # 参考右侧返回区，只保留结果、统计提示和重开入口
+const BATTLE_RESULT_PANEL_SIZE := Vector2(170, 220) # 右侧结算框高度，同时容纳永久成长、局内奖励和重开入口
 signal battle_departure_requested(state: BattleSquadState)
 
 enum WorldView { BATTLEFIELDS, COLLECTION }
@@ -232,6 +253,9 @@ var drag_mode_button: Button
 var enemy_avatar: TextureRect
 var battle_speed_button: Button
 var battle_timer_label: Label
+var battle_seed_panel: PanelContainer
+var battle_seed_spin: SpinBox
+var battle_seed_random_button: Button
 var battle_log_panel: PanelContainer
 var battle_log_text: RichTextLabel
 var formula_popup: PanelContainer
@@ -241,6 +265,7 @@ var player_avatar_button: TextureButton
 var start_battle_button: Button
 var battle_result_panel: Panel
 var battle_result_label: Label
+var battle_result_summary_label: RichTextLabel
 var restart_battle_button: Button
 var battle_controller: BattleController
 var search_edit: LineEdit
@@ -367,6 +392,60 @@ func _build_battle_hud(parent: Control) -> void:
 	timer.z_index = 200
 	timer.visible = false
 	parent.add_child(timer)
+
+	var seed_panel := PanelContainer.new()
+	seed_panel.name = "BattleSeedPanel"
+	seed_panel.unique_name_in_owner = true
+	seed_panel.position = BATTLE_SEED_PANEL_POSITION
+	seed_panel.size = BATTLE_SEED_PANEL_SIZE
+	seed_panel.custom_minimum_size = BATTLE_SEED_PANEL_SIZE
+	seed_panel.z_index = 200
+	seed_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var seed_style := StyleBoxFlat.new()
+	seed_style.bg_color = Color(0.025, 0.035, 0.043, 0.9)
+	seed_style.border_color = Color(0.31, 0.55, 0.58, 0.9)
+	seed_style.set_border_width_all(1)
+	seed_style.set_corner_radius_all(4)
+	seed_style.content_margin_left = 6.0
+	seed_style.content_margin_top = 4.0
+	seed_style.content_margin_right = 6.0
+	seed_style.content_margin_bottom = 4.0
+	seed_panel.add_theme_stylebox_override("panel", seed_style)
+	parent.add_child(seed_panel)
+
+	var seed_layout := VBoxContainer.new()
+	seed_layout.add_theme_constant_override("separation", 2)
+	seed_panel.add_child(seed_layout)
+	var seed_title := Label.new()
+	seed_title.text = "战斗种子"
+	seed_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	seed_title.add_theme_font_override("font", BATTLE_LOG_FONT)
+	seed_title.add_theme_font_size_override("font_size", 10)
+	seed_title.add_theme_color_override("font_color", Color("f5df9b"))
+	seed_layout.add_child(seed_title)
+	var seed_controls := HBoxContainer.new()
+	seed_controls.add_theme_constant_override("separation", 4)
+	seed_layout.add_child(seed_controls)
+	var seed_spin := SpinBox.new()
+	seed_spin.name = "BattleSeedSpin"
+	seed_spin.unique_name_in_owner = true
+	seed_spin.min_value = 0.0
+	seed_spin.max_value = float(BATTLE_SEED_MAX)
+	seed_spin.step = 1.0
+	seed_spin.allow_greater = false
+	seed_spin.allow_lesser = false
+	seed_spin.update_on_text_changed = true
+	seed_spin.custom_minimum_size = Vector2(126, 26)
+	seed_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	seed_spin.tooltip_text = "修改后用于下一场战斗；相同阵容和种子可复现相同随机结果"
+	seed_controls.add_child(seed_spin)
+	var seed_random := Button.new()
+	seed_random.name = "BattleSeedRandomButton"
+	seed_random.unique_name_in_owner = true
+	seed_random.text = "随机"
+	seed_random.custom_minimum_size = Vector2(54, 26)
+	seed_random.tooltip_text = "生成一个新的战斗种子"
+	seed_controls.add_child(seed_random)
 
 	var log_panel := PanelContainer.new()
 	log_panel.name = "BattleLogPanel"
@@ -533,19 +612,22 @@ func _build_battle_result_panel() -> void:
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 20)
 	panel.add_child(title)
-	var placeholder := _make_label(
-		"卡面显示本局统计",
-		Vector2(10, 36),
-		Vector2(150, 24)
-	)
+	var placeholder := RichTextLabel.new()
 	placeholder.name = "BattleResultPlaceholder"
 	placeholder.unique_name_in_owner = true
-	placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	placeholder.position = Vector2(10, 36)
+	placeholder.size = Vector2(150, 140)
+	placeholder.text = "卡面：本局统计\n永久成长：无\n本场奖励：无"
+	placeholder.fit_content = false
+	placeholder.scroll_active = true
+	placeholder.add_theme_font_override("normal_font", BATTLE_LOG_FONT)
+	placeholder.add_theme_font_size_override("normal_font_size", 11)
+	placeholder.add_theme_color_override("default_color", Color("e8eee5"))
 	panel.add_child(placeholder)
 	var restart := _make_button(
 		"RestartBattleButton",
 		"重新开始",
-		Vector2(25, 70),
+		Vector2(25, 184),
 		Vector2(120, 27),
 		true
 	)
@@ -619,14 +701,14 @@ func _build_collection_section(parent: Control) -> void:
 	rarities.name = "RarityButtons"
 	rarities.unique_name_in_owner = true
 	rarities.position = RARITY_FILTER_POSITION
-	rarities.size = Vector2(111, 16)
+	rarities.size = RARITY_FILTER_TEXTURE.get_size()
 	rarities.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	filter.add_child(rarities)
 	var elements := Control.new()
 	elements.name = "ElementButtons"
 	elements.unique_name_in_owner = true
 	elements.position = ELEMENT_FILTER_POSITION
-	elements.size = Vector2(111, 16)
+	elements.size = ELEMENT_FILTER_TEXTURE.get_size()
 	elements.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	filter.add_child(elements)
 	filter.add_child(_make_button("AttackEffectLabButton", "攻击特效调试器", Vector2(1110, 248), Vector2(150, 32), true))
@@ -832,6 +914,8 @@ func _ready() -> void:
 	start_battle_button.pressed.connect(_on_start_battle_button_pressed)
 	restart_battle_button.pressed.connect(_on_restart_battle_button_pressed)
 	battle_speed_button.pressed.connect(cycle_battle_speed)
+	battle_seed_random_button.pressed.connect(_use_new_battle_seed)
+	_use_new_battle_seed()
 	battle_controller = BattleController.new() as BattleController
 	battle_controller.name = "BattleController"
 	battle_controller.use_projectile_timing = true
@@ -842,6 +926,7 @@ func _ready() -> void:
 	battle_controller.effect_resolved.connect(_on_battle_effect_resolved)
 	battle_controller.direct_damage_resolved.connect(_on_battle_direct_damage_resolved)
 	battle_controller.squad_defeated.connect(_request_battle_squad_departure)
+	battle_controller.squad_revived.connect(_cancel_battle_squad_departure)
 	battle_controller.battle_finished.connect(_on_battle_finished)
 	_apply_battle_speed()
 	_build_filter_buttons()
@@ -854,6 +939,7 @@ func _ready() -> void:
 	current_world_view = WorldView.COLLECTION
 	_update_phase_label()
 	_on_drag_mode_toggled(drag_mode_button.button_pressed)
+	_refresh_preparation_effect_preview.call_deferred()
 
 
 func _bind_scene_nodes() -> void:
@@ -867,6 +953,9 @@ func _bind_scene_nodes() -> void:
 	enemy_avatar = get_node("%EnemyAvatar") as TextureRect
 	battle_speed_button = get_node("%BattleSpeedButton") as Button
 	battle_timer_label = get_node("%BattleTimerLabel") as Label
+	battle_seed_panel = get_node("%BattleSeedPanel") as PanelContainer
+	battle_seed_spin = get_node("%BattleSeedSpin") as SpinBox
+	battle_seed_random_button = get_node("%BattleSeedRandomButton") as Button
 	battle_log_panel = get_node("%BattleLogPanel") as PanelContainer
 	battle_log_text = get_node("%BattleLogText") as RichTextLabel
 	battle_effect_layer = get_node("%BattleEffectLayer") as Control
@@ -912,6 +1001,7 @@ func _build_formula_popup() -> void:
 		battle_log_text.meta_hover_ended.connect(_on_battle_log_meta_hover_ended)
 	battle_result_panel = get_node("%BattleResultPanel") as Panel
 	battle_result_label = get_node("%BattleResultLabel") as Label
+	battle_result_summary_label = get_node("%BattleResultPlaceholder") as RichTextLabel
 	restart_battle_button = get_node("%RestartBattleButton") as Button
 	search_edit = get_node("%SearchEdit") as LineEdit
 	search_button = get_node("%SearchButton") as Button
@@ -948,6 +1038,14 @@ func _on_player_avatar_button_pressed() -> void:
 func cycle_battle_speed() -> void:
 	battle_speed_index = (battle_speed_index + 1) % BATTLE_SPEED_MULTIPLIERS.size()
 	_apply_battle_speed()
+
+
+func _use_new_battle_seed() -> void:
+	if battle_seed_spin == null:
+		return
+	# 用微秒时钟生成便于抄录的九位非负整数；真正的随机序列仍由
+	# BattleController 自己的 RandomNumberGenerator 独立维护。
+	battle_seed_spin.value = int(Time.get_ticks_usec() % (BATTLE_SEED_MAX + 1))
 
 
 func _apply_battle_speed() -> void:
@@ -1008,14 +1106,17 @@ func _build_filter_buttons() -> void:
 	for rarity: int in CardData.Rarity.size():
 		var region := RARITY_FILTER_REGIONS[rarity]
 		var button := _create_atlas_filter_button(
-			COLLECTION_FILTER_ICONS_TEXTURE,
+			RARITY_FILTER_TEXTURE,
 			region,
 			"稀有度 %s" % ["I", "II", "III", "IV", "V"][rarity]
+		)
+		button.texture_pressed = _make_atlas_texture(
+			RARITY_FILTER_TEXTURE,
+			RARITY_FILTER_SELECTED_REGIONS[rarity]
 		)
 		button.position = region.position - RARITY_FILTER_REGIONS[0].position
 		button.toggle_mode = true
 		button.button_pressed = active_rarity_filters.has(rarity)
-		_add_filter_selected_mark(button)
 		button.pressed.connect(_on_rarity_button_pressed.bind(rarity))
 		rarity_buttons.add_child(button)
 		button.size = region.size
@@ -1023,14 +1124,17 @@ func _build_filter_buttons() -> void:
 		var element_type: int = ELEMENT_FILTER_TYPES[visual_index]
 		var region := ELEMENT_FILTER_REGIONS[visual_index]
 		var button := _create_atlas_filter_button(
-			COLLECTION_FILTER_ICONS_TEXTURE,
+			ELEMENT_FILTER_TEXTURE,
 			region,
 			"包含%s符文" % ELEMENT_FILTER_NAMES[visual_index]
+		)
+		button.texture_pressed = _make_atlas_texture(
+			ELEMENT_FILTER_TEXTURE,
+			ELEMENT_FILTER_SELECTED_REGIONS[visual_index]
 		)
 		button.position = region.position - ELEMENT_FILTER_REGIONS[0].position
 		button.toggle_mode = true
 		button.button_pressed = active_element_filters.has(element_type)
-		_add_filter_selected_mark(button)
 		button.pressed.connect(_on_element_button_pressed.bind(element_type))
 		element_buttons.add_child(button)
 		button.size = region.size
@@ -1091,7 +1195,6 @@ func _build_filter_buttons() -> void:
 		tab_root.add_child(hotspot)
 	_update_card_type_tab_positions(false)
 	_update_action_tab_positions(false)
-	_update_filter_selected_marks()
 
 
 func get_action_tab_icon_rect(action_type: int) -> Rect2:
@@ -1114,31 +1217,6 @@ func _create_atlas_filter_button(
 	button.stretch_mode = TextureButton.STRETCH_SCALE
 	button.tooltip_text = tooltip
 	return button
-
-
-func _add_filter_selected_mark(button: BaseButton) -> void:
-	var mark := Label.new()
-	mark.name = "SelectedMark"
-	mark.position = Vector2(7, -5)
-	mark.size = Vector2(12, 12)
-	mark.text = "✓"
-	mark.add_theme_color_override("font_color", Color("fff1a8"))
-	mark.add_theme_color_override("font_shadow_color", Color("3b1b14"))
-	mark.add_theme_constant_override("shadow_offset_x", 1)
-	mark.add_theme_constant_override("shadow_offset_y", 1)
-	mark.add_theme_font_size_override("font_size", 10)
-	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	mark.z_index = 5
-	button.add_child(mark)
-
-
-func _update_filter_selected_marks() -> void:
-	for container: Control in [rarity_buttons, element_buttons]:
-		for child: Node in container.get_children():
-			var button := child as BaseButton
-			if button == null or not button.has_node("SelectedMark"):
-				continue
-			(button.get_node("SelectedMark") as Label).visible = button.button_pressed
 
 
 func _update_action_tab_positions(animate: bool = true) -> void:
@@ -1316,7 +1394,6 @@ func _sync_minion_filter_controls() -> void:
 			ELEMENT_FILTER_TYPES[visual_index]
 		)
 	current_collection_page = 0
-	_update_filter_selected_marks()
 	_update_action_tab_positions()
 	_update_card_type_tab_positions()
 	_build_collection_cards()
@@ -1329,7 +1406,6 @@ func toggle_rarity_filter(rarity: int) -> void:
 			active_rarity_filters.has(rarity_index)
 		)
 	current_collection_page = 0
-	_update_filter_selected_marks()
 	_build_collection_cards()
 
 
@@ -1964,10 +2040,16 @@ func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
 	current_phase = GamePhase.BATTLE
 	battle_result_panel.visible = false
 	_update_phase_label()
+	var resolved_seed := (
+		random_seed
+		if random_seed >= 0
+		else clampi(roundi(battle_seed_spin.value), 0, BATTLE_SEED_MAX)
+	)
+	battle_seed_spin.value = resolved_seed
 	battle_controller.start_battle(
 		player_formation,
 		enemy_formation,
-		random_seed,
+		resolved_seed,
 		auto_run
 	)
 	_map_battle_states_to_slots(battle_controller.player_states, player_formation)
@@ -1998,9 +2080,11 @@ func restart_battle() -> bool:
 	current_phase = GamePhase.PREPARE
 	battle_result_panel.visible = false
 	battle_result_label.text = "战斗结算"
+	battle_result_summary_label.text = "卡面：本局统计\n永久成长：无\n本场奖励：无"
 	_update_battle_timer()
 	_update_phase_label()
 	_build_collection_cards()
+	_refresh_preparation_effect_preview.call_deferred()
 	play_area_label.text = "已精确恢复本次战斗开始前的阵容与准备状态"
 	return true
 
@@ -2011,6 +2095,8 @@ func set_phase_for_test(phase: GamePhase) -> void:
 		battle_controller.stop_battle()
 	current_phase = phase
 	_update_phase_label()
+	if current_phase == GamePhase.PREPARE:
+		_refresh_preparation_effect_preview.call_deferred()
 
 
 func _update_phase_label() -> void:
@@ -2025,6 +2111,9 @@ func _update_phase_label() -> void:
 	start_battle_button.visible = current_phase == GamePhase.PREPARE
 	battle_speed_button.visible = current_phase == GamePhase.BATTLE
 	battle_timer_label.visible = current_phase == GamePhase.BATTLE
+	battle_seed_panel.visible = true
+	battle_seed_spin.get_line_edit().editable = current_phase == GamePhase.PREPARE
+	battle_seed_random_button.disabled = current_phase != GamePhase.PREPARE
 	# 结算页继续复用本场同一份结构化日志，直到玩家点击重新开始。
 	battle_log_panel.visible = current_phase in [GamePhase.BATTLE, GamePhase.RESULT]
 	battle_result_panel.visible = current_phase == GamePhase.RESULT
@@ -2101,8 +2190,27 @@ func _on_battle_states_changed() -> void:
 				state.displayed_armor,
 				state.remaining_cooldown,
 				state.get_buff_stacks(BattleRules.FATIGUE_BUFF_ID),
-				state.get_display_action_value()
+				state.get_display_action_value(),
+				state.runtime_action_type_override,
+				state.get_rune_pattern_result(),
+				state.get_active_rune_slots(),
+				state.get_masked_rune_indices_by_card()
 			)
+
+
+func _refresh_preparation_effect_preview() -> void:
+	if current_phase != GamePhase.PREPARE or battle_controller == null:
+		return
+	# 备战态复用正式战斗的状态初始化与持续效果系统，但不会触发战吼、推进时间或写入奖励账本。
+	var player_formation := _build_battle_formation(front_row, &"player_front")
+	player_formation.append_array(_build_battle_formation(back_row, &"player_back"))
+	var enemy_formation := _build_battle_formation(enemy_front_row, &"enemy_front")
+	enemy_formation.append_array(_build_battle_formation(enemy_back_row, &"enemy_back"))
+	_battle_state_slots.clear()
+	battle_controller.prepare_battle_preview(player_formation, enemy_formation, 0)
+	_map_battle_states_to_slots(battle_controller.player_states, player_formation)
+	_map_battle_states_to_slots(battle_controller.enemy_states, enemy_formation)
+	_on_battle_states_changed()
 
 
 func _update_battle_timer() -> void:
@@ -2124,7 +2232,7 @@ func _on_battle_action_resolved(
 ) -> void:
 	var actor_slot := _battle_state_slots.get(actor) as BoardSlot
 	var target_slot := _battle_state_slots.get(target) as BoardSlot
-	var action_name := actor.get_action_source().get_action_type_name()
+	var action_name := CardData.get_action_type_name_for(action_type)
 	var target_name := target.get_effect_source().display_name
 	if is_instance_valid(actor_slot):
 		actor_slot.show_battle_action("%s → %s  %d" % [action_name, target_name, amount])
@@ -2357,7 +2465,7 @@ func _attack_element_colors(actor: BattleSquadState) -> Dictionary:
 	if actor == null or actor.squad_data == null:
 		return result
 	var groups := BattleElementResolver.get_element_groups(
-		actor.squad_data.get_rune_pattern_result()
+		actor.get_rune_pattern_result()
 	)
 	if groups.is_empty():
 		return result
@@ -2435,20 +2543,36 @@ func _request_battle_squad_departure(state: BattleSquadState) -> void:
 		state,
 		slot,
 		row,
-		_battle_generation
+		_battle_generation,
+		state.life_generation
 	)
+
+
+func _cancel_battle_squad_departure(state: BattleSquadState) -> void:
+	var slot := _battle_state_slots.get(state) as BoardSlot
+	if is_instance_valid(slot):
+		slot.cancel_death_dissolve()
 
 
 func _animate_battle_squad_departure(
 	state: BattleSquadState,
 	slot: BoardSlot,
 	row: BattlefieldRow,
-	battle_generation: int
+	battle_generation: int,
+	departure_life_generation: int
 ) -> void:
 	if is_instance_valid(slot):
 		var noise_seed := float(state.side * 101 + state.formation_index * 17 + battle_departure_count)
 		await slot.play_death_dissolve(noise_seed)
 	if battle_generation != _battle_generation:
+		return
+	if state.alive or state.life_generation != departure_life_generation:
+		_active_battle_departures = maxi(_active_battle_departures - 1, 0)
+		if (
+			_active_battle_departures == 0
+			and _pending_battle_result != BattleController.Result.NONE
+		):
+			_show_battle_result(_pending_battle_result)
 		return
 	_completed_battle_departures.append({
 		"state": state,
@@ -2521,8 +2645,94 @@ func _show_battle_result(result: BattleController.Result) -> void:
 			battle_result_label.text = "平局"
 		_:
 			battle_result_label.text = "战斗结算"
+	_refresh_battle_result_summary()
 	_update_phase_label()
 	play_area_label.text = "战斗结束：%s" % battle_result_label.text
+
+
+func _refresh_battle_result_summary() -> void:
+	if battle_result_summary_label == null or battle_controller == null:
+		return
+	battle_result_summary_label.text = _format_battle_result_summary(
+		battle_controller.permanent_growth_ledger.get_entries(),
+		battle_controller.run_reward_ledger.get_entries()
+	)
+	battle_result_summary_label.scroll_to_line(0)
+
+
+func _format_battle_result_summary(
+	growth_entries: Array[Dictionary],
+	reward_entries: Array[Dictionary]
+) -> String:
+	var lines: Array[String] = ["卡面：本局统计"]
+	var growth_totals: Dictionary = {}
+	var growth_order: Array[String] = []
+	for entry: Dictionary in growth_entries:
+		if int(entry.get("side", BattleSquadState.Side.PLAYER)) != BattleSquadState.Side.PLAYER:
+			continue
+		var stat := entry.get("stat", &"") as StringName
+		if stat not in [
+			BattlePermanentGrowthLedger.STAT_BASE_VALUE,
+			BattlePermanentGrowthLedger.STAT_BASE_ARMOR,
+		]:
+			continue
+		var key := "%d:%d:%s" % [
+			int(entry.get("owner_runtime_id", -1)),
+			int(entry.get("card_index", -1)),
+			String(stat),
+		]
+		if not growth_totals.has(key):
+			var card := entry.get("card_data") as CardData
+			growth_totals[key] = {
+				"card_name": card.display_name if card != null else String(entry.get("card_id", "未知卡牌")),
+				"stat": stat,
+				"amount": 0.0,
+			}
+			growth_order.append(key)
+		var total := growth_totals[key] as Dictionary
+		total["amount"] = float(total.get("amount", 0.0)) + float(entry.get("amount", 0.0))
+	if growth_order.is_empty():
+		lines.append("永久成长：无")
+	else:
+		lines.append("永久成长（待写回）")
+		for key: String in growth_order:
+			var total := growth_totals[key] as Dictionary
+			var stat_name := (
+				"行动"
+				if total.get("stat") == BattlePermanentGrowthLedger.STAT_BASE_VALUE
+				else "基础护甲"
+			)
+			lines.append("• %s：%s %s" % [
+				String(total.get("card_name", "未知卡牌")),
+				stat_name,
+				_format_positive_result_amount(float(total.get("amount", 0.0))),
+			])
+
+	var gold_total := 0
+	var random_card_total := 0
+	for entry: Dictionary in reward_entries:
+		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
+			continue
+		match entry.get("kind", &"") as StringName:
+			BattleRunRewardLedger.KIND_GOLD:
+				gold_total += int(entry.get("amount", 0))
+			BattleRunRewardLedger.KIND_RANDOM_CARD_REQUEST:
+				random_card_total += int(entry.get("amount", 0))
+	if gold_total <= 0 and random_card_total <= 0:
+		lines.append("本场奖励：无")
+	else:
+		lines.append("本场奖励（待写回）")
+		if gold_total > 0:
+			lines.append("• 金币 +%d" % gold_total)
+		if random_card_total > 0:
+			lines.append("• 待抽取随从 +%d" % random_card_total)
+	return "\n".join(lines)
+
+
+func _format_positive_result_amount(amount: float) -> String:
+	if is_equal_approx(amount, roundf(amount)):
+		return "+%d" % roundi(amount)
+	return "+%s" % BattleLogEntry.format_number(amount)
 
 
 func _restore_battle_result_layout() -> void:
@@ -2538,11 +2748,10 @@ func _restore_battle_result_layout() -> void:
 			continue
 		var slot := row_slots[state.formation_index] as BoardSlot
 		_battle_state_slots[state] = slot
-		var action_source := state.get_action_source()
 		slot.show_battle_result_statistics(
 			state.get_battle_statistics(),
 			not state.alive,
-			action_source.action_type if action_source != null else CardData.ActionType.MELEE
+			state.get_effective_action_type()
 		)
 
 
@@ -2556,6 +2765,7 @@ func _connect_board_rows() -> void:
 		)
 	for enemy_row: BattlefieldRow in [enemy_back_row, enemy_front_row]:
 		enemy_row.set_drag_enabled(false)
+		enemy_row.squads_changed.connect(_on_battlefield_squads_changed)
 
 
 func _on_battlefield_squads_changed() -> void:
@@ -2570,6 +2780,7 @@ func _reset_rune_flow_if_no_battlefield_effects() -> void:
 	# 跨排移动会先移除后加入；延迟到事务结束再检查，避免中途误重置。
 	if not _battlefield_has_active_rune_effects():
 		CardView.reset_active_rune_flow()
+	_refresh_preparation_effect_preview()
 
 
 func _battlefield_has_active_rune_effects() -> bool:
@@ -3157,7 +3368,8 @@ func _transfer_drop_intent(
 	if (
 		operation == &"merge_card"
 		and target_slot != source_slot
-		and not target_slot.get_squad_data().can_accept_external_card_at(
+		and not target_slot.get_squad_data().can_accept_card_at(
+			card_data,
 			int(intent.get("card_index", 0))
 		)
 	):

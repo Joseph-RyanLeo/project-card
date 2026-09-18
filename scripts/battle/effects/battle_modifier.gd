@@ -6,6 +6,7 @@ extends RefCounted
 enum Stat {
 	ZEAL,
 	ACTION_VALUE,
+	ACTION_MULTIPLIER,
 	MAX_HEALTH,
 	BASE_ARMOR,
 	TARGET_PRIORITY,

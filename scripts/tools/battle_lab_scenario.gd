@@ -4,7 +4,7 @@ extends Resource
 ## 战斗实验室的一份可保存输入快照。
 ## 这里只描述阵容与预期结果；真正结算仍交给正式 BattleController。
 
-const SIDE_SLOT_COUNT: int = 4 # 实验室每一方最多同时配置的小队数量
+const SIDE_SLOT_COUNT: int = 6 # 实验室每一方最多同时配置的小队数量，便于验证多人相邻与种族光环
 const MAX_VISIBLE_RUNES: int = 5 # 当前牌型系统允许进入结算的最大可见符文数
 const BattleLabEffectLibrary = preload("res://scripts/tools/battle_lab_effect_library.gd")
 const BattleRules = preload("res://scripts/battle/battle_rules.gd")
@@ -89,7 +89,7 @@ func build_enemy_formation() -> Array[Dictionary]:
 
 func to_dictionary() -> Dictionary:
 	return {
-		"version": 2,
+		"version": 3,
 		"scenario_name": scenario_name,
 		"random_seed": random_seed,
 		"speed_multiplier": speed_multiplier,
@@ -161,7 +161,11 @@ static func _build_card(spec: Dictionary, stable_id: String) -> CardData:
 	card.art_texture = visual_template.art_texture
 	card.art_normal_texture = visual_template.art_normal_texture
 	card.art_offset = visual_template.art_offset
-	card.race_type = visual_template.race_type
+	card.race_type = clampi(
+		int(spec.get("race", CardData.RaceType.HUMAN)),
+		0,
+		CardData.RaceType.size() - 1
+	) as CardData.RaceType
 	card.rarity = visual_template.rarity
 	card.base_value = int(spec.get("base_value", 10))
 	var requested_cooldown := clampf(
@@ -217,7 +221,7 @@ static func _normalize_side(raw_specs: Variant, side_name: String) -> Array[Dict
 	return result
 
 
-static func _squad_spec(name_value: String, enabled: bool, row: String, position: int, action: int, base_value: int, cooldown: float, health: int, armor: int, runes: Array) -> Dictionary:
+static func _squad_spec(name_value: String, enabled: bool, row: String, position: int, action: int, base_value: int, cooldown: float, health: int, armor: int, runes: Array, race: int = CardData.RaceType.HUMAN) -> Dictionary:
 	return {
 		"name": name_value,
 		"enabled": enabled,
@@ -228,6 +232,7 @@ static func _squad_spec(name_value: String, enabled: bool, row: String, position
 		"cooldown": cooldown,
 		"health": health,
 		"armor": armor,
+		"race": race,
 		"runes": runes.duplicate(),
 		"effect_card": String(BattleLabEffectLibrary.NONE),
 	}

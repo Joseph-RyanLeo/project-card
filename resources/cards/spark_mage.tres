@@ -16,4 +16,4 @@ race_type = 4
 rarity = 2
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(8, 32)
-effect_text = "行动时对随机目标造成法术伤害。火光暗组合用于测试混合牌型。"
+effect_text = ""

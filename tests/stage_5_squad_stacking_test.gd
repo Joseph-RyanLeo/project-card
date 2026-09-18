@@ -18,6 +18,7 @@ func _run() -> void:
 	root.size = Vector2i(1280, 720)
 	await _test_squad_data_layout_and_orders()
 	await _test_squad_view_sources_and_row_width()
+	await _test_stack_snapshot_copies_runtime_values()
 	await _test_card_transactions()
 	await _test_whole_squad_transactions()
 	await _test_compact_double_squad_merges_with_single()
@@ -253,6 +254,50 @@ func _test_squad_view_sources_and_row_width() -> void:
 	var slots := front_row.get_squads()
 	var measured_width := slots[-1].position.x + slots[-1].size.x - slots[0].position.x
 	_expect(is_equal_approx(measured_width, 801.0), "战场行按真实小队宽度居中并保持 801px 满排")
+	await _dispose_main(main)
+
+
+func _test_stack_snapshot_copies_runtime_values() -> void:
+	var main: Variant = await _create_main()
+	var front_row := main.get_node("%FrontRow") as BattlefieldRow
+	var card := main.collection_cards[0] as CardData
+	var slot := front_row.add_card(card, 0)
+	await process_frame
+	await process_frame
+	var live_card := slot.get_primary_card_view()
+	var masked_indices: Array[int] = [1]
+	live_card.set_battle_vitals(28, 6)
+	live_card.set_battle_remaining_cooldown(7.5)
+	live_card.set_battle_action_value(12)
+	live_card.set_battle_action_type(CardData.ActionType.MAGIC)
+	live_card.set_battle_masked_runes(masked_indices)
+	await create_timer(CardView.BATTLE_NUMBER_TWEEN_DURATION + 0.03).timeout
+	slot.set_stack_target_feedback(1.0)
+	await process_frame
+	var snapshot_layer := slot.get("_stack_target_snapshot_layer") as Control
+	var snapshot_visual := (
+		snapshot_layer.get_child(0) as CardSnapshotVisual
+		if snapshot_layer != null and snapshot_layer.get_child_count() == 1
+		else null
+	)
+	var snapshot_card := (
+		snapshot_visual.get_source_card_view() as CardView
+		if snapshot_visual != null
+		else null
+	)
+	_expect(
+		snapshot_card != null
+		and snapshot_card.health_label.text == live_card.health_label.text
+		and snapshot_card.armor_label.text == live_card.armor_label.text
+		and snapshot_card.cooldown_label.text == live_card.cooldown_label.text
+		and snapshot_card.value_label.text == live_card.value_label.text
+		and snapshot_card._battle_action_type_override
+		== live_card._battle_action_type_override
+		and snapshot_card.get_battle_masked_rune_indices()
+		== live_card.get_battle_masked_rune_indices(),
+		"堆叠颤动快照复制卡面当前生命、护甲、冷却、行动值、行动类型与符文遮蔽"
+	)
+	slot.set_stack_target_feedback(0.0)
 	await _dispose_main(main)
 
 
@@ -1232,8 +1277,8 @@ func _test_geometry_targeting_and_distance_feedback() -> void:
 	# Y 放到收藏区域，验证鼠标尚未进入战场行时，也会根据拖动卡的
 	# 水平位置立刻提示两排附近的合法叠卡目标。
 	pointer_global.y = (main.get_node("%CollectionDropZone") as Control).get_global_rect().get_center().y
-	front_row.update_stack_target_feedback_global(pointer_global, ambiguous_drag)
 	var compact_target := slots[0]
+	front_row.update_stack_target_feedback_global(pointer_global, ambiguous_drag)
 	var compact_snapshot_layer := compact_target.get(
 		"_stack_target_snapshot_layer"
 	) as Control

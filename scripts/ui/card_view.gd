@@ -183,6 +183,7 @@ var _external_lift: float = 0.0
 var _resting_z_index: int = 0
 # 高亮索引描述当前牌型参与的三个槽位；流光节点本身按需创建并等待全局周期。
 var _highlighted_rune_indices: Array[int] = []
+var _battle_masked_rune_indices: Array[int] = [] # 仅在本场战斗隐藏的符文槽，不修改CardData
 var _rune_highlight_is_preview: bool = false
 var _dim_preview_active_runes: bool = true
 var _active_rune_icons: Dictionary = {}
@@ -195,6 +196,7 @@ var _battle_cooldown_active: bool = false
 var _battle_remaining_cooldown: float = 0.0
 var _battle_action_value_active: bool = false
 var _battle_action_value: int = 0
+var _battle_action_type_override: int = -1 # 战斗中的行动方式覆盖；负数显示CardData原值
 var _battle_number_tweens: Dictionary = {} # 生命、护甲、冷却与行动值各自只保留一条数值动画
 var _battle_number_targets: Dictionary = {} # 保存每项动画的最终目标，避免逐帧状态刷新反复重启动画
 
@@ -710,8 +712,31 @@ func is_layout_animating() -> bool:
 
 # --- 卡牌数据与牌型流光公开接口 ---
 func set_card_data(value: CardData) -> void:
+	var card_changed := _card_data != value
 	_card_data = value
+	if card_changed:
+		_battle_action_type_override = -1
+		_battle_masked_rune_indices.clear()
 
+	if is_node_ready():
+		_refresh()
+
+
+func copy_runtime_display_state_from(source: CardView) -> void:
+	if source == null:
+		return
+	# 颤动快照必须复制玩家此刻看见的数值，而不是重新读取 CardData 基础值。
+	# 不复制 Tween 本身，快照只冻结创建瞬间的显示状态，随后随目标整体颤动。
+	_battle_vitals_active = source._battle_vitals_active
+	_battle_current_health = source._battle_current_health
+	_battle_current_armor = source._battle_current_armor
+	_battle_cooldown_active = source._battle_cooldown_active
+	_battle_remaining_cooldown = source._battle_remaining_cooldown
+	_battle_action_value_active = source._battle_action_value_active
+	_battle_action_value = source._battle_action_value
+	_battle_action_type_override = source._battle_action_type_override
+	_battle_masked_rune_indices.assign(source._battle_masked_rune_indices)
+	_battle_number_targets.clear()
 	if is_node_ready():
 		_refresh()
 
@@ -825,6 +850,30 @@ func clear_battle_action_value() -> void:
 		_refresh_action_value_text()
 
 
+func set_battle_action_type(action_type: CardData.ActionType) -> void:
+	_battle_action_type_override = int(action_type)
+	if is_node_ready() and card_data != null:
+		action_icon.texture = _get_action_texture(action_type)
+		priority_label.text = str(CardData.get_base_target_priority_for_action(action_type))
+		_apply_action_layout(action_type)
+
+
+func clear_battle_action_type() -> void:
+	_battle_action_type_override = -1
+	if is_node_ready() and card_data != null:
+		action_icon.texture = _get_action_texture(card_data.action_type)
+		priority_label.text = str(card_data.get_base_target_priority())
+		_apply_action_layout(card_data.action_type)
+
+
+func _get_display_action_type() -> CardData.ActionType:
+	return (
+		_battle_action_type_override as CardData.ActionType
+		if _battle_action_type_override >= 0
+		else card_data.action_type
+	)
+
+
 func _animate_battle_number(
 	key: StringName,
 	from_value: float,
@@ -883,6 +932,26 @@ func set_rune_pattern_highlights(
 		_refresh_runes()
 
 
+func set_battle_masked_runes(rune_indices: Array[int]) -> void:
+	if _battle_masked_rune_indices == rune_indices:
+		return
+	_battle_masked_rune_indices.assign(rune_indices)
+	if is_node_ready():
+		_refresh_runes()
+
+
+func clear_battle_masked_runes() -> void:
+	if _battle_masked_rune_indices.is_empty():
+		return
+	_battle_masked_rune_indices.clear()
+	if is_node_ready():
+		_refresh_runes()
+
+
+func get_battle_masked_rune_indices() -> Array[int]:
+	return _battle_masked_rune_indices.duplicate()
+
+
 func get_highlighted_rune_indices() -> Array[int]:
 	return _highlighted_rune_indices.duplicate()
 
@@ -937,12 +1006,13 @@ func _refresh() -> void:
 		return
 
 	_set_card_name(card_data.display_name)
-	action_icon.texture = _get_action_texture(card_data.action_type)
+	var display_action_type := _get_display_action_type()
+	action_icon.texture = _get_action_texture(display_action_type)
 	_refresh_action_value_text()
 	_refresh_card_type_visuals()
 	_refresh_vitals_text()
 	_refresh_cooldown_text()
-	priority_label.text = str(card_data.get_base_target_priority())
+	priority_label.text = str(CardData.get_base_target_priority_for_action(display_action_type))
 	card_name_frame.visible = true
 	_refresh_card_frame()
 	_refresh_art()
@@ -957,7 +1027,7 @@ func _refresh_action_value_text() -> void:
 	value_label.text = str(
 		_battle_action_value if _battle_action_value_active else card_data.base_value
 	)
-	_apply_action_layout(card_data.action_type)
+	_apply_action_layout(_get_display_action_type())
 
 
 func _refresh_vitals_text() -> void:
@@ -1368,7 +1438,8 @@ func _refresh_runes() -> void:
 		rune_row.add_child(rune_slot)
 		if slot_index < card_data.runes.size():
 			var rune := card_data.runes[slot_index]
-			var is_active := _highlighted_rune_indices.has(slot_index)
+			var is_masked := _battle_masked_rune_indices.has(slot_index)
+			var is_active := _highlighted_rune_indices.has(slot_index) and not is_masked
 			var join_cycle: int = -1
 			if is_active:
 				join_cycle = (
@@ -1382,6 +1453,7 @@ func _refresh_runes() -> void:
 				_active_rune_join_cycles[slot_index] = join_cycle
 			var show_active_frame := is_active and current_cycle >= join_cycle
 			var rune_icon := _create_rune_icon(rune, show_active_frame)
+			rune_icon.visible = not is_masked
 			rune_slot.add_child(rune_icon)
 			if is_active:
 				_active_rune_icons[slot_index] = rune_icon

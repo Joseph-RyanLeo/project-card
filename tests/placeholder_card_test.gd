@@ -174,7 +174,7 @@ func _test_collection_and_illegal_drops(cards: Array[CardData]) -> void:
 	root.add_child(main)
 	await process_frame
 	await process_frame
-	_expect(main.collection_cards.size() == 53, "Main 收藏包含原有 24 张与新增 29 张")
+	_expect(main.collection_cards.size() == 53, "Main 收藏保留24张随从站位资源与新增29张法术/装备")
 	main.active_card_type_filters.assign([CardData.CardType.SPELL])
 	var spells: Array[CardData] = main.get_filtered_collection_cards()
 	_expect(spells.size() == 14 and spells.all(func(card: CardData) -> bool: return card.card_type == CardData.CardType.SPELL), "收藏法术种类筛选只显示 14 张法术")
@@ -188,7 +188,12 @@ func _test_collection_and_illegal_drops(cards: Array[CardData]) -> void:
 	main.active_action_filters.clear()
 	main.search_query = "强化"
 	var searched: Array[CardData] = main.get_filtered_collection_cards()
-	_expect(searched.size() == 3 and searched.all(func(card: CardData) -> bool: return card.card_type == CardData.CardType.SPELL), "搜索可匹配法术类型中文")
+	_expect(
+		searched.size() == 7
+		and searched.filter(func(card: CardData) -> bool: return card.card_type == CardData.CardType.SPELL).size() == 3
+		and searched.any(func(card: CardData) -> bool: return card.id == &"tide_archer"),
+		"搜索可同时匹配法术类型中文、灰烬卡正式文本与潮汐射手的暂存效果文本"
+	)
 	main.search_query = ""
 	var spell_drag := {
 		"kind": &"card",

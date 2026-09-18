@@ -7,6 +7,7 @@ extends RefCounted
 const BattleRules = preload("res://scripts/battle/battle_rules.gd")
 
 signal integer_settlement_committed(event: Dictionary)
+signal health_lost_accumulated(event: Dictionary)
 
 enum Side { PLAYER, ENEMY }
 
@@ -24,7 +25,9 @@ var current_health = 0:
 	set(value):
 		current_health = value
 		if not _precise_write:
-			displayed_health = clampi(roundi(value), 0, get_max_health())
+			# 生命上限降低不再截断当前生命，所以卡面必须能显示
+			# 暂时高于新上限的真实生命，只受全局生命数值上限限制。
+			displayed_health = clampi(roundi(value), 0, CardData.MAXIMUM_HEALTH)
 var current_armor = 0:
 	set(value):
 		current_armor = value
@@ -55,9 +58,16 @@ var logical_right: float = 0.0
 var logical_center: float = 0.0
 var runtime_base_cooldown_override: float = -1.0 # 负数表示使用卡牌基础冷却；战斗实验室可注入最长99秒的测试值
 var battle_damage_dealt: float = 0.0
+var battle_damage_dealt_by_action: Dictionary = {} # 行动类型→实际伤害；结算卡面据此分开展示多种攻击方式
 var battle_damage_taken: float = 0.0
 var battle_healing_done: float = 0.0
 var battle_armor_granted: float = 0.0
+var battle_health_lost: float = 0.0 # 本场累计生命伤害；治疗与重新入场均不回退
+var runtime_action_type_override: int = -1 # 负数读取原卡行动方式；非负值只在本场战斗覆盖，不写回CardData
+var masked_rune_slots: Dictionary = {} # 本场被遮蔽的符文槽；键由卡牌实例与槽位组成，值保留显示所需定位
+var battle_active_injury_ids: Array[StringName] = [] # 由后续伤势系统注入的本场生效伤势身份；D2-4不自行生成伤势
+var injury_mask_sources: Dictionary = {} # 伤势身份→遮蔽运行实例集合；多个来源独立到期
+var life_generation: int = 0 # 每次重新入场递增，用于区分已经失效的旧退场动画
 
 var _precise_write: bool = false
 var _syncing_cooldown: bool = false
@@ -84,6 +94,7 @@ func initialize(
 	modifiers.clear()
 	reset_action_cooldown()
 	alive = current_health > 0.0
+	life_generation = 0
 	buff_stacks.clear()
 	clear_precise_runtime()
 	clear_battle_statistics()
@@ -94,18 +105,47 @@ func clear_precise_runtime() -> void:
 		fractional_accumulators[channel] = 0.0
 	pending_kill_source = null
 	pending_kill_event = null
+	runtime_action_type_override = -1
+	masked_rune_slots.clear()
+	battle_active_injury_ids.clear()
+	injury_mask_sources.clear()
 
 
 func clear_battle_statistics() -> void:
 	battle_damage_dealt = 0.0
+	battle_damage_dealt_by_action.clear()
 	battle_damage_taken = 0.0
 	battle_healing_done = 0.0
 	battle_armor_granted = 0.0
+	battle_health_lost = 0.0
+
+
+func revive_at_current_maximum(health_amount: float) -> bool:
+	# 重新入场只恢复已确认的生命与基础护甲；冷却、强化和符文遮蔽
+	# 保持本场当前状态，避免替未确认规则擅自重置。
+	var vitals_source := get_vitals_source()
+	if vitals_source == null:
+		return false
+	var restored_health := minf(maxf(health_amount, 0.0), float(get_max_health()))
+	if restored_health <= 0.0:
+		return false
+	_set_exact_health(restored_health)
+	_set_exact_armor(float(vitals_source.armor))
+	displayed_health = clampi(roundi(current_health), 0, get_max_health())
+	displayed_armor = clampi(roundi(current_armor), 0, CardData.MAXIMUM_ARMOR)
+	for channel: StringName in fractional_accumulators:
+		fractional_accumulators[channel] = 0.0
+	pending_kill_source = null
+	pending_kill_event = null
+	alive = true
+	life_generation += 1
+	return true
 
 
 func get_battle_statistics() -> Dictionary:
 	return {
 		"damage_dealt": battle_damage_dealt,
+		"damage_dealt_by_action": battle_damage_dealt_by_action.duplicate(true),
 		"damage_taken": battle_damage_taken,
 		"healing_done": battle_healing_done,
 		"armor_granted": battle_armor_granted,
@@ -124,6 +164,21 @@ func get_effect_source() -> CardData:
 	return squad_data.get_effect_source() if squad_data != null else null
 
 
+func get_effective_action_type() -> CardData.ActionType:
+	if runtime_action_type_override >= 0:
+		return runtime_action_type_override as CardData.ActionType
+	var source := get_action_source()
+	return source.action_type if source != null else CardData.ActionType.MELEE
+
+
+func set_runtime_action_type(value: CardData.ActionType) -> void:
+	runtime_action_type_override = int(value)
+
+
+func clear_runtime_action_type() -> void:
+	runtime_action_type_override = -1
+
+
 func get_max_health() -> int:
 	var source := get_vitals_source()
 	var base := float(source.max_health) if source != null else 0.0
@@ -131,9 +186,9 @@ func get_max_health() -> int:
 
 
 func get_target_weight() -> int:
-	var source := get_action_source()
-	var base := float(source.get_base_target_priority()) if source != null else 1.0
-	return maxi(roundi(base + modifiers.get_additive(BattleModifier.Stat.TARGET_PRIORITY)), 1)
+	var base := float(CardData.get_base_target_priority_for_action(get_effective_action_type()))
+	# 通用基础权重最低为1；明确写出“最低0”的卡牌效果可以把最终权重降到0。
+	return maxi(roundi(base + modifiers.get_additive(BattleModifier.Stat.TARGET_PRIORITY)), 0)
 
 
 func get_exact_action_amount() -> float:
@@ -145,7 +200,116 @@ func get_exact_action_amount() -> float:
 		0,
 		CardData.MAXIMUM_BASE_VALUE
 	)
-	return BattleRules.calculate_exact_action_amount(modified_base, squad_data.get_rune_pattern_result().pattern_type)
+	var base_result := BattleRules.calculate_exact_action_amount(modified_base, get_rune_pattern_result().pattern_type)
+	return base_result * maxf(0.0, 1.0 + modifiers.get_additive(BattleModifier.Stat.ACTION_MULTIPLIER))
+
+
+func get_active_rune_slots() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if squad_data == null:
+		return result
+	for slot: Dictionary in squad_data.get_visible_rune_slots():
+		var card := slot.get("card") as CardData
+		var rune_index := int(slot.get("rune_index", -1))
+		if not masked_rune_slots.has(_rune_slot_key(card, rune_index)):
+			result.append(slot)
+	return result
+
+
+func get_active_runes() -> Array[CardData.ElementType]:
+	var result: Array[CardData.ElementType] = []
+	for slot: Dictionary in get_active_rune_slots():
+		result.append(slot["element"] as CardData.ElementType)
+	return result
+
+
+func get_rune_pattern_result() -> RunePatternResult:
+	return RunePatternRules.identify(get_active_runes())
+
+
+func mask_rune_slot(card: CardData, rune_index: int) -> bool:
+	if card == null or rune_index < 0:
+		return false
+	var key := _rune_slot_key(card, rune_index)
+	if masked_rune_slots.has(key):
+		return false
+	for slot: Dictionary in get_active_rune_slots():
+		if slot.get("card") == card and int(slot.get("rune_index", -1)) == rune_index:
+			masked_rune_slots[key] = {
+				"card": card,
+				"rune_index": rune_index,
+			}
+			return true
+	return false
+
+
+func unmask_rune_slot(card: CardData, rune_index: int) -> bool:
+	return masked_rune_slots.erase(_rune_slot_key(card, rune_index))
+
+
+func set_battle_active_injuries(injury_ids: Array[StringName]) -> void:
+	battle_active_injury_ids.clear()
+	injury_mask_sources.clear()
+	for injury_id: StringName in injury_ids:
+		if injury_id != &"" and not battle_active_injury_ids.has(injury_id):
+			battle_active_injury_ids.append(injury_id)
+
+
+func get_unmasked_active_injuries() -> Array[StringName]:
+	var result: Array[StringName] = []
+	for injury_id: StringName in battle_active_injury_ids:
+		var sources := injury_mask_sources.get(injury_id, {}) as Dictionary
+		if sources.is_empty():
+			result.append(injury_id)
+	return result
+
+
+func has_unmasked_active_injury() -> bool:
+	return not get_unmasked_active_injuries().is_empty()
+
+
+func mask_injury(injury_id: StringName, source_instance_id: int) -> bool:
+	if injury_id == &"" or source_instance_id <= 0 or not battle_active_injury_ids.has(injury_id):
+		return false
+	var sources := injury_mask_sources.get(injury_id, {}) as Dictionary
+	sources[source_instance_id] = true
+	injury_mask_sources[injury_id] = sources
+	return true
+
+
+func unmask_injury(injury_id: StringName, source_instance_id: int) -> bool:
+	if not injury_mask_sources.has(injury_id):
+		return false
+	var sources := injury_mask_sources[injury_id] as Dictionary
+	var removed := sources.erase(source_instance_id)
+	if sources.is_empty():
+		injury_mask_sources.erase(injury_id)
+	else:
+		injury_mask_sources[injury_id] = sources
+	return removed
+
+
+func is_injury_masked(injury_id: StringName) -> bool:
+	return not (injury_mask_sources.get(injury_id, {}) as Dictionary).is_empty()
+
+
+func get_masked_rune_indices_by_card() -> Dictionary:
+	var result: Dictionary = {}
+	for slot_value: Variant in masked_rune_slots.values():
+		var slot := slot_value as Dictionary
+		var card := slot.get("card") as CardData
+		if card == null:
+			continue
+		if not result.has(card):
+			result[card] = []
+		(result[card] as Array).append(int(slot.get("rune_index", -1)))
+	for card_value: Variant in result:
+		(result[card_value] as Array).sort()
+	return result
+
+
+func _rune_slot_key(card: CardData, rune_index: int) -> String:
+	return "%d:%d" % [card.get_instance_id() if card != null else 0, rune_index]
 
 
 func get_action_amount() -> int:
@@ -219,7 +383,15 @@ func apply_damage_exact(amount: float, source_state: BattleSquadState = null, ev
 	if armor_damage > 0.0:
 		_accumulate(CHANNEL_ARMOR_DAMAGE, armor_damage, source_state, event)
 	if health_damage > 0.0:
+		battle_health_lost += health_damage
 		_accumulate(CHANNEL_HEALTH_DAMAGE, health_damage, source_state, event)
+		health_lost_accumulated.emit({
+			"state": self,
+			"amount": health_damage,
+			"accumulated_health_loss": battle_health_lost,
+			"source": source_state,
+			"effect_event": event,
+		})
 	if health_before > 0.0 and current_health <= 0.0 and pending_kill_event == null:
 		pending_kill_source = source_state
 		pending_kill_event = event
@@ -227,7 +399,21 @@ func apply_damage_exact(amount: float, source_state: BattleSquadState = null, ev
 		displayed_armor = 0
 	if current_health <= 0.0:
 		displayed_health = 0
-	return {"armor_damage": armor_damage, "health_damage": health_damage, "total": armor_damage + health_damage}
+	else:
+		_ensure_living_health_is_visible()
+	var total_damage := armor_damage + health_damage
+	# 所有普通攻击、疲劳直伤与效果伤害最终都经过这里。把统计放在实际
+	# 扣减入口，避免某类调用绕过 BattleController 后出现卡面承伤漏记。
+	if total_damage > 0.0:
+		battle_damage_taken += total_damage
+		if source_state != null:
+			var source_action_type := (
+				event.action_type
+				if event != null
+				else source_state.get_effective_action_type()
+			)
+			source_state.record_damage_dealt(source_action_type, total_damage)
+	return {"armor_damage": armor_damage, "health_damage": health_damage, "total": total_damage}
 
 
 func apply_direct_health_damage_exact(amount: float, source_state: BattleSquadState = null, event: BattleEffectEvent = null) -> float:
@@ -245,7 +431,9 @@ func apply_healing_exact(amount: float, source_state: BattleSquadState = null, e
 		pending_kill_source = null
 		pending_kill_event = null
 	if current_health >= float(get_max_health()):
-		displayed_health = get_max_health()
+		displayed_health = clampi(roundi(current_health), 0, CardData.MAXIMUM_HEALTH)
+	else:
+		_ensure_living_health_is_visible()
 	return effective
 
 
@@ -279,6 +467,7 @@ func finalize_batch_survival() -> void:
 	if current_health > 0.0:
 		pending_kill_source = null
 		pending_kill_event = null
+		_ensure_living_health_is_visible()
 	else:
 		displayed_health = 0
 
@@ -287,7 +476,9 @@ func force_boundary_sync() -> void:
 	if current_health <= 0.0:
 		displayed_health = 0
 	elif current_health >= float(get_max_health()):
-		displayed_health = get_max_health()
+		displayed_health = clampi(roundi(current_health), 0, CardData.MAXIMUM_HEALTH)
+	else:
+		_ensure_living_health_is_visible()
 	if current_armor <= 0.0:
 		displayed_armor = 0
 	elif current_armor >= float(CardData.MAXIMUM_ARMOR):
@@ -324,6 +515,7 @@ func _accumulate(channel: StringName, amount: float, source_state: BattleSquadSt
 	match channel:
 		CHANNEL_HEALTH_DAMAGE:
 			displayed_health = maxi(displayed_health - committed, 0)
+			_ensure_living_health_is_visible()
 		CHANNEL_ARMOR_DAMAGE:
 			displayed_armor = maxi(displayed_armor - committed, 0)
 		CHANNEL_HEALING:
@@ -331,6 +523,23 @@ func _accumulate(channel: StringName, amount: float, source_state: BattleSquadSt
 		CHANNEL_ARMOR_GAIN:
 			displayed_armor = mini(displayed_armor + committed, CardData.MAXIMUM_ARMOR)
 	integer_settlement_committed.emit({"state": self, "channel": channel, "amount": committed, "source": source_state, "effect_event": event, "remainder": float(fractional_accumulators[channel])})
+
+
+func record_damage_dealt(action_type: CardData.ActionType, amount: float) -> void:
+	var effective := maxf(amount, 0.0)
+	if effective <= 0.0:
+		return
+	battle_damage_dealt += effective
+	var action_key := int(action_type)
+	battle_damage_dealt_by_action[action_key] = (
+		float(battle_damage_dealt_by_action.get(action_key, 0.0)) + effective
+	)
+
+
+func _ensure_living_health_is_visible() -> void:
+	# 精确生命可以是 0～1 的小数；仍存活时卡面至少显示 1，避免出现“0 血活着”。
+	if current_health > 0.0 and displayed_health <= 0:
+		displayed_health = 1
 
 
 func _set_exact_health(value) -> void:

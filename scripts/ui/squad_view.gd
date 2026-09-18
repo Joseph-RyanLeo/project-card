@@ -83,12 +83,17 @@ var _stack_target_rotation_tween: Tween
 var _stack_target_snapshot_layer: Control
 var _squad_feedback_active: bool = false
 var _displayed_pattern_result: RunePatternResult
+var _battle_pattern_result: RunePatternResult
+var _battle_active_rune_slots: Array[Dictionary] = [] # 战斗临时遮蔽后的生效符文顺序
 var _battle_action_tween: Tween
 var _battle_action_lift_tween: Tween
 var _death_dissolve_tween: Tween
 var _death_dissolving: bool = false
 var _death_dissolve_material: ShaderMaterial
 var _death_dissolve_item_count: int = 0
+var _death_dissolve_original_materials: Dictionary = {} # 复活取消溶解时逐节点恢复原材质
+var _death_dissolve_original_mouse_filter: int = Control.MOUSE_FILTER_STOP
+var _death_dissolve_original_drag_enabled: bool = false
 var _battle_result_overlay: Control
 var _battle_result_rows: VBoxContainer
 var _battle_result_death_icon: TextureRect
@@ -116,6 +121,8 @@ func set_squad_data(value: SquadData) -> void:
 	squad_data = value
 	_preview_squad_data = null
 	_preview_ghost_cards.clear()
+	_battle_pattern_result = null
+	_battle_active_rune_slots.clear()
 	if is_node_ready():
 		_refresh()
 
@@ -181,16 +188,38 @@ func set_battle_status(
 	current_armor: int,
 	remaining_cooldown: float,
 	fatigue_stacks: int = 0,
-	action_value: int = -1
+	action_value: int = -1,
+	action_type: int = -1,
+	pattern_result: RunePatternResult = null,
+	active_rune_slots: Array[Dictionary] = [],
+	masked_runes_by_card: Dictionary = {}
 ) -> void:
 	if not is_node_ready():
 		return
 	var display_data := get_display_data()
+	_battle_pattern_result = pattern_result
+	_battle_active_rune_slots.assign(active_rune_slots)
+	_refresh_pattern_label(display_data, float(display_data.get_display_width()))
+	var highlighted_runes_by_card := _get_highlighted_runes_by_card(
+		display_data,
+		_displayed_pattern_result,
+		_battle_active_rune_slots
+	)
 	var action_source := display_data.get_action_source()
 	var vitals_source := display_data.get_vitals_source()
 	for card_view: CardView in get_card_views():
+		var masked_indices: Array[int] = []
+		masked_indices.assign(masked_runes_by_card.get(card_view.card_data, []))
+		card_view.set_battle_masked_runes(masked_indices)
+		card_view.set_rune_pattern_highlights(
+			_get_card_highlight_indices(highlighted_runes_by_card, card_view.card_data)
+		)
 		if card_view.card_data == action_source:
 			card_view.set_battle_remaining_cooldown(remaining_cooldown)
+			if action_type >= 0:
+				card_view.set_battle_action_type(action_type as CardData.ActionType)
+			else:
+				card_view.clear_battle_action_type()
 			if action_value >= 0:
 				card_view.set_battle_action_value(action_value)
 			else:
@@ -198,6 +227,7 @@ func set_battle_status(
 		else:
 			card_view.clear_battle_remaining_cooldown()
 			card_view.clear_battle_action_value()
+			card_view.clear_battle_action_type()
 		if card_view.card_data == vitals_source:
 			card_view.set_battle_vitals(current_health, current_armor)
 		else:
@@ -213,14 +243,19 @@ func clear_battle_status() -> void:
 		return
 	battle_status_label.visible = false
 	battle_action_label.visible = false
+	_battle_pattern_result = null
+	_battle_active_rune_slots.clear()
 	for card_view: CardView in get_card_views():
+		card_view.clear_battle_masked_runes()
 		card_view.clear_battle_vitals()
 		card_view.clear_battle_remaining_cooldown()
 		card_view.clear_battle_action_value()
+		card_view.clear_battle_action_type()
 	if _battle_action_tween != null and _battle_action_tween.is_valid():
 		_battle_action_tween.kill()
 	if _battle_action_lift_tween != null and _battle_action_lift_tween.is_valid():
 		_battle_action_lift_tween.kill()
+	_refresh()
 	if is_instance_valid(squad_lift_layer):
 		squad_lift_layer.position = Vector2.ZERO
 
@@ -314,6 +349,9 @@ func play_death_dissolve(noise_seed: float = 0.0) -> void:
 	if _death_dissolving or not is_node_ready():
 		return
 	_death_dissolving = true
+	_death_dissolve_original_mouse_filter = mouse_filter
+	_death_dissolve_original_drag_enabled = _drag_enabled
+	_death_dissolve_original_materials.clear()
 	_drag_enabled = false
 	reset_hover_feedback()
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -349,6 +387,23 @@ func play_death_dissolve(noise_seed: float = 0.0) -> void:
 	await _death_dissolve_tween.finished
 
 
+func cancel_death_dissolve() -> void:
+	if not _death_dissolving:
+		return
+	# Tween 可以在后台自然结束；画面立即脱离它正在修改的临时材质，
+	# 这样同一帧复活不会闪成全透明，也不会让等待中的退场协程误删槽位。
+	for item_value: Variant in _death_dissolve_original_materials:
+		var item := item_value as CanvasItem
+		if is_instance_valid(item):
+			item.material = _death_dissolve_original_materials[item_value] as Material
+	_death_dissolve_original_materials.clear()
+	_death_dissolving = false
+	_death_dissolve_material = null
+	_death_dissolve_item_count = 0
+	mouse_filter = _death_dissolve_original_mouse_filter
+	configure_drag_source(_death_dissolve_original_drag_enabled, _source_row)
+
+
 func is_death_dissolving() -> bool:
 	return _death_dissolving
 
@@ -369,7 +424,9 @@ func get_death_dissolve_item_count() -> int:
 
 func _apply_death_dissolve_material(node: Node, material: ShaderMaterial) -> void:
 	if node is CanvasItem:
-		(node as CanvasItem).material = material
+		var item := node as CanvasItem
+		_death_dissolve_original_materials[item] = item.material
+		item.material = material
 		_death_dissolve_item_count += 1
 	for child: Node in node.get_children():
 		_apply_death_dissolve_material(child, material)
@@ -643,9 +700,15 @@ func _refresh() -> void:
 		floorf((display_width - BATTLE_ACTION_LABEL_SIZE.x) * 0.5),
 		BATTLE_ACTION_LABEL_TOP
 	)
+	var visible_slots_override: Variant = (
+		_battle_active_rune_slots
+		if not is_preview() and _battle_pattern_result != null
+		else null
+	)
 	var highlighted_runes_by_card := _get_highlighted_runes_by_card(
 		data,
-		_displayed_pattern_result
+		_displayed_pattern_result,
+		visible_slots_override
 	)
 	custom_minimum_size = Vector2(display_width, CARD_SIZE.y)
 	size = custom_minimum_size
@@ -776,10 +839,27 @@ func _refresh_battle_result_overlay(display_width: float) -> void:
 func _get_visible_battle_result_entries() -> Array[Dictionary]:
 	var entries: Array[Dictionary] = []
 	var damage_dealt := float(_battle_result_statistics.get("damage_dealt", 0.0))
+	var damage_by_action := (
+		_battle_result_statistics.get("damage_dealt_by_action", {}) as Dictionary
+	)
 	var damage_taken := float(_battle_result_statistics.get("damage_taken", 0.0))
 	var healing_done := float(_battle_result_statistics.get("healing_done", 0.0))
 	var armor_granted := float(_battle_result_statistics.get("armor_granted", 0.0))
-	if damage_dealt > 0.000001:
+	for action_type: int in [
+		CardData.ActionType.MELEE,
+		CardData.ActionType.RANGED,
+		CardData.ActionType.MAGIC,
+	]:
+		var action_damage := float(damage_by_action.get(action_type, 0.0))
+		if action_damage <= 0.000001:
+			continue
+		entries.append({
+			"kind": StringName("damage_dealt_%d" % action_type),
+			"texture": BATTLE_RESULT_ACTION_TEXTURES[action_type],
+			"value": action_damage,
+		})
+	# 兼容尚未带分项字段的旧统计数据；新战斗只走上面的逐行动类型记录。
+	if damage_by_action.is_empty() and damage_dealt > 0.000001:
 		var damage_texture_index := clampi(int(_battle_result_action_type), 0, 2)
 		entries.append({
 			"kind": &"damage_dealt",
@@ -834,7 +914,11 @@ func _make_battle_result_row(entry: Dictionary) -> HBoxContainer:
 
 
 func _refresh_pattern_label(data: SquadData, display_width: float) -> void:
-	_displayed_pattern_result = data.get_rune_pattern_result()
+	_displayed_pattern_result = (
+		_battle_pattern_result
+		if not is_preview() and _battle_pattern_result != null
+		else data.get_rune_pattern_result()
+	)
 	pattern_label.text = (
 		"预览·%s" % _displayed_pattern_result.get_pattern_name()
 		if is_preview()
@@ -853,16 +937,22 @@ func _refresh_pattern_label(data: SquadData, display_width: float) -> void:
 
 
 func _get_highlighted_runes_by_card(
-	data: SquadData, result: RunePatternResult
+	data: SquadData,
+	result: RunePatternResult,
+	visible_slots_override: Variant = null
 ) -> Dictionary:
 	var highlighted_by_card: Dictionary = {}
 	if data == null or result == null:
 		return highlighted_by_card
-	var visible_slots := data.get_visible_rune_slots()
+	var visible_slots: Array = (
+		visible_slots_override
+		if visible_slots_override is Array
+		else data.get_visible_rune_slots()
+	)
 	for visible_index: int in result.participating_indices:
 		if visible_index < 0 or visible_index >= visible_slots.size():
 			continue
-		var slot := visible_slots[visible_index]
+		var slot := visible_slots[visible_index] as Dictionary
 		var card := slot["card"] as CardData
 		if not highlighted_by_card.has(card):
 			highlighted_by_card[card] = []
@@ -936,10 +1026,20 @@ func _ensure_stack_target_snapshots() -> void:
 	var data := get_current_visual_squad_data()
 	if data == null or not data.is_valid():
 		return
-	var snapshot_result := data.get_rune_pattern_result()
+	var snapshot_result := (
+		_displayed_pattern_result
+		if _displayed_pattern_result != null
+		else data.get_rune_pattern_result()
+	)
+	var snapshot_slots_override: Variant = (
+		_battle_active_rune_slots
+		if not is_preview() and _battle_pattern_result != null
+		else null
+	)
 	var highlighted_runes_by_card := _get_highlighted_runes_by_card(
 		data,
-		snapshot_result
+		snapshot_result,
+		snapshot_slots_override
 	)
 
 	_stack_target_snapshot_layer = Control.new()
@@ -954,9 +1054,10 @@ func _ensure_stack_target_snapshots() -> void:
 		var card_data := data.horizontal_cards[horizontal_index]
 		var snapshot_card := CARD_VIEW_SCENE.instantiate() as CardView
 		var live_card := get_card_view(card_data)
+		snapshot_card.set_card_data(card_data)
 		if live_card != null:
 			snapshot_card.showing_effect = live_card.showing_effect
-			snapshot_card.set_card_data(card_data)
+			snapshot_card.copy_runtime_display_state_from(live_card)
 		snapshot_card.set_rune_pattern_highlights(
 			_get_card_highlight_indices(highlighted_runes_by_card, card_data),
 			is_preview(),
