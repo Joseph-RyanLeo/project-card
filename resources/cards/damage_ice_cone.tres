@@ -8,6 +8,7 @@ script = ExtResource("2_uai0a")
 id = &"damage_ice_cone"
 display_name = "冰锥术"
 card_type = 2
+spell_trigger_kind = 2
 base_value = 0
 max_health = 0
 rarity = 3

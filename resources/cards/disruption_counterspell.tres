@@ -8,6 +8,7 @@ script = ExtResource("2_l14xw")
 id = &"disruption_counterspell"
 display_name = "法术反制"
 card_type = 2
+spell_trigger_kind = 3
 base_value = 0
 max_health = 0
 rarity = 1

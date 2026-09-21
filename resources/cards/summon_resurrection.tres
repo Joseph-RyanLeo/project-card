@@ -8,6 +8,7 @@ script = ExtResource("2_frckw")
 id = &"summon_resurrection"
 display_name = "死者苏生"
 card_type = 2
+spell_trigger_kind = 3
 base_value = 0
 max_health = 0
 rarity = 4

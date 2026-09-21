@@ -8,6 +8,7 @@ script = ExtResource("2_hantt")
 id = &"support_healing_aura"
 display_name = "治疗光环"
 card_type = 2
+spell_trigger_kind = 2
 base_value = 0
 max_health = 0
 rarity = 4

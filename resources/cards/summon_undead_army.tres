@@ -8,6 +8,7 @@ script = ExtResource("2_46jda")
 id = &"summon_undead_army"
 display_name = "亡灵大军"
 card_type = 2
+spell_trigger_kind = 2
 base_value = 0
 max_health = 0
 rarity = 3

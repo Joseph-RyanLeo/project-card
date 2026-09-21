@@ -8,6 +8,7 @@ script = ExtResource("2_32fcb")
 id = &"blessing_vitality"
 display_name = "生命祝福"
 card_type = 2
+spell_trigger_kind = 1
 base_value = 0
 max_health = 0
 rarity = 2
