@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"stone_of_greed"
+display_name = "贪欲之石"
+pack_id = &"labyrinth"
+card_type = 3
+rarity = 0
+max_health = 3
+resource_type = 0
+deferred_effect_hooks = {"harvest_roll": {"roll": "1d10", "less_than_6": {"operation": "lose_gold", "amount": 2}, "greater_than_5": {"operation": "gain_gold", "amount": 3}, "equal_10": {"operation": "gain_gold", "amount": 10}, "precedence": "equal_10_only"}}
+effect_text = "收获：1d10<6失去2金币，>5获得3金币，=10获得10金币。"

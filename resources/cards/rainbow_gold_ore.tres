@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"rainbow_gold_ore"
+display_name = "彩金矿"
+pack_id = &"labyrinth"
+card_type = 3
+rarity = 2
+max_health = 7
+resource_type = 0
+effect_text = "收获：1金币，并投2d10；>15额外5金币，>18额外10金币，=20额外20金币。额外奖励不叠加，最高档生效。"

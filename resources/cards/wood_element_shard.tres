@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"wood_element_shard"
+display_name = "木元素碎晶"
+pack_id = &"labyrinth"
+card_type = 3
+rarity = 1
+max_health = 2
+resource_type = 0
+effect_text = "收获：护甲永久+1。"

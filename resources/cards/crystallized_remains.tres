@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"crystallized_remains"
+display_name = "晶化残躯"
+pack_id = &"labyrinth"
+card_type = 3
+rarity = 1
+max_health = 6
+resource_type = 0
+effect_text = "收获：1d10<9获一张元素碎晶，>8获一个纹章。"

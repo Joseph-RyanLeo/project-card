@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"abandoned_toolbox"
+display_name = "废弃工具箱"
+pack_id = &"labyrinth"
+card_type = 3
+rarity = 0
+max_health = 2
+resource_type = 2
+effect_text = "收获：随机一件I级装备。"
