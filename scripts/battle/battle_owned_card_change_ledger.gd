@@ -8,6 +8,7 @@ extends RefCounted
 const KIND_SET_WOUND_SLOT: StringName = &"set_wound_slot"
 const KIND_SET_EMBLEM_SLOT: StringName = &"set_emblem_slot"
 const KIND_ADD_EMBLEM_PROGRESS: StringName = &"add_emblem_progress"
+const KIND_CONSUME_EQUIPMENT: StringName = &"consume_equipment"
 
 var _entries: Array[Dictionary] = []
 
@@ -55,6 +56,30 @@ func record_emblem_progress(
 		"emblem_instance_id": emblem_instance_id,
 		"amount": amount,
 	})
+	return true
+
+
+func record_equipment_consumption(
+	owner: BattleEffectOwnerRef,
+	effect_id: StringName,
+	source_runtime_id: int,
+	logical_time_us: int,
+	battle_instance_id: StringName = &""
+) -> bool:
+	if (
+		owner == null
+		or owner.owned_card == null
+		or owner.owned_card.card_data == null
+		or owner.owned_card.card_data.card_type != CardData.CardType.EQUIPMENT
+	):
+		return false
+	for entry: Dictionary in _entries:
+		if (
+			entry.get("kind") == KIND_CONSUME_EQUIPMENT
+			and entry.get("owned_card_instance_id") == owner.owned_card_instance_id
+		):
+			return false
+	_append_entry(owner, KIND_CONSUME_EQUIPMENT, effect_id, source_runtime_id, logical_time_us, battle_instance_id, {})
 	return true
 
 

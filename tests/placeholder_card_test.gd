@@ -6,6 +6,7 @@ extends SceneTree
 const MAIN_SCENE: PackedScene = preload("res://scenes/Main.tscn")
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
 const TUNER_SCENE: PackedScene = preload("res://scenes/tools/CardArtTuner.tscn")
+const SpellPreparationIconStyle = preload("res://scripts/ui/spell_preparation_icon_style.gd")
 const PLACEHOLDER_PATHS := [
 	"res://resources/cards/frostfang_blade.tres",
 	"res://resources/cards/azure_hunt_bow.tres",
@@ -101,8 +102,9 @@ func _test_data_mappings(cards: Array[CardData]) -> void:
 	_expect(
 		equipment_cards[0].equipment_action_delta > 0
 		and equipment_cards[1].equipment_action_delta < 0
-		and absf(equipment_cards[0].equipment_cooldown_delta) == 0.5,
-		"装备占位数据覆盖正负行动与冷却变化量"
+		and equipment_cards[0].equipment_zeal_delta == -1
+		and equipment_cards[1].equipment_zeal_delta == 1,
+		"装备占位数据覆盖正负行动与整数热诚层数"
 	)
 
 
@@ -118,10 +120,10 @@ func _test_card_views(cards: Array[CardData]) -> void:
 	var spell_type_icon := spell_view.race_icon.texture as AtlasTexture
 	_expect(
 		spell_badge != null
-		and spell_badge.atlas == CardView.SPELL_RARITY_BADGE_TEXTURE
-		and spell_badge.region == CardView.SPELL_RARITY_BADGE_REGIONS[spell.rarity]
-		and spell_view.action_icon.position == CardView.SPELL_RARITY_BADGE_POSITION,
-		"法术左上稀有度使用 I、V、IV、III、II 的显式图集映射"
+		and spell_badge.atlas == SpellPreparationIconStyle.ICON_ATLAS
+		and spell_view.action_icon.position + spell_view.action_icon.size * 0.5
+		== CardView.SPELL_RARITY_BADGE_POSITION + CardView.SPELL_RARITY_BADGE_SIZE * 0.5,
+		"法术左上按触发类别替换图标，并与旧稀有度角标同心"
 	)
 	_expect(
 		spell_type_icon != null
@@ -143,7 +145,10 @@ func _test_card_views(cards: Array[CardData]) -> void:
 		and CardView.EQUIPMENT_ACTION_INCREASE_TEXTURE.get_image().get_used_rect()
 		== Rect2i(2, 3, 24, 24)
 		and positive_view.value_label.text == "1"
-		and positive_view.cooldown_icon.texture == CardView.COOLDOWN_HOURGLASS_TEXTURE
+		and positive_view.cooldown_icon.texture == CardView.ZEAL_TEXTURE
+		and positive_view.cooldown_icon.position
+		== positive_view.cooldown_icon_position + Vector2(-1.0, -1.0)
+		and positive_view.cooldown_icon.size == Vector2(14.0, 18.0)
 		and positive_view.health_icon.texture == CardView.HEALTH_TEXTURE
 		and positive_view.armor_icon.texture == CardView.ARMOR_TEXTURE
 		and positive_view.value_label is RuneNumberDisplay
@@ -164,6 +169,12 @@ func _test_card_views(cards: Array[CardData]) -> void:
 		and negative_view.rune_row.visible == false,
 		"装备负值显示红色下箭头且数字取绝对值"
 	)
+	_expect(
+		positive_view.cooldown_label.text == "-1"
+		and negative_view.cooldown_label.text == "+1"
+		and RuneNumberDisplay.ZEAL_SIGN_TEXTURE.get_size() == Vector2(23.0, 10.0),
+		"原冷却增加／减少占位方向反转成热诚-1／+1，正负号使用用户像素素材"
+	)
 	for view: CardView in [spell_view, positive_view, negative_view]:
 		view.queue_free()
 	await process_frame
@@ -174,13 +185,13 @@ func _test_collection_and_illegal_drops(cards: Array[CardData]) -> void:
 	root.add_child(main)
 	await process_frame
 	await process_frame
-	_expect(main.collection_cards.size() == 53, "Main 收藏保留24张随从站位资源与新增29张法术/装备")
+	_expect(main.collection_cards.size() == 58, "Main 收藏包含24张随从、14张法术和20张装备")
 	main.active_card_type_filters.assign([CardData.CardType.SPELL])
 	var spells: Array[CardData] = main.get_filtered_collection_cards()
 	_expect(spells.size() == 14 and spells.all(func(card: CardData) -> bool: return card.card_type == CardData.CardType.SPELL), "收藏法术种类筛选只显示 14 张法术")
 	main.active_card_type_filters.assign([CardData.CardType.EQUIPMENT])
 	var equipment: Array[CardData] = main.get_filtered_collection_cards()
-	_expect(equipment.size() == 15 and equipment.all(func(card: CardData) -> bool: return card.card_type == CardData.CardType.EQUIPMENT), "收藏装备种类筛选只显示 15 张装备")
+	_expect(equipment.size() == 20 and equipment.all(func(card: CardData) -> bool: return card.card_type == CardData.CardType.EQUIPMENT), "收藏装备种类筛选显示15张占位与5张正式装备")
 	main.active_card_type_filters.clear()
 	main.active_action_filters.assign([CardData.ActionType.MELEE])
 	var action_filtered: Array[CardData] = main.get_filtered_collection_cards()
@@ -226,9 +237,9 @@ func _test_tuner() -> void:
 		await process_frame
 		group_counts.append(tuner.card_selector.item_count)
 	_expect(
-		group_counts == [24, 14, 15]
-		and group_counts.reduce(func(sum: int, count: int) -> int: return sum + count, 0) == 53,
-		"CardArtTuner 以随从/法术/装备滚动分组覆盖全部 53 张卡"
+		group_counts == [24, 14, 20]
+		and group_counts.reduce(func(sum: int, count: int) -> int: return sum + count, 0) == 58,
+		"CardArtTuner 以随从/法术/装备滚动分组覆盖全部 58 张卡"
 	)
 	tuner.queue_free()
 	await process_frame

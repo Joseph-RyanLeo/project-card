@@ -11,6 +11,9 @@ signal squad_clicked(squad_view: SquadView, card_data: CardData)
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
+const EQUIPMENT_INDICATOR_SCRIPT: Script = preload(
+	"res://scripts/ui/equipment_indicator.gd"
+)
 const CARD_SNAPSHOT_VISUAL_SCRIPT: Script = preload(
 	"res://scripts/ui/card_snapshot_visual.gd"
 )
@@ -27,6 +30,10 @@ const BATTLE_RESULT_ARMOR_TEXTURE: Texture2D = preload("res://assets/actions/act
 const BATTLE_RESULT_HEALTH_TEXTURE: Texture2D = preload("res://assets/stats/health.png")
 const BATTLE_RESULT_DEATH_TEXTURE: Texture2D = preload("res://assets/stats/battle_result_death.png")
 const CARD_SIZE := Vector2(99, 136) # 每张随从卡始终保持的完整裸卡尺寸
+const EquipmentIndicatorStyleScript = preload(
+	"res://scripts/ui/equipment_indicator_style.gd"
+)
+const EQUIPMENT_INDICATOR_SIZE := EquipmentIndicatorStyleScript.DISPLAY_SIZE
 const PREVIEW_ALPHA: float = 0.4 # 放置预览中待加入卡牌的不透明度
 const INACTIVE_ATTRIBUTE_ALPHA: float = 0.4 # 非属性来源卡牌对应图标与数字的不透明度
 const MODE_SWITCH_HOVER_SECONDS: float = 0.65 # 悬停多久后在“随从/小队”操作对象之间切换
@@ -101,6 +108,9 @@ var _battle_result_active: bool = false
 var _battle_result_statistics: Dictionary = {}
 var _battle_result_defeated: bool = false
 var _battle_result_action_type: CardData.ActionType = CardData.ActionType.MELEE
+var _equipment_indicator: Control
+var _celestial_views: Dictionary = {}
+var _equipment_indicator_base_position := Vector2.ZERO
 
 @onready var stack_feedback_layer: Control = %StackFeedbackLayer
 @onready var squad_lift_layer: Control = %SquadLiftLayer
@@ -549,8 +559,19 @@ func configure_drag_source(enabled: bool, source_row: Node = null) -> void:
 	for card_data: CardData in _card_views:
 		var card_view := _card_views[card_data] as CardView
 		card_view.configure_drag_source(_drag_enabled, &"board", source_row, self)
+	if is_instance_valid(_equipment_indicator):
+		_equipment_indicator.call(
+			"configure",
+			get_display_data().get_equipped_item() if get_display_data() != null else null,
+			_source_row,
+			self,
+			_drag_enabled
+		)
 	if not _drag_enabled:
 		reset_hover_feedback()
+	for view: CelestialIndicatorView in _celestial_views.values():
+		view.drag_enabled = _drag_enabled
+		view.source_row = _source_row
 
 
 func set_prefer_minion(value: bool) -> void:
@@ -581,6 +602,20 @@ func enrich_drag_data(data: Dictionary, card_data: CardData) -> Dictionary:
 		if squad_data != null
 		else -1
 	)
+	if squad_data != null and _locked_drag_card != null:
+		enriched["owned_card"] = squad_data.get_owned_card(_locked_drag_card)
+		var equipped_item := squad_data.get_equipped_item()
+		if (
+			equipped_item != null
+			and (
+				_locked_drag_kind == &"squad"
+				or squad_data.get_card_count() == 1
+			)
+		):
+			enriched["attached_equipment_data"] = equipped_item.card_data
+			enriched["equipment_indicator_position"] = (
+				squad_data.get_equipment_indicator_position()
+			)
 	if _locked_drag_kind == &"squad" and squad_data != null:
 		var horizontal_index := squad_data.horizontal_cards.find(_locked_drag_card)
 		var squad_grab_position: Vector2 = enriched.get("grab_local_position", Vector2.ZERO)
@@ -664,6 +699,7 @@ func reset_hover_feedback() -> void:
 	_set_squad_feedback(false)
 	for card_view: CardView in get_card_views():
 		card_view.clear_pointer_hover_feedback()
+	_sync_equipment_indicator_hover_offset()
 
 
 # --- 从 SquadData 重建卡牌、布局、属性来源和牌型显示 ---
@@ -675,6 +711,8 @@ func _refresh() -> void:
 	var data := get_display_data()
 	if data == null or not data.is_valid():
 		_clear_card_views()
+		_clear_equipment_indicator()
+		refresh_celestial_indicators(null)
 		_displayed_pattern_result = null
 		pattern_label.visible = false
 		custom_minimum_size = CARD_SIZE
@@ -691,6 +729,8 @@ func _refresh() -> void:
 		return
 	visible = true
 	var display_width := float(display_data.get_display_width())
+	_refresh_equipment_indicator(data)
+	refresh_celestial_indicators(data)
 	_refresh_pattern_label(data, display_width)
 	battle_status_label.position = Vector2(
 		floorf((display_width - BATTLE_STATUS_LABEL_SIZE.x) * 0.5),
@@ -732,6 +772,7 @@ func _refresh() -> void:
 			Vector2(x_positions[horizontal_index], 0.0)
 		)
 		card_view.set_card_data(card_data)
+		card_view.set_squad_attribute_preview_from_squad(display_data)
 		card_view.set_rune_pattern_highlights(
 			_get_card_highlight_indices(highlighted_runes_by_card, card_data),
 			is_preview(),
@@ -772,6 +813,94 @@ func _refresh() -> void:
 	if _stack_target_feedback_strength > 0.0:
 		_ensure_stack_target_snapshots()
 	_apply_battle_result_visual_state(display_width)
+
+
+func get_equipment_indicator() -> Control:
+	return _equipment_indicator
+
+
+func _refresh_equipment_indicator(data: SquadData) -> void:
+	var equipped_item := data.get_equipped_item() if data != null else null
+	if (
+		equipped_item == null
+		or (
+			_drag_hidden_card != null
+			and data.get_card_count() == 1
+		)
+	):
+		_clear_equipment_indicator()
+		return
+	if not is_instance_valid(_equipment_indicator):
+		_equipment_indicator = EQUIPMENT_INDICATOR_SCRIPT.new() as Control
+		_equipment_indicator.name = "EquipmentIndicator"
+		card_visual_layer.add_child(_equipment_indicator)
+		_equipment_indicator.connect(
+			"click_carry_requested",
+			_on_card_click_carry_requested
+		)
+	_equipment_indicator_base_position = (
+		data.get_equipment_indicator_position()
+		- EQUIPMENT_INDICATOR_SIZE * 0.5
+	)
+	_sync_equipment_indicator_hover_offset()
+	_equipment_indicator.modulate.a = PREVIEW_ALPHA if is_preview() else 1.0
+	_equipment_indicator.call(
+		"configure",
+		equipped_item,
+		_source_row,
+		self,
+		_drag_enabled and not is_preview()
+	)
+	_equipment_indicator.visible = true
+
+
+func _clear_equipment_indicator() -> void:
+	if is_instance_valid(_equipment_indicator):
+		_equipment_indicator.queue_free()
+	_equipment_indicator = null
+
+
+func _sync_equipment_indicator_hover_offset() -> void:
+	var follows_hover_lift := (
+		_hovered_card != null
+		and (_active_drag_kind == &"card" or _squad_feedback_active)
+	)
+	var lift := Vector2(0.0, CARD_LIFT_OFFSET if follows_hover_lift else 0.0)
+	if is_instance_valid(_equipment_indicator):
+		_equipment_indicator.position = _equipment_indicator_base_position - lift
+	for view: CelestialIndicatorView in _celestial_views.values():
+		view.position = (view.get_meta("rest_position", Vector2.ZERO) as Vector2) - lift
+
+
+func refresh_celestial_indicators(data: SquadData) -> void:
+	var retained: Dictionary = {}
+	if data != null and not (_drag_hidden_card != null and data.get_card_count() == 1):
+		for attachment: Dictionary in data.indicator_attachments:
+			var item := attachment["indicator"] as CelestialIndicator
+			retained[item.instance_id] = true
+			var view := _celestial_views.get(item.instance_id) as CelestialIndicatorView
+			if not is_instance_valid(view):
+				view = CelestialIndicatorView.new()
+				view.indicator_data = item
+				view.source_slot = self
+				card_visual_layer.add_child(view)
+				view.click_carry_requested.connect(_on_card_click_carry_requested)
+				_celestial_views[item.instance_id] = view
+			view.drag_enabled = _drag_enabled and not is_preview()
+			view.source_row = _source_row
+			var point: Vector2 = attachment["position"] + data._get_effect_source_horizontal_offset()
+			view.set_meta("rest_position", point - view.size * 0.5)
+			view.modulate.a = PREVIEW_ALPHA if is_preview() else 1.0
+	for key: Variant in _celestial_views.keys():
+		if not retained.has(key):
+			(_celestial_views[key] as Control).visible = false
+			(_celestial_views[key] as Control).queue_free()
+			_celestial_views.erase(key)
+	_sync_equipment_indicator_hover_offset()
+
+
+func get_celestial_indicator(instance_id: StringName) -> CelestialIndicatorView:
+	return _celestial_views.get(instance_id) as CelestialIndicatorView
 
 
 func _apply_battle_result_visual_state(display_width: float) -> void:
@@ -1101,6 +1230,25 @@ func _ensure_stack_target_snapshots() -> void:
 			(data.layer_cards.size() - layer_index)
 			* CardView.CARD_LAYER_Z_STEP
 		)
+	# 目标小队开始晃动时会隐藏真实 CardVisualLayer，改由快照绘制。
+	# 装备指示物也必须进入同一快照层，否则视觉上会在切换瞬间消失。
+	var equipped_item := data.get_equipped_item()
+	if equipped_item != null and equipped_item.card_data != null:
+		var indicator_snapshot := EquipmentIndicatorStyleScript.create_visual(
+			equipped_item.card_data
+		)
+		indicator_snapshot.name = "EquipmentIndicatorSnapshot"
+		indicator_snapshot.position = (
+			data.get_equipment_indicator_position()
+			- EQUIPMENT_INDICATOR_SIZE * 0.5
+		)
+		indicator_snapshot.modulate.a = PREVIEW_ALPHA if is_preview() else 1.0
+		_stack_target_snapshot_layer.add_child(indicator_snapshot)
+	for attachment: Dictionary in data.indicator_attachments:
+		var token_snapshot := CelestialIndicatorStyle.create_visual(attachment["indicator"])
+		token_snapshot.position = (attachment["position"] as Vector2) + data._get_effect_source_horizontal_offset() - token_snapshot.size * 0.5
+		token_snapshot.modulate.a = PREVIEW_ALPHA if is_preview() else 1.0
+		_stack_target_snapshot_layer.add_child(token_snapshot)
 	card_visual_layer.visible = false
 
 
@@ -1178,6 +1326,7 @@ func _apply_immediate_hover_subject() -> void:
 	else:
 		_clear_member_pointer_hover_feedback()
 		_set_squad_feedback(true)
+	_sync_equipment_indicator_hover_offset()
 
 
 func _on_mode_switch_timeout() -> void:
@@ -1198,6 +1347,7 @@ func _on_mode_switch_timeout() -> void:
 		if hovered_view != null:
 			hovered_view.show_pointer_hover_feedback()
 			hovered_view.set_external_lift(CARD_LIFT_OFFSET)
+	_sync_equipment_indicator_hover_offset()
 
 
 func _clear_member_pointer_hover_feedback() -> void:
@@ -1248,3 +1398,4 @@ func _apply_squad_lift_position() -> void:
 	var lift := SQUAD_LIFT_OFFSET if _squad_feedback_active else 0.0
 	for card_view: CardView in get_card_views():
 		card_view.set_external_lift(lift)
+	_sync_equipment_indicator_hover_offset()

@@ -7,13 +7,14 @@
 script = ExtResource("2_ctdjo")
 id = &"inferno_edge"
 display_name = "炼狱之刃"
+faction = 1
 card_type = 1
 base_value = 0
 max_health = 0
 equipment_type = 1
 equipment_action_delta = 2
-equipment_cooldown_delta = 0.5
+equipment_zeal_delta = -1
 equipment_armor_delta = 2
 art_texture = ExtResource("1_ttubc")
 art_offset = Vector2i(-10, 12)
-effect_text = "占位：近战武器；行动+2，冷却+0.5秒，生命+0，护甲+2。"
+effect_text = "占位：近战武器；行动+2，热诚-1，生命+0，护甲+2。"

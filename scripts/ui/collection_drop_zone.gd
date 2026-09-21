@@ -6,6 +6,7 @@ extends Control
 
 signal card_dropped(data: Dictionary, card_global_position: Vector2)
 
+const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const HIGHLIGHT_COLOR := Color(0.48, 0.9, 0.66, 0.95) # 场上卡可放回收藏时，收藏区域边框的高亮颜色
 
 var drop_enabled: bool = false
@@ -29,6 +30,12 @@ func preview_card_drop(
 	_pointer_global_position: Vector2,
 	data: Variant
 ) -> bool:
+	if data is Dictionary:
+		var drag_data := data as Dictionary
+		if drag_data.get("kind") == &"equipment_indicator":
+			var drag_visual := drag_data.get("drag_visual") as CardDragPreview
+			if is_instance_valid(drag_visual):
+				drag_visual.set_equipment_indicator_mode(false)
 	var can_drop := _is_card_drag(data)
 	_set_highlighted(can_drop)
 	return can_drop
@@ -90,6 +97,11 @@ func _is_card_drag(data: Variant) -> bool:
 		return drag_data.get("card_data") is CardData
 	if drag_data.get("kind") == &"squad":
 		return drag_data.get("squad_data") is SquadData
+	if drag_data.get("kind") == &"equipment_indicator":
+		return (
+			drag_data.get("owned_card") is OwnedCard
+			and drag_data.get("card_data") is CardData
+		)
 	return false
 
 

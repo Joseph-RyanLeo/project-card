@@ -131,7 +131,7 @@
     },
     {
       "card_id": "anvil_margaret",
-      "display_name": "“铁砧”玛格丽特",
+      "display_name": "铁砧-玛格丽特",
       "source_record_id": "recvudySZqhKPd",
       "source_cell": "G6",
       "card_type": "随从",
@@ -139,7 +139,7 @@
       "availability": "active",
       "source_fields": {
         "伤势槽位": "5",
-        "卡牌名": "“铁砧”玛格丽特",
+        "卡牌名": "铁砧-玛格丽特",
         "卡牌类型": "随从",
         "卡面短文本": "友军获得护甲×2；有护甲时热诚-4。",
         "原基础护甲": "15",
@@ -3257,7 +3257,7 @@
           "questions": []
         }
       ],
-      "resource_path": null
+      "resource_path": "res://resources/cards/ash_war_banner.tres"
     },
     {
       "card_id": "ash_war_shield",
@@ -3369,7 +3369,7 @@
           "reading": "装备者受到基础行动伤害后，以该次伤害结算后的当前护甲计算，使伤害来源承受等于此护甲20%的非行动伤害，单次最多4点。该反伤不触发元素、回响、反伤或命中后效果。"
         }
       ],
-      "resource_path": null
+      "resource_path": "res://resources/cards/ash_war_shield.tres"
     },
     {
       "card_id": "rally_horn",
@@ -3478,7 +3478,7 @@
           "questions": []
         }
       ],
-      "resource_path": null
+      "resource_path": "res://resources/cards/rally_horn.tres"
     },
     {
       "card_id": "coarse_bandage",
@@ -3589,7 +3589,7 @@
           "questions": []
         }
       ],
-      "resource_path": null
+      "resource_path": "res://resources/cards/coarse_bandage.tres"
     },
     {
       "card_id": "recruitment_ledger",
@@ -3755,7 +3755,7 @@
           "questions": []
         }
       ],
-      "resource_path": null
+      "resource_path": "res://resources/cards/recruitment_ledger.tres"
     }
   ],
   "retired_effect_ids": [

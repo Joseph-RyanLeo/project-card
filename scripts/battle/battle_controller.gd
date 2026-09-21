@@ -33,6 +33,7 @@ signal permanent_growth_recorded(entry: Dictionary)
 signal pending_run_reward_recorded(entry: Dictionary)
 signal pending_owned_card_change_recorded(entry: Dictionary)
 signal battle_finished(result: Result)
+signal indicator_transferred(indicator: CelestialIndicator, source: BattleSquadState, target: BattleSquadState)
 
 enum Result { NONE, PLAYER_VICTORY, PLAYER_DEFEAT, DRAW }
 
@@ -149,17 +150,35 @@ func _register_formation_card_effects() -> void:
 		return
 	for state: BattleSquadState in get_all_states():
 		var card := state.get_effect_source()
-		if card == null or not card.is_available:
+		_register_card_effects(state, card)
+		var equipped_item := (
+			state.squad_data.get_equipped_item()
+			if state.squad_data != null
+			else null
+		)
+		if equipped_item != null:
+			_register_card_effects(state, equipped_item.card_data, true)
+
+
+func _register_card_effects(
+	state: BattleSquadState,
+	card: CardData,
+	is_equipment: bool = false
+) -> void:
+	if card == null or not card.is_available:
+		return
+	for effect_id: StringName in card.effect_ids:
+		var definition := effect_catalog.get_definition(effect_id)
+		if definition == null:
+			push_error("卡牌 %s 绑定了效果目录中不存在的效果：%s" % [card.id, effect_id])
 			continue
-		for effect_id: StringName in card.effect_ids:
-			var definition := effect_catalog.get_definition(effect_id)
-			if definition == null:
-				push_error("卡牌 %s 绑定了效果目录中不存在的效果：%s" % [card.id, effect_id])
-				continue
-			effect_runtime.register_definition(
-				definition,
-				BattleEffectOwnerRef.for_state(state, definition.source_owner)
-			)
+		if is_equipment and definition.source_owner != BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE:
+			push_error("装备 %s 的效果 %s 必须以 equipment_instance 为来源" % [card.id, effect_id])
+			continue
+		effect_runtime.register_definition(
+			definition,
+			BattleEffectOwnerRef.for_state(state, definition.source_owner)
+		)
 
 
 func stop_battle() -> void:
@@ -324,6 +343,17 @@ func record_pending_owned_card_slot_change(
 	return true
 
 
+func record_pending_equipment_consumption(
+	owner: BattleEffectOwnerRef,
+	effect_id: StringName,
+	source_runtime_id: int,
+	logical_time_us: int
+) -> bool:
+	return owned_card_change_ledger.record_equipment_consumption(
+		owner, effect_id, source_runtime_id, logical_time_us, battle_instance_id
+	)
+
+
 func record_pending_emblem_progress(
 	owner: BattleEffectOwnerRef,
 	emblem_instance_id: StringName,
@@ -400,6 +430,89 @@ func choose_weighted_target(candidates: Array[BattleSquadState], forced_roll: in
 		if roll < boundary:
 			return candidate
 	return valid[-1]
+
+
+func choose_base_target(
+	actor: BattleSquadState,
+	candidates: Array[BattleSquadState],
+	action_type: CardData.ActionType,
+	forced_roll: int = -1
+) -> BattleSquadState:
+	# 治疗和防御选友军，不能让敌方攻击的耀眼规则改写它们的目标池。
+	if action_type in [CardData.ActionType.HEAL, CardData.ActionType.DEFENSE]:
+		return choose_weighted_target(candidates, forced_roll)
+	if actor == null:
+		return null
+	var preference := actor.get_target_action_type_preference()
+	var source := actor.get_effect_source()
+	var beast_attack := source != null and source.race_type == CardData.RaceType.BEAST
+	var best_tier := 5
+	var tier_candidates: Array[BattleSquadState] = []
+	for candidate: BattleSquadState in candidates:
+		if candidate == null or not candidate.alive or candidate.current_health <= 0.0 or candidate.moon_shadowed or get_effective_target_weight(candidate) <= 0:
+			continue
+		var tier := _attack_target_tier(candidate, preference, beast_attack)
+		if tier < best_tier:
+			best_tier = tier
+			tier_candidates.clear()
+		if tier == best_tier:
+			tier_candidates.append(candidate)
+	return choose_weighted_target(tier_candidates, forced_roll)
+
+
+func _attack_target_tier(candidate: BattleSquadState, preference: int, beast_attack: bool) -> int:
+	# “野兽不会优先攻击”高于耀眼及常规类型偏好，但并不使目标永久不可选。
+	if beast_attack and candidate.has_targeting_keyword(&"beast_last"):
+		return 4
+	var dazzling := has_effective_dazzling(candidate)
+	if preference >= 0:
+		if candidate.get_effective_action_type() == preference:
+			return 0 if dazzling else 1
+		return 2 if dazzling else 3
+	return 0 if dazzling else 1
+
+
+func has_effective_dazzling(candidate: BattleSquadState) -> bool:
+	if candidate.squad_data.has_indicator(CelestialIndicator.Kind.SUN):
+		return true
+	for state: BattleSquadState in get_all_states():
+		if state.alive and state.current_health > 0.0 and state.squad_data.has_indicator(CelestialIndicator.Kind.SUN):
+			return false
+	return candidate.squad_data.has_indicator(CelestialIndicator.Kind.STAR) or candidate.has_targeting_keyword(&"dazzling")
+
+
+func _on_indicator_action_launched(actor: BattleSquadState) -> void:
+	if actor == null or not actor.squad_data.has_indicator(CelestialIndicator.Kind.MOON):
+		return
+	actor.moon_shadowed = false
+	if not is_finite(actor.moon_restore_time):
+		actor.moon_restore_time = elapsed_seconds + CelestialIndicator.MOON_RESTORE_SECONDS
+
+
+func _transfer_defeated_star(source: BattleSquadState) -> void:
+	if not source.squad_data.has_indicator(CelestialIndicator.Kind.STAR):
+		return
+	var candidates: Array[BattleSquadState] = []
+	for target: BattleSquadState in get_all_states():
+		if target != source and target.side == source.side and target.alive and target.current_health > 0.0 and not target.squad_data.has_indicator(CelestialIndicator.Kind.STAR):
+			candidates.append(target)
+	if candidates.is_empty():
+		return
+	var target := candidates[_random.randi_range(0, candidates.size() - 1)]
+	for attachment: Dictionary in source.squad_data.indicator_attachments:
+		var indicator := attachment["indicator"] as CelestialIndicator
+		if indicator.kind != CelestialIndicator.Kind.STAR:
+			continue
+		target.squad_data.attach_indicator(indicator, attachment["position"], int(attachment["order"]))
+		source.squad_data.detach_indicator(indicator.instance_id)
+		var bonus := BattleModifier.new()
+		bonus.stat = BattleModifier.Stat.ACTION_VALUE
+		bonus.value = 1.0
+		bonus.effect_id = &"star_transfer"
+		bonus.source_runtime_id = source.runtime_id
+		target.modifiers.add_modifier(bonus)
+		indicator_transferred.emit(indicator, source, target)
+		break
 
 
 func get_effective_target_weight(state: BattleSquadState) -> int:
@@ -500,6 +613,9 @@ func _get_next_cooldown() -> float:
 
 func _get_next_event_delay() -> float:
 	var next_time := _get_next_cooldown()
+	for state: BattleSquadState in get_all_states():
+		if state.alive and is_finite(state.moon_restore_time):
+			next_time = minf(next_time, maxf(state.moon_restore_time - elapsed_seconds, 0.0))
 	var next_effect_time := effect_runtime.get_next_event_time_seconds()
 	if is_finite(next_effect_time):
 		next_time = minf(next_time, maxf(next_effect_time - elapsed_seconds, 0.0))
@@ -520,6 +636,10 @@ func _decrease_living_cooldowns(amount: float) -> void:
 
 
 func _resolve_ready_batch() -> void:
+	for state: BattleSquadState in get_all_states():
+		if state.alive and state.moon_restore_time <= elapsed_seconds + COOLDOWN_EPSILON:
+			state.moon_shadowed = state.squad_data.has_indicator(CelestialIndicator.Kind.MOON)
+			state.moon_restore_time = INF
 	effect_runtime.process_due(elapsed_seconds)
 	if use_projectile_timing:
 		_resolve_ready_projectile_batch()
@@ -535,6 +655,8 @@ func _resolve_ready_batch() -> void:
 			actors.append(state)
 	actors.sort_custom(_is_actor_before)
 	var actions := _select_base_actions(actors, living_snapshot)
+	for action: Dictionary in actions:
+		_on_indicator_action_launched(action["actor"])
 	var layer_zero: Array[BattleEffectEvent] = _collect_due_continuous_events()
 	var fatigue_events := _prepare_fatigue_events(living_snapshot)
 	layer_zero.append_array(fatigue_events)
@@ -686,6 +808,7 @@ func _launch_registered_projectiles(events: Array[BattleEffectEvent]) -> void:
 		else:
 			projectile_launched.emit(event)
 			if event.is_base_action:
+				_on_indicator_action_launched(event.source)
 				effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.ECHO, {"actor": event.source})
 				effect_runtime.process_due(elapsed_seconds)
 
@@ -757,6 +880,7 @@ func execute_immediate_action(
 		return true
 	# 无弹道计时时仍发出“已发射”信号，再同步结算命中，保持事件语义一致。
 	projectile_launched.emit(base_event)
+	_on_indicator_action_launched(actor)
 	effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.ECHO, {"actor": actor})
 	effect_runtime.process_due(elapsed_seconds)
 	_resolve_effect_layer([base_event])
@@ -804,7 +928,7 @@ func _build_action(
 			for candidate: BattleSquadState in wounded:
 				if is_equal_approx(_missing_health_ratio(candidate), largest_missing_ratio):
 					candidates.append(candidate)
-	var target := choose_weighted_target(candidates)
+	var target := choose_base_target(actor, candidates, action_type)
 	if target == null:
 		return {}
 	var pattern := actor.get_rune_pattern_result()
@@ -844,13 +968,12 @@ func _is_base_candidate(actor: BattleSquadState, candidate: BattleSquadState, ac
 		return false
 	if action_type in [CardData.ActionType.HEAL, CardData.ActionType.DEFENSE]:
 		return candidate.side == actor.side
-	return candidate.side != actor.side
+	return candidate.side != actor.side and not candidate.moon_shadowed
 
 
 func _make_value_event(action: Dictionary, target: BattleSquadState, element_multiplier: float, layer: int, base_action: bool = false, pierces: bool = false) -> BattleEffectEvent:
 	var actor := action["actor"] as BattleSquadState
 	var action_type := action["action_type"] as CardData.ActionType
-	var source := actor.get_action_source()
 	var pattern := action["pattern"] as RunePatternResult
 	var event := BattleEffectEvent.new()
 	event.group_id = int(action["group_id"])
@@ -877,7 +1000,7 @@ func _make_value_event(action: Dictionary, target: BattleSquadState, element_mul
 	event.formula = BattleFormulaData.create(
 		_value_name_for_action(action_type),
 		action_type,
-		float(source.base_value),
+		float(actor.squad_data.get_effective_action_base_value()),
 		BattleRules.get_pattern_multiplier(pattern.pattern_type),
 		element_multiplier,
 		actor,
@@ -1122,6 +1245,15 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 			event.armor_amount = float(split["armor_damage"])
 			event.health_amount = float(split["health_damage"])
 			event.effective_amount = float(split["total"])
+			if event.is_base_action and event.effective_amount > 0.0:
+				effect_runtime.emit_trigger(
+					BattleEffectDefinition.Trigger.EQUIPPED_UNIT_AFTER_BASIC_ACTION_DAMAGE,
+					{
+						"actor": event.target,
+						"damage_source": event.source,
+						"current_armor_after_damage": event.target.current_armor,
+					}
+				)
 		BattleEffectEvent.EffectKind.HEALING:
 			event.effective_amount = event.target.apply_healing_exact(event.exact_amount, event.source, event)
 			if event.is_base_action:
@@ -1310,6 +1442,7 @@ func _finalize_batch() -> void:
 				kill_resolved.emit(state.pending_kill_source, state, state.pending_kill_event)
 	recalculate_logical_layout()
 	for state: BattleSquadState in defeated:
+		_transfer_defeated_star(state)
 		squad_defeated.emit(state)
 		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.LAST_WISH, {"actor": state})
 		effect_runtime.notify_source_defeated(state)
@@ -1410,6 +1543,12 @@ func _check_battle_result() -> void:
 		current_result = Result.PLAYER_VICTORY
 	else:
 		current_result = Result.PLAYER_DEFEAT
+	if current_result == Result.PLAYER_VICTORY:
+		effect_runtime.emit_trigger(
+			BattleEffectDefinition.Trigger.BATTLE_WON,
+			{"winner_side": BattleSquadState.Side.PLAYER}
+		)
+		effect_runtime.process_due(elapsed_seconds)
 	effect_runtime.notify_battle_end()
 	effect_runtime.process_due(elapsed_seconds)
 	stop_battle()

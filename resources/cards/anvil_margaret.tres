@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_card_data")
 id = &"anvil_margaret"
-display_name = "“铁砧”玛格丽特"
+display_name = "铁砧-玛格丽特"
 pack_id = &"ash_ledger"
 effect_ids = Array[StringName]([&"anvil_margaret.effect.01", &"anvil_margaret.effect.02"])
 keywords = Array[StringName]([&"armor_multiplier", &"zeal", &"same_name_nonstacking"])

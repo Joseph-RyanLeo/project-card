@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"recruitment_ledger"
+display_name = "征兵册"
+pack_id = &"ash_ledger"
+effect_ids = Array[StringName]([&"recruitment_ledger.effect.01", &"recruitment_ledger.effect.02"])
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 0
+equipment_type = 5
+equipment_action_delta = 0
+equipment_zeal_delta = 1
+equipment_armor_delta = 0
+effect_text = "携带参战并获胜后，获得2张随机随从并消耗此卡。"

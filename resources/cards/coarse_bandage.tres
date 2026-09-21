@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"coarse_bandage"
+display_name = "粗麻绷带"
+pack_id = &"ash_ledger"
+effect_ids = Array[StringName]([&"coarse_bandage.effect.01"])
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 0
+equipment_type = 3
+equipment_action_delta = 0
+equipment_zeal_delta = 0
+equipment_armor_delta = 1
+effect_text = "装备时，遮蔽装备者最多2处伤势。"

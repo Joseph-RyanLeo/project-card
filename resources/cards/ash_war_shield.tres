@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"ash_war_shield"
+display_name = "灰烬战盾"
+pack_id = &"ash_ledger"
+effect_ids = Array[StringName]([&"ash_war_shield.effect.01"])
+card_type = 1
+base_value = 0
+max_health = 0
+rarity = 1
+equipment_type = 2
+equipment_action_delta = 0
+equipment_zeal_delta = -1
+equipment_armor_delta = 4
+effect_text = "受击后，对来源造成当前护甲20%的伤害（最多4）。"

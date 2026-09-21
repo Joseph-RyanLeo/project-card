@@ -66,7 +66,11 @@ var battle_health_lost: float = 0.0 # 本场累计生命伤害；治疗与重新
 var runtime_action_type_override: int = -1 # 负数读取原卡行动方式；非负值只在本场战斗覆盖，不写回CardData
 var masked_rune_slots: Dictionary = {} # 本场被遮蔽的符文槽；键由卡牌实例与槽位组成，值保留显示所需定位
 var battle_active_injury_ids: Array[StringName] = [] # 由后续伤势系统注入的本场生效伤势身份；D2-4不自行生成伤势
+var battle_injury_levels: Dictionary = {} # 伤势身份→等级；遮蔽优先级依据实例槽位等级而非名称猜测
 var injury_mask_sources: Dictionary = {} # 伤势身份→遮蔽运行实例集合；多个来源独立到期
+var runtime_keyword_sources: Dictionary = {} # 临时关键词→效果实例集合；每个来源独立撤销，不改写共享卡牌资源
+var moon_shadowed: bool = false
+var moon_restore_time: float = INF
 var life_generation: int = 0 # 每次重新入场递增，用于区分已经失效的旧退场动画
 
 var _precise_write: bool = false
@@ -80,7 +84,7 @@ func initialize(
 	index: int,
 	base_cooldown_override: float = -1.0
 ) -> void:
-	squad_data = value
+	squad_data = value.duplicate_squad() if value != null else null
 	side = battle_side
 	row_key = row
 	formation_index = index
@@ -96,6 +100,9 @@ func initialize(
 	life_generation = 0
 	buff_stacks.clear()
 	clear_precise_runtime()
+	moon_shadowed = squad_data != null and squad_data.has_indicator(CelestialIndicator.Kind.MOON)
+	moon_restore_time = INF
+	_load_owned_card_injuries()
 	clear_battle_statistics()
 
 
@@ -107,7 +114,9 @@ func clear_precise_runtime() -> void:
 	runtime_action_type_override = -1
 	masked_rune_slots.clear()
 	battle_active_injury_ids.clear()
+	battle_injury_levels.clear()
 	injury_mask_sources.clear()
+	runtime_keyword_sources.clear()
 
 
 func clear_battle_statistics() -> void:
@@ -187,6 +196,23 @@ func get_target_weight() -> int:
 	return maxi(roundi(base + modifiers.get_additive(BattleModifier.Stat.TARGET_PRIORITY)), 0)
 
 
+func get_target_action_type_preference() -> int:
+	var source := get_action_source()
+	return source.preferred_target_action_type if source != null else -1
+
+
+func has_targeting_keyword(keyword: StringName) -> bool:
+	if has_runtime_keyword(keyword):
+		return true
+	if squad_data == null:
+		return false
+	for card: CardData in squad_data.horizontal_cards:
+		if card != null and card.has_keyword(keyword):
+			return true
+	var item := squad_data.get_equipped_item()
+	return item != null and item.card_data != null and item.card_data.has_keyword(keyword)
+
+
 func get_exact_action_amount() -> float:
 	if get_action_source() == null or squad_data == null:
 		return 0.0
@@ -242,12 +268,33 @@ func unmask_rune_slot(card: CardData, rune_index: int) -> bool:
 	return masked_rune_slots.erase(_rune_slot_key(card, rune_index))
 
 
-func set_battle_active_injuries(injury_ids: Array[StringName]) -> void:
+func set_battle_active_injuries(injury_ids: Array[StringName], injury_levels: Dictionary = {}) -> void:
 	battle_active_injury_ids.clear()
+	battle_injury_levels.clear()
 	injury_mask_sources.clear()
 	for injury_id: StringName in injury_ids:
 		if injury_id != &"" and not battle_active_injury_ids.has(injury_id):
 			battle_active_injury_ids.append(injury_id)
+			battle_injury_levels[injury_id] = maxi(int(injury_levels.get(injury_id, 0)), 0)
+
+
+func _load_owned_card_injuries() -> void:
+	if squad_data == null:
+		return
+	var injury_ids: Array[StringName] = []
+	var levels: Dictionary = {}
+	for card_data: CardData in squad_data.horizontal_cards:
+		var owned_card := squad_data.get_owned_card(card_data)
+		if owned_card == null:
+			continue
+		for slot_index: int in owned_card.wound_slots.size():
+			var wound := owned_card.wound_slots[slot_index]
+			if (wound.get("wound_id", &"") as StringName).is_empty():
+				continue
+			var injury_key := StringName("%s:wound:%d" % [owned_card.instance_id, slot_index])
+			injury_ids.append(injury_key)
+			levels[injury_key] = maxi(int(wound.get("level", 0)), 0)
+	set_battle_active_injuries(injury_ids, levels)
 
 
 func get_unmasked_active_injuries() -> Array[StringName]:
@@ -288,6 +335,28 @@ func is_injury_masked(injury_id: StringName) -> bool:
 	return not (injury_mask_sources.get(injury_id, {}) as Dictionary).is_empty()
 
 
+func grant_runtime_keyword(keyword: StringName, source_instance_id: int) -> bool:
+	if keyword.is_empty() or source_instance_id <= 0:
+		return false
+	var sources := runtime_keyword_sources.get(keyword, {}) as Dictionary
+	sources[source_instance_id] = true
+	runtime_keyword_sources[keyword] = sources
+	return true
+
+
+func revoke_runtime_keyword(keyword: StringName, source_instance_id: int) -> void:
+	var sources := runtime_keyword_sources.get(keyword, {}) as Dictionary
+	sources.erase(source_instance_id)
+	if sources.is_empty():
+		runtime_keyword_sources.erase(keyword)
+	else:
+		runtime_keyword_sources[keyword] = sources
+
+
+func has_runtime_keyword(keyword: StringName) -> bool:
+	return not (runtime_keyword_sources.get(keyword, {}) as Dictionary).is_empty()
+
+
 func get_masked_rune_indices_by_card() -> Dictionary:
 	var result: Dictionary = {}
 	for slot_value: Variant in masked_rune_slots.values():
@@ -323,7 +392,10 @@ func get_display_action_value() -> int:
 
 
 func get_zeal_layers() -> int:
-	return roundi(modifiers.get_additive(BattleModifier.Stat.ZEAL))
+	return (
+		roundi(modifiers.get_additive(BattleModifier.Stat.ZEAL))
+		+ (squad_data.get_equipment_zeal_delta() if squad_data != null else 0)
+	)
 
 
 func get_action_interval() -> float:

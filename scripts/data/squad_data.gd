@@ -20,11 +20,16 @@ const TRIPLE_UNIT_COUNT: int = 5 # 三卡小队占用的战场单元数
 const CARD_WIDTH: int = 99 # 每张完整随从卡保持的固定裸卡宽度
 const RUNE_SLOT_CENTER_X: Array[float] = [19.5, 49.5, 79.5] # 三个符文槽相对裸卡左边缘的中心 X
 const FORBID_STACKING_KEYWORD: StringName = &"forbid_stacking" # 带此固有关键词的卡只能独立组成单卡小队
+const DEFAULT_EQUIPMENT_INDICATOR_POSITION := Vector2(49.5, 68.0) # 无落点数据时，装备指示物默认位于最上层卡牌中心
+const UNSPECIFIED_EQUIPMENT_INDICATOR_POSITION := Vector2(-1.0, -1.0) # equip_item未传落点时的内部哨兵值，不代表卡面坐标
 
 @export var horizontal_cards: Array[CardData] = [] # 小队从左到右的卡牌顺序
 @export var layer_cards: Array[CardData] = [] # 从最上层到最下层保存，第一项提供卡牌效果
 @export var two_card_layout: TwoCardLayout = TwoCardLayout.EXPANDED # 双卡使用紧密或展开吸附布局
 var _owned_cards_by_card: Dictionary = {} # CardData引用→本局唯一OwnedCard；显示层仍可沿用CardData
+var _equipped_item: OwnedCard # 装备位引用同一OwnedCard物品实例；指示物只是它的场上显示形态
+var indicator_attachments: Array[Dictionary] = [] # 独立日月星实例、顶牌局部中心与附加顺序，不占装备位
+var _equipment_indicator_card_position: Vector2 = DEFAULT_EQUIPMENT_INDICATOR_POSITION # 指示物中心相对小队最上层卡牌左上角的位置
 
 
 static func from_card(card_data: CardData) -> SquadData:
@@ -65,7 +70,72 @@ func duplicate_squad() -> SquadData:
 	copy.layer_cards.assign(layer_cards)
 	copy.two_card_layout = two_card_layout
 	copy._owned_cards_by_card = _owned_cards_by_card.duplicate()
+	copy._equipped_item = _equipped_item
+	copy._equipment_indicator_card_position = _equipment_indicator_card_position
+	for attachment: Dictionary in indicator_attachments:
+		copy.indicator_attachments.append(attachment.duplicate())
 	return copy
+
+
+func has_indicator(kind: int) -> bool:
+	for attachment: Dictionary in indicator_attachments:
+		if (attachment["indicator"] as CelestialIndicator).kind == kind:
+			return true
+	return false
+
+
+func attach_indicator(indicator: CelestialIndicator, card_position: Vector2, order: int) -> bool:
+	if indicator == null or not indicator.is_valid() or has_indicator(indicator.kind) or not card_position.is_finite() or order < 0:
+		return false
+	indicator_attachments.append({"indicator": indicator, "position": card_position, "order": order})
+	return true
+
+
+func detach_indicator(instance_id: StringName) -> bool:
+	for index: int in indicator_attachments.size():
+		if (indicator_attachments[index]["indicator"] as CelestialIndicator).instance_id == instance_id:
+			indicator_attachments.remove_at(index)
+			return true
+	return false
+
+
+func merge_indicators_from(other: SquadData) -> void:
+	if other == null:
+		return
+	var combined := indicator_attachments.duplicate()
+	for attachment: Dictionary in other.indicator_attachments:
+		combined.append(attachment.duplicate())
+	combined.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["order"]) < int(b["order"]))
+	indicator_attachments.clear()
+	for attachment: Dictionary in combined:
+		var indicator := attachment["indicator"] as CelestialIndicator
+		attach_indicator(indicator, attachment["position"], int(attachment["order"]))
+
+
+func capture_indicators() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for attachment: Dictionary in indicator_attachments:
+		var state := (attachment["indicator"] as CelestialIndicator).capture_state()
+		var point: Vector2 = attachment["position"]
+		state["position"] = [point.x, point.y]
+		state["order"] = int(attachment["order"])
+		result.append(state)
+	return result
+
+
+func restore_indicators(entries: Array) -> bool:
+	var candidate := SquadData.new()
+	for value: Variant in entries:
+		if not value is Dictionary:
+			return false
+		var entry := value as Dictionary
+		var point: Variant = entry.get("position")
+		if not point is Array or (point as Array).size() != 2:
+			return false
+		if not candidate.attach_indicator(CelestialIndicator.from_state(entry), Vector2(float(point[0]), float(point[1])), int(entry.get("order", -1))):
+			return false
+	indicator_attachments.assign(candidate.indicator_attachments)
+	return true
 
 
 func bind_owned_card(card_data: CardData, owned_card: OwnedCard) -> bool:
@@ -96,33 +166,145 @@ func get_effect_source_instance() -> OwnedCard:
 	return get_owned_card(get_effect_source())
 
 
+func can_equip_item(owned_item: OwnedCard) -> bool:
+	return (
+		_equipped_item == null
+		and owned_item != null
+		and owned_item.is_valid()
+		and owned_item.card_data.card_type == CardData.CardType.EQUIPMENT
+	)
+
+
+func equip_item(
+	owned_item: OwnedCard,
+	indicator_position: Vector2 = UNSPECIFIED_EQUIPMENT_INDICATOR_POSITION
+) -> bool:
+	# 装备位只保存收藏物品实例的引用，不生成第二张“装备指示物卡”。
+	if not can_equip_item(owned_item) or not indicator_position.is_finite():
+		return false
+	_equipped_item = owned_item
+	_equipment_indicator_card_position = (
+		DEFAULT_EQUIPMENT_INDICATOR_POSITION
+		if indicator_position == UNSPECIFIED_EQUIPMENT_INDICATOR_POSITION
+		else indicator_position - _get_effect_source_horizontal_offset()
+	)
+	return true
+
+
+func get_equipped_item() -> OwnedCard:
+	return _equipped_item
+
+
+func get_equipment_zeal_delta() -> int:
+	return (
+		_equipped_item.card_data.equipment_zeal_delta
+		if _equipped_item != null and _equipped_item.card_data != null
+		else 0
+	)
+
+
+func get_equipment_indicator_position() -> Vector2:
+	# 对显示、拖拽和存档仍提供小队局部坐标；内部落点跟随当前顶牌移动。
+	if _equipped_item == null:
+		return DEFAULT_EQUIPMENT_INDICATOR_POSITION
+	return _equipment_indicator_card_position + _get_effect_source_horizontal_offset()
+
+
+func set_equipment_indicator_position(value: Vector2) -> bool:
+	if _equipped_item == null or not value.is_finite():
+		return false
+	_equipment_indicator_card_position = value - _get_effect_source_horizontal_offset()
+	return true
+
+
+func _get_effect_source_horizontal_offset() -> Vector2:
+	var top_card_index := horizontal_cards.find(get_effect_source())
+	var card_x_positions := get_card_x_positions()
+	return (
+		Vector2(card_x_positions[top_card_index], 0.0)
+		if top_card_index >= 0 else Vector2.ZERO
+	)
+
+
+func unequip_item() -> OwnedCard:
+	var returned_item := _equipped_item
+	_equipped_item = null
+	_equipment_indicator_card_position = DEFAULT_EQUIPMENT_INDICATOR_POSITION
+	return returned_item
+
+
+func return_equipment_for_split() -> OwnedCard:
+	indicator_attachments.clear()
+	# 拆队不判断装备来自哪一张成员卡；当前规则统一把小队装备退回收藏。
+	return unequip_item()
+
+
+func merge_equipment_from(other_squad: SquadData) -> Array[OwnedCard]:
+	merge_indicators_from(other_squad)
+	# 收藏容器始终保有这些实例；返回数组只告诉调用者哪些装备已解除绑定。
+	var returned_items: Array[OwnedCard] = []
+	if other_squad == null or other_squad._equipped_item == null:
+		return returned_items
+	if _equipped_item == null:
+		_equipped_item = other_squad._equipped_item
+		_equipment_indicator_card_position = other_squad._equipment_indicator_card_position
+		return returned_items
+	returned_items.append(_equipped_item)
+	returned_items.append(other_squad._equipped_item)
+	_equipped_item = null
+	_equipment_indicator_card_position = DEFAULT_EQUIPMENT_INDICATOR_POSITION
+	return returned_items
+
+
 func get_effective_action_base_value() -> int:
 	var owned_card := get_action_source_instance()
 	var source := get_action_source()
-	return (
+	var base := (
 		owned_card.get_effective_base_value()
 		if owned_card != null
 		else (source.base_value if source != null else 0)
+	)
+	var equipment := _equipped_item.card_data if _equipped_item != null else null
+	return clampi(
+		base + (equipment.equipment_action_delta if equipment != null else 0)
+		+ (CelestialIndicator.SUN_VALUE if has_indicator(CelestialIndicator.Kind.SUN) else 0)
+		+ (CelestialIndicator.STAR_VALUE if has_indicator(CelestialIndicator.Kind.STAR) else 0),
+		0,
+		CardData.MAXIMUM_BASE_VALUE
 	)
 
 
 func get_effective_max_health() -> int:
 	var owned_card := get_vitals_source_instance()
 	var source := get_vitals_source()
-	return (
+	var base := (
 		owned_card.get_effective_max_health()
 		if owned_card != null
 		else (source.max_health if source != null else 0)
+	)
+	var equipment := _equipped_item.card_data if _equipped_item != null else null
+	return clampi(
+		base + (equipment.equipment_health_delta if equipment != null else 0)
+		+ (CelestialIndicator.SUN_HEALTH if has_indicator(CelestialIndicator.Kind.SUN) else 0),
+		0,
+		CardData.MAXIMUM_HEALTH
 	)
 
 
 func get_effective_base_armor() -> int:
 	var owned_card := get_vitals_source_instance()
 	var source := get_vitals_source()
-	return (
+	var base := (
 		owned_card.get_effective_base_armor()
 		if owned_card != null
 		else (source.armor if source != null else 0)
+	)
+	var equipment := _equipped_item.card_data if _equipped_item != null else null
+	return clampi(
+		base + (equipment.equipment_armor_delta if equipment != null else 0)
+		+ (CelestialIndicator.MOON_ARMOR if has_indicator(CelestialIndicator.Kind.MOON) else 0),
+		0,
+		CardData.MAXIMUM_ARMOR
 	)
 
 
@@ -145,6 +327,15 @@ func is_valid() -> bool:
 			return false
 		if layer_cards.count(card_data) != 1:
 			return false
+	if (
+		_equipped_item != null
+		and (
+			not _equipped_item.is_valid()
+			or _equipped_item.card_data.card_type != CardData.CardType.EQUIPMENT
+			or not _equipment_indicator_card_position.is_finite()
+		)
+	):
+		return false
 	if horizontal_cards.size() > 1 and contains_stacking_forbidden_card():
 		return false
 	return true
@@ -389,6 +580,7 @@ func merge_compact_double_with_single(
 	if single_owned_card != null:
 		result.bind_owned_card(single_card, single_owned_card)
 	result.two_card_layout = TwoCardLayout.EXPANDED
+	result.merge_equipment_from(single_squad)
 	result._normalize()
 	return result if result.is_valid() else null
 

@@ -6,9 +6,25 @@ extends SceneTree
 const MANIFEST_PATH := "res://assets/card_art/placeholder_card_art_manifest.tsv"
 const OUTPUT_ROOT := "res://resources/cards"
 const EQUIPMENT_ACTION_DELTAS: Array[int] = [1, -1, 2, -2]
-const EQUIPMENT_COOLDOWN_DELTAS: Array[float] = [0.5, -0.5]
+const EQUIPMENT_ZEAL_DELTAS: Array[int] = [-1, 1] # 旧冷却秒数增加对应热诚负层，旧冷却秒数减少对应热诚正层
 const EQUIPMENT_HEALTH_DELTAS: Array[int] = [1, 2, 0, 3]
 const EQUIPMENT_ARMOR_DELTAS: Array[int] = [0, 1, 2, 1]
+const SPELL_TRIGGER_BY_ID := {
+	&"blessing_sacred_shield": CardData.SpellTriggerKind.CONDITIONAL,
+	&"blessing_strength": CardData.SpellTriggerKind.PREPARED,
+	&"blessing_vitality": CardData.SpellTriggerKind.INSTANT,
+	&"damage_fireball": CardData.SpellTriggerKind.INSTANT,
+	&"damage_ice_cone": CardData.SpellTriggerKind.CONDITIONAL,
+	&"damage_sandstorm": CardData.SpellTriggerKind.INSTANT,
+	&"disruption_counterspell": CardData.SpellTriggerKind.PREPARED,
+	&"disruption_discordant_wave": CardData.SpellTriggerKind.INSTANT,
+	&"disruption_rust_blade": CardData.SpellTriggerKind.CONDITIONAL,
+	&"summon_resurrection": CardData.SpellTriggerKind.PREPARED,
+	&"summon_scarab_swarm": CardData.SpellTriggerKind.PREPARED,
+	&"summon_undead_army": CardData.SpellTriggerKind.CONDITIONAL,
+	&"support_healing_aura": CardData.SpellTriggerKind.CONDITIONAL,
+	&"support_repulsion_aura": CardData.SpellTriggerKind.INSTANT,
+} # 14张占位法术首次随机均衡分配后固定，重新生成资源时不得再次洗牌
 
 
 func _init() -> void:
@@ -57,6 +73,9 @@ func _generate() -> void:
 		if kind == "spell":
 			card.rarity = spell_count % CardData.Rarity.size()
 			card.spell_type = _spell_type_from_name(subtype)
+			card.spell_trigger_kind = SPELL_TRIGGER_BY_ID.get(
+				card.id, CardData.SpellTriggerKind.UNASSIGNED
+			) as CardData.SpellTriggerKind
 			card.effect_text = "占位：%s类法术，后续补充释放条件与效果。" % subtype
 			spell_count += 1
 		else:
@@ -66,8 +85,8 @@ func _generate() -> void:
 			card.equipment_action_delta = EQUIPMENT_ACTION_DELTAS[
 				equipment_index % EQUIPMENT_ACTION_DELTAS.size()
 			]
-			card.equipment_cooldown_delta = EQUIPMENT_COOLDOWN_DELTAS[
-				equipment_index % EQUIPMENT_COOLDOWN_DELTAS.size()
+			card.equipment_zeal_delta = EQUIPMENT_ZEAL_DELTAS[
+				equipment_index % EQUIPMENT_ZEAL_DELTAS.size()
 			]
 			card.equipment_health_delta = EQUIPMENT_HEALTH_DELTAS[
 				equipment_index % EQUIPMENT_HEALTH_DELTAS.size()
@@ -76,13 +95,13 @@ func _generate() -> void:
 				equipment_index % EQUIPMENT_ARMOR_DELTAS.size()
 			]
 			card.effect_text = (
-				"占位：%s；行动%s%d，冷却%s%.1f秒，生命+%d，护甲+%d。"
+				"占位：%s；行动%s%d，热诚%s%d，生命+%d，护甲+%d。"
 				% [
 					subtype,
 					"+" if card.equipment_action_delta >= 0 else "",
 					card.equipment_action_delta,
-					"+" if card.equipment_cooldown_delta >= 0.0 else "",
-					card.equipment_cooldown_delta,
+					"+" if card.equipment_zeal_delta >= 0 else "",
+					card.equipment_zeal_delta,
 					card.equipment_health_delta,
 					card.equipment_armor_delta,
 				]

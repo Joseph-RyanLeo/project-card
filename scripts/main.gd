@@ -40,6 +40,7 @@ const RECENT_CARDS_BOOKMARK_TEXTURE: Texture2D = preload("res://assets/stage_6_5
 const RECENT_CARDS_LEFT_PAGE_TEXTURE: Texture2D = preload("res://assets/stage_6_5/recent_cards_left_page.png")
 const RECENT_CARDS_RIGHT_PAGE_TEXTURE: Texture2D = preload("res://assets/stage_6_5/recent_cards_right_page.png")
 const CHARACTER_SHEET_TEXTURE: Texture2D = preload("res://assets/stage_6_5/character_front_back.png")
+const PLAYER_AVATAR_TURN_TEXTURE: Texture2D = preload("res://assets/stage_6_5/player_avatar_turn.png")
 const ACTION_TABS_TEXTURE: Texture2D = preload("res://assets/stage_6_5/page_tabs.png")
 const CARD_TYPE_TABS_TEXTURE: Texture2D = preload("res://assets/stage_6_5/card_type_tabs.png")
 const RARITY_FILTER_TEXTURE: Texture2D = preload("res://assets/stage_6_5/rarity_filter_icons.png")
@@ -55,6 +56,9 @@ const ACTION_FILTER_NAMES: Array[String] = ["近战", "远程", "法术", "治�
 const COLLECTION_FILTER_ICONS_TEXTURE: Texture2D = preload("res://assets/stage_6_5/collection_filter_icons.png")
 const CHARACTER_FRONT_REGION := Rect2(449, 256, 161, 187) # 人物正面在原始透明图中的像素区域
 const CHARACTER_BACK_REGION := Rect2(642, 256, 165, 187) # 人物背面在原始透明图中的像素区域
+const PLAYER_AVATAR_FRAME_SIZE := Vector2(180.0, 180.0) # 我方人物转身图集中单帧的原始像素尺寸
+const PLAYER_AVATAR_FRAME_COUNT: int = 8 # 用户动图前八帧为正面转背面的有效动作帧
+const PLAYER_AVATAR_POSITION := Vector2(890.0, 164.0) # 新人物画布与旧按钮中心大致对齐的位置
 const ACTION_TAB_REGION := Rect2(34, 22, 34, 66) # 高清标签图中第一个完整未选中标签的像素区域
 const CARD_TYPE_FILTER_REGIONS: Array[Rect2] = [
 	Rect2(0, 0, 30, 40),
@@ -114,6 +118,7 @@ const SEARCH_CLEAR_HOTSPOT_REGION := Rect2(96, 10, 16, 14) # 相对搜索栏图�
 const COLLECTION_CARD_SAFE_PADDING := Vector2(14, 11) # 收藏槽四周预留空间，避免放大和越界图标被裁切
 const WORLD_SECTION_HEIGHT: float = 360.0 # 敌方、我方和收藏三段纵向世界各自的高度
 const VIEW_TWEEN_DURATION: float = 0.32 # 人物按钮与阶段默认视角的平滑切换时长
+const PLAYER_AVATAR_TURN_DURATION: float = 0.32 # 完整转身动作的时长，与战场视角切换同步
 const COLLECTION_MAX_PHYSICAL_PAGES: int = 100 # 收藏最多显示 100 个物理单页
 const COLLECTION_MAX_SPREADS: int = COLLECTION_MAX_PHYSICAL_PAGES / 2 # 两个物理页组成一组展开页
 const COLLECTION_SLOTS_PER_PAGE: int = 12 # 每组左右书页合计固定卡位数
@@ -208,6 +213,7 @@ var selected_board_slot: BoardSlot
 # 点击携带与 Godot 原生拖拽共用同一种拖拽数据字典，避免两套规则分叉。
 var _click_carry_data: Dictionary = {}
 var _click_carry_preview: Control
+var _native_equipment_drag_data: Dictionary = {} # 跟踪原生装备拖拽，以便实时换形并在无效松手时返还收藏
 var _battlefield_clock_check_queued: bool = false
 var current_world_view: WorldView = WorldView.COLLECTION
 var current_collection_page: int = 0
@@ -222,6 +228,8 @@ var _regular_collection_page_before_bookmark: int = 0
 var _collection_effect_display_states: Dictionary = {} # 按卡牌稳定id保存收藏中的效果面状态，翻页重建节点后仍可恢复
 var last_page_turn_method: StringName = &""
 var _view_tween: Tween
+var _player_avatar_turn_tween: Tween
+var _player_avatar_frame_index: int = 0
 var _page_tween: Tween
 var _action_tab_tween: Tween
 var _card_type_tab_tween: Tween
@@ -279,6 +287,7 @@ var formula_popup: PanelContainer
 var formula_popup_text: RichTextLabel
 var battle_effect_layer: Control
 var player_avatar_button: TextureButton
+var celestial_indicators: CelestialIndicatorController
 var start_battle_button: Button
 var battle_result_panel: Panel
 var battle_result_label: Label
@@ -359,6 +368,13 @@ func _add_texture_layer(
 
 func _make_character_texture(region: Rect2) -> AtlasTexture:
 	return _make_atlas_texture(CHARACTER_SHEET_TEXTURE, region)
+
+
+func _make_player_avatar_frame_texture(frame_index: int) -> AtlasTexture:
+	return _make_atlas_texture(
+		PLAYER_AVATAR_TURN_TEXTURE,
+		Rect2(PLAYER_AVATAR_FRAME_SIZE.x * frame_index, 0.0, PLAYER_AVATAR_FRAME_SIZE.x, PLAYER_AVATAR_FRAME_SIZE.y)
+	)
 
 
 func _make_atlas_texture(atlas: Texture2D, region: Rect2) -> AtlasTexture:
@@ -572,16 +588,17 @@ func _build_board_section(parent: Control, section_name: String, top: float, ene
 		var player_avatar := TextureButton.new()
 		player_avatar.name = "PlayerAvatarButton"
 		player_avatar.unique_name_in_owner = true
-		player_avatar.texture_normal = _make_character_texture(CHARACTER_BACK_REGION)
-		player_avatar.position = Vector2(897, 160)
-		player_avatar.size = CHARACTER_BACK_REGION.size
+		player_avatar.texture_normal = _make_player_avatar_frame_texture(0)
+		player_avatar.position = PLAYER_AVATAR_POSITION
+		player_avatar.size = PLAYER_AVATAR_FRAME_SIZE
 		player_avatar.ignore_texture_size = true
 		player_avatar.stretch_mode = TextureButton.STRETCH_SCALE
+		player_avatar.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		player_avatar.tooltip_text = "切换敌我战场与收藏视角"
 		player_avatar.z_index = 100
 		section.add_child(player_avatar)
-		player_avatar.position = Vector2(897, 160)
-		player_avatar.size = CHARACTER_BACK_REGION.size
+		player_avatar.position = PLAYER_AVATAR_POSITION
+		player_avatar.size = PLAYER_AVATAR_FRAME_SIZE
 		var phase := _make_label("准备阶段", Vector2(742, 76), Vector2(116, 24))
 		phase.name = "PhaseLabel"
 		phase.unique_name_in_owner = true
@@ -910,6 +927,7 @@ func _make_label(text_value: String, pos: Vector2, node_size: Vector2) -> Label:
 
 # --- 场景初始化、阶段与全局状态 ---
 func _ready() -> void:
+	set_process(true)
 	if not has_node("WorldContent"):
 		_build_scene_structure()
 	_bind_scene_nodes()
@@ -957,6 +975,10 @@ func _ready() -> void:
 	current_world_view = WorldView.COLLECTION
 	_update_phase_label()
 	_on_drag_mode_toggled(drag_mode_button.button_pressed)
+	celestial_indicators = CelestialIndicatorController.new()
+	add_child(celestial_indicators)
+	celestial_indicators.initialize(self)
+	battle_controller.indicator_transferred.connect(celestial_indicators.animate_star_transfer)
 	_refresh_preparation_effect_preview.call_deferred()
 
 
@@ -1128,9 +1150,7 @@ func _apply_battle_speed() -> void:
 
 func set_world_view(view: WorldView, animate: bool = true) -> void:
 	current_world_view = view
-	player_avatar_button.texture_normal = _make_character_texture(
-		CHARACTER_FRONT_REGION if view == WorldView.COLLECTION else CHARACTER_BACK_REGION
-	)
+	_turn_player_avatar(0 if view == WorldView.COLLECTION else PLAYER_AVATAR_FRAME_COUNT - 1, animate)
 	var target_y := -WORLD_SECTION_HEIGHT if view == WorldView.COLLECTION else 0.0
 	if _view_tween != null and _view_tween.is_valid():
 		_view_tween.kill()
@@ -1139,6 +1159,26 @@ func set_world_view(view: WorldView, animate: bool = true) -> void:
 		return
 	_view_tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 	_view_tween.tween_property(world_content, "position:y", target_y, VIEW_TWEEN_DURATION)
+
+
+func _turn_player_avatar(target_frame: int, animate: bool) -> void:
+	if _player_avatar_turn_tween != null and _player_avatar_turn_tween.is_valid():
+		_player_avatar_turn_tween.kill()
+	if not animate or not is_inside_tree() or target_frame == _player_avatar_frame_index:
+		_set_player_avatar_frame(float(target_frame))
+		return
+	var remaining_frame_count := absi(target_frame - _player_avatar_frame_index)
+	var duration := PLAYER_AVATAR_TURN_DURATION * float(remaining_frame_count) / float(PLAYER_AVATAR_FRAME_COUNT - 1)
+	_player_avatar_turn_tween = create_tween().set_trans(Tween.TRANS_LINEAR)
+	_player_avatar_turn_tween.tween_method(_set_player_avatar_frame, float(_player_avatar_frame_index), float(target_frame), duration)
+
+
+func _set_player_avatar_frame(frame_value: float) -> void:
+	var next_frame := clampi(roundi(frame_value), 0, PLAYER_AVATAR_FRAME_COUNT - 1)
+	if next_frame == _player_avatar_frame_index:
+		return
+	_player_avatar_frame_index = next_frame
+	player_avatar_button.texture_normal = _make_player_avatar_frame_texture(next_frame)
 
 
 func _build_enemy_test_squads() -> void:
@@ -2054,11 +2094,62 @@ func _on_attack_effect_lab_button_pressed() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_DRAG_END and is_node_ready():
+	if not is_node_ready():
+		return
+	if what == NOTIFICATION_DRAG_BEGIN:
+		var drag_data: Variant = get_viewport().gui_get_drag_data()
+		if (
+			drag_data is Dictionary
+			and (drag_data as Dictionary).get("kind") in [
+				&"equipment_card",
+				&"equipment_indicator",
+			]
+		):
+			_native_equipment_drag_data = (drag_data as Dictionary).duplicate()
+			_update_native_equipment_drag_preview.call_deferred(
+				get_viewport().get_mouse_position()
+			)
+	elif what == NOTIFICATION_DRAG_END:
 		collection_drop_zone.clear_drop_preview()
+		var failed_indicator_drag := _native_equipment_drag_data
+		_native_equipment_drag_data = {}
+		if (
+			not failed_indicator_drag.is_empty()
+			and failed_indicator_drag.get("kind") == &"equipment_indicator"
+			and not get_viewport().gui_is_drag_successful()
+		):
+			var drag_visual_value: Variant = failed_indicator_drag.get("drag_visual")
+			var drag_visual: CardDragPreview
+			if is_instance_valid(drag_visual_value):
+				drag_visual = drag_visual_value as CardDragPreview
+				drag_visual.set_equipment_indicator_mode(false)
+			var preview_offset: Vector2 = failed_indicator_drag.get(
+				"drag_visual_offset",
+				failed_indicator_drag.get("preview_offset", Vector2.ZERO)
+			)
+			var return_global_position := (
+				drag_visual.get_card_global_position()
+				if is_instance_valid(drag_visual)
+				else get_viewport().get_mouse_position() - preview_offset
+			)
+			_return_failed_equipment_indicator_drag.call_deferred(
+				failed_indicator_drag,
+				return_global_position
+			)
+
+
+func _process(_delta: float) -> void:
+	# 原生拖拽的透明接收层不保证在所有平台持续发送 mouse_exited；
+	# 用视口鼠标位置逐帧重算，确保离开卡面的同一帧恢复完整装备牌。
+	if not _native_equipment_drag_data.is_empty() and get_viewport().gui_is_dragging():
+		_update_native_equipment_drag_preview(get_viewport().get_mouse_position())
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and not _native_equipment_drag_data.is_empty():
+		_update_native_equipment_drag_preview(
+			(event as InputEventMouseMotion).position
+		)
 	if _click_carry_data.is_empty():
 		return
 
@@ -2081,6 +2172,51 @@ func _input(event: InputEvent) -> void:
 		if key_event.pressed and key_event.keycode == KEY_ESCAPE:
 			_cancel_click_carry()
 			get_viewport().set_input_as_handled()
+
+
+func _update_native_equipment_drag_preview(
+	pointer_global_position: Vector2
+) -> void:
+	var active_drag_data := _native_equipment_drag_data
+	var live_drag_data: Variant = get_viewport().gui_get_drag_data()
+	if (
+		live_drag_data is Dictionary
+		and (live_drag_data as Dictionary).get("kind") in [
+			&"equipment_card",
+			&"equipment_indicator",
+		]
+	):
+		active_drag_data = live_drag_data as Dictionary
+		_native_equipment_drag_data["drag_visual"] = active_drag_data.get("drag_visual")
+	var target_row: BattlefieldRow
+	for row: BattlefieldRow in [front_row, back_row]:
+		var row_position := _to_row_drop_position(row, pointer_global_position)
+		if row._find_equipment_target_slot(row_position, active_drag_data) != null:
+			target_row = row
+			break
+	if target_row == null:
+		front_row.clear_drop_preview(false)
+		back_row.clear_drop_preview(false)
+		_set_native_equipment_drag_visual_mode(active_drag_data, false)
+		return
+	for row: BattlefieldRow in [front_row, back_row]:
+		if row != target_row:
+			row.clear_drop_preview(false)
+	var can_equip_here := target_row.preview_card_drop(
+		_to_row_drop_position(target_row, pointer_global_position),
+		active_drag_data
+	)
+	if not can_equip_here:
+		_set_native_equipment_drag_visual_mode(active_drag_data, false)
+
+
+func _set_native_equipment_drag_visual_mode(
+	drag_data: Dictionary,
+	enabled: bool
+) -> void:
+	var drag_visual_value: Variant = drag_data.get("drag_visual")
+	if is_instance_valid(drag_visual_value):
+		(drag_visual_value as CardDragPreview).set_equipment_indicator_mode(enabled)
 
 
 func _on_start_battle_button_pressed() -> void:
@@ -2240,7 +2376,14 @@ func _restore_row_from_snapshot(row: BattlefieldRow, snapshot_value: Variant) ->
 	for squad_value: Variant in squads:
 		var squad := squad_value as SquadData
 		if squad != null:
-			var slot := row.add_squad(squad.duplicate_squad(), row.get_squad_count())
+			var restored_squad := squad.duplicate_squad()
+			var equipped_item := restored_squad.get_equipped_item()
+			if (
+				equipped_item != null
+				and owned_card_collection.get_by_instance_id(equipped_item.instance_id) == null
+			):
+				restored_squad.unequip_item()
+			var slot := row.add_squad(restored_squad, row.get_squad_count())
 			if slot != null:
 				slot.clear_battle_status()
 
@@ -2276,7 +2419,8 @@ func save_run_to_path(path: String) -> Error:
 		_next_battle_instance_sequence,
 		run_reward_state,
 		settlement_journal,
-		current_phase
+		current_phase,
+		celestial_indicators.capture_state()
 	)
 	var error := run_save_service.save_checkpoint(path, checkpoint)
 	_last_run_persistence_result = {
@@ -2321,6 +2465,7 @@ func load_run_from_path(path: String) -> bool:
 	battle_seed_spin.value = int(restore_result.get("battle_seed", 0))
 	_sync_legacy_collection_cards()
 	var restored_rows := restore_result.get("rows", {}) as Dictionary
+	celestial_indicators.restore_state(restore_result.get("indicator_inventory", {}))
 	_restore_row_from_snapshot(front_row, restored_rows.get(&"player_front", []))
 	_restore_row_from_snapshot(back_row, restored_rows.get(&"player_back", []))
 	_restore_row_from_snapshot(enemy_front_row, restored_rows.get(&"enemy_front", []))
@@ -2407,6 +2552,8 @@ func _on_battle_states_changed() -> void:
 	for state: BattleSquadState in battle_controller.get_all_states():
 		var slot := _battle_state_slots.get(state) as BoardSlot
 		if is_instance_valid(slot):
+			if current_phase == GamePhase.BATTLE:
+				slot.refresh_celestial_indicators(state.squad_data)
 			slot.set_battle_status(
 				state.displayed_health,
 				state.displayed_armor,
@@ -2859,6 +3006,10 @@ func _show_battle_result(result: BattleController.Result) -> void:
 	current_phase = GamePhase.RESULT
 	_restore_battle_result_layout()
 	_last_battle_settlement_result = settle_current_battle()
+	if int(_last_battle_settlement_result.get("equipment_consumed", 0)) > 0:
+		_remove_missing_equipment_from_board()
+		_sync_legacy_collection_cards()
+		_build_collection_cards()
 	match result:
 		BattleController.Result.PLAYER_VICTORY:
 			battle_result_label.text = "胜利"
@@ -2885,6 +3036,16 @@ func _refresh_battle_result_summary() -> void:
 		]
 	)
 	battle_result_summary_label.scroll_to_line(0)
+
+
+func _remove_missing_equipment_from_board() -> void:
+	for row: BattlefieldRow in [front_row, back_row]:
+		for slot: BoardSlot in row.get_squads():
+			var squad := slot.get_squad_data()
+			var item := squad.get_equipped_item() if squad != null else null
+			if item != null and owned_card_collection.get_by_instance_id(item.instance_id) == null:
+				squad.unequip_item()
+				slot.set_squad_data(squad)
 
 
 func _format_battle_result_summary(
@@ -3073,9 +3234,12 @@ func _build_collection_cards(
 		if page_index >= page_cards.size():
 			continue
 		var collection_card: CardData = page_cards[page_index]
+		var owned_card := owned_card_collection.find_first_by_definition(collection_card)
 		var slot := _create_collection_card_slot(
 			collection_card,
-			_is_card_deployed(collection_card)
+			_is_owned_card_deployed(owned_card) if owned_card != null else _is_card_deployed(collection_card),
+			true,
+			owned_card
 		)
 		var card_view := slot.get_child(0) as CardView
 		slot.position = _collection_slot_position(page_index)
@@ -3090,10 +3254,58 @@ func _build_collection_cards(
 			)
 
 
+func _find_collection_slot_for_owned_card(owned_card: OwnedCard) -> Control:
+	if owned_card == null:
+		return null
+	for slot: Control in _get_collection_card_slots():
+		if slot.get_meta("owned_card", null) == owned_card:
+			return slot
+	return null
+
+
+func _animate_returned_equipment_entries(entries: Array[Dictionary]) -> void:
+	for entry: Dictionary in entries:
+		var owned_item := entry.get("owned_card") as OwnedCard
+		var slot := _find_collection_slot_for_owned_card(owned_item)
+		if slot == null or slot.get_child_count() == 0:
+			continue
+		_animate_collection_card_entry.call_deferred(
+			slot.get_child(0) as CardView,
+			entry.get("global_position", Vector2.ZERO) as Vector2
+		)
+
+
+func _capture_returned_equipment_entry(
+	slot: BoardSlot,
+	result_squad: SquadData,
+	release_binding: bool = false
+) -> Dictionary:
+	if not is_instance_valid(slot):
+		return {}
+	var squad := slot.get_squad_data()
+	var owned_item := squad.get_equipped_item() if squad != null else null
+	if owned_item == null or result_squad.get_equipped_item() == owned_item:
+		return {}
+	var indicator := slot.get_equipment_indicator()
+	var entry := {
+		"owned_card": owned_item,
+		"global_position": (
+			indicator.global_position
+			if is_instance_valid(indicator)
+			else slot.global_position
+		),
+	}
+	if release_binding:
+		squad.unequip_item()
+		slot.set_squad_data(squad)
+	return entry
+
+
 func _create_collection_card_slot(
 	card_data: CardData,
 	is_deployed_ghost: bool = false,
-	interactive: bool = true
+	interactive: bool = true,
+	owned_card: OwnedCard = null
 ) -> Control:
 	var slot := Control.new()
 	slot.custom_minimum_size = (
@@ -3102,6 +3314,8 @@ func _create_collection_card_slot(
 	)
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.set_meta("is_deployed_ghost", is_deployed_ghost)
+	if owned_card != null:
+		slot.set_meta("owned_card", owned_card)
 
 	var card_view := CARD_VIEW_SCENE.instantiate() as CardView
 	card_view.position = (
@@ -3173,6 +3387,28 @@ func _is_card_deployed(card_data: CardData) -> bool:
 			var squad_data := slot.get_squad_data()
 			if squad_data != null and squad_data.contains(card_data):
 				return true
+			if (
+				squad_data != null
+				and squad_data.get_equipped_item() != null
+				and squad_data.get_equipped_item().card_data == card_data
+			):
+				return true
+	return false
+
+
+func _is_owned_card_deployed(owned_card: OwnedCard) -> bool:
+	if owned_card == null:
+		return false
+	for row: BattlefieldRow in [front_row, back_row]:
+		for slot: BoardSlot in row.get_squads():
+			var squad := slot.get_squad_data()
+			if squad == null:
+				continue
+			if squad.get_equipped_item() == owned_card:
+				return true
+			for member_data: CardData in squad.horizontal_cards:
+				if squad.get_owned_card(member_data) == owned_card:
+					return true
 	return false
 
 
@@ -3213,6 +3449,9 @@ func _on_click_carry_requested(
 	drag_data: Dictionary,
 	pointer_global_position: Vector2
 ) -> void:
+	if drag_data.get("kind") == &"celestial_indicator":
+		celestial_indicators.begin_click_carry(drag_data, pointer_global_position)
+		return
 	if (
 		current_phase != GamePhase.PREPARE
 		or not _click_carry_data.is_empty()
@@ -3241,6 +3480,11 @@ func _create_click_carry_preview(
 	var preview_root := CardView.create_drag_visual(drag_data)
 	add_child(preview_root)
 	preview_root.global_position = pointer_global_position
+	if drag_data.get("kind") == &"equipment_indicator":
+		preview_root.set_equipment_indicator_mode(true, false)
+		preview_root.continue_equipment_pickup(
+			drag_data.get("indicator_lifted_grab_local_position", drag_data.get("indicator_grab_local_position", EquipmentIndicatorStyle.DISPLAY_SIZE * 0.5))
+		)
 	return preview_root
 
 
@@ -3259,6 +3503,12 @@ func _ghost_click_carry_source() -> void:
 		)
 		if is_instance_valid(source_row):
 			source_row._begin_card_drag(_click_carry_data)
+		if _click_carry_data.get("kind") == &"equipment_indicator":
+			var source_slot := _click_carry_data.get("source_slot") as BoardSlot
+			if is_instance_valid(source_slot):
+				var indicator := source_slot.get_equipment_indicator()
+				if is_instance_valid(indicator):
+					indicator.visible = false
 
 
 func _update_click_carry(pointer_global_position: Vector2) -> void:
@@ -3334,6 +3584,10 @@ func _cancel_click_carry() -> void:
 func _finish_click_carry(committed: bool) -> void:
 	var drag_data := _click_carry_data
 	_click_carry_data = {}
+	var should_return_failed_indicator: bool = (
+		not committed
+		and drag_data.get("kind") == &"equipment_indicator"
+	)
 	var return_global_position: Variant = null
 	if (
 		not committed
@@ -3370,7 +3624,21 @@ func _finish_click_carry(committed: bool) -> void:
 	elif source_type == &"board":
 		var source_row := drag_data.get("source_row") as BattlefieldRow
 		if is_instance_valid(source_row):
-			source_row._finish_card_drag(return_global_position)
+			source_row._finish_card_drag(
+				null if should_return_failed_indicator else return_global_position
+			)
+		var source_slot := drag_data.get("source_slot") as BoardSlot
+		if is_instance_valid(source_slot):
+			var indicator := source_slot.get_equipment_indicator()
+			if is_instance_valid(indicator):
+				indicator.visible = true
+		if should_return_failed_indicator:
+			_return_failed_equipment_indicator_drag(
+				drag_data,
+				return_global_position as Vector2
+				if return_global_position is Vector2
+				else get_viewport().get_mouse_position()
+			)
 
 
 func _clear_click_drop_feedback(clear_stack_feedback: bool = true) -> void:
@@ -3413,6 +3681,9 @@ func _on_board_card_dropped(
 	drag_data: Dictionary,
 	card_global_position: Vector2
 ) -> void:
+	if drag_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
+		_equip_item_on_squad(target_row, drag_data)
+		return
 	if drag_data.has("drop_intent"):
 		_transfer_drop_intent(
 			drag_data,
@@ -3433,6 +3704,10 @@ func _on_collection_card_dropped(
 	drag_data: Dictionary,
 	card_global_position: Vector2
 ) -> void:
+	if drag_data.get("kind") == &"equipment_indicator":
+		collection_drop_zone.clear_drop_preview()
+		_unequip_indicator_to_collection(drag_data, card_global_position)
+		return
 	if drag_data.get("kind") == &"squad":
 		collection_drop_zone.clear_drop_preview()
 		_transfer_squad_to_collection(drag_data, card_global_position)
@@ -3450,6 +3725,135 @@ func _on_collection_card_dropped(
 		0,
 		card_global_position
 	)
+
+
+func _equip_item_on_squad(
+	target_row: BattlefieldRow,
+	drag_data: Dictionary
+) -> bool:
+	if current_phase != GamePhase.PREPARE or target_row == null:
+		return false
+	var intent := drag_data.get("drop_intent") as Dictionary
+	var target_slot := intent.get("target_slot") as BoardSlot if intent != null else null
+	var owned_item := drag_data.get("owned_card") as OwnedCard
+	var indicator_local_position: Vector2 = intent.get(
+		"indicator_local_position",
+		SquadData.DEFAULT_EQUIPMENT_INDICATOR_POSITION
+	) if intent != null else SquadData.DEFAULT_EQUIPMENT_INDICATOR_POSITION
+	if (
+		intent == null
+		or intent.get("operation") != &"equip_item"
+		or not is_instance_valid(target_slot)
+		or target_row.get_slot_index(target_slot) < 0
+		or owned_item == null
+		or owned_item.card_data == null
+		or owned_item.card_data.card_type != CardData.CardType.EQUIPMENT
+		or owned_card_collection.get_by_instance_id(owned_item.instance_id) != owned_item
+		or not indicator_local_position.is_finite()
+	):
+		return false
+	var target_squad := target_slot.get_squad_data()
+	if target_squad == null:
+		return false
+	var source_type := drag_data.get("source_type") as StringName
+	var source_row := drag_data.get("source_row") as BattlefieldRow
+	var source_slot := drag_data.get("source_slot") as BoardSlot
+	var source_squad: SquadData
+	if source_type == &"collection":
+		if _is_owned_card_deployed(owned_item) or not target_squad.can_equip_item(owned_item):
+			return false
+	elif source_type == &"board":
+		if (
+			not is_instance_valid(source_row)
+			or not is_instance_valid(source_slot)
+			or source_row.get_slot_index(source_slot) < 0
+		):
+			return false
+		source_squad = source_slot.get_squad_data()
+		if source_squad == null or source_squad.get_equipped_item() != owned_item:
+			return false
+		if target_slot != source_slot and not target_squad.can_equip_item(owned_item):
+			return false
+	else:
+		return false
+
+	if target_slot == source_slot:
+		if not target_squad.set_equipment_indicator_position(indicator_local_position):
+			return false
+	else:
+		var source_indicator_position := (
+			source_squad.get_equipment_indicator_position()
+			if source_squad != null
+			else SquadData.DEFAULT_EQUIPMENT_INDICATOR_POSITION
+		)
+		if source_squad != null and source_squad.unequip_item() != owned_item:
+			return false
+		if not target_squad.equip_item(owned_item, indicator_local_position):
+			if source_squad != null:
+				source_squad.equip_item(owned_item, source_indicator_position)
+			return false
+		if source_squad != null:
+			source_slot.set_squad_data(source_squad)
+			source_slot.configure_drag_source(true, source_row)
+	target_slot.set_squad_data(target_squad)
+	target_slot.configure_drag_source(true, target_row)
+	var placed_indicator := target_slot.get_equipment_indicator()
+	if is_instance_valid(placed_indicator):
+		placed_indicator.call(
+			"play_drop_feedback",
+			intent.get("indicator_release_global_center", Vector2.INF)
+		)
+	selected_board_row = target_row
+	selected_board_slot = target_slot
+	_select_card(owned_item.card_data)
+	_build_collection_cards()
+	play_area_label.text = "%s 已以指示物形态绑定到鼠标落点" % owned_item.card_data.display_name
+	_refresh_drag_availability()
+	_on_battlefield_squads_changed()
+	return true
+
+
+func _return_failed_equipment_indicator_drag(
+	drag_data: Dictionary,
+	entry_global_position: Vector2
+) -> bool:
+	# 指示物一旦离开合法卡面就已经显示为完整装备牌；松在任何无效区域，
+	# 都按“卸下”处理，而不是把它弹回原随从。
+	return _unequip_indicator_to_collection(drag_data, entry_global_position)
+
+
+func _unequip_indicator_to_collection(
+	drag_data: Dictionary,
+	entry_global_position: Vector2
+) -> bool:
+	if current_phase != GamePhase.PREPARE:
+		return false
+	var source_row := drag_data.get("source_row") as BattlefieldRow
+	var source_slot := drag_data.get("source_slot") as BoardSlot
+	var owned_item := drag_data.get("owned_card") as OwnedCard
+	if (
+		not is_instance_valid(source_row)
+		or not is_instance_valid(source_slot)
+		or source_row not in [front_row, back_row]
+		or source_row.get_slot_index(source_slot) < 0
+		or owned_item == null
+	):
+		return false
+	var squad := source_slot.get_squad_data()
+	if squad == null or squad.get_equipped_item() != owned_item:
+		return false
+	if squad.unequip_item() != owned_item:
+		return false
+	source_slot.set_squad_data(squad)
+	source_slot.configure_drag_source(true, source_row)
+	selected_board_row = null
+	selected_board_slot = null
+	_select_card(owned_item.card_data)
+	_build_collection_cards(owned_item.card_data, entry_global_position)
+	play_area_label.text = "%s 已从指示物恢复为装备牌" % owned_item.card_data.display_name
+	_refresh_drag_availability()
+	_on_battlefield_squads_changed()
+	return true
 
 
 func _get_collection_card_slots() -> Array[Control]:
@@ -3488,10 +3892,19 @@ func _transfer_card(
 		if target_type != &"board" or not target_row.has_capacity_for_single_card():
 			return false
 
-		if not collection_cards.has(card_data) or _is_card_deployed(card_data):
+		var owned_card := drag_data.get("owned_card") as OwnedCard
+		if owned_card == null:
+			# 旧测试/旧调用点没有实例字段时，从权威收藏补齐；真实CardView会直接携带实例。
+			owned_card = owned_card_collection.find_first_by_definition(card_data)
+		if (
+			not collection_cards.has(card_data)
+			or owned_card == null
+			or owned_card_collection.get_by_instance_id(owned_card.instance_id) != owned_card
+			or _is_owned_card_deployed(owned_card)
+		):
 			return false
 
-		selected_board_slot = target_row.add_card(card_data, insert_index)
+		selected_board_slot = target_row.add_card(card_data, insert_index, owned_card)
 		selected_board_row = target_row
 		_build_collection_cards()
 		if entry_global_position is Vector2:
@@ -3510,11 +3923,30 @@ func _transfer_card(
 		):
 			return false
 
+		var source_squad := source_slot.get_squad_data()
+		var returned_equipment_entries: Array[Dictionary] = []
+		var moving_whole_single := source_squad.get_card_count() == 1
+		if target_type == &"collection":
+			var returns_new_owned_card := not collection_cards.has(card_data)
+			if returns_new_owned_card and collection_cards.size() >= COLLECTION_MAX_CARDS:
+				return false
+		elif (
+			target_type == &"board"
+			and source_row != target_row
+			and not target_row.has_capacity_for_single_card()
+		):
+			return false
+		if target_type == &"collection" or not moving_whole_single:
+			var returned_entry := _capture_returned_equipment_entry(
+				source_slot,
+				SquadData.new(),
+				true
+			)
+			if not returned_entry.is_empty():
+				returned_equipment_entries.append(returned_entry)
 		if target_type == &"collection":
 			var returned_card := card_data
 			var returns_new_owned_card := not collection_cards.has(returned_card)
-			if returns_new_owned_card and collection_cards.size() >= COLLECTION_MAX_CARDS:
-				return false
 			if not source_row.remove_card_from_squad(source_slot, card_data):
 				return false
 			# 上场卡一直保留在 collection_cards 中；回收只解除部署状态。
@@ -3525,10 +3957,15 @@ func _transfer_card(
 			selected_board_slot = null
 			_build_collection_cards(returned_card, entry_global_position)
 		elif target_type == &"board":
+			var moving_owned_card := source_squad.get_owned_card(card_data)
 			if source_row == target_row:
-				if source_slot.get_squad_data().get_card_count() > 1:
+				if not moving_whole_single:
 					source_row.remove_card_from_squad(source_slot, card_data)
-					selected_board_slot = target_row.add_card(card_data, insert_index)
+					selected_board_slot = target_row.add_card(
+						card_data,
+						insert_index,
+						moving_owned_card
+					)
 				else:
 					if target_row.get_slot_index(source_slot) != insert_index:
 						target_row.move_card_slot(source_slot, insert_index)
@@ -3543,10 +3980,19 @@ func _transfer_card(
 				if not target_row.has_capacity_for_single_card():
 					return false
 
-				if not source_row.remove_card_from_squad(source_slot, card_data):
-					return false
-
-				selected_board_slot = target_row.add_card(card_data, insert_index)
+				if moving_whole_single:
+					var moved_squad := source_row.remove_squad_slot(source_slot)
+					if moved_squad == null:
+						return false
+					selected_board_slot = target_row.add_squad(moved_squad, insert_index)
+				else:
+					if not source_row.remove_card_from_squad(source_slot, card_data):
+						return false
+					selected_board_slot = target_row.add_card(
+						card_data,
+						insert_index,
+						moving_owned_card
+					)
 				selected_board_row = target_row
 				if entry_global_position is Vector2:
 					_animate_board_card_entry.call_deferred(
@@ -3555,6 +4001,14 @@ func _transfer_card(
 					)
 		else:
 			return false
+		if not returned_equipment_entries.is_empty():
+			if target_type == &"board":
+				_build_collection_cards()
+			for returned_entry: Dictionary in returned_equipment_entries:
+				var returned_item := returned_entry.get("owned_card") as OwnedCard
+				if returned_item != null:
+					_record_recently_returned_card(returned_item.card_data)
+			_animate_returned_equipment_entries(returned_equipment_entries)
 	else:
 		return false
 
@@ -3626,8 +4080,18 @@ func _transfer_drop_intent(
 		return false
 
 	if source_type == &"collection":
-		if not collection_cards.has(card_data) or _is_card_deployed(card_data):
+		var owned_card := drag_data.get("owned_card") as OwnedCard
+		if owned_card == null:
+			# 兼容旧拖拽字典，同时保证进入小队后仍绑定到唯一OwnedCard。
+			owned_card = owned_card_collection.find_first_by_definition(card_data)
+		if (
+			not collection_cards.has(card_data)
+			or owned_card == null
+			or owned_card_collection.get_by_instance_id(owned_card.instance_id) != owned_card
+			or _is_owned_card_deployed(owned_card)
+		):
 			return false
+		result_squad.bind_owned_card(card_data, owned_card)
 	elif source_type == &"board":
 		if (
 			not is_instance_valid(source_row)
@@ -3638,6 +4102,42 @@ func _transfer_drop_intent(
 			return false
 	else:
 		return false
+	if source_type == &"board" and operation == &"new_squad":
+		var live_source_squad := source_slot.get_squad_data()
+		if live_source_squad.get_card_count() == 1:
+			result_squad.merge_indicators_from(live_source_squad)
+		if (
+			live_source_squad.get_card_count() == 1
+			and live_source_squad.get_equipped_item() != null
+			and result_squad.get_equipped_item() == null
+		):
+			result_squad.equip_item(
+				live_source_squad.get_equipped_item(),
+				live_source_squad.get_equipment_indicator_position()
+			)
+
+	var returned_equipment_entries: Array[Dictionary] = []
+	if (
+		operation == &"new_squad"
+		and source_type == &"board"
+		and source_slot.get_squad_data().get_card_count() > 1
+	):
+		var returned_entry := _capture_returned_equipment_entry(
+			source_slot,
+			result_squad,
+			true
+		)
+		if not returned_entry.is_empty():
+			returned_equipment_entries.append(returned_entry)
+	if operation == &"merge_card" and source_type == &"board" and source_slot != target_slot:
+		for equipment_slot: BoardSlot in [target_slot, source_slot]:
+			var returned_entry := _capture_returned_equipment_entry(
+				equipment_slot,
+				result_squad,
+				true
+			)
+			if not returned_entry.is_empty():
+				returned_equipment_entries.append(returned_entry)
 
 	if operation == &"new_squad":
 		if (
@@ -3672,8 +4172,14 @@ func _transfer_drop_intent(
 	else:
 		return false
 
-	if source_type == &"collection":
+	if source_type == &"collection" or not returned_equipment_entries.is_empty():
 		_build_collection_cards()
+	if not returned_equipment_entries.is_empty():
+		for returned_entry: Dictionary in returned_equipment_entries:
+			var returned_item := returned_entry.get("owned_card") as OwnedCard
+			if returned_item != null:
+				_record_recently_returned_card(returned_item.card_data)
+		_animate_returned_equipment_entries(returned_equipment_entries)
 	selected_board_row = target_row
 	_select_card(card_data)
 	if entry_global_position is Vector2 and is_instance_valid(selected_board_slot):
@@ -3721,10 +4227,26 @@ func _transfer_compact_squad_into_single(
 	used_units += result.get_unit_count()
 	if used_units > BattlefieldRow.BATTLEFIELD_UNIT_COUNT:
 		return false
+	var returned_equipment_entries: Array[Dictionary] = []
+	for equipment_slot: BoardSlot in [source_slot, target_slot]:
+		var returned_entry := _capture_returned_equipment_entry(
+			equipment_slot,
+			result,
+			true
+		)
+		if not returned_entry.is_empty():
+			returned_equipment_entries.append(returned_entry)
 
 	source_row.remove_squad_slot(source_slot)
 	target_slot.set_squad_data(result)
 	target_slot.configure_drag_source(true, target_row)
+	if not returned_equipment_entries.is_empty():
+		_build_collection_cards()
+		for returned_entry: Dictionary in returned_equipment_entries:
+			var returned_item := returned_entry.get("owned_card") as OwnedCard
+			if returned_item != null:
+				_record_recently_returned_card(returned_item.card_data)
+		_animate_returned_equipment_entries(returned_equipment_entries)
 	selected_board_row = target_row
 	selected_board_slot = target_slot
 	_select_card(result.get_effect_source())
@@ -3823,6 +4345,11 @@ func _is_card_drag_data(data: Variant) -> bool:
 		return drag_data.get("card_data") is CardData
 	if drag_data.get("kind") == &"squad":
 		return drag_data.get("squad_data") is SquadData
+	if drag_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
+		return (
+			drag_data.get("card_data") is CardData
+			and drag_data.get("owned_card") is OwnedCard
+		)
 	return false
 
 

@@ -16,6 +16,10 @@ signal collection_return_requested(
 	return_global_position: Vector2
 )
 
+const OwnedCard = preload("res://scripts/data/owned_card.gd")
+const EquipmentIndicatorStyleScript = preload(
+	"res://scripts/ui/equipment_indicator_style.gd"
+)
 const RUNE_FIRE_TEXTURE: Texture2D = preload("res://assets/runes/rune_fire.png")
 const RUNE_WATER_TEXTURE: Texture2D = preload("res://assets/runes/rune_water.png")
 const RUNE_WOOD_TEXTURE: Texture2D = preload("res://assets/runes/rune_wood.png")
@@ -35,6 +39,10 @@ const ARMOR_TEXTURE: Texture2D = preload("res://assets/stats/armor.png")
 const COOLDOWN_HOURGLASS_TEXTURE: Texture2D = preload(
 	"res://assets/stats/cooldown_hourglass.png"
 )
+const ZEAL_TEXTURE: Texture2D = preload("res://assets/stats/zeal.png")
+const SpellPreparationIconStyle = preload("res://scripts/ui/spell_preparation_icon_style.gd")
+const ResourceIndicatorStyle = preload("res://scripts/ui/resource_indicator_style.gd")
+const ZEAL_ICON_OFFSET := Vector2(-1.0, -1.0) # 装备热诚图标左上角相对旧沙漏向左、向上各移动1px
 const SPELL_RARITY_BADGE_TEXTURE: Texture2D = preload(
 	"res://assets/card_ui/placeholders/spell_rarity_badges.png"
 )
@@ -59,6 +67,8 @@ const SPELL_RARITY_BADGE_REGIONS := [
 ] # 法术稀有度图集视觉顺序为 I、V、IV、III、II，显式映射到 I～V
 const SPELL_RARITY_BADGE_POSITION := Vector2(-6, -2) # 按法术参考图相对 99×136 卡框原点对齐
 const SPELL_RARITY_BADGE_SIZE := Vector2(22, 22) # 法术稀有度角标保持原生 22×22px
+const RESOURCE_BADGE_POSITION := Vector2(-5, -4) # 资源袋角标放在卡牌左上角，保持原生像素对齐
+const RESOURCE_BADGE_SIZE := Vector2(21, 26) # 资源袋角标保持用户素材原生21×26像素
 const EQUIPMENT_ACTION_POSITION := Vector2(-9, -9) # 装备参考合图相对卡框原点的位置；完整箭头位于合图顶部
 const EQUIPMENT_ACTION_SIZE := Vector2(28, 28) # 装备增减箭头保持原生 28×28px 画布
 const SPELL_TYPE_ATLAS_X := [5, 26, 46, 67, 86] # 法术类型图集视觉列为 V、IV、III、II、I
@@ -199,6 +209,10 @@ var _battle_action_value: int = 0
 var _battle_action_type_override: int = -1 # 战斗中的行动方式覆盖；负数显示CardData原值
 var _battle_number_tweens: Dictionary = {} # 生命、护甲、冷却与行动值各自只保留一条数值动画
 var _battle_number_targets: Dictionary = {} # 保存每项动画的最终目标，避免逐帧状态刷新反复重启动画
+var _squad_action_preview: int = -1 # 负值表示卡面使用自身行动值，非负值显示所在小队含装备的战前结果
+var _squad_health_preview: int = -1 # 负值表示卡面使用自身生命值，非负值显示所在小队含装备的战前结果
+var _squad_armor_preview: int = -1 # 负值表示卡面使用自身护甲值，非负值显示所在小队含装备的战前结果
+var _squad_cooldown_preview: float = -1.0 # 负值使用自身基础冷却，非负值显示装备热诚修正后的战前行动间隔
 
 # 所有真实卡共享一条静态时间轴；新加入的符文等到下一轮再同步开始。
 static var _active_rune_flow_epoch_msec: int = -1
@@ -338,9 +352,18 @@ func _apply_native_drag_visual_metrics(drag_data: Dictionary) -> void:
 
 func _build_drag_data(at_position: Vector2) -> Dictionary:
 	var drag_source_scale := scale
+	var owned_card: OwnedCard = null
+	if is_instance_valid(_drag_source_slot) and _drag_source_slot.has_meta("owned_card"):
+		owned_card = _drag_source_slot.get_meta("owned_card") as OwnedCard
 	var drag_data := {
-		"kind": &"card",
+		"kind": (
+			&"equipment_card"
+			if card_data.card_type == CardData.CardType.EQUIPMENT
+			and _drag_source_type == &"collection"
+			else &"card"
+		),
 		"card_data": card_data,
+		"owned_card": owned_card,
 		"source_type": _drag_source_type,
 		"source_row": _drag_source_row,
 		"source_slot": _drag_source_slot,
@@ -372,18 +395,22 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 		var cards: Array = drag_data.get("squad_cards", [])
 		var x_positions: Array = drag_data.get("squad_x_positions", [])
 		var layers: Array = drag_data.get("squad_layer_cards", [])
+		var carried_squad := drag_data.get("squad_data") as SquadData
 		for index: int in cards.size():
 			var squad_card := card_view_scene.instantiate() as CardView
 			squad_card.position = Vector2(float(x_positions[index]), 0.0)
 			# CardView 会在 _ready() 记录静止位置，因此整队快照也要先放好 X 再入树。
 			squad_visual.add_child(squad_card)
 			squad_card.set_card_data(cards[index] as CardData)
+			if carried_squad != null:
+				squad_card.set_squad_attribute_preview_from_squad(carried_squad)
 			squad_card.configure_drag_source(false)
 			squad_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			squad_card.set_resting_z_index(
 				(cards.size() - layers.find(cards[index]))
 				* CARD_LAYER_Z_STEP
 			)
+		_add_attached_equipment_visual(squad_visual, drag_data)
 		preview_root.configure(
 			squad_visual,
 			drag_data.get("grab_local_position", Vector2.ZERO),
@@ -396,7 +423,11 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 	preview_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview_card.showing_effect = bool(drag_data.get("showing_effect", false))
 	preview_card.set_card_data(drag_data["card_data"] as CardData)
+	var carried_single := drag_data.get("squad_data") as SquadData
+	if carried_single != null and carried_single.get_card_count() == 1:
+		preview_card.set_squad_attribute_preview_from_squad(carried_single)
 	preview_card.configure_drag_source(false)
+	_add_attached_equipment_visual(preview_card, drag_data)
 	var grab_local_position: Vector2 = drag_data.get(
 		"grab_local_position",
 		Vector2.ZERO
@@ -407,7 +438,40 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 		visual_scale,
 		preview_card.card_size
 	)
+	var owned_item := drag_data.get("owned_card") as OwnedCard
+	if owned_item != null:
+		preview_root.set_equipment_card_data(owned_item.card_data)
+	if drag_data.get("kind") == &"equipment_indicator":
+		preview_root.set_equipment_indicator_grab_local_position(
+			drag_data.get("indicator_grab_local_position", EquipmentIndicatorStyleScript.DISPLAY_SIZE * 0.5)
+		)
 	return preview_root
+
+
+static func _add_attached_equipment_visual(
+	visual_parent: Control,
+	drag_data: Dictionary
+) -> void:
+	var carried_squad := drag_data.get("squad_data") as SquadData
+	if carried_squad != null and (drag_data.get("kind") == &"squad" or carried_squad.get_card_count() == 1):
+		for attachment: Dictionary in carried_squad.indicator_attachments:
+			var token := CelestialIndicatorStyle.create_visual(attachment["indicator"])
+			token.position = (attachment["position"] as Vector2) + carried_squad._get_effect_source_horizontal_offset() - token.size * 0.5
+			visual_parent.add_child(token)
+	var equipment_data := drag_data.get("attached_equipment_data") as CardData
+	if equipment_data == null:
+		return
+	var indicator := EquipmentIndicatorStyleScript.create_visual(equipment_data)
+	indicator.name = "AttachedEquipmentIndicator"
+	indicator.position = (
+		drag_data.get(
+			"equipment_indicator_position",
+			Vector2(49.5, 68.0)
+		) as Vector2
+		- EquipmentIndicatorStyleScript.DISPLAY_SIZE * 0.5
+	)
+	indicator.z_index = EquipmentIndicatorStyleScript.INDICATOR_Z_INDEX
+	visual_parent.add_child(indicator)
 
 
 func _notification(what: int) -> void:
@@ -685,6 +749,46 @@ func set_attribute_source_state(
 	effect_text_label.modulate.a = 1.0 if effect_active else inactive_alpha
 
 
+func set_squad_attribute_preview(
+	action_value: int = -1,
+	max_health: int = -1,
+	base_armor: int = -1,
+	action_interval: float = -1.0
+) -> void:
+	if (
+		_squad_action_preview == action_value
+		and _squad_health_preview == max_health
+		and _squad_armor_preview == base_armor
+		and is_equal_approx(_squad_cooldown_preview, action_interval)
+	):
+		return
+	_squad_action_preview = action_value
+	_squad_health_preview = max_health
+	_squad_armor_preview = base_armor
+	_squad_cooldown_preview = action_interval
+	if is_node_ready() and card_data != null:
+		_refresh_action_value_text()
+		_refresh_vitals_text()
+		_refresh_cooldown_text()
+
+
+func set_squad_attribute_preview_from_squad(squad: SquadData) -> void:
+	var action_source := squad.get_action_source() if squad != null else null
+	set_squad_attribute_preview(
+		squad.get_effective_action_base_value()
+		if squad != null and card_data == action_source else -1,
+		squad.get_effective_max_health()
+		if squad != null and card_data == squad.get_vitals_source() else -1,
+		squad.get_effective_base_armor()
+		if squad != null and card_data == squad.get_vitals_source() else -1,
+		BattleRules.get_action_interval(
+			action_source.cooldown_seconds,
+			squad.get_equipment_zeal_delta()
+		)
+		if action_source != null and card_data == action_source else -1.0
+	)
+
+
 func toggle_effect_display() -> bool:
 	if card_data == null or card_data.card_type != CardData.CardType.MINION:
 		return false
@@ -735,6 +839,10 @@ func copy_runtime_display_state_from(source: CardView) -> void:
 	_battle_action_value_active = source._battle_action_value_active
 	_battle_action_value = source._battle_action_value
 	_battle_action_type_override = source._battle_action_type_override
+	_squad_action_preview = source._squad_action_preview
+	_squad_health_preview = source._squad_health_preview
+	_squad_armor_preview = source._squad_armor_preview
+	_squad_cooldown_preview = source._squad_cooldown_preview
 	_battle_masked_rune_indices.assign(source._battle_masked_rune_indices)
 	_battle_number_targets.clear()
 	if is_node_ready():
@@ -1025,7 +1133,13 @@ func _refresh_action_value_text() -> void:
 		value_label.text = ""
 		return
 	value_label.text = str(
-		_battle_action_value if _battle_action_value_active else card_data.base_value
+		_battle_action_value
+		if _battle_action_value_active
+		else (
+			_squad_action_preview
+			if card_data.card_type == CardData.CardType.MINION and _squad_action_preview >= 0
+			else card_data.base_value
+		)
 	)
 	_apply_action_layout(_get_display_action_type())
 
@@ -1039,16 +1153,25 @@ func _refresh_vitals_text() -> void:
 		health_label.text = ""
 		armor_label.text = ""
 		return
+	if card_data.card_type == CardData.CardType.RESOURCE:
+		health_label.text = str(card_data.max_health)
+		armor_label.text = ""
+		_layout_vitals_numbers()
+		return
 	if card_data.card_type == CardData.CardType.EQUIPMENT:
 		health_label.text = str(card_data.equipment_health_delta)
 		armor_label.text = str(card_data.equipment_armor_delta)
 		_layout_vitals_numbers()
 		return
 	health_label.text = str(
-		_battle_current_health if _battle_vitals_active else card_data.max_health
+		_battle_current_health
+		if _battle_vitals_active
+		else (_squad_health_preview if _squad_health_preview >= 0 else card_data.max_health)
 	)
 	armor_label.text = str(
-		_battle_current_armor if _battle_vitals_active else card_data.armor
+		_battle_current_armor
+		if _battle_vitals_active
+		else (_squad_armor_preview if _squad_armor_preview >= 0 else card_data.armor)
 	)
 	_layout_vitals_numbers()
 
@@ -1057,15 +1180,21 @@ func _refresh_cooldown_text() -> void:
 	if card_data == null:
 		cooldown_label.text = ""
 		return
-	if card_data.card_type == CardData.CardType.SPELL:
+	if card_data.card_type in [CardData.CardType.SPELL, CardData.CardType.RESOURCE]:
 		cooldown_label.text = ""
 		return
-	var seconds := card_data.cooldown_seconds
 	if card_data.card_type == CardData.CardType.EQUIPMENT:
-		seconds = absf(card_data.equipment_cooldown_delta)
-	elif _battle_cooldown_active:
-		seconds = _battle_remaining_cooldown
-	cooldown_label.text = format_cooldown_seconds(seconds)
+		var layers := card_data.equipment_zeal_delta
+		cooldown_label.text = ("+" if layers >= 0 else "-") + str(absi(layers))
+		cooldown_icon.tooltip_text = "热诚 %s：每层改变5%%普通行动冷却速度" % cooldown_label.text
+	else:
+		var seconds := card_data.cooldown_seconds
+		if _battle_cooldown_active:
+			seconds = _battle_remaining_cooldown
+		elif _squad_cooldown_preview >= 0.0:
+			seconds = _squad_cooldown_preview
+		cooldown_label.text = format_cooldown_seconds(seconds)
+		cooldown_icon.tooltip_text = ""
 	_set_control_rect(
 		cooldown_label,
 		COOLDOWN_VALUE_POSITION,
@@ -1262,6 +1391,18 @@ func _refresh_card_frame() -> void:
 
 
 func _refresh_race_icon() -> void:
+	if card_data.card_type == CardData.CardType.RESOURCE:
+		race_icon.texture = ResourceIndicatorStyle.get_card_type_texture(
+			card_data.rarity, int(card_data.resource_type)
+		)
+		race_icon.visible = race_icon.texture != null
+		if race_icon.visible:
+			_set_centered_identity_icon(race_icon.texture.get_size())
+		race_icon.tooltip_text = "%s · 稀有度 %s" % [
+			card_data.get_resource_type_name(),
+			card_data.get_rarity_name(),
+		]
+		return
 	if card_data.card_type == CardData.CardType.SPELL:
 		race_icon.texture = _make_raw_atlas_texture(
 			SPELL_TYPE_ATLAS,
@@ -1319,6 +1460,13 @@ func _refresh_race_icon() -> void:
 
 func _refresh_card_type_visuals() -> void:
 	# 共用随从节点：非随从只替换左上/中央身份图标，不复制第二套 CardView。
+	var shows_zeal := card_data.card_type == CardData.CardType.EQUIPMENT
+	cooldown_icon.texture = ZEAL_TEXTURE if shows_zeal else COOLDOWN_HOURGLASS_TEXTURE
+	_set_control_rect(
+		cooldown_icon,
+		cooldown_icon_position + (ZEAL_ICON_OFFSET if shows_zeal else Vector2.ZERO),
+		ZEAL_TEXTURE.get_size() if shows_zeal else cooldown_icon_size
+	)
 	action_icon.visible = true
 	value_label.visible = true
 	health_icon.visible = true
@@ -1329,19 +1477,38 @@ func _refresh_card_type_visuals() -> void:
 	cooldown_label.visible = true
 	priority_label.visible = false
 	if card_data.card_type == CardData.CardType.SPELL:
-		action_icon.texture = _make_raw_atlas_texture(
-			SPELL_RARITY_BADGE_TEXTURE,
-			SPELL_RARITY_BADGE_REGIONS[card_data.rarity]
+		var trigger_column := SpellPreparationIconStyle.source_column_for_trigger(
+			card_data.spell_trigger_kind
 		)
-		_set_control_rect(
-			action_icon,
-			SPELL_RARITY_BADGE_POSITION,
-			SPELL_RARITY_BADGE_SIZE
-		)
+		if trigger_column >= 0:
+			var trigger_region := SpellPreparationIconStyle.get_icon_region(
+				trigger_column, card_data.rarity
+			)
+			action_icon.texture = _make_raw_atlas_texture(
+				SpellPreparationIconStyle.ICON_ATLAS, trigger_region
+			)
+			_set_control_rect(action_icon, _get_spell_badge_position(), trigger_region.size)
+		else:
+			action_icon.texture = _make_raw_atlas_texture(
+				SPELL_RARITY_BADGE_TEXTURE,
+				SPELL_RARITY_BADGE_REGIONS[card_data.rarity]
+			)
+			_set_control_rect(action_icon, SPELL_RARITY_BADGE_POSITION, SPELL_RARITY_BADGE_SIZE)
 		value_label.text = ""
 		value_label.visible = false
 		health_icon.visible = false
 		health_label.visible = false
+		armor_icon.visible = false
+		armor_label.visible = false
+		cooldown_icon.visible = false
+		cooldown_label.visible = false
+	elif card_data.card_type == CardData.CardType.RESOURCE:
+		action_icon.texture = _make_raw_atlas_texture(
+			ResourceIndicatorStyle.BADGE_ATLAS,
+			ResourceIndicatorStyle.get_badge_region(card_data.rarity)
+		)
+		_set_control_rect(action_icon, RESOURCE_BADGE_POSITION, RESOURCE_BADGE_SIZE)
+		value_label.visible = false
 		armor_icon.visible = false
 		armor_label.visible = false
 		cooldown_icon.visible = false
@@ -1373,6 +1540,20 @@ func _make_raw_atlas_texture(atlas: Texture2D, region: Rect2) -> AtlasTexture:
 	atlas_texture.atlas = atlas
 	atlas_texture.region = region
 	return atlas_texture
+
+
+func _get_spell_badge_position() -> Vector2:
+	var icon_size := _get_spell_trigger_region().size
+	return SPELL_RARITY_BADGE_POSITION + SPELL_RARITY_BADGE_SIZE * 0.5 - icon_size * 0.5
+
+
+func _get_spell_trigger_region() -> Rect2:
+	var trigger_column := SpellPreparationIconStyle.source_column_for_trigger(
+		card_data.spell_trigger_kind
+	)
+	return SpellPreparationIconStyle.get_icon_region(
+		trigger_column, card_data.rarity
+	)
 
 
 func _get_spell_type_region(
@@ -1783,8 +1964,17 @@ func _apply_action_layout(action_type: CardData.ActionType) -> void:
 func get_visual_capture_padding_top_left() -> Vector2:
 	if card_data != null:
 		if card_data.card_type == CardData.CardType.SPELL:
+			if card_data.spell_trigger_kind != CardData.SpellTriggerKind.UNASSIGNED:
+				var trigger_region := _get_spell_trigger_region()
+				return _get_rect_capture_padding(
+					Rect2(_get_spell_badge_position(), trigger_region.size)
+				)
 			return _get_rect_capture_padding(
 				Rect2(SPELL_RARITY_BADGE_POSITION, SPELL_RARITY_BADGE_SIZE)
+			)
+		if card_data.card_type == CardData.CardType.RESOURCE:
+			return _get_rect_capture_padding(
+				Rect2(RESOURCE_BADGE_POSITION, RESOURCE_BADGE_SIZE)
 			)
 		if card_data.card_type == CardData.CardType.EQUIPMENT:
 			return _get_rect_capture_padding(
@@ -1812,6 +2002,8 @@ func get_max_visual_capture_padding_top_left() -> Vector2:
 		padding.y = maxf(padding.y, action_padding.y)
 	for extra_rect: Rect2 in [
 		Rect2(SPELL_RARITY_BADGE_POSITION, SPELL_RARITY_BADGE_SIZE),
+		Rect2(Vector2(-8, -7), Vector2(26, 32)),
+		Rect2(RESOURCE_BADGE_POSITION, RESOURCE_BADGE_SIZE),
 		Rect2(EQUIPMENT_ACTION_POSITION, EQUIPMENT_ACTION_SIZE),
 	]:
 		var extra_padding := _get_rect_capture_padding(extra_rect)

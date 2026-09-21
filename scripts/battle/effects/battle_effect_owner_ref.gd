@@ -27,13 +27,19 @@ static func for_state(
 		match kind:
 			BattleEffectDefinition.OwnerKind.MINION_CARD_INSTANCE:
 				result.card_data = value.get_effect_source()
+			BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE:
+				if value.squad_data != null:
+					result.owned_card = value.squad_data.get_equipped_item()
+					if result.owned_card != null:
+						result.card_data = result.owned_card.card_data
 			BattleEffectDefinition.OwnerKind.ACTION_PROVIDER_CARD:
 				result.card_data = value.get_action_source()
 			BattleEffectDefinition.OwnerKind.ARMOR_PROVIDER_CARD:
 				result.card_data = value.get_vitals_source()
 		if result.card_data != null and value.squad_data != null:
 			result.card_index = value.squad_data.horizontal_cards.find(result.card_data)
-			result.owned_card = value.squad_data.get_owned_card(result.card_data)
+			if result.owned_card == null:
+				result.owned_card = value.squad_data.get_owned_card(result.card_data)
 			if result.owned_card != null:
 				result.owned_card_instance_id = result.owned_card.instance_id
 	return result

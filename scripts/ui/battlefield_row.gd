@@ -18,10 +18,13 @@ signal card_click_carry_requested(data: Dictionary, pointer_global_position: Vec
 signal squads_changed
 
 const BOARD_SLOT_SCENE: PackedScene = preload("res://scenes/ui/BoardSlot.tscn")
+const OwnedCard = preload("res://scripts/data/owned_card.gd")
+const EquipmentIndicatorStyle = preload("res://scripts/ui/equipment_indicator_style.gd")
 const BATTLEFIELD_UNIT_COUNT: int = 21 # 单排可使用的战场单元总容量
 const SINGLE_CARD_UNIT_COUNT: int = 3 # 单卡小队占用的战场单元数
 const SINGLE_CARD_WIDTH: int = 99 # 单张裸卡保持的固定显示宽度
 const SQUAD_GAP: int = 18 # 同一排相邻小队之间的固定间距
+const EQUIPMENT_DROP_TRAVEL := Vector2(0.0, 6.0) # 指示物松手后从可见悬停位置向卡面下落的本地像素距离
 const FULL_ROW_DISPLAY_WIDTH: int = 801 # 七个单卡小队含六段间距的真实显示宽度
 const DROP_PREVIEW_Z_INDEX: int = 1000 # 目标虚影高于所有真实小队、低于鼠标携带卡牌的全局层级
 const STACK_TARGET_FEEDBACK_RADIUS: float = 700.0 # 拖动单卡时，附近合法叠卡目标开始持续旋转颤动的中心距离
@@ -64,6 +67,8 @@ var _active_stack_feedback_drag_data: Dictionary = {}
 var _merge_preview_anchor_card: CardData
 var _merge_preview_alignment_revision: int = 0
 var _preview_drag_visual: CardDragPreview
+var _equipment_target_slot: BoardSlot
+var _equipment_drag_visual: CardDragPreview
 
 
 # --- 生命周期、行内容查询与真实槽增删 ---
@@ -150,8 +155,17 @@ func has_capacity_for_squad(squad_data: SquadData) -> bool:
 	)
 
 
-func add_card(card_data: CardData, insert_index: int) -> BoardSlot:
-	return add_squad(SquadData.from_card(card_data), insert_index)
+func add_card(
+	card_data: CardData,
+	insert_index: int,
+	owned_card: OwnedCard = null
+) -> BoardSlot:
+	return add_squad(
+		SquadData.from_owned_card(owned_card)
+		if owned_card != null
+		else SquadData.from_card(card_data),
+		insert_index
+	)
 
 
 func add_squad(squad_data: SquadData, insert_index: int) -> BoardSlot:
@@ -219,6 +233,7 @@ func remove_card_from_squad(slot: BoardSlot, card_data: CardData) -> bool:
 	if squad.get_card_count() == 1:
 		remove_squad_slot(slot)
 	else:
+		squad.indicator_attachments.clear()
 		squad.remove_card(card_data)
 		slot.set_squad_data(squad)
 		slot.configure_drag_source(_drag_enabled, self)
@@ -288,6 +303,9 @@ func preview_card_drop(
 		return false
 	reset_all_hover_feedback()
 	var drag_data := data as Dictionary
+	if drag_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
+		return _preview_equipment_drop(at_position, drag_data)
+	_clear_equipment_target_preview()
 	_update_stack_target_feedback(at_position.x, drag_data)
 	# Godot 松手前会用同一坐标再查询一次。鼠标没有移动时必须沿用玩家
 	# 已看到的席位和虚影；拖拽快照的追赶只由 force_recalculate 帧更新处理。
@@ -351,6 +369,46 @@ func commit_card_drop(at_position: Vector2, data: Variant) -> void:
 	if not can_receive_card_drag(data):
 		clear_drop_preview()
 		return
+	var incoming_data := data as Dictionary
+	if incoming_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
+		if not preview_card_drop(at_position, data):
+			return
+		var target_slot := _equipment_target_slot
+		var held_center := _get_equipment_held_center_global(at_position, incoming_data)
+		var target_squad := target_slot.get_squad_data()
+		var top_card := target_slot.get_card_view(target_squad.get_effect_source())
+		var landing_global_position := top_card.get_global_transform_with_canvas() * (
+			top_card.get_global_transform_with_canvas().affine_inverse()
+			* held_center + EQUIPMENT_DROP_TRAVEL
+		)
+		var indicator_local_position := (
+			target_slot.get_global_transform_with_canvas().affine_inverse()
+			* landing_global_position
+		)
+		var drag_data := incoming_data.duplicate()
+		var drag_visual := drag_data.get("drag_visual") as CardDragPreview
+		drag_data["drop_intent"] = {
+			"operation": &"equip_item",
+			"target_slot": target_slot,
+			"indicator_local_position": indicator_local_position,
+			"indicator_release_global_center": (
+				drag_visual.get_equipment_indicator_visual_global_center()
+				if is_instance_valid(drag_visual) else held_center
+			),
+		}
+		var preview_offset: Vector2 = drag_data.get(
+			"drag_visual_offset",
+			drag_data.get("preview_offset", Vector2.ZERO)
+		)
+		var card_global_position := (
+			drag_visual.global_position - preview_offset
+			if is_instance_valid(drag_visual)
+			else placement_overlay.get_global_transform_with_canvas() * at_position - preview_offset
+		)
+		var target_index := get_slot_index(target_slot)
+		clear_drop_preview()
+		card_dropped.emit(self, target_index, drag_data, card_global_position)
+		return
 	# 鼠标移动阶段已经持续重算吸附点；松手时直接提交最后一次预览，
 	# 避免覆盖层与拖动快照的帧间变化改写玩家已经看到的意图。
 	if _preview_intent.is_empty() and not preview_card_drop(at_position, data):
@@ -399,8 +457,92 @@ func get_drop_reservation_index() -> int:
 func clear_drop_preview(clear_stack_feedback: bool = true) -> void:
 	_clear_intent_preview()
 	_clear_drop_reservation()
+	_clear_equipment_target_preview()
 	if clear_stack_feedback:
 		_clear_stack_target_feedback()
+
+
+func _preview_equipment_drop(at_position: Vector2, drag_data: Dictionary) -> bool:
+	_clear_intent_preview()
+	_clear_drop_reservation()
+	_clear_stack_target_feedback()
+	_equipment_drag_visual = drag_data.get("drag_visual") as CardDragPreview
+	var owned_item := drag_data.get("owned_card") as OwnedCard
+	if (
+		owned_item == null
+		or not owned_item.is_valid()
+		or owned_item.card_data.card_type != CardData.CardType.EQUIPMENT
+	):
+		_clear_equipment_target_preview()
+		return false
+	var target_slot := _find_equipment_target_slot(at_position, drag_data)
+	var target_squad := target_slot.get_squad_data() if target_slot != null else null
+	if (
+		target_slot == null
+		or target_squad == null
+		or (
+			target_squad.get_equipped_item() != null
+			and target_squad.get_equipped_item() != owned_item
+		)
+	):
+		_clear_equipment_target_preview()
+		return false
+	if _equipment_target_slot != target_slot:
+		if is_instance_valid(_equipment_target_slot):
+			_equipment_target_slot.modulate = Color.WHITE
+		_equipment_target_slot = target_slot
+		_equipment_target_slot.modulate = Color(0.78, 1.0, 0.82, 1.0)
+	_set_equipment_drag_indicator_mode(true)
+	return true
+
+
+func _get_equipment_held_center_global(at_position: Vector2, drag_data: Dictionary) -> Vector2:
+	var drag_visual := drag_data.get("drag_visual") as CardDragPreview
+	if is_instance_valid(drag_visual):
+		return drag_visual.get_equipment_indicator_rest_global_center()
+	return placement_overlay.get_global_transform_with_canvas() * at_position
+
+
+func _find_equipment_target_slot(at_position: Vector2, drag_data: Dictionary = {}) -> BoardSlot:
+	var held_center := _get_equipment_held_center_global(at_position, drag_data)
+	for slot: BoardSlot in _get_visible_real_slots():
+		var squad := slot.get_squad_data()
+		if squad == null:
+			continue
+		var top_card := slot.get_card_view(squad.get_effect_source())
+		if top_card == null:
+			continue
+		# 落点是指示物中心；四周必须完整落入最上层卡牌的立绘窗。
+		# 在 CardView 局部坐标判定，可自动跟随多卡错位、悬停上抬和旋转。
+		var held_card_position := (
+			top_card.get_global_transform_with_canvas().affine_inverse()
+			* held_center
+		)
+		var icon_half_size := EquipmentIndicatorStyle.DISPLAY_SIZE * 0.5
+		var allowed_center_rect := Rect2(
+			top_card.art_area_position + icon_half_size,
+			top_card.art_area_size - EquipmentIndicatorStyle.DISPLAY_SIZE
+		)
+		if (
+			allowed_center_rect.has_point(held_card_position)
+			and allowed_center_rect.has_point(held_card_position + EQUIPMENT_DROP_TRAVEL)
+		):
+			return slot
+	return null
+
+
+func _clear_equipment_target_preview() -> void:
+	if is_instance_valid(_equipment_target_slot):
+		_equipment_target_slot.modulate = Color.WHITE
+	_equipment_target_slot = null
+	_set_equipment_drag_indicator_mode(false)
+
+
+func _set_equipment_drag_indicator_mode(enabled: bool) -> void:
+	if is_instance_valid(_equipment_drag_visual):
+		_equipment_drag_visual.set_equipment_indicator_mode(enabled)
+	if not enabled:
+		_equipment_drag_visual = null
 
 
 # --- 唯一预留位：宽度由来源离场后的可用容量决定，位置随实体越过中线换位 ---
@@ -661,6 +803,21 @@ func _build_drop_intent(
 		return {}
 	var card_data := data.get("card_data") as CardData
 	var target_slot := _find_card_stack_target(at_position.x, data)
+	var owned_card := data.get("owned_card") as OwnedCard
+	var dragged_squad := data.get("squad_data") as SquadData
+	var new_squad_result := (
+		dragged_squad.duplicate_squad()
+		if (
+			data.get("source_type") == &"board"
+			and dragged_squad != null
+			and dragged_squad.get_card_count() == 1
+		)
+		else (
+			SquadData.from_owned_card(owned_card)
+			if owned_card != null
+			else SquadData.from_card(card_data)
+		)
+	)
 	var new_squad_intent := {
 		"operation": &"new_squad",
 		"squad_index": (
@@ -671,7 +828,7 @@ func _build_drop_intent(
 			)
 		),
 		"card_index": 0,
-		"result_squad": SquadData.from_card(card_data),
+		"result_squad": new_squad_result,
 	}
 	if (
 		is_instance_valid(target_slot)
@@ -837,6 +994,16 @@ func _build_merge_intent(
 		layout = target_squad.two_card_layout
 	if not result.insert_card(card_data, card_index, layout):
 		return {}
+	var incoming_owned_card := data.get("owned_card") as OwnedCard
+	if incoming_owned_card != null:
+		result.bind_owned_card(card_data, incoming_owned_card)
+	var source_squad := data.get("squad_data") as SquadData
+	if (
+		target_slot != source_slot
+		and source_squad != null
+		and source_squad.get_card_count() == 1
+	):
+		result.merge_equipment_from(source_squad)
 	var intent := {
 		"operation": &"merge_card",
 		"squad_index": get_slot_index(target_slot),
@@ -1192,6 +1359,10 @@ func _begin_card_drag(data: Variant) -> void:
 		return
 	var source_slot := drag_data.get("source_slot") as BoardSlot
 	if source_slot == null or source_slot.get_parent() != squad_row:
+		return
+	if drag_data.get("kind") == &"equipment_indicator":
+		# 装备指示物自己隐藏；不能把整张随从卡或小队席位一并当成拖拽来源。
+		_active_drag_visual = drag_data.get("drag_visual") as CardDragPreview
 		return
 	_hidden_source_slot = source_slot
 	_active_drag_preview_offset = drag_data.get(
@@ -1796,6 +1967,26 @@ func _is_drag_data(data: Variant) -> bool:
 	if drag_data.get("kind") == &"card":
 		var card_data := drag_data.get("card_data") as CardData
 		return card_data != null and card_data.card_type == CardData.CardType.MINION
+	if drag_data.get("kind") == &"equipment_card":
+		var equipment_data := drag_data.get("card_data") as CardData
+		var owned_item := drag_data.get("owned_card") as OwnedCard
+		return (
+			drag_data.get("source_type") == &"collection"
+			and equipment_data != null
+			and equipment_data.card_type == CardData.CardType.EQUIPMENT
+			and owned_item != null
+			and owned_item.card_data == equipment_data
+		)
+	if drag_data.get("kind") == &"equipment_indicator":
+		var equipment_data := drag_data.get("card_data") as CardData
+		var owned_item := drag_data.get("owned_card") as OwnedCard
+		return (
+			drag_data.get("source_type") == &"board"
+			and equipment_data != null
+			and equipment_data.card_type == CardData.CardType.EQUIPMENT
+			and owned_item != null
+			and owned_item.card_data == equipment_data
+		)
 	if drag_data.get("kind") == &"squad":
 		return drag_data.get("squad_data") is SquadData
 	return false

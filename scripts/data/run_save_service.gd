@@ -27,7 +27,8 @@ func create_checkpoint(
 	next_battle_instance_sequence: int,
 	reward_state: RunRewardState,
 	settlement_journal: RunSettlementJournal,
-	phase_on_save: int
+	phase_on_save: int,
+	indicator_inventory: Dictionary = {}
 ) -> Dictionary:
 	var encoded_collection := _encode_collection_state(collection_state)
 	var encoded_rows := _encode_rows(rows)
@@ -43,6 +44,7 @@ func create_checkpoint(
 		"reward_state": _json_safe(reward_state.capture_state()),
 		"committed_battle_ids": _encode_committed_battles(settlement_journal.capture_state()),
 		"phase_on_save": phase_on_save,
+		"indicator_inventory": indicator_inventory.duplicate(true),
 	}
 
 
@@ -104,6 +106,21 @@ func restore_checkpoint(
 	)
 	if not bool(validation_rows.get("success", false)):
 		return validation_rows
+	var inventory: Dictionary = checkpoint.get("indicator_inventory", {})
+	var known_indicators: Dictionary = {}
+	for value: Variant in inventory.get("items", []):
+		if not value is Dictionary:
+			return _failure("save_indicator_inventory_invalid")
+		var item := CelestialIndicator.from_state(value)
+		if item == null or known_indicators.has(item.instance_id):
+			return _failure("save_indicator_inventory_invalid")
+		known_indicators[item.instance_id] = item.kind
+	for squads: Array in (validation_rows["rows"] as Dictionary).values():
+		for squad: SquadData in squads:
+			for attachment: Dictionary in squad.indicator_attachments:
+				var item := attachment["indicator"] as CelestialIndicator
+				if known_indicators.get(item.instance_id, -1) != item.kind:
+					return _failure("save_indicator_reference_invalid")
 	if not owned_collection.restore_state(decoded_collection):
 		return _failure("save_collection_restore_failed")
 	var restored_rows := _decode_rows(
@@ -130,6 +147,7 @@ func restore_checkpoint(
 			1
 		),
 		"phase_on_save": int(checkpoint.get("phase_on_save", 0)),
+		"indicator_inventory": inventory.duplicate(true),
 	}
 
 
@@ -236,9 +254,19 @@ func _encode_rows(rows: Dictionary) -> Dictionary:
 			for card_data: CardData in squad.layer_cards:
 				layer_refs.append(_encode_squad_card_ref(squad, card_data))
 			encoded_squads.append({
+				"indicators": squad.capture_indicators(),
 				"horizontal_cards": horizontal_refs,
 				"layer_cards": layer_refs,
 				"two_card_layout": int(squad.two_card_layout),
+				"equipped_item_instance_id": (
+					String(squad.get_equipped_item().instance_id)
+					if squad.get_equipped_item() != null
+					else ""
+				),
+				"equipment_indicator_position": [
+					squad.get_equipment_indicator_position().x,
+					squad.get_equipment_indicator_position().y,
+				],
 			})
 		result[String(row_key)] = encoded_squads
 	return result
@@ -250,6 +278,8 @@ func _decode_rows(
 	card_registry: Dictionary
 ) -> Dictionary:
 	var result: Dictionary = {}
+	var claimed_equipment_instance_ids: Dictionary = {}
+	var claimed_indicator_ids: Dictionary = {}
 	for row_key: StringName in ROW_KEYS:
 		if not data.has(String(row_key)) and not data.has(row_key):
 			return _failure("save_row_missing")
@@ -277,6 +307,13 @@ func _decode_rows(
 			):
 				return _failure("save_squad_card_invalid")
 			var squad := SquadData.new()
+			if not squad.restore_indicators(encoded_squad.get("indicators", [])):
+				return _failure("save_indicator_attachment_invalid")
+			for attachment: Dictionary in squad.indicator_attachments:
+				var indicator := attachment["indicator"] as CelestialIndicator
+				if claimed_indicator_ids.has(indicator.instance_id):
+					return _failure("save_indicator_duplicate_attachment")
+				claimed_indicator_ids[indicator.instance_id] = true
 			squad.horizontal_cards.assign(horizontal_result.get("cards", []) as Array)
 			squad.layer_cards.assign(layer_result.get("cards", []) as Array)
 			squad.two_card_layout = int(
@@ -288,6 +325,31 @@ func _decode_rows(
 					binding.get("card_data") as CardData,
 					binding.get("owned_card") as OwnedCard
 				)
+			var equipment_instance_id := StringName(
+				String(encoded_squad.get("equipped_item_instance_id", ""))
+			)
+			if not equipment_instance_id.is_empty():
+				var equipped_item := owned_collection.get_by_instance_id(
+					equipment_instance_id
+				)
+				var indicator_position := SquadData.UNSPECIFIED_EQUIPMENT_INDICATOR_POSITION
+				var encoded_position: Variant = encoded_squad.get(
+					"equipment_indicator_position",
+					[]
+				)
+				if encoded_position is Array and (encoded_position as Array).size() == 2:
+					indicator_position = Vector2(
+						float((encoded_position as Array)[0]),
+						float((encoded_position as Array)[1])
+					)
+				if (
+					equipped_item == null
+					or equipped_item.card_data.card_type != CardData.CardType.EQUIPMENT
+					or claimed_equipment_instance_ids.has(equipment_instance_id)
+					or not squad.equip_item(equipped_item, indicator_position)
+				):
+					return _failure("save_squad_equipment_invalid")
+				claimed_equipment_instance_ids[equipment_instance_id] = true
 			if not squad.is_valid():
 				return _failure("save_squad_layout_invalid")
 			decoded_squads.append(squad)

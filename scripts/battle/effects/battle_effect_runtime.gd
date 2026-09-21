@@ -161,7 +161,11 @@ func recheck_continuous_conditions(parent: BattleRuntimeEvent = null) -> void:
 	var instances := active_instances.duplicate()
 	for instance_value: Variant in instances:
 		var instance := instance_value as BattleEffectInstance
-		if not instance.active or not instance.definition.end_conditions.has(BattleEffectDefinition.EndCondition.CONDITION_INVALID):
+		if not instance.active or not (
+			instance.definition.end_conditions.has(BattleEffectDefinition.EndCondition.CONDITION_INVALID)
+			or instance.definition.end_conditions.has(BattleEffectDefinition.EndCondition.NEIGHBOR_INVALID)
+			or instance.definition.end_conditions.has(BattleEffectDefinition.EndCondition.EQUIPMENT_UNEQUIPPED)
+		):
 			continue
 		var event := BattleRuntimeEvent.new()
 		event.definition = instance.definition
@@ -169,7 +173,12 @@ func recheck_continuous_conditions(parent: BattleRuntimeEvent = null) -> void:
 		event.source = instance.source
 		event.target = instance.target
 		if not _all_conditions_pass(instance.definition, instance.source, instance.target, event):
-			_mark_end_condition(instance, BattleEffectDefinition.EndCondition.CONDITION_INVALID, event)
+			var invalid_condition := BattleEffectDefinition.EndCondition.CONDITION_INVALID
+			if instance.definition.end_conditions.has(BattleEffectDefinition.EndCondition.NEIGHBOR_INVALID):
+				invalid_condition = BattleEffectDefinition.EndCondition.NEIGHBOR_INVALID
+			elif instance.definition.end_conditions.has(BattleEffectDefinition.EndCondition.EQUIPMENT_UNEQUIPPED):
+				invalid_condition = BattleEffectDefinition.EndCondition.EQUIPMENT_UNEQUIPPED
+			_mark_end_condition(instance, invalid_condition, event)
 	# 持续定义在条件恢复后可以重新安装；叠加规则会阻止重复发放。
 	emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS, {}, parent)
 
@@ -406,6 +415,9 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 			_add_modifier(instance, BattleModifier.Stat.ACTION_MULTIPLIER, BattleModifier.Mode.ADD, instance.applied_value)
 		BattleEffectDefinition.Operation.ADD_TARGET_PRIORITY:
 			_add_modifier(instance, BattleModifier.Stat.TARGET_PRIORITY, BattleModifier.Mode.ADD, instance.applied_value)
+		BattleEffectDefinition.Operation.GRANT_KEYWORD:
+			if not target.grant_runtime_keyword(definition.value.enum_value, instance.instance_id):
+				return false
 		BattleEffectDefinition.Operation.ADD_REINFORCEMENT:
 			_add_modifier(instance, BattleModifier.Stat.REINFORCEMENT, BattleModifier.Mode.ADD, instance.applied_value)
 		BattleEffectDefinition.Operation.SET_MINIMUM_HEALTH:
@@ -439,6 +451,18 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 				definition.parameters
 			):
 				return false
+		BattleEffectDefinition.Operation.CONSUME_EQUIPMENT:
+			if (
+				controller == null
+				or not controller.has_method("record_pending_equipment_consumption")
+				or not controller.record_pending_equipment_consumption(
+					instance.result_owner,
+					definition.effect_id,
+					instance.source.runtime_id,
+					event.logical_time_us
+				)
+			):
+				return false
 		BattleEffectDefinition.Operation.IMMEDIATE_ACTION:
 			var forced_action := _action_type_from_name(StringName(definition.parameters.get("forced_action", "")))
 			if forced_action < 0 or controller == null or not controller.has_method("execute_immediate_action"):
@@ -469,13 +493,26 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 			var eligible_injuries := target.get_unmasked_active_injuries()
 			if eligible_injuries.is_empty():
 				return false
-			var selected_injury := eligible_injuries[
-				_random.randi_range(0, eligible_injuries.size() - 1)
-			]
-			if not target.mask_injury(selected_injury, instance.instance_id):
+			var maximum_targets := maxi(int(definition.parameters.get("maximum_targets", 1)), 1)
+			var masked_injuries: Array[StringName] = []
+			for _target_index: int in mini(maximum_targets, eligible_injuries.size()):
+				var highest_level := -1
+				var tied: Array[StringName] = []
+				for injury_id: StringName in eligible_injuries:
+					var level := int(target.battle_injury_levels.get(injury_id, 0))
+					if level > highest_level:
+						highest_level = level
+						tied.assign([injury_id])
+					elif level == highest_level:
+						tied.append(injury_id)
+				var selected_injury := tied[_random.randi_range(0, tied.size() - 1)]
+				eligible_injuries.erase(selected_injury)
+				if target.mask_injury(selected_injury, instance.instance_id):
+					masked_injuries.append(selected_injury)
+					_trace(event, definition, instance.source, target, &"mask_injury", &"applied", "伤势=%s 等级=%d" % [selected_injury, highest_level])
+			if masked_injuries.is_empty():
 				return false
-			instance.payload["masked_injury_id"] = selected_injury
-			_trace(event, definition, instance.source, target, &"mask_injury", &"applied", "伤势=%s" % selected_injury)
+			instance.payload["masked_injury_ids"] = masked_injuries
 		BattleEffectDefinition.Operation.MASK_RUNE:
 			var masked_slots: Array[Dictionary] = []
 			var mask_count := maxi(roundi(instance.applied_value), 0)
@@ -652,6 +689,11 @@ func _end_instance(
 	instance.target.refresh_cooldown_after_modifier_change()
 	if instance.definition.operation == BattleEffectDefinition.Operation.SET_ACTION_TYPE:
 		instance.target.clear_runtime_action_type()
+	if instance.definition.operation == BattleEffectDefinition.Operation.GRANT_KEYWORD:
+		instance.target.revoke_runtime_keyword(
+			instance.definition.value.enum_value,
+			instance.instance_id
+		)
 	if instance.definition.operation == BattleEffectDefinition.Operation.MASK_RUNE:
 		for slot_value: Variant in instance.payload.get("masked_rune_slots", []):
 			var slot := slot_value as Dictionary
@@ -660,10 +702,8 @@ func _end_instance(
 				int(slot.get("rune_index", -1))
 			)
 	if instance.definition.operation == BattleEffectDefinition.Operation.MASK_INJURY:
-		instance.target.unmask_injury(
-			StringName(instance.payload.get("masked_injury_id", "")),
-			instance.instance_id
-		)
+		for injury_id: StringName in instance.payload.get("masked_injury_ids", []):
+			instance.target.unmask_injury(injury_id, instance.instance_id)
 	_adjust_current_health_for_maximum_modifier(instance, -instance.applied_value)
 	_trace(event, instance.definition, instance.source, instance.target, &"end", StringName(BattleEffectInstance.EndReason.keys()[reason].to_lower()), detail)
 	if instance.definition.stacking.kind == BattleEffectStacking.Kind.SAME_NAME_NONSTACKING:
@@ -694,7 +734,7 @@ func _resolve_targets(
 	var result: Array[BattleSquadState] = []
 	var source_state := source.state
 	match definition.target:
-		BattleEffectDefinition.Target.SOURCE_COMBAT_UNIT, BattleEffectDefinition.Target.SOURCE_CARD_INSTANCE:
+		BattleEffectDefinition.Target.SOURCE_COMBAT_UNIT, BattleEffectDefinition.Target.SOURCE_CARD_INSTANCE, BattleEffectDefinition.Target.SOURCE_EQUIPMENT, BattleEffectDefinition.Target.EQUIPPED_UNIT, BattleEffectDefinition.Target.EQUIPPED_UNIT_INJURIES:
 			if source_state != null: result.append(source_state)
 		BattleEffectDefinition.Target.SOURCE_DEAD_CARD:
 			if source_state != null and not source_state.alive:
@@ -710,7 +750,10 @@ func _resolve_targets(
 					continue
 				if definition.target == BattleEffectDefinition.Target.SAME_ROW_FRIENDLY_UNITS:
 					result.append(state)
-				elif state == source_state or abs(state.formation_index - source_state.formation_index) == 1:
+				elif (
+					state == source_state
+					and definition.target != BattleEffectDefinition.Target.ADJACENT_FRIENDLY_UNITS
+				) or abs(state.formation_index - source_state.formation_index) == 1:
 					if definition.target == BattleEffectDefinition.Target.SELF_AND_ADJACENT_HUMAN_UNITS:
 						if not _is_human(state):
 							continue
@@ -732,7 +775,7 @@ func _resolve_targets(
 			# 玩家不是战斗单位；D2-4 以效果来源状态作为阵营锚点，
 			# 真正的收藏/金币身份由战后系统消费待结算记录时提供。
 			if source_state != null: result.append(source_state)
-		BattleEffectDefinition.Target.GRANTED_EFFECT_HOLDER, BattleEffectDefinition.Target.EQUIPPED_UNIT:
+		BattleEffectDefinition.Target.GRANTED_EFFECT_HOLDER:
 			var holder := event.payload.get("holder") as BattleSquadState
 			if holder != null: result.append(holder)
 	result.sort_custom(_is_state_before)
@@ -803,6 +846,15 @@ func _condition_passes(
 			return true
 		BattleEffectDefinition.Condition.SOURCE_EFFECT_ACTIVE:
 			return source.is_alive()
+		BattleEffectDefinition.Condition.EQUIPMENT_EQUIPPED, BattleEffectDefinition.Condition.SOURCE_EQUIPMENT_PARTICIPATED:
+			return (
+				source.owned_card != null
+				and source.state != null
+				and source.state.squad_data != null
+				and source.state.squad_data.get_equipped_item() == source.owned_card
+			)
+		BattleEffectDefinition.Condition.EQUIPPED_UNIT_ALIVE:
+			return source.is_alive()
 		BattleEffectDefinition.Condition.TARGET_HAS_ARMOR:
 			return target != null and target.current_armor > 0.0
 		BattleEffectDefinition.Condition.TARGET_IS_HUMAN:
@@ -864,7 +916,7 @@ func _resolve_value(
 			return 0.0
 		BattleEffectValue.Kind.FORMULA:
 			if value.expression == "min(current_armor_after_damage * 0.2, 4)":
-				return minf(float(target.current_armor) * 0.2, 4.0)
+				return minf(float(source.state.current_armor) * 0.2, 4.0)
 	_trace(event, definition, source, target, &"value", &"unsupported_value", "当前取值种类尚不能生成数字")
 	return 0.0
 
@@ -972,10 +1024,17 @@ func _binding_matches_event_actor(binding: BattleEffectBinding, event: BattleRun
 		BattleEffectDefinition.Trigger.AFTER_BASIC_HEAL,
 		BattleEffectDefinition.Trigger.SOURCE_ARMOR_GAINED,
 		BattleEffectDefinition.Trigger.SOURCE_HEALTH_LOST_ACCUMULATED,
+		BattleEffectDefinition.Trigger.EQUIPPED_UNIT_AFTER_BASIC_ACTION_DAMAGE,
 	]:
 		# D2-3 合成测试允许直接发出无 actor 的系统触发；真实战斗钩子始终携带 actor，
 		# 此时必须与效果来源一致，避免其他单位的行动或获得护甲误触发本卡。
 		return actor == null or (binding.source != null and binding.source.state == actor)
+	if event.trigger == BattleEffectDefinition.Trigger.BATTLE_WON:
+		return (
+			binding.source != null
+			and binding.source.state != null
+			and binding.source.state.side == int(event.payload.get("winner_side", -1))
+		)
 	if event.trigger == BattleEffectDefinition.Trigger.ADJACENT_ALLY_DESTROYED:
 		return (
 			actor != null

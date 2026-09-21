@@ -7,14 +7,15 @@
 script = ExtResource("2_xgh0q")
 id = &"starsea_ring"
 display_name = "星海戒"
+faction = 1
 card_type = 1
 base_value = 0
 max_health = 0
 rarity = 2
 equipment_type = 3
 equipment_action_delta = 1
-equipment_cooldown_delta = 0.5
+equipment_zeal_delta = -1
 equipment_health_delta = 1
 art_texture = ExtResource("1_tg5wn")
 art_offset = Vector2i(0, 7)
-effect_text = "占位：饰品；行动+1，冷却+0.5秒，生命+1，护甲+0。"
+effect_text = "占位：饰品；行动+1，热诚-1，生命+1，护甲+0。"

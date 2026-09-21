@@ -18,6 +18,7 @@ const LARGE_TEXTURE: Texture2D = preload("res://assets/fonts/rune_numbers_large.
 const MEDIUM_TEXTURE: Texture2D = preload("res://assets/fonts/rune_numbers_medium.png")
 const SMALL_TEXTURE: Texture2D = preload("res://assets/fonts/rune_numbers_small.png")
 const DECIMAL_POINT_TEXTURE: Texture2D = preload("res://assets/fonts/rune_decimal_point.png")
+const ZEAL_SIGN_TEXTURE: Texture2D = preload("res://assets/fonts/rune_zeal_signs.png")
 
 const LARGE_GLYPH_RECTS: Dictionary = {
 	"1": Rect2(0, 0, 7, 14),
@@ -62,6 +63,11 @@ const SMALL_HEIGHT: float = 8.0
 const COOLDOWN_FRACTION_TOP: float = 4.0 # 卡面 y=24 起算，小号数字绝对顶部为 y=28
 const COOLDOWN_POINT_TOP: float = 9.0 # 卡面 y=24 起算，小数点绝对顶部为 y=33
 const COOLDOWN_JOIN_OVERLAP: float = 1.0 # 小数点左右黑边各与相邻数字重合 1px
+const SIGN_WIDTH: float = 7.0 # 热诚正负号的像素宽度，与冷却中号卢恩数字并排显示
+const SIGN_HEIGHT: float = 10.0 # 用户提供的正负号原图画布高度，绘制时保留原始透明边距
+const SIGN_TOP: float = 1.0 # 10px符号画布在12px中号数字旁的垂直居中偏移
+const SIGN_PLUS_REGION := Rect2(0, 0, 7, 10) # 用户正号在原图中的7×10裁切区域
+const SIGN_MINUS_REGION := Rect2(14, 0, 7, 10) # 用户负号在原图中的7×10裁切区域
 
 @export var number_style: NumberStyle = NumberStyle.LARGE:
 	set(value):
@@ -149,6 +155,10 @@ func _draw_digit_run(
 	var cursor_x := start_position.x
 	for index: int in value.length():
 		var digit := value.substr(index, 1)
+		if digit == "+" or digit == "-":
+			_draw_zeal_sign(Vector2(cursor_x, start_position.y), digit == "+")
+			cursor_x += SIGN_WIDTH + float(character_spacing)
+			continue
 		if not glyph_rects.has(digit):
 			continue
 		var glyph_rect := glyph_rects[digit] as Rect2
@@ -165,11 +175,23 @@ func _measure_digit_run(value: String, glyph_rects: Dictionary) -> float:
 	var glyph_count := 0
 	for index: int in value.length():
 		var digit := value.substr(index, 1)
+		if digit == "+" or digit == "-":
+			width += SIGN_WIDTH
+			glyph_count += 1
+			continue
 		if not glyph_rects.has(digit):
 			continue
 		width += (glyph_rects[digit] as Rect2).size.x
 		glyph_count += 1
 	return width + float(maxi(glyph_count - 1, 0) * character_spacing)
+
+
+func _draw_zeal_sign(origin: Vector2, positive: bool) -> void:
+	draw_texture_rect_region(
+		ZEAL_SIGN_TEXTURE,
+		Rect2(origin + Vector2(0.0, SIGN_TOP), Vector2(SIGN_WIDTH, SIGN_HEIGHT)),
+		SIGN_PLUS_REGION if positive else SIGN_MINUS_REGION
+	)
 
 
 func _sync_size_and_redraw() -> void:

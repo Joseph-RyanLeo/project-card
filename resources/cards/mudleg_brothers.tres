@@ -19,4 +19,4 @@ wound_slot_count = 3
 emblem_slot_count = 3
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-5, 22)
-effect_text = "无法堆叠。遗愿：遮蔽1个符文并重新入场（2次）。"
+effect_text = "无法堆叠。遗愿：被遮蔽随机1个符文，复活2。"

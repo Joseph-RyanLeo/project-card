@@ -68,6 +68,7 @@ func settle(
 	var rollback_rewards := reward_state.capture_state()
 	var growth_applied := 0
 	var owned_changes_applied := 0
+	var equipment_consumed := 0
 	var emblem_progress_added := 0
 	var temporary_progress_skipped := 0
 	var spell_durability_spent := 0
@@ -91,6 +92,8 @@ func settle(
 		growth_applied += 1
 	for entry: Dictionary in owned_change_entries:
 		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
+			continue
+		if entry.get("kind") == BattleOwnedCardChangeLedger.KIND_CONSUME_EQUIPMENT:
 			continue
 		var change_result := _apply_owned_change(entry, owned_collection)
 		if not bool(change_result.get("success", false)):
@@ -129,6 +132,19 @@ func settle(
 					_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 					return _failure("random_request_apply_failed", battle_id)
 				random_requests_queued += amount
+	# 征兵册先生成随机随从请求，再移除源装备；即使合法奖励池为空也照常消耗。
+	for entry: Dictionary in owned_change_entries:
+		if (
+			int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER
+			or entry.get("kind") != BattleOwnedCardChangeLedger.KIND_CONSUME_EQUIPMENT
+		):
+			continue
+		if owned_collection.remove_by_instance_id(
+			entry.get("owned_card_instance_id", &"") as StringName
+		) == null:
+			_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
+			return _failure("equipment_consumption_failed", battle_id)
+		equipment_consumed += 1
 	if not journal.mark_committed(battle_id):
 		_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 		return _failure("commit_guard_failed", battle_id)
@@ -138,6 +154,7 @@ func settle(
 		"battle_instance_id": battle_id,
 		"growth_applied": growth_applied,
 		"owned_changes_applied": owned_changes_applied,
+		"equipment_consumed": equipment_consumed,
 		"emblem_progress_added": emblem_progress_added,
 		"temporary_progress_skipped": temporary_progress_skipped,
 		"spell_durability_spent": spell_durability_spent,
@@ -167,6 +184,7 @@ func _validate_entries(
 		if not instance_id.is_empty() and owned_collection.get_by_instance_id(instance_id) == null:
 			return _failure("missing_growth_owner", battle_id)
 	var occupied_slot_changes: Dictionary = {}
+	var consumed_equipment_ids: Dictionary = {}
 	for entry: Dictionary in owned_change_entries:
 		if not _validate_common_entry(entry, battle_id, seen_entry_ids):
 			return _failure("invalid_owned_change_entry_identity", battle_id)
@@ -179,6 +197,13 @@ func _validate_entries(
 		var kind := entry.get("kind", &"") as StringName
 		var parameters := entry.get("parameters", {}) as Dictionary
 		match kind:
+			BattleOwnedCardChangeLedger.KIND_CONSUME_EQUIPMENT:
+				if (
+					owned_card.card_data.card_type != CardData.CardType.EQUIPMENT
+					or consumed_equipment_ids.has(instance_id)
+				):
+					return _failure("invalid_equipment_consumption", battle_id)
+				consumed_equipment_ids[instance_id] = true
 			BattleOwnedCardChangeLedger.KIND_SET_WOUND_SLOT, BattleOwnedCardChangeLedger.KIND_SET_EMBLEM_SLOT:
 				var slot_index := int(parameters.get("slot_index", -1))
 				var slot_count := (

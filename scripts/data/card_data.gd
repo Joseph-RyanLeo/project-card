@@ -6,6 +6,9 @@ extends Resource
 ## 这里只保存不会随战斗临时变化的基础资料；卡牌节点负责显示，
 ## 小队顺序和遮挡关系则由 SquadData 保存。
 
+const CardFactionScript = preload("res://scripts/data/card_faction.gd")
+const CardPackRegistryScript = preload("res://scripts/data/card_pack_registry.gd")
+
 enum CardType {
 	MINION,
 	EQUIPMENT,
@@ -57,6 +60,20 @@ enum SpellType {
 	DISRUPTION,
 }
 
+enum SpellTriggerKind {
+	UNASSIGNED,
+	INSTANT,
+	CONDITIONAL,
+	PREPARED,
+}
+
+enum ResourceType {
+	MINERAL,
+	PLANT,
+	RELIC,
+	FOOD,
+}
+
 enum EquipmentType {
 	RANGED_WEAPON,
 	MELEE_WEAPON,
@@ -76,6 +93,7 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export var id: StringName = &"" # 卡牌数据的稳定标识，不使用显示名称代替
 @export var display_name: String = "" # 卡面显示名称
 @export var pack_id: StringName = &"" # 所属卡包稳定标识；开发测试卡使用独立标识，避免混入正式卡池
+@export var faction: CardFaction.Id = CardFaction.Id.UNALIGNED # 卡牌显式阵营；未设置时继承所属卡包阵营
 @export var is_available: bool = true # 是否进入当前可用卡池；停用卡仍可保留资源与美术
 @export var effect_ids: Array[StringName] = [] # 绑定到通用效果目录的原子效果 ID
 @export var keywords: Array[StringName] = [] # 卡牌关键词；由对应权威规则读取，不在这里直接运行战斗结算
@@ -83,6 +101,7 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export var is_derived: bool = false # 是否为战斗衍生卡；死亡触发与奖励池会读取
 @export var card_type: CardType = CardType.MINION # 卡牌大类，当前 Demo 主要使用随从
 @export var action_type: ActionType = ActionType.MELEE # 行动图标与行动方式
+@export_range(-1, 4, 1) var preferred_target_action_type: int = -1 # 普通攻击明确优先寻找的敌方行动类型；-1 表示没有额外目标偏好
 @export_range(0, MAXIMUM_BASE_VALUE, 1) var base_value: int = 1: # 行动的基础数值
 	set(value):
 		base_value = clampi(value, 0, MAXIMUM_BASE_VALUE)
@@ -103,9 +122,11 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export var race_type: RaceType = RaceType.HUMAN # 种族图标与种族规则来源
 @export var rarity: Rarity = Rarity.I # 卡框、种族图标配色与稀有度显示
 @export var spell_type: SpellType = SpellType.ENHANCE # 法术中央类型图标与搜索名称
+@export var spell_trigger_kind: SpellTriggerKind = SpellTriggerKind.UNASSIGNED # 法术启动类别；旧占位卡待确认后再分配
 @export var equipment_type: EquipmentType = EquipmentType.RANGED_WEAPON # 装备中央类型图标与搜索名称
+@export var resource_type: ResourceType = ResourceType.MINERAL # 资源卡立绘下部的种类图标
 @export_range(-99, 99, 1) var equipment_action_delta: int = 0 # 装备对基础行动数值的临时占位变化量
-@export_range(-9.9, 9.9, 0.1) var equipment_cooldown_delta: float = 0.0 # 装备对基础冷却秒数的临时占位变化量
+@export_range(-99, 99, 1) var equipment_zeal_delta: int = 0 # 装备提供的带正负号热诚层数；每层按现有战斗规则改变5%冷却速度
 @export_range(0, 99, 1) var equipment_health_delta: int = 0 # 装备对生命值的临时占位加成
 @export_range(0, 99, 1) var equipment_armor_delta: int = 0 # 装备对护甲值的临时占位加成
 @export_range(0, 99, 1) var wound_slot_count: int = 0 # 共享定义只保存槽位数量；实际伤势属于OwnedCard实例
@@ -153,8 +174,37 @@ func get_spell_type_name() -> String:
 	return ["强化", "召唤", "伤害", "支援", "干扰"][spell_type]
 
 
+func get_spell_preparation_column() -> int:
+	# 逻辑列序是准备栏从左到右：即时、条件、准备；与原素材列序不同。
+	match spell_trigger_kind:
+		SpellTriggerKind.INSTANT:
+			return 0
+		SpellTriggerKind.CONDITIONAL:
+			return 1
+		SpellTriggerKind.PREPARED:
+			return 2
+		_:
+			return -1
+
+
 func get_equipment_type_name() -> String:
 	return ["远程武器", "近战武器", "防具", "饰品", "法器", "消耗品"][equipment_type]
+
+
+func get_resource_type_name() -> String:
+	return ["矿物", "植物", "遗物", "食物"][resource_type]
+
+
+func get_effective_faction() -> CardFaction.Id:
+	return (
+		faction
+		if faction != CardFaction.Id.UNALIGNED
+		else CardPackRegistryScript.get_faction(pack_id)
+	)
+
+
+func get_faction_name() -> String:
+	return CardFactionScript.get_display_name(get_effective_faction())
 
 
 func get_base_target_priority() -> int:

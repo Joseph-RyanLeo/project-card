@@ -56,6 +56,11 @@ const CARD_RESOURCE_PATHS := [
 	"res://resources/cards/starsea_ring.tres",
 	"res://resources/cards/void_orb_scepter.tres",
 	"res://resources/cards/bloodrage_elixir.tres",
+	"res://resources/cards/ash_war_banner.tres",
+	"res://resources/cards/ash_war_shield.tres",
+	"res://resources/cards/rally_horn.tres",
+	"res://resources/cards/coarse_bandage.tres",
+	"res://resources/cards/recruitment_ledger.tres",
 	"res://resources/cards/blessing_sacred_shield.tres",
 	"res://resources/cards/blessing_strength.tres",
 	"res://resources/cards/blessing_vitality.tres",
@@ -75,7 +80,7 @@ const SELECTABLE_CARD_TYPES := [
 	CardData.CardType.MINION,
 	CardData.CardType.SPELL,
 	CardData.CardType.EQUIPMENT,
-] # 调整器按随从、法术、装备分组，避免 53 张卡挤进同一个超长菜单
+] # 调整器按随从、法术、装备分组，避免 58 张卡挤进同一个超长菜单
 
 # 资源列表是工具可选择的卡牌白名单，避免误写其他 Resource。
 

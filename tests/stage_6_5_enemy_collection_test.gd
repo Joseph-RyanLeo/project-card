@@ -49,8 +49,10 @@ func _test_world_rows_views_and_lock() -> void:
 		"敌方人物固定显示正面且只读"
 	)
 	_expect(
-		(main.player_avatar_button.texture_normal as AtlasTexture).region == main.CHARACTER_FRONT_REGION,
-		"准备视图中我方人物显示正面"
+		(main.player_avatar_button.texture_normal as AtlasTexture).atlas == main.PLAYER_AVATAR_TURN_TEXTURE
+		and (main.player_avatar_button.texture_normal as AtlasTexture).region == Rect2(Vector2.ZERO, main.PLAYER_AVATAR_FRAME_SIZE)
+		and main.PLAYER_AVATAR_TURN_TEXTURE.get_size() == Vector2(1440, 180),
+		"准备视图中我方人物显示透明转身图集的正面首帧"
 	)
 	var enemy_back: BattlefieldRow = main.enemy_back_row
 	var enemy_front: BattlefieldRow = main.enemy_front_row
@@ -89,14 +91,20 @@ func _test_world_rows_views_and_lock() -> void:
 	_expect(main.current_world_view == main.WorldView.BATTLEFIELDS and is_zero_approx(main.world_content.position.y), "战斗阶段默认显示敌我战场并平滑完成切换")
 	_expect(main.player_avatar_button.global_position.y >= 360.0, "战斗视图人物按钮位于屏幕右下区域")
 	_expect(
-		(main.player_avatar_button.texture_normal as AtlasTexture).region == main.CHARACTER_BACK_REGION,
-		"战斗视图中我方人物显示背面"
+		(main.player_avatar_button.texture_normal as AtlasTexture).region
+		== Rect2(Vector2(main.PLAYER_AVATAR_FRAME_SIZE.x * 7.0, 0.0), main.PLAYER_AVATAR_FRAME_SIZE),
+		"战斗视图中我方人物显示转身后的背面末帧"
 	)
 	main.player_avatar_button.pressed.emit()
+	await create_timer(main.PLAYER_AVATAR_TURN_DURATION * 0.5).timeout
+	_expect(
+		main._player_avatar_frame_index > 0 and main._player_avatar_frame_index < main.PLAYER_AVATAR_FRAME_COUNT - 1,
+		"点击切换时人物经过中间转身帧，而非瞬间换面"
+	)
 	await create_timer(main.VIEW_TWEEN_DURATION + 0.05).timeout
 	_expect(
 		main.current_world_view == main.WorldView.COLLECTION
-		and (main.player_avatar_button.texture_normal as AtlasTexture).region == main.CHARACTER_FRONT_REGION,
+		and (main.player_avatar_button.texture_normal as AtlasTexture).region == Rect2(Vector2.ZERO, main.PLAYER_AVATAR_FRAME_SIZE),
 		"点击我方人物会同步翻为正面并平滑切到下视图"
 	)
 	_expect(not player_front.can_receive_card_drag(_collection_drag(main.collection_cards[0])), "战斗阶段禁止调整我方卡牌")
