@@ -75,12 +75,16 @@ const CARD_RESOURCE_PATHS := [
 	"res://resources/cards/disruption_counterspell.tres",
 	"res://resources/cards/disruption_rust_blade.tres",
 	"res://resources/cards/disruption_discordant_wave.tres",
+	"res://resources/cards/battle_fury.tres",
+	"res://resources/cards/side_by_side.tres",
+	"res://resources/cards/return_to_battlefield.tres",
+	"res://resources/cards/volley_order.tres",
 ]
 const SELECTABLE_CARD_TYPES := [
 	CardData.CardType.MINION,
 	CardData.CardType.SPELL,
 	CardData.CardType.EQUIPMENT,
-] # 调整器按随从、法术、装备分组，避免 58 张卡挤进同一个超长菜单
+] # 调整器按随从、法术、装备分组，避免整批卡挤进同一个超长菜单
 
 # 资源列表是工具可选择的卡牌白名单，避免误写其他 Resource。
 

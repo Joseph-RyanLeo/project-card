@@ -22,9 +22,17 @@ const BattleRunRewardLedger = preload("res://scripts/battle/battle_run_reward_le
 const BattlePreparationSnapshot = preload("res://scripts/data/battle_preparation_snapshot.gd")
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const OwnedCardCollection = preload("res://scripts/data/owned_card_collection.gd")
+const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
+const EmblemLibraryData = preload("res://scripts/data/emblem_library_data.gd")
+const StatusIndicatorStyle = preload("res://scripts/ui/status_indicator_style.gd")
+const EmblemLibraryViewScript = preload("res://scripts/ui/emblem_library_view.gd")
+const CardInspectionOverlayScript = preload("res://scripts/ui/card_inspection_overlay.gd")
 const RunSettlementJournal = preload("res://scripts/data/run_settlement_journal.gd")
 const RunRewardState = preload("res://scripts/data/run_reward_state.gd")
 const BattleSettlementService = preload("res://scripts/data/battle_settlement_service.gd")
+const BattleDiagnosticRecorderScript = preload("res://scripts/battle/battle_diagnostic_recorder.gd")
+const BattleDiagnosticSerializerScript = preload("res://scripts/battle/battle_diagnostic_serializer.gd")
+const BattleAudioServiceScript = preload("res://scripts/battle/battle_audio_service.gd")
 const RunSaveService = preload("res://scripts/data/run_save_service.gd")
 const PAGE_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_large.fnt")
 const BATTLE_LOG_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
@@ -169,9 +177,12 @@ const PAGE_TURN_SHADOW_Z_INDEX: int = 50 # 高于固定页卡牌内部节点、�
 const PAGE_TURN_MOVING_Z_INDEX: int = 100 # 活动页纸张必须压住固定页卡牌内部最高绘制层
 const START_BATTLE_BUTTON_POSITION := Vector2(704, 294) # 正式开始战斗按钮在我方战场区的位置
 const START_BATTLE_BUTTON_SIZE := Vector2(150, 38) # 正式开始战斗按钮的可点击尺寸
-const BATTLE_SPEED_BUTTON_POSITION := Vector2(78, 190) # 战斗速度按钮位于左上敌方画像正下方
-const BATTLE_SPEED_BUTTON_SIZE := Vector2(82, 30) # 1×/2×/3×循环按钮的可点击尺寸
-const BATTLE_SPEED_MULTIPLIERS: Array[float] = [1.0, 2.0, 3.0] # 可循环选择的现实播放速度
+const BATTLE_PAUSE_BUTTON_POSITION := Vector2(42, 190) # 暂停按钮紧邻四段速度条左侧
+const BATTLE_PAUSE_BUTTON_SIZE := Vector2(32, 30) # 暂停按钮的可点击尺寸
+const BATTLE_SPEED_BUTTON_POSITION := Vector2(78, 190) # 四段战斗速度条位于左上敌方画像正下方
+const BATTLE_SPEED_BUTTON_SIZE := Vector2(164, 30) # 四段战斗速度条的总可点击尺寸
+const BATTLE_SPEED_MULTIPLIERS: Array[float] = [0.5, 1.0, 2.0, 3.0] # 四段战斗速度由左向右递增
+const BATTLE_TRACE_MAX_FRAMES: int = 36000 # 性能采样最多保留10分钟@60fps，达到上限后停止记录
 const BATTLE_TIMER_POSITION := Vector2(54, 343) # 战斗逻辑计时位于战场中线靠左位置
 const BATTLE_TIMER_SIZE := Vector2(130, 32) # 战斗计时文字的固定显示区域
 const BATTLE_SEED_PANEL_POSITION := Vector2(12, 380) # 种子器位于战斗计时下方，方便按阵容截图复现同一场战斗
@@ -195,7 +206,7 @@ const EFFECT_COLOR_FIRE := Color("e51414") # 火元素的纯红色攻击颜色
 const EFFECT_COLOR_WATER := Color("0095ff") # 水元素的纯蓝色攻击颜色
 const EFFECT_COLOR_WOOD := Color("3ac330") # 木元素的纯绿色攻击颜色
 const BATTLE_RESULT_PANEL_POSITION := Vector2(1096, 184) # 战后入口放在战场右侧空白区，不遮挡四排卡牌
-const BATTLE_RESULT_PANEL_SIZE := Vector2(170, 220) # 右侧结算框高度，同时容纳永久成长、局内奖励和重开入口
+const BATTLE_RESULT_PANEL_SIZE := Vector2(170, 278) # 右侧结算框高度，同时容纳战斗数据导出与重开入口
 signal battle_departure_requested(state: BattleSquadState)
 
 enum WorldView { BATTLEFIELDS, COLLECTION }
@@ -213,8 +224,23 @@ var selected_board_slot: BoardSlot
 # 点击携带与 Godot 原生拖拽共用同一种拖拽数据字典，避免两套规则分叉。
 var _click_carry_data: Dictionary = {}
 var _click_carry_preview: Control
-var _native_equipment_drag_data: Dictionary = {} # 跟踪原生装备拖拽，以便实时换形并在无效松手时返还收藏
+var _native_carry_data: Dictionary = {} # 统一跟踪原生卡牌/装备拖拽的当前目标
+var _native_carry_update_frame := -1
+var _native_carry_update_pointer := Vector2.INF
+var _native_carry_last_target: Dictionary = {}
+var _native_carry_pointer := Vector2.ZERO
 var _battlefield_clock_check_queued: bool = false
+var _equipment_drop_profile_started_usec := 0
+var _equipment_drop_profile_last_usec := 0
+var _equipment_drop_profile_sections: Dictionary = {}
+var _equipment_drop_profile_active := false
+var _battle_performance_trace_enabled: bool = false
+var _battle_trace_frame_samples: Array[Dictionary] = []
+var _battle_trace_drag_preview_usec: int = 0
+var _battle_trace_state_sync_usec: int = 0
+var _battle_trace_effect_dispatch_usec: int = 0
+var _battle_trace_last_advance_total_usec: int = 0
+var _battle_trace_last_exact_snap_total_usec: int = 0
 var current_world_view: WorldView = WorldView.COLLECTION
 var current_collection_page: int = 0
 var active_rarity_filters: Array[int] = []
@@ -223,6 +249,7 @@ var active_action_filters: Array[int] = []
 var active_card_type_filters: Array[int] = []
 var search_query: String = ""
 var recently_returned_cards: Array[CardData] = []
+var recently_returned_owned_cards: Array[OwnedCard] = [] # 最近页与卡面定义并行保存，避免同名卡错绑实例
 var collection_bookmark_active: bool = false
 var _regular_collection_page_before_bookmark: int = 0
 var _collection_effect_display_states: Dictionary = {} # 按卡牌稳定id保存收藏中的效果面状态，翻页重建节点后仍可恢复
@@ -239,10 +266,11 @@ var _page_turn_overlay: Control
 var _battle_snapshot: BattlePreparationSnapshot
 var _battle_state_slots: Dictionary = {}
 var battle_departure_count: int = 0
-var battle_speed_index: int = 0
+var battle_speed_index: int = 1
 var _active_battle_departures: int = 0
 var _pending_battle_result: BattleController.Result = BattleController.Result.NONE
 var _battle_log_entries: Array[BattleLogEntry] = []
+var _next_direct_effect_log_id: int = 1
 var _battle_log_by_group: Dictionary = {}
 var _battle_generation: int = 0
 var _completed_battle_departures: Array[Dictionary] = []
@@ -276,7 +304,9 @@ var battle_lab_button: Button
 var attack_effect_lab_button: Button
 var drag_mode_button: Button
 var enemy_avatar: TextureRect
-var battle_speed_button: Button
+var battle_pause_button: Button
+var battle_speed_bar: Control
+var battle_speed_buttons: Array[Button] = []
 var battle_timer_label: Label
 var battle_seed_panel: PanelContainer
 var battle_seed_spin: SpinBox
@@ -285,15 +315,23 @@ var battle_log_panel: PanelContainer
 var battle_log_text: RichTextLabel
 var formula_popup: PanelContainer
 var formula_popup_text: RichTextLabel
+var _formula_popup_hide_generation: int = 0
 var battle_effect_layer: Control
 var player_avatar_button: TextureButton
+var battle_volume_slider: HSlider
+var battle_audio_service: Variant
 var celestial_indicators: CelestialIndicatorController
 var start_battle_button: Button
 var battle_result_panel: Panel
 var battle_result_label: Label
 var battle_result_summary_label: RichTextLabel
+var export_battle_data_button: Button
+var battle_export_status_label: Label
 var restart_battle_button: Button
+var battle_diagnostic_file_dialog: FileDialog
+var battle_diagnostic_message_dialog: AcceptDialog
 var battle_controller: BattleController
+var _battle_diagnostic_recorder: BattleDiagnosticRecorder
 var search_edit: LineEdit
 var search_button: Button
 var clear_search_button: Button
@@ -312,6 +350,45 @@ var regular_left_page_art: TextureRect
 var regular_right_page_art: TextureRect
 var recent_left_page_art: TextureRect
 var recent_right_page_art: TextureRect
+var emblem_library: Variant
+var _emblem_library_parent: Control
+var wound_library: Variant
+var _wound_library_parent: Control
+var _inspection_overlay: Variant
+var _inspection_carry_layer: Control
+var _inspection_card_view: CardView
+var _inspection_owned_card: OwnedCard
+var _inspection_card_data: CardData
+var _inspection_previous_tree_paused := false
+var _inspection_effect_layer_was_visible := true
+var _inspection_surface: InspectionCardSurface
+var _inspection_source_view: CardView
+var _inspection_statistics_suppression_snapshot: Array[Dictionary] = []
+var _inspection_dim: ColorRect
+var _inspection_display_mode_button: Button
+var _inspection_tween: Tween
+var _inspection_library_original_parent: Control
+var _inspection_library_original_canvas_transform := Transform2D.IDENTITY
+var _inspection_library_original_layout: Dictionary = {}
+var _inspection_library_original_z_index := -48
+var _inspection_library_original_scroll := 0
+var _inspection_library_transform_saved := false
+var _inspection_placement_tween: Tween
+var _inspection_placement_visual: Polygon2D
+var _inspection_placement_state: Dictionary = {}
+var _inspection_placement_is_wound := false
+var _inspection_placement_in_progress := false
+var _inspection_closing := false
+var _next_developer_emblem_instance: int = 1
+const INSPECTION_STICKER_FLIGHT_DURATION: float = 0.18 # 纹章与元素贴纸从抓取位置飞入槽位的动画时长
+const WOUND_LIBRARY_NORMAL_POSITION := Vector2(140, 67) # 隐藏的伤势目录返回常规界面时停放在书本左侧
+const WOUND_LIBRARY_NORMAL_SIZE := Vector2(124, 248) # 伤势目录常规停放尺寸，与纹章工作包一致
+const WOUND_LIBRARY_INSPECTION_RIGHT_INSET: float = 356.0 # 检视伤势区右边缘与画面右边界的逻辑像素间距
+const WOUND_LIBRARY_INSPECTION_TOP: float = 160.0 # 检视伤势区展开后的顶部坐标
+const WOUND_LIBRARY_RETRACT_SCALE: float = 0.1 # 伤势区收起动画的起始缩放比例
+const WOUND_LIBRARY_OPEN_DURATION: float = 0.25 # 伤势区展开动画时长
+const WOUND_LIBRARY_CLOSE_DURATION: float = 0.2 # 伤势区缩回动画时长
+var _last_chaos_reroll_day_token: StringName = &""
 
 
 func _build_scene_structure() -> void:
@@ -401,17 +478,43 @@ func _build_enemy_avatar(parent: Control) -> void:
 
 
 func _build_battle_hud(parent: Control) -> void:
-	var speed_button := _make_button(
-		"BattleSpeedButton",
-		"速度 1×",
-		BATTLE_SPEED_BUTTON_POSITION,
-		BATTLE_SPEED_BUTTON_SIZE,
+	battle_pause_button = _make_button(
+		"BattlePauseButton",
+		"⏸️",
+		BATTLE_PAUSE_BUTTON_POSITION,
+		BATTLE_PAUSE_BUTTON_SIZE,
 		true
 	)
-	speed_button.tooltip_text = "循环切换 1×、2×、3× 战斗播放速度"
-	speed_button.z_index = 200
-	speed_button.visible = false
-	parent.add_child(speed_button)
+	battle_pause_button.z_index = 200
+	battle_pause_button.visible = false
+	battle_pause_button.process_mode = Node.PROCESS_MODE_ALWAYS
+	battle_pause_button.tooltip_text = "暂停战斗"
+	parent.add_child(battle_pause_button)
+	battle_pause_button.pressed.connect(_on_battle_pause_button_pressed)
+
+	var speed_bar := HBoxContainer.new()
+	speed_bar.name = "BattleSpeedBar"
+	speed_bar.unique_name_in_owner = true
+	speed_bar.position = BATTLE_SPEED_BUTTON_POSITION
+	speed_bar.size = BATTLE_SPEED_BUTTON_SIZE
+	speed_bar.z_index = 200
+	speed_bar.visible = false
+	speed_bar.add_theme_constant_override("separation", 1)
+	parent.add_child(speed_bar)
+	for speed_index: int in BATTLE_SPEED_MULTIPLIERS.size():
+		var multiplier := BATTLE_SPEED_MULTIPLIERS[speed_index]
+		var speed_button := _make_button(
+			"Speed%d" % speed_index,
+			"%.1f×" % multiplier if multiplier < 1.0 else "%d×" % int(multiplier),
+			BATTLE_SPEED_BUTTON_POSITION,
+			Vector2(BATTLE_SPEED_BUTTON_SIZE.x / 4.0 - 1.0, BATTLE_SPEED_BUTTON_SIZE.y),
+			true
+		)
+		speed_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		speed_button.toggle_mode = true
+		speed_button.tooltip_text = "直接切换到 %.1f× 战斗播放速度" % multiplier
+		speed_bar.add_child(speed_button)
+		speed_button.pressed.connect(set_battle_speed.bind(speed_index))
 	var timer := _make_label("战斗 00:00.0", BATTLE_TIMER_POSITION, BATTLE_TIMER_SIZE)
 	timer.name = "BattleTimerLabel"
 	timer.unique_name_in_owner = true
@@ -599,6 +702,25 @@ func _build_board_section(parent: Control, section_name: String, top: float, ene
 		section.add_child(player_avatar)
 		player_avatar.position = PLAYER_AVATAR_POSITION
 		player_avatar.size = PLAYER_AVATAR_FRAME_SIZE
+		var volume_label := _make_label("音量", PLAYER_AVATAR_POSITION + Vector2(0, -21), Vector2(34, 18))
+		volume_label.name = "BattleVolumeLabel"
+		volume_label.unique_name_in_owner = true
+		volume_label.add_theme_font_size_override("font_size", 9)
+		volume_label.add_theme_color_override("font_color", Color("f5df9b"))
+		volume_label.z_index = 101
+		section.add_child(volume_label)
+		var volume_slider := HSlider.new()
+		volume_slider.name = "BattleVolumeSlider"
+		volume_slider.unique_name_in_owner = true
+		volume_slider.position = PLAYER_AVATAR_POSITION + Vector2(36, -21)
+		volume_slider.size = Vector2(112, 18)
+		volume_slider.min_value = 0.0
+		volume_slider.max_value = 100.0
+		volume_slider.step = 1.0
+		volume_slider.value = 25.0 # 音量滑条默认百分比，0 为静音
+		volume_slider.tooltip_text = "全局音量：0 为静音，100 为最大音量"
+		volume_slider.z_index = 101
+		section.add_child(volume_slider)
 		var phase := _make_label("准备阶段", Vector2(742, 76), Vector2(116, 24))
 		phase.name = "PhaseLabel"
 		phase.unique_name_in_owner = true
@@ -658,15 +780,113 @@ func _build_battle_result_panel() -> void:
 	placeholder.add_theme_font_size_override("normal_font_size", 11)
 	placeholder.add_theme_color_override("default_color", Color("e8eee5"))
 	panel.add_child(placeholder)
+	var export_button := _make_button(
+		"ExportBattleDataButton",
+		"导出战斗数据",
+		Vector2(10, 182),
+		Vector2(150, 27),
+		true
+	)
+	panel.add_child(export_button)
+	var export_status := _make_label("", Vector2(9, 212), Vector2(152, 30))
+	export_status.name = "BattleExportStatusLabel"
+	export_status.unique_name_in_owner = true
+	export_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	export_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	export_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	export_status.add_theme_font_size_override("font_size", 9)
+	panel.add_child(export_status)
 	var restart := _make_button(
 		"RestartBattleButton",
 		"重新开始",
-		Vector2(25, 184),
+		Vector2(25, 245),
 		Vector2(120, 27),
 		true
 	)
 	panel.add_child(restart)
 	_assign_runtime_owner(panel)
+
+
+func _build_battle_diagnostic_file_dialog() -> void:
+	if is_instance_valid(battle_diagnostic_file_dialog):
+		return
+	battle_diagnostic_file_dialog = FileDialog.new()
+	battle_diagnostic_file_dialog.name = "BattleDiagnosticSaveDialog"
+	battle_diagnostic_file_dialog.title = "导出战斗数据"
+	battle_diagnostic_file_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	battle_diagnostic_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	battle_diagnostic_file_dialog.filters = PackedStringArray(["*.json ; JSON 战斗数据"])
+	battle_diagnostic_file_dialog.overwrite_warning_enabled = true
+	battle_diagnostic_file_dialog.file_selected.connect(_save_battle_diagnostic_file)
+	add_child(battle_diagnostic_file_dialog)
+	var documents_path := OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
+	if not DirAccess.dir_exists_absolute(documents_path):
+		documents_path = OS.get_system_dir(OS.SYSTEM_DIR_DESKTOP)
+	if DirAccess.dir_exists_absolute(documents_path):
+		battle_diagnostic_file_dialog.current_dir = documents_path
+
+
+func _on_export_battle_data_button_pressed() -> void:
+	if (
+		_battle_diagnostic_recorder == null
+		or not _battle_diagnostic_recorder.is_complete
+		or not is_instance_valid(battle_diagnostic_file_dialog)
+	):
+		_refresh_battle_diagnostic_export_button()
+		return
+	battle_diagnostic_file_dialog.current_file = _default_battle_diagnostic_filename()
+	battle_diagnostic_file_dialog.popup_centered_ratio(0.72)
+
+
+func _default_battle_diagnostic_filename() -> String:
+	var project_version := String(ProjectSettings.get_setting("application/config/version", "unknown"))
+	if project_version.is_empty():
+		project_version = "unknown"
+	project_version = project_version.replace("/", "_").replace("\\", "_").replace(" ", "_")
+	var date_part := Time.get_datetime_string_from_system(false)
+	date_part = date_part.replace("-", "").replace(":", "").replace("T", "_")
+	return "project-card-battle-%s-godot%s.json" % [date_part, project_version]
+
+
+func _save_battle_diagnostic_file(path: String) -> void:
+	if _battle_diagnostic_recorder == null or not _battle_diagnostic_recorder.is_complete:
+		_show_battle_diagnostic_message("没有可导出的完整战斗记录。")
+		return
+	var result := BattleDiagnosticSerializerScript.save_to_path(
+		_battle_diagnostic_recorder.get_record_copy(),
+		path
+	)
+	if not bool(result.get("success", false)):
+		var failure_path := String(result.get("path", path))
+		var failure_reason := String(result.get("reason", "unknown"))
+		battle_export_status_label.text = "导出失败：%s" % failure_reason
+		battle_export_status_label.tooltip_text = failure_path
+		_show_battle_diagnostic_message(
+			"写入战斗数据失败。\n路径：%s\n错误：%s" % [failure_path, result.get("error", "未知错误")]
+		)
+		return
+	var saved_path := String(result.get("path", path))
+	battle_export_status_label.text = "已保存：%s" % saved_path.get_file()
+	battle_export_status_label.tooltip_text = saved_path
+	play_area_label.text = "战斗数据已导出到：%s" % saved_path
+
+
+func _show_battle_diagnostic_message(message: String) -> void:
+	if not is_instance_valid(battle_diagnostic_message_dialog):
+		battle_diagnostic_message_dialog = AcceptDialog.new()
+		battle_diagnostic_message_dialog.name = "BattleDiagnosticMessageDialog"
+		add_child(battle_diagnostic_message_dialog)
+	battle_diagnostic_message_dialog.dialog_text = message
+	battle_diagnostic_message_dialog.popup_centered()
+
+
+func _refresh_battle_diagnostic_export_button() -> void:
+	if not is_instance_valid(export_battle_data_button):
+		return
+	export_battle_data_button.disabled = (
+		_battle_diagnostic_recorder == null
+		or not _battle_diagnostic_recorder.is_complete
+	)
 
 
 func _build_collection_section(parent: Control) -> void:
@@ -890,18 +1110,33 @@ func _build_collection_section(parent: Control) -> void:
 	drop_zone.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	drop_zone.set_script(COLLECTION_DROP_ZONE_SCRIPT)
 	book.add_child(drop_zone)
-	var badge := Panel.new()
+	var badge: Variant = EmblemLibraryViewScript.new()
 	badge.name = "BadgePanel"
 	badge.unique_name_in_owner = true
-	badge.position = Vector2(35, 67)
-	badge.size = Vector2(176, 281)
-	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	badge.z_index = -49
+	badge.position = Vector2(12, 67)
+	badge.size = Vector2(124, 248)
+	badge.set_definitions(EmblemLibraryData.get_definitions())
+	badge.z_index = -48
 	section.add_child(badge)
-	var badge_text := _make_label("强化徽章（预留）", Vector2(12, 12), Vector2(152, 32))
-	badge_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	badge_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	badge.add_child(badge_text)
+	emblem_library = badge
+	_emblem_library_parent = section
+	emblem_library.click_carry_requested.connect(_on_click_carry_requested)
+	var wounds: Variant = EmblemLibraryViewScript.new()
+	wounds.name = "WoundWorkspace"
+	wounds.set_item_kind("wound")
+	var wound_definitions: Array[Dictionary] = EmblemLibraryData.get_wound_definitions()
+	for wound_definition: Dictionary in wound_definitions:
+		wound_definition["status_kind"] = "wound"
+	wounds.set_definitions(wound_definitions)
+	wounds.position = WOUND_LIBRARY_NORMAL_POSITION
+	wounds.size = WOUND_LIBRARY_NORMAL_SIZE
+	wounds.visible = false
+	wounds.z_index = -48
+	section.add_child(wounds)
+	wound_library = wounds
+	_wound_library_parent = section
+	wound_library._returned = emblem_library._returned
+	wound_library.click_carry_requested.connect(_on_click_carry_requested)
 	# Control 的命中顺序除了 z_index 也受同层子节点顺序影响；
 	# 把筛选层移动到最后，确保搜索按钮始终在书页和卡牌之上。
 	section.move_child(filter, section.get_child_count() - 1)
@@ -927,9 +1162,16 @@ func _make_label(text_value: String, pos: Vector2, node_size: Vector2) -> Label:
 
 # --- 场景初始化、阶段与全局状态 ---
 func _ready() -> void:
+	_battle_performance_trace_enabled = (
+		"--trace-battle-performance" in OS.get_cmdline_user_args()
+		or OS.get_environment("PROJECT_CARD_TRACE_BATTLE_PERFORMANCE") == "1"
+	)
 	set_process(true)
 	if not has_node("WorldContent"):
 		_build_scene_structure()
+	battle_audio_service = BattleAudioServiceScript.new()
+	battle_audio_service.name = "BattleAudioService"
+	add_child(battle_audio_service)
 	_bind_scene_nodes()
 	_initialize_owned_card_collection()
 	_build_formula_popup()
@@ -948,22 +1190,25 @@ func _ready() -> void:
 	right_edge_button.pressed.connect(func() -> void: turn_collection_page(current_collection_page + 1, &"edge"))
 	recent_bookmark_button.pressed.connect(toggle_recent_bookmark)
 	start_battle_button.pressed.connect(_on_start_battle_button_pressed)
+	export_battle_data_button.pressed.connect(_on_export_battle_data_button_pressed)
 	restart_battle_button.pressed.connect(_on_restart_battle_button_pressed)
-	battle_speed_button.pressed.connect(cycle_battle_speed)
 	battle_seed_random_button.pressed.connect(_use_new_battle_seed)
 	_use_new_battle_seed()
 	battle_controller = BattleController.new() as BattleController
 	battle_controller.name = "BattleController"
 	battle_controller.use_projectile_timing = true
+	battle_controller.performance_trace_enabled = _battle_performance_trace_enabled
 	add_child(battle_controller)
 	battle_controller.states_changed.connect(_on_battle_states_changed)
 	battle_controller.projectile_launched.connect(_on_battle_projectile_launched)
 	battle_controller.action_resolved.connect(_on_battle_action_resolved)
 	battle_controller.effect_resolved.connect(_on_battle_effect_resolved)
+	battle_controller.special_effect_resolved.connect(_on_battle_special_effect_resolved)
 	battle_controller.direct_damage_resolved.connect(_on_battle_direct_damage_resolved)
 	battle_controller.squad_defeated.connect(_request_battle_squad_departure)
 	battle_controller.squad_revived.connect(_cancel_battle_squad_departure)
 	battle_controller.battle_finished.connect(_on_battle_finished)
+	_build_battle_diagnostic_file_dialog()
 	_apply_battle_speed()
 	_build_filter_buttons()
 	collection_drop_zone.connect("card_dropped", _on_collection_card_dropped)
@@ -1040,7 +1285,11 @@ func _bind_scene_nodes() -> void:
 	enemy_back_row = get_node("%EnemyBackRow") as BattlefieldRow
 	enemy_front_row = get_node("%EnemyFrontRow") as BattlefieldRow
 	enemy_avatar = get_node("%EnemyAvatar") as TextureRect
-	battle_speed_button = get_node("%BattleSpeedButton") as Button
+	battle_pause_button = get_node("%BattlePauseButton") as Button
+	battle_speed_bar = get_node("%BattleSpeedBar") as Control
+	for child: Node in battle_speed_bar.get_children():
+		if child is Button:
+			battle_speed_buttons.append(child as Button)
 	battle_timer_label = get_node("%BattleTimerLabel") as Label
 	battle_seed_panel = get_node("%BattleSeedPanel") as PanelContainer
 	battle_seed_spin = get_node("%BattleSeedSpin") as SpinBox
@@ -1056,6 +1305,9 @@ func _bind_scene_nodes() -> void:
 	attack_effect_lab_button = get_node("%AttackEffectLabButton") as Button
 	drag_mode_button = get_node("%DragModeButton") as Button
 	player_avatar_button = get_node("%PlayerAvatarButton") as TextureButton
+	battle_volume_slider = get_node("%BattleVolumeSlider") as HSlider
+	battle_volume_slider.value_changed.connect(_on_battle_volume_changed)
+	battle_audio_service.set_master_volume_percent(battle_volume_slider.value)
 	start_battle_button = get_node("%StartBattleButton") as Button
 
 
@@ -1066,7 +1318,7 @@ func _build_formula_popup() -> void:
 	formula_popup.name = "BattleFormulaPopup"
 	formula_popup.size = Vector2(FORMULA_POPUP_MIN_WIDTH, 1.0)
 	formula_popup.custom_minimum_size = Vector2.ZERO
-	formula_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	formula_popup.mouse_filter = Control.MOUSE_FILTER_STOP
 	formula_popup.z_index = 2000
 	formula_popup.visible = false
 	var style := StyleBoxFlat.new()
@@ -1081,10 +1333,13 @@ func _build_formula_popup() -> void:
 	formula_popup_text.name = "FormulaText"
 	formula_popup_text.fit_content = false
 	formula_popup_text.scroll_active = true
+	formula_popup_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	formula_popup_text.add_theme_font_override("normal_font", BATTLE_LOG_FONT)
 	formula_popup_text.add_theme_font_size_override("normal_font_size", 12)
 	formula_popup_text.add_theme_color_override("default_color", Color("e8eee5"))
 	formula_popup.add_child(formula_popup_text)
+	formula_popup.mouse_entered.connect(_on_formula_popup_mouse_entered)
+	formula_popup.mouse_exited.connect(_schedule_formula_popup_hide)
 	if not battle_log_text.meta_hover_started.is_connected(_on_battle_log_meta_hover_started):
 		battle_log_text.meta_hover_started.connect(_on_battle_log_meta_hover_started)
 		battle_log_text.meta_hover_ended.connect(_on_battle_log_meta_hover_ended)
@@ -1092,6 +1347,8 @@ func _build_formula_popup() -> void:
 	battle_result_label = get_node("%BattleResultLabel") as Label
 	battle_result_summary_label = get_node("%BattleResultPlaceholder") as RichTextLabel
 	restart_battle_button = get_node("%RestartBattleButton") as Button
+	export_battle_data_button = get_node("%ExportBattleDataButton") as Button
+	battle_export_status_label = get_node("%BattleExportStatusLabel") as Label
 	search_edit = get_node("%SearchEdit") as LineEdit
 	search_button = get_node("%SearchButton") as Button
 	clear_search_button = get_node("%ClearSearchButton") as Button
@@ -1124,9 +1381,29 @@ func _on_player_avatar_button_pressed() -> void:
 	set_world_view(WorldView.BATTLEFIELDS if current_world_view == WorldView.COLLECTION else WorldView.COLLECTION)
 
 
-func cycle_battle_speed() -> void:
-	battle_speed_index = (battle_speed_index + 1) % BATTLE_SPEED_MULTIPLIERS.size()
+func _on_battle_volume_changed(value: float) -> void:
+	if is_instance_valid(battle_audio_service):
+		battle_audio_service.set_master_volume_percent(value)
+
+
+func set_battle_speed(index: int) -> void:
+	battle_speed_index = clampi(index, 0, BATTLE_SPEED_MULTIPLIERS.size() - 1)
 	_apply_battle_speed()
+
+
+func _on_battle_pause_button_pressed() -> void:
+	if current_phase != GamePhase.BATTLE or is_instance_valid(_inspection_overlay):
+		return
+	get_tree().paused = not get_tree().paused
+	_update_battle_pause_button()
+
+
+func _update_battle_pause_button() -> void:
+	if not is_instance_valid(battle_pause_button):
+		return
+	var paused := get_tree().paused
+	battle_pause_button.text = "▶️" if paused else "⏸️"
+	battle_pause_button.tooltip_text = "继续战斗" if paused else "暂停战斗"
 
 
 func _use_new_battle_seed() -> void:
@@ -1139,13 +1416,15 @@ func _use_new_battle_seed() -> void:
 
 func _apply_battle_speed() -> void:
 	var multiplier := BATTLE_SPEED_MULTIPLIERS[battle_speed_index]
-	if battle_speed_button != null:
-		battle_speed_button.text = "速度 %d×" % int(multiplier)
+	for index: int in battle_speed_buttons.size():
+		battle_speed_buttons[index].button_pressed = index == battle_speed_index
+		battle_speed_buttons[index].modulate = Color("fff0b4") if index == battle_speed_index else Color("b9a982")
 	if battle_controller != null:
 		battle_controller.set_battle_speed_multiplier(multiplier)
 	if is_instance_valid(battle_effect_layer):
 		for child: Node in battle_effect_layer.get_children():
-			BattleAttackTrailRenderer.set_flight_speed(child, multiplier)
+			if BattleAttackTrailRenderer.is_flight_root(child):
+				BattleAttackTrailRenderer.set_flight_speed(child, multiplier)
 
 
 func set_world_view(view: WorldView, animate: bool = true) -> void:
@@ -1694,13 +1973,24 @@ func _update_page_number_labels() -> void:
 	right_page_number_label.visible = right_page_number <= physical_page_count
 
 
-func _record_recently_returned_card(card_data: CardData) -> void:
+func _record_recently_returned_card(card_data: CardData, owned_card: OwnedCard = null) -> void:
 	if card_data == null:
 		return
-	recently_returned_cards.erase(card_data)
+	if owned_card == null:
+		for candidate: OwnedCard in owned_card_collection.get_cards():
+			if candidate.card_data == card_data:
+				owned_card = candidate
+				break
+	var old_index := recently_returned_cards.find(card_data)
+	if old_index >= 0:
+		recently_returned_cards.remove_at(old_index)
+		if old_index < recently_returned_owned_cards.size():
+			recently_returned_owned_cards.remove_at(old_index)
 	recently_returned_cards.push_front(card_data)
+	recently_returned_owned_cards.push_front(owned_card)
 	if recently_returned_cards.size() > RECENT_CARDS_LIMIT:
 		recently_returned_cards.resize(RECENT_CARDS_LIMIT)
+		recently_returned_owned_cards.resize(mini(recently_returned_owned_cards.size(), RECENT_CARDS_LIMIT))
 	_play_recent_bookmark_shake()
 
 
@@ -1905,10 +2195,12 @@ func _create_page_turn_snapshot(
 		if filtered_index >= filtered_cards.size():
 			break
 		var card_data := filtered_cards[filtered_index]
+		var owned_card := _get_owned_card_for_collection_index(filtered_cards, filtered_index)
 		var slot := _create_collection_card_slot(
 			card_data,
-			_is_card_deployed(card_data),
-			false
+			_is_owned_card_deployed(owned_card) if owned_card != null else _is_card_deployed(card_data),
+			false,
+			owned_card
 		)
 		slot.name = "TurnCard%d" % side_index
 		slot.position = (
@@ -2100,19 +2392,23 @@ func _notification(what: int) -> void:
 		var drag_data: Variant = get_viewport().gui_get_drag_data()
 		if (
 			drag_data is Dictionary
-			and (drag_data as Dictionary).get("kind") in [
-				&"equipment_card",
-				&"equipment_indicator",
-			]
+			and _is_card_carry_drag(drag_data as Dictionary)
 		):
-			_native_equipment_drag_data = (drag_data as Dictionary).duplicate()
-			_update_native_equipment_drag_preview.call_deferred(
-				get_viewport().get_mouse_position()
+			_native_carry_data = (drag_data as Dictionary).duplicate()
+			_native_carry_update_frame = -1
+			_native_carry_update_pointer = Vector2.INF
+			_native_carry_pointer = get_viewport().get_mouse_position()
+			_update_card_carry_target.call_deferred(
+				get_viewport().get_mouse_position(),
+				_native_carry_data
 			)
 	elif what == NOTIFICATION_DRAG_END:
-		collection_drop_zone.clear_drop_preview()
-		var failed_indicator_drag := _native_equipment_drag_data
-		_native_equipment_drag_data = {}
+		var failed_indicator_drag := _native_carry_data
+		_native_carry_data = {}
+		_native_carry_update_frame = -1
+		_native_carry_update_pointer = Vector2.INF
+		_native_carry_last_target = {}
+		_clear_click_drop_feedback(false)
 		if (
 			not failed_indicator_drag.is_empty()
 			and failed_indicator_drag.get("kind") == &"equipment_indicator"
@@ -2120,7 +2416,7 @@ func _notification(what: int) -> void:
 		):
 			var drag_visual_value: Variant = failed_indicator_drag.get("drag_visual")
 			var drag_visual: CardDragPreview
-			if is_instance_valid(drag_visual_value):
+			if is_instance_valid(drag_visual_value) and drag_visual_value is CardDragPreview:
 				drag_visual = drag_visual_value as CardDragPreview
 				drag_visual.set_equipment_indicator_mode(false)
 			var preview_offset: Vector2 = failed_indicator_drag.get(
@@ -2138,17 +2434,35 @@ func _notification(what: int) -> void:
 			)
 
 
-func _process(_delta: float) -> void:
-	# 原生拖拽的透明接收层不保证在所有平台持续发送 mouse_exited；
-	# 用视口鼠标位置逐帧重算，确保离开卡面的同一帧恢复完整装备牌。
-	if not _native_equipment_drag_data.is_empty() and get_viewport().gui_is_dragging():
-		_update_native_equipment_drag_preview(get_viewport().get_mouse_position())
+func _process(delta: float) -> void:
+	# 接收层偶尔漏发 mouse_exited；以最近收到的鼠标坐标逐帧统一确定拖拽目标。
+	if not _native_carry_data.is_empty() and get_viewport().gui_is_dragging():
+		var live_drag_data: Variant = get_viewport().gui_get_drag_data()
+		if live_drag_data is Dictionary:
+			_native_carry_data["drag_visual"] = (live_drag_data as Dictionary).get("drag_visual")
+		_update_card_carry_target(
+			_native_carry_pointer,
+			_native_carry_data
+		)
+	_record_battle_performance_frame(delta)
 
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion and not _native_equipment_drag_data.is_empty():
-		_update_native_equipment_drag_preview(
-			(event as InputEventMouseMotion).position
+	if (
+		_battle_performance_trace_enabled
+		and event is InputEventKey
+		and (event as InputEventKey).pressed
+		and not (event as InputEventKey).echo
+		and (event as InputEventKey).keycode == KEY_F10
+	):
+		_write_battle_performance_trace()
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventMouseMotion and not _native_carry_data.is_empty():
+		_native_carry_pointer = (event as InputEventMouseMotion).position
+		_update_card_carry_target(
+			_native_carry_pointer,
+			_native_carry_data
 		)
 	if _click_carry_data.is_empty():
 		return
@@ -2174,49 +2488,81 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-func _update_native_equipment_drag_preview(
-	pointer_global_position: Vector2
-) -> void:
-	var active_drag_data := _native_equipment_drag_data
-	var live_drag_data: Variant = get_viewport().gui_get_drag_data()
-	if (
-		live_drag_data is Dictionary
-		and (live_drag_data as Dictionary).get("kind") in [
-			&"equipment_card",
-			&"equipment_indicator",
-		]
-	):
-		active_drag_data = live_drag_data as Dictionary
-		_native_equipment_drag_data["drag_visual"] = active_drag_data.get("drag_visual")
-	var target_row: BattlefieldRow
-	for row: BattlefieldRow in [front_row, back_row]:
-		var row_position := _to_row_drop_position(row, pointer_global_position)
-		if row._find_equipment_target_slot(row_position, active_drag_data) != null:
-			target_row = row
-			break
-	if target_row == null:
-		front_row.clear_drop_preview(false)
-		back_row.clear_drop_preview(false)
-		_set_native_equipment_drag_visual_mode(active_drag_data, false)
-		return
-	for row: BattlefieldRow in [front_row, back_row]:
-		if row != target_row:
-			row.clear_drop_preview(false)
-	var can_equip_here := target_row.preview_card_drop(
-		_to_row_drop_position(target_row, pointer_global_position),
-		active_drag_data
-	)
-	if not can_equip_here:
-		_set_native_equipment_drag_visual_mode(active_drag_data, false)
-
-
-func _set_native_equipment_drag_visual_mode(
+func _set_equipment_drag_visual_mode(
 	drag_data: Dictionary,
 	enabled: bool
 ) -> void:
+	if drag_data.get("kind") not in [&"equipment_card", &"equipment_indicator"]:
+		return
 	var drag_visual_value: Variant = drag_data.get("drag_visual")
-	if is_instance_valid(drag_visual_value):
+	if is_instance_valid(drag_visual_value) and drag_visual_value is CardDragPreview:
 		(drag_visual_value as CardDragPreview).set_equipment_indicator_mode(enabled)
+
+
+func _is_card_carry_drag(drag_data: Dictionary) -> bool:
+	return (
+		drag_data.get("source_type") in [&"board", &"collection"]
+		and drag_data.get("kind") in [
+		&"card",
+		&"squad",
+		&"equipment_card",
+		&"equipment_indicator",
+		]
+	)
+
+
+func _update_card_carry_target(
+	pointer_global_position: Vector2,
+	drag_data: Dictionary
+) -> Dictionary:
+	var is_native_drag := (
+		not _native_carry_data.is_empty()
+		and _is_card_carry_drag(drag_data)
+	)
+	if is_native_drag:
+		var frame := Engine.get_process_frames()
+		if (
+			frame == _native_carry_update_frame
+			and pointer_global_position.is_equal_approx(_native_carry_update_pointer)
+		):
+			return _native_carry_last_target
+		_native_carry_update_frame = frame
+		_native_carry_update_pointer = pointer_global_position
+	if is_instance_valid(_click_carry_preview):
+		_click_carry_preview.global_position = pointer_global_position
+	for row: BattlefieldRow in [front_row, back_row]:
+		row.update_stack_target_feedback_global(pointer_global_position, drag_data)
+
+	var target := {"row": null, "collection": false, "accepted": false}
+	var target_row := _find_board_row_at(pointer_global_position)
+	if target_row != null:
+		for row: BattlefieldRow in [front_row, back_row]:
+			if row != target_row:
+				row.clear_drop_preview(false)
+		collection_drop_zone.clear_drop_preview()
+		target["row"] = target_row
+		target["accepted"] = target_row.preview_card_drop(
+			_to_row_drop_position(target_row, pointer_global_position),
+			drag_data
+		)
+	elif collection_drop_zone.get_global_rect().has_point(pointer_global_position):
+		front_row.clear_drop_preview(false)
+		back_row.clear_drop_preview(false)
+		target["collection"] = true
+		target["accepted"] = collection_drop_zone.preview_card_drop(
+			pointer_global_position,
+			drag_data
+		)
+	else:
+		_clear_click_drop_feedback(false)
+	if drag_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
+		_set_equipment_drag_visual_mode(
+			drag_data,
+			target.get("row") != null and bool(target.get("accepted", false))
+		)
+	if is_native_drag:
+		_native_carry_last_target = target
+	return target
 
 
 func _on_start_battle_button_pressed() -> void:
@@ -2238,6 +2584,16 @@ func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
 	_last_battle_settlement_result.clear()
 	_battle_state_slots.clear()
 	_clear_battle_log()
+	if _battle_diagnostic_recorder != null:
+		_battle_diagnostic_recorder.detach()
+	_battle_diagnostic_recorder = BattleDiagnosticRecorderScript.new()
+	_battle_diagnostic_recorder.recording_completed.connect(
+		_refresh_battle_diagnostic_export_button
+	)
+	_battle_diagnostic_recorder.attach(battle_controller)
+	battle_export_status_label.text = ""
+	battle_export_status_label.tooltip_text = ""
+	_refresh_battle_diagnostic_export_button()
 	_battle_generation += 1
 	_completed_battle_departures.clear()
 	_battle_departure_flush_queued = false
@@ -2275,6 +2631,7 @@ func _on_restart_battle_button_pressed() -> void:
 func restart_battle() -> bool:
 	if _battle_snapshot == null or _battle_snapshot.is_empty() or battle_controller == null:
 		return false
+	_close_card_inspection(true)
 	battle_controller.clear_battle()
 	_clear_battle_log()
 	_battle_generation += 1
@@ -2300,6 +2657,8 @@ func restart_battle() -> bool:
 
 
 func set_phase_for_test(phase: GamePhase) -> void:
+	if phase != GamePhase.BATTLE:
+		_close_card_inspection(true)
 	_cancel_click_carry()
 	if battle_controller != null and phase != GamePhase.BATTLE:
 		battle_controller.stop_battle()
@@ -2319,7 +2678,9 @@ func _update_phase_label() -> void:
 			phase_label.text = "结算阶段"
 	set_world_view(WorldView.COLLECTION if current_phase == GamePhase.PREPARE else WorldView.BATTLEFIELDS)
 	start_battle_button.visible = current_phase == GamePhase.PREPARE
-	battle_speed_button.visible = current_phase == GamePhase.BATTLE
+	battle_pause_button.visible = current_phase == GamePhase.BATTLE
+	_update_battle_pause_button()
+	battle_speed_bar.visible = current_phase == GamePhase.BATTLE
 	battle_timer_label.visible = current_phase == GamePhase.BATTLE
 	battle_seed_panel.visible = true
 	battle_seed_spin.get_line_edit().editable = current_phase == GamePhase.PREPARE
@@ -2327,6 +2688,7 @@ func _update_phase_label() -> void:
 	# 结算页继续复用本场同一份结构化日志，直到玩家点击重新开始。
 	battle_log_panel.visible = current_phase in [GamePhase.BATTLE, GamePhase.RESULT]
 	battle_result_panel.visible = current_phase == GamePhase.RESULT
+	_refresh_battle_diagnostic_export_button()
 	_refresh_drag_availability()
 
 
@@ -2422,6 +2784,11 @@ func save_run_to_path(path: String) -> Error:
 		current_phase,
 		celestial_indicators.capture_state()
 	)
+	checkpoint["developer_sticker_bag"] = {
+		"returned": emblem_library._returned.duplicate(true),
+		"next_instance": _next_developer_emblem_instance,
+	}
+	checkpoint["chaos_reroll_day_token"] = _last_chaos_reroll_day_token
 	var error := run_save_service.save_checkpoint(path, checkpoint)
 	_last_run_persistence_result = {
 		"success": error == OK,
@@ -2432,23 +2799,81 @@ func save_run_to_path(path: String) -> Error:
 	return error
 
 
+func reroll_chaos_stickers_for_new_day(day_token: StringName) -> int:
+	if day_token.is_empty() or day_token == _last_chaos_reroll_day_token:
+		return 0
+	_last_chaos_reroll_day_token = day_token
+	var rerolled := 0
+	for owned_card: OwnedCard in owned_card_collection.get_cards():
+		var changed := false
+		for rune_index: int in owned_card.rune_stickers.size():
+			var sticker: Dictionary = owned_card.rune_stickers[rune_index]
+			if sticker.get("emblem_id", &"") != &"混沌贴纸":
+				continue
+			var next_state := sticker.duplicate(true)
+			next_state["element"] = randi_range(0, 4)
+			owned_card.set_rune_sticker(rune_index, next_state)
+			rerolled += 1
+			changed = true
+		if changed:
+			_refresh_owned_card_status_visuals(owned_card)
+	return rerolled
+
+
 func load_run_from_path(path: String) -> bool:
 	var load_result := run_save_service.load_checkpoint(path)
 	if not bool(load_result.get("success", false)):
 		_last_run_persistence_result = load_result
 		return false
+	var loaded_checkpoint := load_result.get("checkpoint", {}) as Dictionary
+	var migration_save_pending := (
+		int(loaded_checkpoint.get("schema_version", 0)) < RunSaveService.SCHEMA_VERSION
+		or int(loaded_checkpoint.get("status_slot_migration_version", 0)) < RunSaveService.STATUS_SLOT_MIGRATION_VERSION
+	)
+	var sticker_bag: Dictionary = loaded_checkpoint.get("developer_sticker_bag", {})
+	var returned_stickers: Variant = sticker_bag.get("returned", [])
+	if not returned_stickers is Array:
+		return false
+	for sticker: Variant in returned_stickers:
+		if not sticker is Dictionary or String(sticker.get("instance_id", "")).is_empty() or String(sticker.get("wound_id" if sticker.get("kind", "emblem") == "wound" else "emblem_id", "")).is_empty():
+			return false
 	var restore_result := run_save_service.restore_checkpoint(
-		load_result.get("checkpoint", {}) as Dictionary,
+		loaded_checkpoint,
 		owned_card_collection,
 		run_reward_state,
 		settlement_journal,
-		_build_card_definition_registry()
+		_build_card_definition_registry(),
+		# 当前主场景是开发测试模式，超额伤势迁入右侧工作区。
+		true
 	)
 	if not bool(restore_result.get("success", false)):
 		_last_run_persistence_result = restore_result
 		return false
 
 	_cancel_click_carry()
+	_close_card_inspection(true)
+	emblem_library._returned.assign(returned_stickers)
+	var migration_returns: Array = restore_result.get("slot_migration_returns", [])
+	for returned_value: Variant in migration_returns:
+		if not returned_value is Dictionary:
+			continue
+		var returned_item := returned_value as Dictionary
+		var returned_state := returned_item.get("state", {}) as Dictionary
+		if returned_state.is_empty():
+			continue
+		returned_state["kind"] = String(returned_item.get("kind", "emblem"))
+		var already_returned := false
+		for existing_return: Dictionary in emblem_library._returned:
+			if String(existing_return.get("instance_id", "")) == String(returned_state.get("instance_id", "")):
+				already_returned = true
+				break
+		if not already_returned:
+			emblem_library._returned.append(returned_state.duplicate(true))
+	emblem_library._refresh_entries()
+	_next_developer_emblem_instance = maxi(1, int(sticker_bag.get("next_instance", 1)))
+	_last_chaos_reroll_day_token = StringName(
+		String((load_result.get("checkpoint", {}) as Dictionary).get("chaos_reroll_day_token", ""))
+	)
 	if battle_controller != null:
 		battle_controller.clear_battle()
 	_clear_battle_log()
@@ -2478,11 +2903,22 @@ func load_run_from_path(path: String) -> bool:
 	_update_phase_label()
 	_build_collection_cards()
 	_refresh_preparation_effect_preview.call_deferred()
-	play_area_label.text = "已从本局存档恢复到安全的战前准备状态"
+	var migration_save_error: Error = OK
+	if migration_save_pending:
+		migration_save_error = save_run_to_path(path)
+	play_area_label.text = (
+		"已恢复存档到战前准备；槽位迁移返还%d件状态" % migration_returns.size()
+		if not migration_returns.is_empty()
+		else "已从本局存档恢复到安全的战前准备状态"
+	)
+	if migration_save_error != OK:
+		play_area_label.text += "；迁移标记自动保存失败，请手动保存"
 	_last_run_persistence_result = {
 		"success": true,
 		"path": path,
 		"pending_battle_instance_id": _resume_battle_instance_id,
+		"migration_saved": migration_save_error == OK,
+		"migration_save_error": migration_save_error,
 	}
 	return true
 
@@ -2548,6 +2984,7 @@ func _map_battle_states_to_slots(
 func _on_battle_states_changed() -> void:
 	if battle_controller == null:
 		return
+	var profile_started_usec := Time.get_ticks_usec() if _battle_performance_trace_enabled else 0
 	_update_battle_timer()
 	for state: BattleSquadState in battle_controller.get_all_states():
 		var slot := _battle_state_slots.get(state) as BoardSlot
@@ -2563,13 +3000,20 @@ func _on_battle_states_changed() -> void:
 				state.runtime_action_type_override,
 				state.get_rune_pattern_result(),
 				state.get_active_rune_slots(),
-				state.get_masked_rune_indices_by_card()
+				state.get_masked_rune_indices_by_card(),
+				battle_controller.get_spent_emblem_slots_by_card(state),
+				state.get_runtime_rune_overrides_by_card(),
+				battle_controller.get_effective_target_weight(state),
+				state.get_masked_wound_indices_by_card()
 			)
+	if profile_started_usec > 0:
+		_battle_trace_state_sync_usec += Time.get_ticks_usec() - profile_started_usec
 
 
 func _refresh_preparation_effect_preview() -> void:
 	if current_phase != GamePhase.PREPARE or battle_controller == null:
 		return
+	var profile_started_usec := Time.get_ticks_usec() if _equipment_drop_profile_active else 0
 	# 备战态复用正式战斗的状态初始化与持续效果系统，但不会触发突击、推进时间或写入奖励账本。
 	var player_formation := _build_battle_formation(front_row, &"player_front")
 	player_formation.append_array(_build_battle_formation(back_row, &"player_back"))
@@ -2580,6 +3024,11 @@ func _refresh_preparation_effect_preview() -> void:
 	_map_battle_states_to_slots(battle_controller.player_states, player_formation)
 	_map_battle_states_to_slots(battle_controller.enemy_states, enemy_formation)
 	_on_battle_states_changed()
+	if profile_started_usec > 0:
+		_record_equipment_drop_profile_duration(
+			&"preparation_preview_refresh",
+			Time.get_ticks_usec() - profile_started_usec
+		)
 
 
 func _update_battle_timer() -> void:
@@ -2615,14 +3064,36 @@ func _on_battle_action_resolved(
 
 
 func _on_battle_effect_resolved(event: BattleEffectEvent) -> void:
+	var profile_started_usec := Time.get_ticks_usec() if _battle_performance_trace_enabled else 0
+	if (
+		event != null
+		and event.is_base_action
+		and event.effect_kind == BattleEffectEvent.EffectKind.DAMAGE
+		and not event.missed
+		and is_instance_valid(battle_audio_service)
+	):
+		battle_audio_service.play_action_hit(event.action_type)
 	_append_battle_effect(event)
 	if event.visual_kind in [&"fire_burn", &"fire_tick", &"fire_finish"]:
 		_play_battle_effect_visual(event)
+	if profile_started_usec > 0:
+		_battle_trace_effect_dispatch_usec += Time.get_ticks_usec() - profile_started_usec
 
 
 func _on_battle_projectile_launched(event: BattleEffectEvent) -> void:
+	if not _battle_performance_trace_enabled:
+		_handle_battle_projectile_launched(event)
+		return
+	var profile_started_usec := Time.get_ticks_usec()
+	_handle_battle_projectile_launched(event)
+	_battle_trace_effect_dispatch_usec += Time.get_ticks_usec() - profile_started_usec
+
+
+func _handle_battle_projectile_launched(event: BattleEffectEvent) -> void:
 	if event == null or battle_controller == null:
 		return
+	if event.is_base_action and is_instance_valid(battle_audio_service):
+		battle_audio_service.play_action_launch(event.action_type)
 	var source_slot := _battle_state_slots.get(event.source) as BoardSlot
 	var target_slot := _battle_state_slots.get(event.target) as BoardSlot
 	if not is_instance_valid(target_slot) or not is_instance_valid(battle_effect_layer):
@@ -2700,21 +3171,86 @@ func _append_battle_effect(event: BattleEffectEvent) -> void:
 	if event == null or battle_log_text == null:
 		return
 	var entry := _battle_log_by_group.get(event.group_id) as BattleLogEntry
+	var is_new := entry == null
 	if entry == null:
 		entry = BattleLogEntry.new()
 		entry.group_id = event.group_id
 		entry.timestamp = event.timestamp
 		entry.source = event.source
-		_battle_log_by_group[event.group_id] = entry
-		_battle_log_entries.append(entry)
 	entry.add_event(event)
+	if is_new:
+		_append_battle_log_entry(entry)
+	else:
+		_refresh_battle_log_text()
+
+
+func _on_battle_special_effect_resolved(record: Dictionary) -> void:
+	if record.is_empty() or battle_log_text == null:
+		return
+	var entry := BattleLogEntry.new()
+	entry.group_id = -_next_direct_effect_log_id
+	_next_direct_effect_log_id += 1
+	entry.timestamp = float(record.get("logical_time_seconds", 0.0))
+	if String(record.get("kind", "")) == "roll":
+		var roll_source_name := String(record.get("source_card_name", "未知来源"))
+		entry.add_direct_effect_line(
+			"%.1f秒 · %s：%s" % [entry.timestamp, roll_source_name, String(record.get("effect_reading", "掷骰结果未知"))]
+		)
+		_append_battle_log_entry(entry)
+		return
+	var source_name := String(record.get("source_card_name", "未知来源"))
+	var target_name := String(record.get("target_card_name", "未知目标"))
+	var kind := String(record.get("kind", "effect"))
+	var amount := float(record.get("effective_amount", 0.0))
+	var calculated := float(record.get("calculated_amount", amount))
+	var verb := "获得护甲" if kind == "armor" else "受到伤害"
+	var reading := String(record.get("effect_reading", ""))
+	var tags: Array = record.get("tags", []) as Array
+	var tag_text := "、".join(_string_array_to_strings(tags))
+	var details: Array[String] = ["%.1f秒" % entry.timestamp, "%s触发" % source_name]
+	var trigger_name := String(record.get("trigger_name", ""))
+	if not trigger_name.is_empty():
+		details.append(trigger_name)
+	if not tag_text.is_empty():
+		details.append(tag_text)
+	var source_status := String(record.get("source_status", "unknown"))
+	if source_status == "unknown":
+		details.append("未知来源")
+	var amount_text := BattleLogEntry.format_number(amount)
+	if kind == "armor":
+		amount_text = "+%s" % amount_text
+	else:
+		amount_text = "-%s" % amount_text
+	var line := "%s 对 %s：%s %s" % [" · ".join(details), target_name, verb, amount_text]
+	if not is_equal_approx(calculated, amount):
+		line += "（计算 %s，实际 %s）" % [BattleLogEntry.format_number(calculated), BattleLogEntry.format_number(amount)]
+	if not reading.is_empty():
+		line += "；来源条目：%s" % reading
+	entry.add_direct_effect_line(line)
+	_append_battle_log_entry(entry)
+
+
+func _append_battle_log_entry(entry: BattleLogEntry) -> void:
+	_battle_log_entries.append(entry)
+	_battle_log_by_group[entry.group_id] = entry
 	while _battle_log_entries.size() > BATTLE_LOG_MAX_ENTRIES:
 		var removed: BattleLogEntry = _battle_log_entries.pop_front()
 		_battle_log_by_group.erase(removed.group_id)
+	_refresh_battle_log_text()
+
+
+func _refresh_battle_log_text() -> void:
 	var lines: Array[String] = []
 	for log_entry: BattleLogEntry in _battle_log_entries:
 		lines.append(log_entry.to_bbcode())
 	battle_log_text.text = "\n".join(lines)
+
+
+func _string_array_to_strings(values: Array) -> Array[String]:
+	var result: Array[String] = []
+	for value: Variant in values:
+		result.append(String(value))
+	return result
 
 
 func _clear_battle_log() -> void:
@@ -2731,26 +3267,26 @@ func _on_battle_log_meta_hover_started(meta: Variant) -> void:
 	if parts.size() != 3 or parts[0] != "formula":
 		return
 	var entry := _battle_log_by_group.get(int(parts[1])) as BattleLogEntry
-	var formula := entry.get_formula(int(parts[2])) if entry != null else null
+	var event := entry.events[int(parts[2])] if entry != null and int(parts[2]) >= 0 and int(parts[2]) < entry.events.size() else null
+	var formula := event.formula if event != null else null
 	if formula == null:
 		return
-	var popup_content := _format_formula_popup(formula)
+	var popup_content := _format_formula_popup(formula, event)
 	formula_popup_text.text = popup_content
 	formula_popup.visible = true
 	var mouse := get_viewport().get_mouse_position()
 	var viewport_size := get_viewport_rect().size
-	var desired_size := _measure_formula_popup_size(popup_content)
+	var desired_size := _measure_formula_popup_size(popup_content, viewport_size)
 	var safe_size := Vector2(minf(desired_size.x, viewport_size.x), minf(desired_size.y, viewport_size.y))
 	formula_popup.size = safe_size
-	formula_popup_text.scroll_active = desired_size.y > safe_size.y
-	var desired := mouse + Vector2(-safe_size.x * 0.5, -safe_size.y - FORMULA_POPUP_MOUSE_GAP)
-	formula_popup.position = Vector2(
-		clampf(desired.x, 0.0, maxf(viewport_size.x - safe_size.x, 0.0)),
-		clampf(desired.y, 0.0, maxf(viewport_size.y - safe_size.y, 0.0))
+	formula_popup_text.scroll_active = true
+	formula_popup.position = BattleFormulaPresenter.place_popup(
+		mouse, viewport_size, safe_size, FORMULA_POPUP_MOUSE_GAP
 	)
+	_formula_popup_hide_generation += 1
 
 
-func _measure_formula_popup_size(popup_content: String) -> Vector2:
+func _measure_formula_popup_size(popup_content: String, viewport_size: Vector2) -> Vector2:
 	return BattleFormulaPresenter.measure_popup_size(
 		popup_content,
 		formula_popup_text.get_theme_font("normal_font"),
@@ -2758,17 +3294,37 @@ func _measure_formula_popup_size(popup_content: String) -> Vector2:
 		FORMULA_POPUP_MIN_WIDTH,
 		FORMULA_POPUP_MAX_WIDTH,
 		FORMULA_POPUP_MAX_HEIGHT,
-		FORMULA_POPUP_CONTENT_PADDING
+		FORMULA_POPUP_CONTENT_PADDING,
+		viewport_size
 	)
 
 
 func _on_battle_log_meta_hover_ended(_meta: Variant) -> void:
-	if is_instance_valid(formula_popup):
-		formula_popup.visible = false
+	_schedule_formula_popup_hide()
 
 
-func _format_formula_popup(formula: BattleFormulaData) -> String:
-	return BattleFormulaPresenter.format_popup(formula)
+func _schedule_formula_popup_hide() -> void:
+	if not is_instance_valid(formula_popup) or not formula_popup.visible:
+		return
+	_formula_popup_hide_generation += 1
+	_hide_formula_popup_after_pointer_transition(_formula_popup_hide_generation)
+
+
+func _on_formula_popup_mouse_entered() -> void:
+	_formula_popup_hide_generation += 1
+
+
+func _hide_formula_popup_after_pointer_transition(generation: int) -> void:
+	await get_tree().create_timer(0.2).timeout
+	if generation != _formula_popup_hide_generation or not is_instance_valid(formula_popup):
+		return
+	if formula_popup.get_global_rect().has_point(get_viewport().get_mouse_position()):
+		return
+	formula_popup.visible = false
+
+
+func _format_formula_popup(formula: BattleFormulaData, event: BattleEffectEvent = null) -> String:
+	return BattleFormulaPresenter.format_popup(formula, event)
 
 
 func _play_battle_effect_visual(event: BattleEffectEvent) -> void:
@@ -2996,6 +3552,9 @@ func _row_for_battle_key(row_key: StringName) -> BattlefieldRow:
 
 
 func _on_battle_finished(result: BattleController.Result) -> void:
+	# Controller 信号连接早于采集器；先在结算改写 OwnedCard 前冻结战斗最终状态。
+	if _battle_diagnostic_recorder != null:
+		_battle_diagnostic_recorder.finish(result)
 	_pending_battle_result = result
 	if _active_battle_departures == 0:
 		_show_battle_result(result)
@@ -3006,6 +3565,8 @@ func _show_battle_result(result: BattleController.Result) -> void:
 	current_phase = GamePhase.RESULT
 	_restore_battle_result_layout()
 	_last_battle_settlement_result = settle_current_battle()
+	if bool(_last_battle_settlement_result.get("success", false)):
+		_add_settled_emblem_rewards_to_library()
 	if int(_last_battle_settlement_result.get("equipment_consumed", 0)) > 0:
 		_remove_missing_equipment_from_board()
 		_sync_legacy_collection_cards()
@@ -3099,6 +3660,7 @@ func _format_battle_result_summary(
 
 	var gold_total := 0
 	var random_card_total := 0
+	var random_emblem_names: Array[String] = []
 	for entry: Dictionary in reward_entries:
 		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
 			continue
@@ -3107,7 +3669,9 @@ func _format_battle_result_summary(
 				gold_total += int(entry.get("amount", 0))
 			BattleRunRewardLedger.KIND_RANDOM_CARD_REQUEST:
 				random_card_total += int(entry.get("amount", 0))
-	if gold_total <= 0 and random_card_total <= 0:
+			BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE:
+				random_emblem_names.append(String((entry.get("parameters", {}) as Dictionary).get("emblem_id", "基础纹章")))
+	if gold_total <= 0 and random_card_total <= 0 and random_emblem_names.is_empty():
 		lines.append("本场奖励：无")
 	else:
 		lines.append("本场奖励" if settled else "本场奖励（待写回）")
@@ -3119,6 +3683,8 @@ func _format_battle_result_summary(
 				if settled
 				else "• 待抽取随从 +%d" % random_card_total
 			)
+		for emblem_name: String in random_emblem_names:
+			lines.append("• 基础纹章：%s" % emblem_name)
 	return "\n".join(lines)
 
 
@@ -3136,8 +3702,20 @@ func settle_current_battle() -> Dictionary:
 		owned_card_collection,
 		run_reward_state,
 		settlement_journal,
-		battle_controller.owned_card_change_ledger.get_entries()
+		battle_controller.get_owned_card_change_entries_for_settlement()
 	)
+
+
+func _add_settled_emblem_rewards_to_library() -> void:
+	if _battle_snapshot == null:
+		return
+	for entry: Dictionary in run_reward_state.drain_emblem_instances_for_battle(_battle_snapshot.battle_instance_id):
+		emblem_library.return_sticker({
+			"instance_id": entry.get("emblem_instance_id", &""),
+			"emblem_id": entry.get("emblem_id", &""),
+			"temporary": false,
+			"source": entry.get("source", "battle_reward"),
+		})
 
 
 func _format_positive_result_amount(amount: float) -> String:
@@ -3171,12 +3749,14 @@ func _connect_board_rows() -> void:
 		row.board_slot_clicked.connect(_on_board_slot_clicked)
 		row.card_dropped.connect(_on_board_card_dropped)
 		row.squads_changed.connect(_on_battlefield_squads_changed)
+		row.card_inspection_requested.connect(_on_card_inspection_requested)
 		row.card_click_carry_requested.connect(
 			_on_click_carry_requested
 		)
 	for enemy_row: BattlefieldRow in [enemy_back_row, enemy_front_row]:
 		enemy_row.set_drag_enabled(false)
 		enemy_row.squads_changed.connect(_on_battlefield_squads_changed)
+		enemy_row.card_inspection_requested.connect(_on_card_inspection_requested)
 
 
 func _on_battlefield_squads_changed() -> void:
@@ -3188,10 +3768,16 @@ func _on_battlefield_squads_changed() -> void:
 
 func _reset_rune_flow_if_no_battlefield_effects() -> void:
 	_battlefield_clock_check_queued = false
+	var profile_started_usec := Time.get_ticks_usec() if _equipment_drop_profile_active else 0
 	# 跨排移动会先移除后加入；延迟到事务结束再检查，避免中途误重置。
 	if not _battlefield_has_active_rune_effects():
 		CardView.reset_active_rune_flow()
 	_refresh_preparation_effect_preview()
+	if profile_started_usec > 0:
+		_record_equipment_drop_profile_duration(
+			&"deferred_board_refresh",
+			Time.get_ticks_usec() - profile_started_usec
+		)
 
 
 func _battlefield_has_active_rune_effects() -> bool:
@@ -3208,6 +3794,7 @@ func _build_collection_cards(
 	entering_card: CardData = null,
 	entry_global_position: Variant = null
 ) -> void:
+	var profile_started_usec := Time.get_ticks_usec() if _equipment_drop_profile_active else 0
 	current_collection_page = clampi(
 		current_collection_page,
 		0,
@@ -3234,7 +3821,10 @@ func _build_collection_cards(
 		if page_index >= page_cards.size():
 			continue
 		var collection_card: CardData = page_cards[page_index]
-		var owned_card := owned_card_collection.find_first_by_definition(collection_card)
+		var owned_card := _get_owned_card_for_collection_index(
+			filtered_cards,
+			page_start + page_index
+		)
 		var slot := _create_collection_card_slot(
 			collection_card,
 			_is_owned_card_deployed(owned_card) if owned_card != null else _is_card_deployed(collection_card),
@@ -3252,6 +3842,11 @@ func _build_collection_cards(
 				card_view,
 				entry_global_position as Vector2
 			)
+	if profile_started_usec > 0:
+		_record_equipment_drop_profile_duration(
+			&"collection_rebuild_total",
+			Time.get_ticks_usec() - profile_started_usec
+		)
 
 
 func _find_collection_slot_for_owned_card(owned_card: OwnedCard) -> Control:
@@ -3326,9 +3921,10 @@ func _create_collection_card_slot(
 	)
 	card_view.scale = Vector2(collection_card_scale, collection_card_scale)
 	card_view.set_card_data(card_data)
+	card_view.set_owned_card(owned_card)
 	card_view.showing_effect = bool(
 		_collection_effect_display_states.get(
-			_get_collection_effect_state_key(card_data),
+			_get_collection_effect_state_key(card_data, owned_card),
 			false
 		)
 	)
@@ -3341,8 +3937,9 @@ func _create_collection_card_slot(
 		card_view.configure_drag_source(false)
 	elif interactive:
 		card_view.card_clicked.connect(_on_collection_card_clicked)
+		card_view.inspection_requested.connect(_on_card_inspection_requested)
 		card_view.effect_display_changed.connect(
-			_on_collection_effect_display_changed
+			_on_collection_effect_display_changed.bind(owned_card)
 		)
 		card_view.click_carry_requested.connect(
 			_on_click_carry_requested
@@ -3363,22 +3960,51 @@ func _create_collection_card_slot(
 
 func _on_collection_effect_display_changed(
 	card_data: CardData,
-	is_showing_effect: bool
+	is_showing_effect: bool,
+	owned_card: OwnedCard = null
 ) -> void:
 	if card_data == null or card_data.card_type != CardData.CardType.MINION:
 		return
-	var state_key: Variant = _get_collection_effect_state_key(card_data)
+	var state_key: Variant = _get_collection_effect_state_key(card_data, owned_card)
 	if is_showing_effect:
 		_collection_effect_display_states[state_key] = true
 	else:
 		_collection_effect_display_states.erase(state_key)
 
 
-func _get_collection_effect_state_key(card_data: CardData) -> Variant:
+func _get_collection_effect_state_key(card_data: CardData, owned_card: OwnedCard = null) -> Variant:
+	# 已拥有卡优先使用实例ID，避免相同定义的多张卡共享翻页／描述状态。
+	if owned_card != null and not owned_card.instance_id.is_empty():
+		return owned_card.instance_id
 	# 正式卡使用稳定id；测试或临时卡没有id时退回资源对象本身，避免空id互相串状态。
 	if card_data != null and not card_data.id.is_empty():
 		return card_data.id
 	return card_data
+
+
+func _get_owned_card_for_collection_index(
+	filtered_cards: Array[CardData],
+	filtered_index: int
+) -> OwnedCard:
+	if filtered_index < 0 or filtered_index >= filtered_cards.size():
+		return null
+	if collection_bookmark_active and filtered_index < recently_returned_owned_cards.size():
+		var recent_owned := recently_returned_owned_cards[filtered_index]
+		if recent_owned != null and recent_owned.card_data == filtered_cards[filtered_index]:
+			return recent_owned
+	var target := filtered_cards[filtered_index]
+	var occurrence := 0
+	for index: int in filtered_index:
+		if filtered_cards[index] == target:
+			occurrence += 1
+	var seen := 0
+	for owned_card: OwnedCard in owned_card_collection.get_cards():
+		if owned_card.card_data != target:
+			continue
+		if seen == occurrence:
+			return owned_card
+		seen += 1
+	return null
 
 
 func _is_card_deployed(card_data: CardData) -> bool:
@@ -3436,6 +4062,910 @@ func _on_collection_card_clicked(card_data: CardData) -> void:
 	_refresh_drag_availability()
 
 
+func _on_card_inspection_requested(
+	card_view: CardView,
+	card_data: CardData,
+	owned_card: OwnedCard
+) -> void:
+	if card_data == null or is_instance_valid(_inspection_overlay):
+		return
+	_open_card_inspection(card_data, owned_card, card_view)
+
+
+func open_paused_card_inspection_at(canvas_position: Vector2) -> bool:
+	if (
+		not get_tree().paused
+		or current_phase != GamePhase.BATTLE
+		or is_instance_valid(_inspection_overlay)
+	):
+		return false
+	var target_view: CardView
+	for node: Node in get_tree().get_nodes_in_group("card_views"):
+		if not node is CardView:
+			continue
+		var candidate := node as CardView
+		if (
+			not candidate.is_visible_in_tree()
+			or candidate.mouse_filter == Control.MOUSE_FILTER_IGNORE
+			or candidate.card_data == null
+		):
+			continue
+		var local_position := (
+			candidate.get_global_transform_with_canvas().affine_inverse()
+			* canvas_position
+		)
+		if candidate._has_point(local_position):
+			if target_view == null or candidate.global_z_index >= target_view.global_z_index:
+				target_view = candidate
+	if target_view == null:
+		return false
+	_on_card_inspection_requested(
+		target_view,
+		target_view.card_data,
+		target_view.get_owned_card()
+	)
+	return is_instance_valid(_inspection_overlay)
+
+
+func _open_card_inspection(card_data: CardData, owned_card: OwnedCard, source_view: CardView = null) -> void:
+	_cancel_click_carry()
+	_inspection_closing = false
+	_inspection_previous_tree_paused = get_tree().paused
+	_inspection_effect_layer_was_visible = (
+		battle_effect_layer.visible if is_instance_valid(battle_effect_layer) else true
+	)
+	_inspection_card_data = card_data
+	_inspection_owned_card = owned_card
+	_inspection_overlay = CardInspectionOverlayScript.new()
+	_inspection_overlay.name = "CardInspectionOverlay"
+	_inspection_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_inspection_overlay.z_index = 4000
+	_inspection_overlay.close_requested.connect(_close_card_inspection)
+	add_child(_inspection_overlay)
+
+	var dim := ColorRect.new()
+	dim.name = "InspectionDim"
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.015, 0.02, 0.025, 0.78)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(_on_inspection_dim_gui_input)
+	_inspection_overlay.add_child(dim)
+	_inspection_dim = dim
+
+	var title := _make_label(
+		"卡牌检视" + ("（战斗中只读）" if current_phase == GamePhase.BATTLE else ""),
+		Vector2(24, 14),
+		Vector2(480, 28)
+	)
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color("f5df9b"))
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title.z_index = 20
+	_inspection_overlay.add_child(title)
+
+	var help := _make_label(
+		("准备阶段：拖动纹章到卡牌上的金色2×2点；" if current_phase == GamePhase.PREPARE else "战斗检视为只读；" )
+		+ "点击暗幕、右键或按 Esc 关闭",
+		Vector2(24, 42),
+		Vector2(680, 22)
+	)
+	help.add_theme_font_size_override("font_size", 10)
+	help.add_theme_color_override("font_color", Color("d9e5df"))
+	help.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	help.z_index = 20
+	_inspection_overlay.add_child(help)
+
+	_inspection_display_mode_button = _make_button(
+		"InspectionDisplayModeButton",
+		"显示描述",
+		Vector2(1030, 14),
+		Vector2(140, 28),
+		false
+	)
+	_inspection_display_mode_button.z_index = 30
+	_inspection_display_mode_button.pressed.connect(_toggle_inspection_display_mode)
+	_inspection_overlay.add_child(_inspection_display_mode_button)
+
+	var close_button := _make_button("CloseInspectionButton", "关闭", Vector2(1182, 78), Vector2(72, 28), false)
+	close_button.z_index = 30
+	close_button.pressed.connect(_close_card_inspection)
+	_inspection_overlay.add_child(close_button)
+
+	_inspection_card_view = CARD_VIEW_SCENE.instantiate() as CardView
+	_inspection_card_view.name = "InspectionCard"
+	_inspection_card_view.position = Vector2.ZERO
+	_inspection_card_view.pivot_offset = Vector2.ZERO
+	_inspection_card_view.scale = Vector2.ONE
+	_inspection_card_view.z_index = 25
+	_inspection_card_view.set_card_data(card_data)
+	_inspection_card_view.set_owned_card(owned_card)
+	var inspection_squad := _find_squad_for_owned_card(owned_card)
+	if inspection_squad != null:
+		_inspection_card_view.set_squad_attribute_preview_from_squad(inspection_squad)
+	var inspection_battle_state := _find_battle_state_for_squad(inspection_squad)
+	if inspection_battle_state != null:
+		_inspection_card_view.set_battle_action_type(
+			inspection_battle_state.runtime_action_type_override as CardData.ActionType
+			if inspection_battle_state.runtime_action_type_override >= 0
+			else inspection_battle_state.get_effective_action_type()
+		)
+		_inspection_card_view.set_battle_target_weight(
+			battle_controller.get_effective_target_weight(inspection_battle_state)
+		)
+		_inspection_card_view.set_battle_action_value(
+			inspection_battle_state.get_display_action_value()
+		)
+		_inspection_card_view.set_battle_vitals(
+			inspection_battle_state.displayed_health,
+			inspection_battle_state.displayed_armor
+		)
+		_inspection_card_view.set_battle_remaining_cooldown(
+			inspection_battle_state.remaining_cooldown
+		)
+		var masked_wound_indices: Array[int] = []
+		masked_wound_indices.assign(
+			inspection_battle_state.get_masked_wound_indices_by_card().get(card_data, [])
+		)
+		_inspection_card_view.set_battle_status_slot_states([], masked_wound_indices)
+	_inspection_card_view.configure_drag_source(false)
+	_inspection_card_view.set_emblem_drop_handler(
+		Callable(self, "_handle_inspection_emblem_drop")
+	)
+	_inspection_overlay.add_child(_inspection_card_view)
+	_refresh_inspection_markers()
+	_inspection_surface = preload("res://scripts/ui/inspection_card_surface.gd").new() as InspectionCardSurface
+	_inspection_surface.name = "InspectionSurface"
+	_inspection_overlay.add_child(_inspection_surface)
+	_inspection_surface.setup(_inspection_card_view, _handle_inspection_emblem_drop, _inspection_sticker_tooltip)
+	if emblem_library != null and _emblem_library_parent != null:
+		_inspection_library_original_parent = emblem_library.get_parent() as Control
+		# Control 没有 Node2D 的 global_scale/global_rotation；保存画布变换后，
+		# 在新父节点下用 position/scale/rotation 分解回合法的 Control 属性。
+		_inspection_library_original_canvas_transform = emblem_library.get_global_transform_with_canvas()
+		_inspection_library_original_layout = {
+			"position": emblem_library.position,
+			"size": emblem_library.size,
+			"scale": emblem_library.scale,
+			"rotation": emblem_library.rotation,
+			"pivot_offset": emblem_library.pivot_offset,
+			"custom_minimum_size": emblem_library.custom_minimum_size,
+		}
+		_inspection_library_original_z_index = emblem_library.z_index
+		_inspection_library_original_scroll = emblem_library.get_scroll_position()
+		_inspection_library_transform_saved = true
+	if wound_library != null and _wound_library_parent != null:
+		if wound_library.get_parent() != null:
+			wound_library.get_parent().remove_child(wound_library)
+		_inspection_overlay.add_child(wound_library)
+		wound_library.visible = true
+		wound_library.set_inspect_mode(true)
+		wound_library.set_drag_enabled(false)
+		wound_library.z_index = 15
+		wound_library.scale = Vector2.ONE * WOUND_LIBRARY_RETRACT_SCALE
+		wound_library.position = Vector2(_inspection_overlay.size.x - WOUND_LIBRARY_INSPECTION_RIGHT_INSET, WOUND_LIBRARY_INSPECTION_TOP)
+	var target_scale := Vector2(4, 4) # 相对原生卡面4倍，由显示壳统一适配窗口分辨率
+	var target_position: Vector2 = (_inspection_overlay.size - _inspection_surface.size * target_scale) * 0.5
+	_inspection_surface.scale = target_scale
+	_inspection_surface.position = target_position
+	if is_instance_valid(source_view):
+		var source_transform: Transform2D = _inspection_overlay.get_global_transform_with_canvas().affine_inverse() * source_view.get_global_transform_with_canvas()
+		_inspection_surface.scale = source_transform.get_scale()
+		_inspection_surface.position = source_transform.origin - _inspection_surface.PADDING * _inspection_surface.scale
+		_inspection_source_view = source_view
+		source_view.visible = false
+		_set_inspection_source_statistics_suppressed(true)
+	var effect_box: PanelContainer = null
+	if card_data != null and card_data.effect_text.length() > 36:
+		effect_box = PanelContainer.new()
+		effect_box.name = "InspectionEffectSideBox"
+		effect_box.size = Vector2(260, 150)
+		effect_box.position = Vector2(
+			target_position.x + _inspection_surface.size.x * target_scale.x + 24.0,
+			target_position.y + 12.0
+		)
+		if effect_box.position.x + effect_box.size.x > _inspection_overlay.size.x - 12.0:
+			effect_box.position.x = maxf(12.0, target_position.x - effect_box.size.x - 24.0)
+		var effect_style := StyleBoxFlat.new()
+		effect_style.bg_color = Color(0.055, 0.07, 0.075, 0.96)
+		effect_style.border_color = Color("d1aa58")
+		effect_style.set_border_width_all(1)
+		effect_box.add_theme_stylebox_override("panel", effect_style)
+		var effect_label := Label.new()
+		effect_label.text = card_data.effect_text
+		effect_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		effect_label.add_theme_font_override("font", preload("res://assets/fonts/chill_7.ttf"))
+		effect_label.add_theme_font_size_override("font_size", 12)
+		effect_label.add_theme_color_override("font_color", Color.WHITE)
+		effect_label.add_theme_color_override("font_outline_color", Color(0.03, 0.025, 0.02, 0.95))
+		effect_label.add_theme_constant_override("outline_size", 2)
+		effect_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		effect_box.add_child(effect_label)
+		effect_box.z_index = 24
+		_inspection_overlay.add_child(effect_box)
+	dim.modulate.a = 0.0
+	_inspection_tween = _inspection_overlay.create_tween().set_parallel(true)
+	_inspection_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	if is_instance_valid(wound_library) and wound_library.get_parent() == _inspection_overlay:
+		_inspection_tween.tween_property(wound_library, "scale", Vector2.ONE * 4.0, WOUND_LIBRARY_OPEN_DURATION)
+	_inspection_tween.tween_property(_inspection_surface, "position", target_position, 0.25)
+	_inspection_tween.tween_property(_inspection_surface, "scale", target_scale, 0.25)
+	_inspection_tween.tween_property(dim, "modulate:a", 1.0, 0.25)
+	if is_instance_valid(effect_box):
+		effect_box.modulate.a = 0.0
+		_inspection_tween.tween_property(effect_box, "modulate:a", 1.0, 0.25)
+
+	if emblem_library != null and _emblem_library_parent != null:
+		if emblem_library.get_parent() != null:
+			emblem_library.get_parent().remove_child(emblem_library)
+		_inspection_overlay.add_child(emblem_library)
+		emblem_library.z_index = 15
+		emblem_library.set_inspect_mode(true)
+		emblem_library.set_drag_enabled(false)
+		_set_control_transform_from_canvas(
+			emblem_library as Control,
+			_inspection_overlay as Control,
+			_inspection_library_original_canvas_transform
+		)
+		var available_library_width := maxf(target_position.x - 24.0, 0.0)
+		var library_zoom := minf(4.0, available_library_width / maxf(emblem_library.size.x, 1.0))
+		var library_target_position := Vector2(16, 168)
+		_inspection_tween.tween_property(emblem_library, "position", library_target_position, 0.25)
+		_inspection_tween.tween_property(emblem_library, "scale", Vector2.ONE * library_zoom, 0.25)
+		_inspection_tween.tween_property(emblem_library, "rotation", 0.0, 0.25)
+		_inspection_tween.tween_callback(_finish_inspection_library_open).set_delay(0.25)
+
+	_inspection_carry_layer = Control.new()
+	_inspection_carry_layer.name = "InspectionCarryLayer"
+	_inspection_carry_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_inspection_carry_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_inspection_carry_layer.z_index = 40
+	_inspection_overlay.add_child(_inspection_carry_layer)
+	_set_inspection_pattern_labels_suppressed(true)
+	if current_phase == GamePhase.BATTLE and is_instance_valid(battle_effect_layer):
+		battle_effect_layer.visible = false
+
+	get_tree().paused = true if current_phase == GamePhase.BATTLE else _inspection_previous_tree_paused
+	_update_battle_pause_button()
+
+
+func _toggle_inspection_display_mode() -> void:
+	if not is_instance_valid(_inspection_card_view):
+		return
+	_inspection_card_view.toggle_effect_display()
+	if is_instance_valid(_inspection_display_mode_button):
+		_inspection_display_mode_button.text = (
+			"显示符文" if _inspection_card_view.showing_effect else "显示描述"
+		)
+
+
+func _finish_inspection_library_open() -> void:
+	if _inspection_closing or not is_instance_valid(emblem_library):
+		return
+	emblem_library.set_drag_enabled(current_phase == GamePhase.PREPARE)
+	if is_instance_valid(wound_library):
+		wound_library.set_drag_enabled(current_phase == GamePhase.PREPARE)
+
+
+func _set_control_transform_from_canvas(
+	control: Control,
+	parent: Control,
+	canvas_transform: Transform2D
+) -> void:
+	var local_transform: Transform2D = (
+		parent.get_global_transform_with_canvas().affine_inverse()
+		* canvas_transform
+	)
+	control.position = local_transform.origin
+	control.rotation = local_transform.get_rotation()
+	control.scale = local_transform.get_scale()
+
+
+func _on_inspection_dim_gui_input(event: InputEvent) -> void:
+	if not event is InputEventMouseButton:
+		return
+	var mouse_event := event as InputEventMouseButton
+	if mouse_event.pressed and mouse_event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+		_close_card_inspection()
+		get_viewport().set_input_as_handled()
+
+
+func _close_card_inspection(immediate: bool = false) -> void:
+	if not is_instance_valid(_inspection_overlay) or _inspection_closing:
+		return
+	_inspection_closing = true
+	_finish_inspection_placement_animation()
+	if not _click_carry_data.is_empty():
+		_cancel_click_carry()
+	if is_instance_valid(_inspection_tween) and _inspection_tween.is_running():
+		_inspection_tween.kill()
+	if is_instance_valid(_inspection_surface):
+		_inspection_surface.clear_drop_preview()
+		_inspection_surface.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if is_instance_valid(_inspection_dim):
+		_inspection_dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	if is_instance_valid(emblem_library):
+		emblem_library.set_drag_enabled(false)
+	if is_instance_valid(wound_library):
+		wound_library.set_drag_enabled(false)
+	if immediate:
+		_finish_card_inspection_close()
+		return
+	if not is_instance_valid(_inspection_surface):
+		_finish_card_inspection_close()
+		return
+	var target_position := _inspection_surface.position
+	var target_scale := _inspection_surface.scale * 0.25
+	if is_instance_valid(_inspection_source_view):
+		var source_transform: Transform2D = (
+			_inspection_overlay.get_global_transform_with_canvas().affine_inverse()
+			* _inspection_source_view.get_global_transform_with_canvas()
+		)
+		target_scale = source_transform.get_scale()
+		target_position = source_transform.origin - _inspection_surface.PADDING * target_scale
+	else:
+		var current_center := _inspection_surface.position + _inspection_surface.size * _inspection_surface.scale * 0.5
+		target_position = current_center - _inspection_surface.size * target_scale * 0.5
+	_inspection_tween = _inspection_overlay.create_tween().set_parallel(true)
+	_inspection_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	_inspection_tween.tween_property(_inspection_surface, "position", target_position, 0.2)
+	_inspection_tween.tween_property(_inspection_surface, "scale", target_scale, 0.2)
+	var original_local_transform := Transform2D.IDENTITY
+	if is_instance_valid(emblem_library) and emblem_library.get_parent() == _inspection_overlay and _inspection_library_transform_saved:
+		original_local_transform = (
+			(_inspection_overlay as Control).get_global_transform_with_canvas().affine_inverse()
+			* _inspection_library_original_canvas_transform
+		)
+		_inspection_tween.tween_property(
+			emblem_library,
+			"position",
+			original_local_transform.origin,
+			0.2
+		)
+	if is_instance_valid(wound_library) and wound_library.get_parent() == _inspection_overlay:
+		_inspection_tween.tween_property(wound_library, "scale", Vector2.ONE * WOUND_LIBRARY_RETRACT_SCALE, WOUND_LIBRARY_CLOSE_DURATION)
+	if is_instance_valid(emblem_library) and emblem_library.get_parent() == _inspection_overlay:
+		_inspection_tween.tween_property(
+			emblem_library,
+			"scale",
+			original_local_transform.get_scale(),
+			0.2
+		)
+		_inspection_tween.tween_property(
+			emblem_library,
+			"rotation",
+			original_local_transform.get_rotation(),
+			0.2
+		)
+	if is_instance_valid(_inspection_dim):
+		_inspection_tween.tween_property(_inspection_dim, "modulate:a", 0.0, 0.2)
+	_inspection_tween.finished.connect(_finish_card_inspection_close)
+
+
+func _finish_card_inspection_close() -> void:
+	if not is_instance_valid(_inspection_overlay):
+		return
+	if is_instance_valid(_inspection_source_view):
+		_set_inspection_source_statistics_suppressed(false)
+		_inspection_source_view.visible = true
+	_inspection_source_view = null
+	if is_instance_valid(_inspection_card_view):
+		_inspection_card_view.set_emblem_drop_handler(Callable())
+	if emblem_library != null and emblem_library.get_parent() == _inspection_overlay:
+		_inspection_overlay.remove_child(emblem_library)
+		var restore_parent := _inspection_library_original_parent if _inspection_library_original_parent != null else _emblem_library_parent
+		if restore_parent != null:
+			restore_parent.add_child(emblem_library)
+		emblem_library.set_inspect_mode(false)
+		if _inspection_library_transform_saved:
+			emblem_library.position = _inspection_library_original_layout.get("position", Vector2(12, 67))
+			emblem_library.size = _inspection_library_original_layout.get("size", Vector2(124, 248))
+			emblem_library.scale = _inspection_library_original_layout.get("scale", Vector2.ONE)
+			emblem_library.rotation = _inspection_library_original_layout.get("rotation", 0.0)
+			emblem_library.pivot_offset = _inspection_library_original_layout.get("pivot_offset", Vector2.ZERO)
+			emblem_library.custom_minimum_size = _inspection_library_original_layout.get(
+				"custom_minimum_size",
+				Vector2(124, 248)
+			)
+			emblem_library.set_scroll_position(_inspection_library_original_scroll)
+			emblem_library.z_index = _inspection_library_original_z_index
+		else:
+			emblem_library.position = Vector2(12, 67)
+			emblem_library.z_index = -48
+		emblem_library.set_drag_enabled(false)
+	if wound_library != null and wound_library.get_parent() == _inspection_overlay:
+		_inspection_overlay.remove_child(wound_library)
+		if _wound_library_parent != null:
+			_wound_library_parent.add_child(wound_library)
+		wound_library.set_inspect_mode(false)
+		wound_library.position = WOUND_LIBRARY_NORMAL_POSITION
+		wound_library.visible = false
+		wound_library.set_drag_enabled(false)
+	get_tree().paused = _inspection_previous_tree_paused
+	_update_battle_pause_button()
+	if is_instance_valid(battle_effect_layer):
+		battle_effect_layer.visible = _inspection_effect_layer_was_visible
+	_inspection_overlay.queue_free()
+	_inspection_overlay = null
+	_inspection_carry_layer = null
+	_set_inspection_pattern_labels_suppressed(false)
+	_inspection_card_view = null
+	_inspection_surface = null
+	_inspection_owned_card = null
+	_inspection_card_data = null
+	_inspection_dim = null
+	_inspection_display_mode_button = null
+	_inspection_library_original_parent = null
+	_inspection_library_original_layout.clear()
+	_inspection_library_transform_saved = false
+	_inspection_tween = null
+	_inspection_closing = false
+	_refresh_drag_availability()
+
+
+func _handle_inspection_emblem_drop(
+	action: StringName,
+	card_view: CardView,
+	at_position: Vector2,
+	data: Variant
+) -> Variant:
+	if action == &"can_drop":
+		return _can_drop_emblem_on_inspection_card(card_view, at_position, data)
+	if action == &"drop":
+		return _drop_emblem_on_inspection_card(card_view, at_position, data)
+	if action == &"animate_drop":
+		return _animate_inspection_item_drop(card_view, at_position, data)
+	if action == &"get_preview":
+		return _get_inspection_drop_preview(card_view, at_position, data)
+	return false
+
+
+func _can_drop_emblem_on_inspection_card(
+	card_view: CardView,
+	at_position: Vector2,
+	data: Variant
+) -> bool:
+	return not _resolve_inspection_drop_target(card_view, at_position, data).is_empty()
+
+
+func _resolve_inspection_drop_target(
+	card_view: CardView,
+	at_position: Vector2,
+	data: Variant
+) -> Dictionary:
+	if (
+		_inspection_placement_in_progress
+		or current_phase != GamePhase.PREPARE
+		or card_view != _inspection_card_view
+		or _inspection_owned_card == null
+		or not _inspection_owned_card.is_valid()
+		or _inspection_card_data == null
+		or _inspection_card_data.card_type != CardData.CardType.MINION
+		or not data is Dictionary
+	):
+		return {}
+	var drag_data := data as Dictionary
+	if drag_data.get("kind") == &"sticker_scraper":
+		var removable := _find_removable_sticker(
+			at_position,
+			drag_data.get("_inspection_hit_rect", Rect2()) as Rect2
+		)
+		return {"kind": "scraper", "target": removable} if not removable.is_empty() else {}
+	if drag_data.get("kind") != &"emblem_library":
+		return {}
+	var definition := drag_data.get("definition", {}) as Dictionary
+	var emblem_id := StringName(String(
+		drag_data.get("wound_id", "")
+		if drag_data.get("status_kind", "emblem") == "wound"
+		else drag_data.get("emblem_id", "")
+	))
+	if emblem_id.is_empty():
+		return {}
+	if String(drag_data.get("status_kind", "emblem")) == "wound":
+		var wound_slot := _find_empty_wound_slot_at(at_position)
+		return {"kind": "wound", "slot_index": wound_slot, "id": emblem_id, "definition": definition} if wound_slot >= 0 else {}
+	if definition.get("target", "emblem") == "rune":
+		if String(emblem_id) == "万能贴纸" and not definition.has("returned_state"):
+			for owned: OwnedCard in owned_card_collection.get_cards():
+				for sticker: Dictionary in owned.rune_stickers:
+					if String(sticker.get("emblem_id", "")) == "万能贴纸":
+						return {}
+			for sticker: Dictionary in emblem_library._returned:
+				if String(sticker.get("emblem_id", "")) == "万能贴纸":
+					return {}
+		var rune_index := _inspection_rune_at(at_position)
+		if rune_index < 0 or (
+			rune_index < _inspection_owned_card.rune_stickers.size()
+			and not _inspection_owned_card.rune_stickers[rune_index].is_empty()
+		):
+			return {}
+		return {"kind": "rune", "rune_index": rune_index, "id": emblem_id, "definition": definition}
+	var emblem_slot := _find_empty_emblem_slot_at(at_position)
+	return {"kind": "emblem", "slot_index": emblem_slot, "id": emblem_id, "definition": definition} if emblem_slot >= 0 else {}
+
+
+func _drop_emblem_on_inspection_card(
+	card_view: CardView,
+	at_position: Vector2,
+	data: Variant,
+	defer_visual_handoff: bool = false,
+	resolved_target: Dictionary = {}
+) -> bool:
+	var target := resolved_target
+	if target.is_empty():
+		target = _resolve_inspection_drop_target(card_view, at_position, data)
+	if target.is_empty() or not data is Dictionary:
+		return false
+	var drag_data := data as Dictionary
+	if target.kind == "scraper":
+		var removable := target.target as Dictionary
+		var removed := false
+		if removable.kind == "rune":
+			removed = _inspection_owned_card.set_rune_sticker(removable.index, {})
+		elif removable.kind == "wound":
+			removed = _inspection_owned_card.set_wound_slot(removable.index, {})
+		else:
+			removed = _inspection_owned_card.set_emblem_slot(removable.index, {})
+		if not removed:
+			return false
+		if not defer_visual_handoff:
+			_refresh_owned_card_status_visuals(_inspection_owned_card)
+			_refresh_inspection_markers()
+		return true
+	var is_wound: bool = target.kind == "wound"
+	var emblem_id := target.id as StringName
+	var instance_id := StringName(
+		"dev_%s_%s_%04d" % ["wound" if is_wound else "emblem", String(emblem_id), _next_developer_emblem_instance]
+	)
+	var definition := target.definition as Dictionary
+	var default_state := {"instance_id": instance_id, "temporary": false}
+	default_state["wound_id" if is_wound else "emblem_id"] = emblem_id
+	var state := (definition.get("returned_state", default_state) as Dictionary).duplicate(true)
+	state["instance_id"] = StringName(String(state.get("instance_id", "")))
+	var placed := false
+	if is_wound:
+		state["wound_id"] = StringName(String(state.get("wound_id", emblem_id)))
+		placed = _inspection_owned_card.set_wound_slot(target.slot_index, state)
+	elif target.kind == "rune":
+		state["emblem_id"] = StringName(String(state.get("emblem_id", emblem_id)))
+		var elements := {"火贴纸": 0, "水贴纸": 1, "木贴纸": 2, "光贴纸": 3, "暗贴纸": 4}
+		if emblem_id == &"混沌贴纸":
+			state["element"] = randi_range(0, 4)
+		elif not state.has("element"):
+			state["element"] = elements.get(String(emblem_id), 0)
+		placed = _inspection_owned_card.set_rune_sticker(target.rune_index, state)
+	else:
+		state["emblem_id"] = StringName(String(state.get("emblem_id", emblem_id)))
+		placed = _inspection_owned_card.set_emblem_slot(target.slot_index, state)
+		if state.has("saved_progress"):
+			_inspection_owned_card.progress_by_source[state.instance_id] = state.saved_progress
+	if not placed:
+		return false
+	_next_developer_emblem_instance += 1
+	if not defer_visual_handoff:
+		if definition.has("returned_state"):
+			if is_wound:
+				wound_library.consume_returned(state)
+			else:
+				emblem_library.consume_returned(state)
+		_refresh_owned_card_status_visuals(_inspection_owned_card)
+		_refresh_inspection_markers()
+		play_area_label.text = "已将%s贴到%s的%s" % [String(emblem_id), _inspection_card_data.display_name, "伤势槽" if is_wound else ("符文槽" if target.kind == "rune" else "纹章槽")]
+	return true
+
+
+func _animate_inspection_item_drop(
+	card_view: CardView,
+	at_position: Vector2,
+	data: Variant
+) -> bool:
+	if data is Dictionary and data.get("kind") == &"sticker_scraper":
+		return _drop_emblem_on_inspection_card(card_view, at_position, data)
+	if _inspection_placement_in_progress or not data is Dictionary:
+		return false
+	var drag_data := data as Dictionary
+	var target := _resolve_inspection_drop_target(card_view, at_position, drag_data)
+	if target.is_empty():
+		return false
+	var landing := _get_inspection_drop_preview(card_view, at_position, drag_data, target)
+	var texture := landing.get("texture") as Texture2D
+	if texture == null or not is_instance_valid(_inspection_carry_layer):
+		return false
+	var start_corners := _get_inspection_carry_corners(drag_data)
+	if start_corners.size() != 4:
+		return false
+	var target_position := landing.get("position", Vector2.ZERO) as Vector2
+	var target_size := landing.get("size", Vector2.ZERO) as Vector2
+	var target_corners := PackedVector2Array([
+		target_position,
+		target_position + Vector2(target_size.x, 0.0),
+		target_position + target_size,
+		target_position + Vector2(0.0, target_size.y),
+	])
+	var animated_visual := Polygon2D.new()
+	animated_visual.name = "InspectionStickerFlight"
+	animated_visual.polygon = PackedVector2Array(start_corners)
+	animated_visual.uv = PackedVector2Array([
+		Vector2.ZERO,
+		Vector2(texture.get_width(), 0.0),
+		Vector2(texture.get_size()),
+		Vector2(0.0, texture.get_height()),
+	])
+	animated_visual.texture = texture
+	animated_visual.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	animated_visual.z_index = 200
+	_inspection_card_view.add_child(animated_visual)
+	var definition := target.get("definition", {}) as Dictionary
+	if not _drop_emblem_on_inspection_card(card_view, at_position, drag_data, true, target):
+		animated_visual.queue_free()
+		return false
+	_inspection_placement_state = definition.get("returned_state", {}).duplicate(true)
+	_inspection_placement_is_wound = target.kind == "wound"
+	_inspection_placement_visual = animated_visual
+	_inspection_placement_in_progress = true
+	_inspection_placement_tween = create_tween()
+	_inspection_placement_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_inspection_placement_tween.tween_property(
+		animated_visual,
+		"polygon",
+		target_corners,
+		INSPECTION_STICKER_FLIGHT_DURATION
+	)
+	_inspection_placement_tween.finished.connect(_finish_inspection_placement_animation)
+	return true
+
+
+func _get_inspection_carry_corners(data: Dictionary) -> PackedVector2Array:
+	var screen_corners := PackedVector2Array()
+	var drag_visual := data.get("drag_visual") as Control
+	if is_instance_valid(drag_visual) and not drag_visual.is_queued_for_deletion():
+		var transform := drag_visual.get_global_transform_with_canvas()
+		var visual_size := drag_visual.size
+		screen_corners = PackedVector2Array([
+			transform * Vector2.ZERO,
+			transform * Vector2(visual_size.x, 0.0),
+			transform * visual_size,
+			transform * Vector2(0.0, visual_size.y),
+		])
+	else:
+		var pointer := get_viewport().get_mouse_position()
+		var preview_size := data.get("preview_size", Vector2(14, 14)) as Vector2
+		var preview_offset := data.get("preview_offset", Vector2.ZERO) as Vector2
+		var top_left := pointer + preview_offset
+		screen_corners = PackedVector2Array([
+			top_left,
+			top_left + Vector2(preview_size.x, 0.0),
+			top_left + preview_size,
+			top_left + Vector2(0.0, preview_size.y),
+		])
+	var result := PackedVector2Array()
+	var surface_inverse := _inspection_surface.get_global_transform_with_canvas().affine_inverse()
+	for screen_point: Vector2 in screen_corners:
+		result.append(_inspection_surface.card_point(surface_inverse * screen_point))
+	return result
+
+
+func _finish_inspection_placement_animation() -> void:
+	if is_instance_valid(_inspection_placement_tween) and _inspection_placement_tween.is_running():
+		_inspection_placement_tween.kill()
+	_inspection_placement_tween = null
+	if is_instance_valid(_inspection_placement_visual):
+		_inspection_placement_visual.queue_free()
+	_inspection_placement_visual = null
+	if _inspection_placement_in_progress:
+		if not _inspection_placement_state.is_empty():
+			var source_library: Variant = wound_library if _inspection_placement_is_wound else emblem_library
+			if is_instance_valid(source_library):
+				source_library.consume_returned(_inspection_placement_state)
+		if is_instance_valid(_inspection_owned_card):
+			_refresh_owned_card_status_visuals(_inspection_owned_card)
+			_refresh_inspection_markers()
+			if is_instance_valid(_inspection_card_data):
+				play_area_label.text = "%s已贴到%s" % ["伤势" if _inspection_placement_is_wound else "纹章或元素贴纸", _inspection_card_data.display_name]
+		_inspection_placement_state.clear()
+		_inspection_placement_is_wound = false
+		_inspection_placement_in_progress = false
+
+
+func _inspection_rune_at(point: Vector2) -> int:
+	if not is_instance_valid(_inspection_card_view):
+		return -1
+	for index: int in _inspection_card_data.runes.size():
+		var origin := _inspection_card_view.rune_area_position + Vector2(index * (_inspection_card_view.rune_slot_size.x + _inspection_card_view.rune_spacing), 0)
+		if Rect2(origin, _inspection_card_view.rune_slot_size).has_point(point):
+			return index
+	return -1
+
+
+func _find_removable_sticker(point: Vector2, hit_rect: Rect2 = Rect2()) -> Dictionary:
+	if hit_rect.has_area():
+		for rune_index: int in _inspection_owned_card.rune_stickers.size():
+			if _inspection_owned_card.rune_stickers[rune_index].is_empty():
+				continue
+			var rune_origin := _inspection_card_view.rune_area_position + Vector2(rune_index * (_inspection_card_view.rune_slot_size.x + _inspection_card_view.rune_spacing), 0)
+			if Rect2(rune_origin - Vector2(2, 2), Vector2(27, 27)).intersects(hit_rect, true):
+				return {"kind": "rune", "index": rune_index}
+		for slot: Dictionary in CardSlotLayout.get_slot_definitions(_inspection_card_data, _inspection_owned_card):
+			var index := int(slot.storage_index)
+			var wound := int(slot.kind) == CardSlotLayout.Kind.WOUND
+			var states: Array[Dictionary] = _inspection_owned_card.wound_slots if wound else _inspection_owned_card.emblem_slots
+			if index >= states.size() or states[index].is_empty():
+				continue
+			if Rect2(slot.position as Vector2, Vector2(14, 14)).intersects(hit_rect, true):
+				return {"kind": "wound" if wound else "emblem", "index": index}
+		return {}
+	var rune_index := _inspection_rune_at(point)
+	if rune_index >= 0 and rune_index < _inspection_owned_card.rune_stickers.size() and not _inspection_owned_card.rune_stickers[rune_index].is_empty():
+		var rune_origin := _inspection_card_view.rune_area_position + Vector2(rune_index * (_inspection_card_view.rune_slot_size.x + _inspection_card_view.rune_spacing), 0)
+		var rune_rect := Rect2(rune_origin - Vector2(2, 2), Vector2(27, 27))
+		if _hit_rect_matches(rune_rect, point, hit_rect):
+			return {"kind": "rune", "index": rune_index}
+	for slot: Dictionary in CardSlotLayout.get_slot_definitions(_inspection_card_data, _inspection_owned_card):
+		var index := int(slot.storage_index)
+		var slot_rect := Rect2(slot.position as Vector2, Vector2(14, 14))
+		var wound := int(slot.kind) == CardSlotLayout.Kind.WOUND
+		var states: Array[Dictionary] = _inspection_owned_card.wound_slots if wound else _inspection_owned_card.emblem_slots
+		if index < states.size() and not states[index].is_empty() and _hit_rect_matches(slot_rect, point, hit_rect):
+			return {"kind": "wound" if wound else "emblem", "index": index}
+	return {}
+
+
+func _hit_rect_matches(target_rect: Rect2, point: Vector2, hit_rect: Rect2) -> bool:
+	if hit_rect.has_area():
+		return target_rect.intersects(hit_rect, true)
+	return target_rect.has_point(point)
+
+
+func _get_inspection_drop_preview(
+	card_view: CardView,
+	point: Vector2,
+	data: Variant,
+	resolved_target: Dictionary = {}
+) -> Dictionary:
+	var target := resolved_target
+	if target.is_empty():
+		target = _resolve_inspection_drop_target(card_view, point, data)
+	if target.is_empty() or not data is Dictionary:
+		return {}
+	var drag_data := data as Dictionary
+	if target.kind == "scraper":
+		var removable := target.target as Dictionary
+		if removable.kind == "rune":
+			var rune_state: Dictionary = _inspection_owned_card.rune_stickers[removable.index]
+			var rune_origin := _inspection_card_view.rune_area_position + Vector2(removable.index * (_inspection_card_view.rune_slot_size.x + _inspection_card_view.rune_spacing), 0)
+			return {"texture": RuneStickerStyle.get_texture_by_id(StringName(rune_state.get("emblem_id", ""))), "position": rune_origin + (_inspection_card_view.rune_slot_size - Vector2(27, 27)) * 0.5, "size": Vector2(27, 27)}
+		var is_wound: bool = removable.kind == "wound"
+		var status_states: Array[Dictionary] = _inspection_owned_card.wound_slots if is_wound else _inspection_owned_card.emblem_slots
+		var status_state: Dictionary = status_states[removable.index]
+		var kind := CardSlotLayout.Kind.WOUND if is_wound else CardSlotLayout.Kind.EMBLEM
+		var status_rect := _get_status_slot_rect(removable.index, kind)
+		var status_id := StringName(status_state.get("wound_id" if is_wound else "emblem_id", ""))
+		return {"texture": StatusIndicatorStyle.get_texture(kind, status_id), "position": status_rect.position, "size": status_rect.size}
+	var emblem_id := target.id as StringName
+	if target.kind == "wound":
+		var wound_rect := _get_status_slot_rect(target.slot_index, CardSlotLayout.Kind.WOUND)
+		return {"texture": StatusIndicatorStyle.get_texture(CardSlotLayout.Kind.WOUND, emblem_id), "position": wound_rect.position, "size": wound_rect.size}
+	if target.kind == "rune":
+		var rune_index: int = target.rune_index
+		var rune_origin := _inspection_card_view.rune_area_position + Vector2(rune_index * (_inspection_card_view.rune_slot_size.x + _inspection_card_view.rune_spacing), 0)
+		return {"texture": RuneStickerStyle.get_texture_by_id(emblem_id), "position": rune_origin + (_inspection_card_view.rune_slot_size - Vector2(27, 27)) * 0.5, "size": Vector2(27, 27)}
+	var slot_rect := _get_emblem_slot_rect(target.slot_index)
+	return {"texture": StatusIndicatorStyle.get_texture(CardSlotLayout.Kind.EMBLEM, emblem_id), "position": slot_rect.position, "size": slot_rect.size}
+
+
+func _get_emblem_slot_rect(storage_index: int) -> Rect2:
+	return _get_status_slot_rect(storage_index, CardSlotLayout.Kind.EMBLEM)
+
+
+func _get_status_slot_rect(storage_index: int, kind: int) -> Rect2:
+	for slot: Dictionary in CardSlotLayout.get_slot_definitions(_inspection_card_data, _inspection_owned_card):
+		if int(slot.kind) == kind and int(slot.storage_index) == storage_index:
+			return Rect2(slot.position as Vector2, Vector2(14, 14))
+	return Rect2()
+
+
+func _inspection_sticker_tooltip(point: Vector2) -> String:
+	return _inspection_card_view.get_sticker_tooltip(point) if is_instance_valid(_inspection_card_view) else ""
+
+
+func _find_empty_emblem_slot_at(at_position: Vector2) -> int:
+	if _inspection_card_data == null or _inspection_owned_card == null:
+		return -1
+	for definition: Dictionary in CardSlotLayout.get_slot_definitions(_inspection_card_data, _inspection_owned_card):
+		if int(definition["kind"]) != CardSlotLayout.Kind.EMBLEM:
+			continue
+		var storage_index := int(definition["storage_index"])
+		if storage_index < 0 or storage_index >= _inspection_owned_card.emblem_slots.size():
+			continue
+		if not (_inspection_owned_card.emblem_slots[storage_index] as Dictionary).is_empty():
+			continue
+		var slot_rect := Rect2(definition["position"] as Vector2, Vector2(14, 14))
+		if slot_rect.has_point(at_position):
+			return storage_index
+	return -1
+
+
+func _find_empty_wound_slot_at(at_position: Vector2) -> int:
+	if _inspection_card_data == null or _inspection_owned_card == null:
+		return -1
+	for definition: Dictionary in CardSlotLayout.get_slot_definitions(_inspection_card_data, _inspection_owned_card):
+		if int(definition["kind"]) != CardSlotLayout.Kind.WOUND:
+			continue
+		var storage_index := int(definition["storage_index"])
+		if storage_index >= _inspection_owned_card.wound_slots.size() or not _inspection_owned_card.wound_slots[storage_index].is_empty():
+			continue
+		if Rect2(definition["position"] as Vector2, Vector2(14, 14)).has_point(at_position):
+			return storage_index
+	return -1
+
+
+func _refresh_inspection_markers() -> void:
+	if not is_instance_valid(_inspection_card_view) or _inspection_card_data == null or _inspection_owned_card == null:
+		return
+	var inspection_squad := SquadData.from_owned_card(_inspection_owned_card)
+	for row: BattlefieldRow in [front_row, back_row, enemy_front_row, enemy_back_row]:
+		for slot: BoardSlot in row.get_squads():
+			var squad := slot.get_squad_data()
+			if squad != null and squad.get_owned_card(_inspection_card_data) == _inspection_owned_card:
+				inspection_squad = squad
+	var pattern := inspection_squad.get_rune_pattern_result()
+	var visible_slots := inspection_squad.get_visible_rune_slots()
+	var highlighted: Array[int] = []
+	for index: int in pattern.participating_indices:
+		if visible_slots[index].card == _inspection_card_data:
+			highlighted.append(int(visible_slots[index].rune_index))
+	_inspection_card_view.set_rune_pattern_highlights(highlighted)
+
+
+func _refresh_owned_card_status_visuals(owned_card: OwnedCard) -> void:
+	if owned_card == null:
+		return
+	var attached_squad := _find_squad_for_owned_card(owned_card)
+	if is_instance_valid(_inspection_card_view) and _inspection_owned_card == owned_card:
+		_inspection_card_view.set_owned_card(owned_card)
+		if attached_squad != null:
+			_inspection_card_view.set_squad_attribute_preview_from_squad(attached_squad)
+	for slot: Control in _get_collection_card_slots():
+		if slot.get_meta("owned_card", null) != owned_card:
+			continue
+		if slot.get_child_count() > 0:
+			(slot.get_child(0) as CardView).set_owned_card(owned_card)
+	for row: BattlefieldRow in [front_row, back_row, enemy_back_row, enemy_front_row]:
+		for slot: BoardSlot in row.get_squads():
+			var squad := slot.get_squad_data()
+			if squad == null:
+				continue
+			for card_data: CardData in squad.horizontal_cards:
+				if squad.get_owned_card(card_data) == owned_card:
+					var view := slot.get_card_view(card_data)
+					if view != null:
+						view.set_owned_card(owned_card)
+						view.set_squad_attribute_preview_from_squad(squad)
+	_refresh_preparation_effect_preview()
+
+
+func _find_squad_for_owned_card(owned_card: OwnedCard) -> SquadData:
+	if owned_card == null:
+		return null
+	for row: BattlefieldRow in [front_row, back_row, enemy_back_row, enemy_front_row]:
+		for slot: BoardSlot in row.get_squads():
+			var squad := slot.get_squad_data()
+			if squad == null:
+				continue
+			for card_data: CardData in squad.horizontal_cards:
+				if squad.get_owned_card(card_data) == owned_card:
+					return squad
+	return null
+
+
+func _find_battle_state_for_squad(squad: SquadData) -> BattleSquadState:
+	if squad == null or current_phase != GamePhase.BATTLE or battle_controller == null:
+		return null
+	for state: BattleSquadState in battle_controller.get_all_states():
+		if state.squad_data == squad:
+			return state
+	return null
+
+
 func _on_board_slot_clicked(row: BattlefieldRow, slot: BoardSlot) -> void:
 	selected_board_row = row
 	selected_board_slot = slot
@@ -3455,8 +4985,17 @@ func _on_click_carry_requested(
 	if (
 		current_phase != GamePhase.PREPARE
 		or not _click_carry_data.is_empty()
-		or not _is_card_drag_data(drag_data)
+		or (not _is_card_drag_data(drag_data) and not _is_inspection_item_drag(drag_data))
 	):
+		return
+	if _is_inspection_item_drag(drag_data):
+		_click_carry_data = drag_data.duplicate()
+		_click_carry_preview = _create_click_carry_preview(
+			_click_carry_data,
+			pointer_global_position
+		)
+		_click_carry_data["drag_visual"] = _click_carry_preview
+		_update_click_carry(pointer_global_position)
 		return
 
 	# 点击携带不会触发 Godot 的原生 DRAG_BEGIN；在这里主动完成与
@@ -3477,6 +5016,20 @@ func _create_click_carry_preview(
 	drag_data: Dictionary,
 	pointer_global_position: Vector2
 ) -> Control:
+	if _is_inspection_item_drag(drag_data):
+		var preview := TextureRect.new()
+		preview.name = "InspectionItemCarryPreview"
+		preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		preview.texture = drag_data.get("preview_texture") as Texture2D
+		preview.size = drag_data.get("preview_size", Vector2(14, 14)) as Vector2
+		preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		preview.modulate.a = 0.9
+		if not is_instance_valid(_inspection_carry_layer):
+			return preview
+		_inspection_carry_layer.add_child(preview)
+		_position_inspection_item_preview(preview, drag_data, pointer_global_position)
+		return preview
 	var preview_root := CardView.create_drag_visual(drag_data)
 	add_child(preview_root)
 	preview_root.global_position = pointer_global_position
@@ -3489,6 +5042,7 @@ func _create_click_carry_preview(
 
 
 func _ghost_click_carry_source() -> void:
+	assert(_is_card_drag_data(_click_carry_data), "只有卡牌来源能进入卡牌虚化与来源恢复")
 	var source_type := _click_carry_data.get("source_type") as StringName
 	if source_type == &"collection":
 		var source_slot := _click_carry_data.get("source_slot") as Control
@@ -3512,61 +5066,121 @@ func _ghost_click_carry_source() -> void:
 
 
 func _update_click_carry(pointer_global_position: Vector2) -> void:
+	if not _battle_performance_trace_enabled:
+		_update_click_carry_impl(pointer_global_position)
+		return
+	var profile_started_usec := Time.get_ticks_usec()
+	_update_click_carry_impl(pointer_global_position)
+	_battle_trace_drag_preview_usec += Time.get_ticks_usec() - profile_started_usec
+
+
+func _update_click_carry_impl(pointer_global_position: Vector2) -> void:
 	if _click_carry_data.is_empty():
 		return
 
-	if is_instance_valid(_click_carry_preview):
-		_click_carry_preview.global_position = pointer_global_position
-	for row: BattlefieldRow in [front_row, back_row]:
-		row.update_stack_target_feedback_global(
-			pointer_global_position,
-			_click_carry_data
-		)
+	if _is_inspection_item_drag(_click_carry_data):
+		if is_instance_valid(_click_carry_preview):
+			_position_inspection_item_preview(
+				_click_carry_preview,
+				_click_carry_data,
+				pointer_global_position
+			)
+		if is_instance_valid(_inspection_surface):
+			var surface_rect := _inspection_surface.get_global_rect()
+			if surface_rect.has_point(pointer_global_position):
+				_inspection_surface.can_drop_global(pointer_global_position, _click_carry_data)
+			else:
+				_inspection_surface.clear_drop_preview()
+		return
 
-	var target_row := _find_board_row_at(pointer_global_position)
-	if target_row != null:
-		for row: BattlefieldRow in [front_row, back_row]:
-			if row != target_row:
-				row.clear_drop_preview(false)
-		collection_drop_zone.clear_drop_preview()
-		target_row.preview_card_drop(
-			_to_row_drop_position(target_row, pointer_global_position),
-			_click_carry_data
-		)
-	elif collection_drop_zone.get_global_rect().has_point(pointer_global_position):
-		front_row.clear_drop_preview(false)
-		back_row.clear_drop_preview(false)
-		collection_drop_zone.preview_card_drop(
-			pointer_global_position,
-			_click_carry_data
-		)
-	else:
-		_clear_click_drop_feedback(false)
+	_update_card_carry_target(pointer_global_position, _click_carry_data)
+
+
+func _position_inspection_item_preview(
+	preview: Control,
+	drag_data: Dictionary,
+	pointer_global_position: Vector2
+) -> void:
+	if not is_instance_valid(preview) or not is_instance_valid(_inspection_carry_layer):
+		return
+	var preview_offset := drag_data.get("preview_offset", Vector2.ZERO) as Vector2
+	var layer_transform := _inspection_carry_layer.get_global_transform_with_canvas()
+	preview.position = layer_transform.affine_inverse() * (pointer_global_position + preview_offset)
+
+
+func _set_inspection_pattern_labels_suppressed(suppressed: bool) -> void:
+	for row: BattlefieldRow in [front_row, back_row, enemy_back_row, enemy_front_row]:
+		if not is_instance_valid(row):
+			continue
+		for slot: BoardSlot in row.get_squads():
+			slot.set_inspection_pattern_suppressed(suppressed)
+
+
+func _set_inspection_source_statistics_suppressed(suppressed: bool) -> void:
+	if suppressed:
+		if not _inspection_statistics_suppression_snapshot.is_empty():
+			return
+		for row: BattlefieldRow in [front_row, back_row, enemy_back_row, enemy_front_row]:
+			if not is_instance_valid(row):
+				continue
+			for slot: BoardSlot in row.get_squads():
+				var node: Node = slot
+				while is_instance_valid(node) and not (node is SquadView):
+					node = node.get_parent()
+				if not is_instance_valid(node):
+					continue
+				var squad_view := node as SquadView
+				if _has_inspection_statistics_snapshot(squad_view):
+					continue
+				_inspection_statistics_suppression_snapshot.append({
+					"view": squad_view,
+					"was_suppressed": squad_view.is_battle_result_statistics_suppressed(),
+				})
+				squad_view.set_battle_result_statistics_suppressed(true)
+		return
+	for entry: Dictionary in _inspection_statistics_suppression_snapshot:
+		var squad_view := entry.get("view") as SquadView
+		if is_instance_valid(squad_view):
+			squad_view.set_battle_result_statistics_suppressed(bool(entry.get("was_suppressed", false)))
+	_inspection_statistics_suppression_snapshot.clear()
+
+
+func _has_inspection_statistics_snapshot(squad_view: SquadView) -> bool:
+	for entry: Dictionary in _inspection_statistics_suppression_snapshot:
+		if entry.get("view") == squad_view:
+			return true
+	return false
 
 
 func _commit_click_carry(pointer_global_position: Vector2) -> void:
 	if _click_carry_data.is_empty():
 		return
+	if _is_inspection_item_drag(_click_carry_data):
+		_update_click_carry(pointer_global_position)
+		var committed := (
+			is_instance_valid(_inspection_surface)
+			and _inspection_surface.drop_global(pointer_global_position, _click_carry_data)
+		)
+		_finish_click_carry(committed)
+		get_viewport().set_input_as_handled()
+		return
 
-	_update_click_carry(pointer_global_position)
+	var target := _update_card_carry_target(
+		pointer_global_position,
+		_click_carry_data
+	)
 	var committed := false
-	var target_row := _find_board_row_at(pointer_global_position)
+	var target_row := target.get("row") as BattlefieldRow
 	if target_row != null:
 		var row_position := _to_row_drop_position(
 			target_row,
 			pointer_global_position
 		)
-		if (
-			target_row.has_active_drop_preview()
-			or target_row.preview_card_drop(row_position, _click_carry_data)
-		):
+		if bool(target.get("accepted", false)):
 			target_row.commit_card_drop(row_position, _click_carry_data)
 			committed = true
-	elif collection_drop_zone.get_global_rect().has_point(pointer_global_position):
-		if collection_drop_zone.preview_card_drop(
-			pointer_global_position,
-			_click_carry_data
-		):
+	elif bool(target.get("collection", false)):
+		if bool(target.get("accepted", false)):
 			collection_drop_zone.commit_card_drop(
 				pointer_global_position,
 				_click_carry_data
@@ -3584,10 +5198,13 @@ func _cancel_click_carry() -> void:
 func _finish_click_carry(committed: bool) -> void:
 	var drag_data := _click_carry_data
 	_click_carry_data = {}
+	var is_inspection_item := _is_inspection_item_drag(drag_data)
 	var should_return_failed_indicator: bool = (
 		not committed
 		and drag_data.get("kind") == &"equipment_indicator"
 	)
+	if drag_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
+		_set_equipment_drag_visual_mode(drag_data, false)
 	var return_global_position: Variant = null
 	if (
 		not committed
@@ -3597,6 +5214,8 @@ func _finish_click_carry(committed: bool) -> void:
 		if drag_visual != null:
 			return_global_position = drag_visual.get_card_global_position()
 	_clear_click_drop_feedback()
+	if is_instance_valid(_inspection_surface):
+		_inspection_surface.clear_drop_preview()
 	for row: BattlefieldRow in [front_row, back_row]:
 		row.stop_stack_target_feedback()
 
@@ -3604,6 +5223,11 @@ func _finish_click_carry(committed: bool) -> void:
 		_click_carry_preview.queue_free()
 	_click_carry_preview = null
 
+	if is_inspection_item:
+		return
+	if not _is_card_drag_data(drag_data):
+		push_error("点击携带结束时收到不符合卡牌拖拽契约的数据")
+		return
 	var source_type := drag_data.get("source_type") as StringName
 	if source_type == &"collection":
 		var source_slot := drag_data.get("source_slot") as Control
@@ -3682,6 +5306,7 @@ func _on_board_card_dropped(
 	card_global_position: Vector2
 ) -> void:
 	if drag_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
+		_begin_equipment_drop_profile()
 		_equip_item_on_squad(target_row, drag_data)
 		return
 	if drag_data.has("drop_intent"):
@@ -3797,6 +5422,7 @@ func _equip_item_on_squad(
 			source_slot.configure_drag_source(true, source_row)
 	target_slot.set_squad_data(target_squad)
 	target_slot.configure_drag_source(true, target_row)
+	_record_equipment_drop_profile_section(&"slot_refresh")
 	var placed_indicator := target_slot.get_equipment_indicator()
 	if is_instance_valid(placed_indicator):
 		placed_indicator.call(
@@ -3806,11 +5432,149 @@ func _equip_item_on_squad(
 	selected_board_row = target_row
 	selected_board_slot = target_slot
 	_select_card(owned_item.card_data)
+	_record_equipment_drop_profile_section(&"select_card")
 	_build_collection_cards()
+	_record_equipment_drop_profile_section(&"build_collection_cards")
 	play_area_label.text = "%s 已以指示物形态绑定到鼠标落点" % owned_item.card_data.display_name
 	_refresh_drag_availability()
+	_record_equipment_drop_profile_section(&"refresh_drag_availability")
 	_on_battlefield_squads_changed()
+	_record_equipment_drop_profile_section(&"battlefield_changed_callback")
 	return true
+
+
+func _begin_equipment_drop_profile() -> void:
+	if OS.get_environment("PROJECT_CARD_TRACE_EQUIP_DROP") != "1":
+		return
+	_equipment_drop_profile_sections.clear()
+	_equipment_drop_profile_started_usec = Time.get_ticks_usec()
+	_equipment_drop_profile_last_usec = _equipment_drop_profile_started_usec
+	_equipment_drop_profile_active = true
+
+
+func _record_equipment_drop_profile_section(section: StringName) -> void:
+	if not _equipment_drop_profile_active:
+		return
+	var now := Time.get_ticks_usec()
+	_equipment_drop_profile_sections[section] = now - _equipment_drop_profile_last_usec
+	_equipment_drop_profile_last_usec = now
+	if section == &"battlefield_changed_callback":
+		_report_equipment_drop_first_frame.call_deferred()
+
+
+func _record_equipment_drop_profile_duration(section: StringName, duration_usec: int) -> void:
+	if _equipment_drop_profile_active:
+		_equipment_drop_profile_sections[section] = duration_usec
+
+
+func _report_equipment_drop_first_frame() -> void:
+	if not _equipment_drop_profile_active:
+		return
+	await RenderingServer.frame_post_draw
+	if not _equipment_drop_profile_active:
+		return
+	var elapsed_usec := Time.get_ticks_usec() - _equipment_drop_profile_started_usec
+	_equipment_drop_profile_active = false
+	print(
+		"EQUIPMENT_DROP_PROFILE release_signal_to_first_draw_ms=%.3f sections_us=%s"
+		% [float(elapsed_usec) / 1000.0, str(_equipment_drop_profile_sections)]
+	)
+
+
+func _record_battle_performance_frame(delta: float) -> void:
+	if not _battle_performance_trace_enabled or _battle_trace_frame_samples.size() >= BATTLE_TRACE_MAX_FRAMES:
+		return
+	var advance_total_usec := (
+		battle_controller.performance_trace_advance_total_usec
+		if is_instance_valid(battle_controller)
+		else _battle_trace_last_advance_total_usec
+	)
+	var advance_delta_usec := maxi(advance_total_usec - _battle_trace_last_advance_total_usec, 0)
+	_battle_trace_last_advance_total_usec = advance_total_usec
+	var exact_snap_total_usec := 0
+	for row: BattlefieldRow in [front_row, back_row]:
+		if is_instance_valid(row):
+			exact_snap_total_usec += row.equipment_exact_snap_total_usec
+	var exact_snap_delta_usec := maxi(
+		exact_snap_total_usec - _battle_trace_last_exact_snap_total_usec,
+		0
+	)
+	_battle_trace_last_exact_snap_total_usec = exact_snap_total_usec
+	_battle_trace_frame_samples.append({
+		"frame_ms": delta * 1000.0,
+		"drag_preview_ms": float(_battle_trace_drag_preview_usec) / 1000.0,
+		"release_exact_snap_ms": float(exact_snap_delta_usec) / 1000.0,
+		"battle_advance_ms": float(advance_delta_usec) / 1000.0,
+		"state_sync_ms": float(_battle_trace_state_sync_usec) / 1000.0,
+		"effect_dispatch_ms": float(_battle_trace_effect_dispatch_usec) / 1000.0,
+		"battle_effect_children": (
+			battle_effect_layer.get_child_count()
+			if is_instance_valid(battle_effect_layer)
+			else 0
+		),
+		"draw_calls": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+	})
+	_battle_trace_drag_preview_usec = 0
+	_battle_trace_state_sync_usec = 0
+	_battle_trace_effect_dispatch_usec = 0
+
+
+func _write_battle_performance_trace() -> void:
+	if not _battle_performance_trace_enabled:
+		return
+	var metric_names: Array[String] = [
+		"frame_ms",
+		"drag_preview_ms",
+		"release_exact_snap_ms",
+		"battle_advance_ms",
+		"state_sync_ms",
+		"effect_dispatch_ms",
+		"battle_effect_children",
+		"draw_calls",
+	]
+	var summary: Dictionary = {}
+	for metric: String in metric_names:
+		var values: Array[float] = []
+		for sample: Dictionary in _battle_trace_frame_samples:
+			values.append(float(sample[metric]))
+		values.sort()
+		if values.is_empty():
+			summary[metric] = {"p50": 0.0, "p95": 0.0, "max": 0.0}
+			continue
+		var p50_index := clampi(ceili(float(values.size()) * 0.50) - 1, 0, values.size() - 1)
+		var p95_index := clampi(ceili(float(values.size()) * 0.95) - 1, 0, values.size() - 1)
+		summary[metric] = {
+			"p50": values[p50_index],
+			"p95": values[p95_index],
+			"max": values.back(),
+		}
+	var slow_frame_count := 0
+	for sample: Dictionary in _battle_trace_frame_samples:
+		if float(sample.frame_ms) > 33.0:
+			slow_frame_count += 1
+	var payload := {
+		"os": OS.get_name(),
+		"window_size": [int(get_viewport_rect().size.x), int(get_viewport_rect().size.y)],
+		"sample_count": _battle_trace_frame_samples.size(),
+		"frames_over_33ms": slow_frame_count,
+		"summary": summary,
+		"samples": _battle_trace_frame_samples,
+	}
+	var stamp := Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")
+	var relative_path := "user://logs/battle-performance-%s.json" % stamp
+	var absolute_directory := ProjectSettings.globalize_path("user://logs")
+	DirAccess.make_dir_recursive_absolute(absolute_directory)
+	var file := FileAccess.open(relative_path, FileAccess.WRITE)
+	if file == null:
+		push_error("无法写入战斗性能日志：%s" % relative_path)
+		return
+	file.store_string(JSON.stringify(payload, "\t"))
+	file.close()
+	var absolute_path := ProjectSettings.globalize_path(relative_path)
+	print("BATTLE_PERFORMANCE_TRACE %s" % absolute_path)
+	if is_instance_valid(play_area_label):
+		play_area_label.text = "性能日志已写入 logs 文件夹（F10 可再次导出）"
+		play_area_label.tooltip_text = absolute_path
 
 
 func _return_failed_equipment_indicator_drag(
@@ -3946,13 +5710,14 @@ func _transfer_card(
 				returned_equipment_entries.append(returned_entry)
 		if target_type == &"collection":
 			var returned_card := card_data
+			var returned_owned_card := source_squad.get_owned_card(card_data)
 			var returns_new_owned_card := not collection_cards.has(returned_card)
 			if not source_row.remove_card_from_squad(source_slot, card_data):
 				return false
 			# 上场卡一直保留在 collection_cards 中；回收只解除部署状态。
 			if returns_new_owned_card:
 				collection_cards.append(returned_card)
-			_record_recently_returned_card(returned_card)
+			_record_recently_returned_card(returned_card, returned_owned_card)
 			selected_board_row = null
 			selected_board_slot = null
 			_build_collection_cards(returned_card, entry_global_position)
@@ -4007,7 +5772,7 @@ func _transfer_card(
 			for returned_entry: Dictionary in returned_equipment_entries:
 				var returned_item := returned_entry.get("owned_card") as OwnedCard
 				if returned_item != null:
-					_record_recently_returned_card(returned_item.card_data)
+					_record_recently_returned_card(returned_item.card_data, returned_item)
 			_animate_returned_equipment_entries(returned_equipment_entries)
 	else:
 		return false
@@ -4178,7 +5943,7 @@ func _transfer_drop_intent(
 		for returned_entry: Dictionary in returned_equipment_entries:
 			var returned_item := returned_entry.get("owned_card") as OwnedCard
 			if returned_item != null:
-				_record_recently_returned_card(returned_item.card_data)
+				_record_recently_returned_card(returned_item.card_data, returned_item)
 		_animate_returned_equipment_entries(returned_equipment_entries)
 	selected_board_row = target_row
 	_select_card(card_data)
@@ -4245,7 +6010,7 @@ func _transfer_compact_squad_into_single(
 		for returned_entry: Dictionary in returned_equipment_entries:
 			var returned_item := returned_entry.get("owned_card") as OwnedCard
 			if returned_item != null:
-				_record_recently_returned_card(returned_item.card_data)
+				_record_recently_returned_card(returned_item.card_data, returned_item)
 		_animate_returned_equipment_entries(returned_equipment_entries)
 	selected_board_row = target_row
 	selected_board_slot = target_slot
@@ -4321,7 +6086,10 @@ func _transfer_squad_to_collection(
 	for card_data: CardData in missing_cards:
 		collection_cards.append(card_data)
 	for index: int in range(source_squad.horizontal_cards.size() - 1, -1, -1):
-		_record_recently_returned_card(source_squad.horizontal_cards[index])
+		_record_recently_returned_card(
+			source_squad.horizontal_cards[index],
+			source_squad.get_owned_card(source_squad.horizontal_cards[index])
+		)
 	selected_board_row = null
 	selected_board_slot = null
 	var entering_card := squad_data.horizontal_cards[0]
@@ -4353,8 +6121,23 @@ func _is_card_drag_data(data: Variant) -> bool:
 	return false
 
 
+func _is_inspection_item_drag(data: Variant) -> bool:
+	return data is Dictionary and (data as Dictionary).get("kind") in [
+		&"emblem_library",
+		&"sticker_scraper",
+	]
+
+
 func _refresh_drag_availability() -> void:
 	var drag_enabled := current_phase == GamePhase.PREPARE
+	if emblem_library != null:
+		emblem_library.set_drag_enabled(
+			drag_enabled and is_instance_valid(_inspection_overlay)
+		)
+	if wound_library != null:
+		wound_library.set_drag_enabled(
+			drag_enabled and is_instance_valid(_inspection_overlay)
+		)
 	for row: BattlefieldRow in [front_row, back_row]:
 		row.set_drag_enabled(drag_enabled)
 

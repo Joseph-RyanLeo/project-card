@@ -612,9 +612,10 @@ func _test_main_battle_loop_and_restart() -> void:
 		"结算摘要按实际获得卡汇总永久成长，并同时显示待写回金币"
 	)
 	_expect(
-		main.battle_speed_button != null
-		and not main.battle_speed_button.visible
-		and main.battle_speed_button.text == "速度 1×",
+		main.battle_speed_bar != null
+		and not main.battle_speed_bar.visible
+		and main.battle_speed_index == 1
+		and main.battle_speed_buttons.size() == 4,
 		"准备阶段已建立战斗速度按钮，并默认隐藏为 1×"
 	)
 	_expect(
@@ -650,13 +651,13 @@ func _test_main_battle_loop_and_restart() -> void:
 		"战斗日志标题与正文统一使用卡牌中文字体，并覆盖日志所需中文字符"
 	)
 	_expect(
-		main.battle_speed_button.position == main.BATTLE_SPEED_BUTTON_POSITION
-		and main.battle_speed_button.size.x >= main.BATTLE_SPEED_BUTTON_SIZE.x
-		and main.battle_speed_button.size.y >= main.BATTLE_SPEED_BUTTON_SIZE.y
-		and main.battle_speed_button.position.y >= (
+		main.battle_speed_bar.position == main.BATTLE_SPEED_BUTTON_POSITION
+		and main.battle_speed_bar.size.x >= main.BATTLE_SPEED_BUTTON_SIZE.x
+		and main.battle_speed_bar.size.y >= main.BATTLE_SPEED_BUTTON_SIZE.y
+		and main.battle_speed_bar.position.y >= (
 			main.enemy_avatar.position.y + main.enemy_avatar.size.y
 		),
-		"战斗速度按钮位于敌方画像下方，并保留足够点击尺寸"
+		"四段战斗速度条位于敌方画像下方，并保留足够点击尺寸"
 	)
 	_expect(
 		main.enemy_back_row.get_card_count() + main.enemy_front_row.get_card_count() == 8,
@@ -678,7 +679,7 @@ func _test_main_battle_loop_and_restart() -> void:
 	_expect(
 		main.current_phase == main.GamePhase.BATTLE
 		and main.current_world_view == main.WorldView.BATTLEFIELDS
-		and main.battle_speed_button.visible
+		and main.battle_speed_bar.visible
 		and main.battle_timer_label.visible
 		and main.battle_seed_panel.visible
 		and main.battle_controller.battle_seed == 1007
@@ -693,20 +694,19 @@ func _test_main_battle_loop_and_restart() -> void:
 		}),
 		"进入战斗后自动切到敌我视图并锁定准备拖拽"
 	)
-	main.cycle_battle_speed()
+	main.set_battle_speed(2)
 	main.battle_controller._process(0.5)
 	_expect(
-		main.battle_speed_button.text == "速度 2×"
+		main.battle_speed_buttons[2].button_pressed
 		and is_equal_approx(main.battle_controller.battle_speed_multiplier, 2.0)
 		and main.battle_timer_label.text == "战斗 00:01.0",
 		"切到 2× 后现实半秒推进一秒逻辑计时，并同步刷新战场计时文字"
 	)
-	main.cycle_battle_speed()
-	main.cycle_battle_speed()
+	main.set_battle_speed(0)
 	_expect(
-		main.battle_speed_button.text == "速度 1×"
-		and is_equal_approx(main.battle_controller.battle_speed_multiplier, 1.0),
-		"战斗速度按钮按 1×→2×→3×→1×循环"
+		main.battle_speed_buttons[0].button_pressed
+		and is_equal_approx(main.battle_controller.battle_speed_multiplier, 0.5),
+		"速度条可直接选择并正确保留0.5×"
 	)
 	var first_state: BattleSquadState = main.battle_controller.player_states[0]
 	var first_slot := main.get("_battle_state_slots").get(first_state) as BoardSlot
@@ -838,6 +838,13 @@ func _test_main_battle_loop_and_restart() -> void:
 		"结算页保留日志数值的公式悬停查看能力"
 	)
 	main._on_battle_log_meta_hover_ended("")
+	var result_inspection_view := any_result_slot.card_view
+	var result_inspection_owned := any_result_slot.get_squad_data().get_owned_card(result_inspection_view.card_data)
+	main._open_card_inspection(result_inspection_view.card_data, result_inspection_owned, result_inspection_view)
+	await process_frame
+	_expect(not any_result_slot._battle_result_overlay.visible, "结算统计在结算卡牌检视时显式隐藏")
+	main._close_card_inspection(true)
+	_expect(any_result_slot._battle_result_overlay.visible, "结算卡牌检视关闭后恢复统计")
 	_expect(main.battle_departure_count > 0, "真实死亡批次调用单一退场入口")
 	_expect(main.restart_battle(), "重新开始入口可执行")
 	await create_timer(main.VIEW_TWEEN_DURATION + 0.05).timeout
@@ -845,7 +852,7 @@ func _test_main_battle_loop_and_restart() -> void:
 		main.current_phase == main.GamePhase.PREPARE
 		and main.current_world_view == main.WorldView.COLLECTION
 		and not main.battle_result_panel.visible
-		and not main.battle_speed_button.visible
+		and not main.battle_speed_bar.visible
 		and not main.battle_timer_label.visible
 		and main.battle_seed_spin.get_line_edit().editable
 		and not main.battle_seed_random_button.disabled

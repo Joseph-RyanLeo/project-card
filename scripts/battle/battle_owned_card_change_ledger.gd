@@ -9,6 +9,8 @@ const KIND_SET_WOUND_SLOT: StringName = &"set_wound_slot"
 const KIND_SET_EMBLEM_SLOT: StringName = &"set_emblem_slot"
 const KIND_ADD_EMBLEM_PROGRESS: StringName = &"add_emblem_progress"
 const KIND_CONSUME_EQUIPMENT: StringName = &"consume_equipment"
+const KIND_HEAL_RANDOM_SQUAD_WOUND: StringName = &"heal_random_squad_wound"
+const KIND_SET_WOUND_BATTLE_COUNTER: StringName = &"set_wound_battle_counter"
 
 var _entries: Array[Dictionary] = []
 
@@ -80,6 +82,50 @@ func record_equipment_consumption(
 		):
 			return false
 	_append_entry(owner, KIND_CONSUME_EQUIPMENT, effect_id, source_runtime_id, logical_time_us, battle_instance_id, {})
+	return true
+
+
+func record_random_squad_wound_heal(
+	owner: BattleEffectOwnerRef,
+	squad_card_instance_ids: Array[StringName],
+	masked_wound_slot_keys: Array[StringName],
+	effect_id: StringName,
+	source_runtime_id: int,
+	logical_time_us: int,
+	battle_instance_id: StringName = &""
+) -> bool:
+	if owner == null or owner.owned_card == null or squad_card_instance_ids.is_empty():
+		return false
+	_append_entry(
+		owner,
+		KIND_HEAL_RANDOM_SQUAD_WOUND,
+		effect_id,
+		source_runtime_id,
+		logical_time_us,
+		battle_instance_id,
+		{
+			"squad_card_instance_ids": squad_card_instance_ids.duplicate(),
+			"masked_wound_slot_keys": masked_wound_slot_keys.duplicate(),
+		}
+	)
+	return true
+
+
+func record_wound_battle_counter(
+	owner: BattleEffectOwnerRef,
+	counter_key: StringName,
+	value: int,
+	effect_id: StringName,
+	source_runtime_id: int,
+	logical_time_us: int,
+	battle_instance_id: StringName = &""
+) -> bool:
+	if owner == null or owner.owned_card == null or counter_key.is_empty() or value < 0:
+		return false
+	_append_entry(owner, KIND_SET_WOUND_BATTLE_COUNTER, effect_id, source_runtime_id, logical_time_us, battle_instance_id, {
+		"counter_key": counter_key,
+		"counter_value": value,
+	})
 	return true
 
 

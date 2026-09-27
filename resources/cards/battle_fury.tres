@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/battle_fury.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"battle_fury"
+display_name = "战斗怒火"
+pack_id = &"ash_ledger"
+effect_ids = Array[StringName]([&"battle_fury.effect.01"])
+keywords = Array[StringName]([&"条件释放", &"无法被消灭", &"生命下限", &"持续时间"])
+card_type = 2
+rarity = 3
+spell_type = 3
+spell_trigger_kind = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(0, 3)
+effect_text = "触发：友方即将被消灭。友军5秒内生命最低为1。"

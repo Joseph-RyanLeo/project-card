@@ -43,7 +43,7 @@ const PRESETS: Array[Dictionary] = [
 	{"id": &"armorsmith", "name": "灰烬·铸甲师", "description": "真实效果：相邻友军被消灭后永久护甲+1。永久写回依赖仍未实现。"},
 	{"id": &"baggage_muleteer", "name": "灰烬·辎重驮夫", "description": "真实效果：突击获得金币，乡邻额外获得金币。金币依赖仍未实现。"},
 	{"id": &"militia", "name": "灰烬·民兵", "description": "真实效果：乡邻使自身和相邻人类小队本场数值+1。"},
-	{"id": &"javelin_skirmisher", "name": "灰烬·标枪散兵", "description": "真实效果：突击执行数值+2的远程行动，发射后转为近战。"},
+	{"id": &"javelin_skirmisher", "name": "灰烬·标枪散兵", "description": "真实效果：突击加入强化+2并执行远程攻击，发射后转为近战。"},
 	{"id": &"musketeer", "name": "灰烬·火枪手", "description": "真实效果：乡邻使自身受击优先级-3。"},
 	{"id": &"elegy_poet", "name": "灰烬·悲歌诗人", "description": "真实效果：非衍生友军死亡后，本场数值与护甲成长。"},
 ]

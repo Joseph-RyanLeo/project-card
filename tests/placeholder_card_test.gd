@@ -185,10 +185,10 @@ func _test_collection_and_illegal_drops(cards: Array[CardData]) -> void:
 	root.add_child(main)
 	await process_frame
 	await process_frame
-	_expect(main.collection_cards.size() == 58, "Main 收藏包含24张随从、14张法术和20张装备")
+	_expect(main.collection_cards.size() == 62, "Main 收藏包含24张随从、18张法术和20张装备")
 	main.active_card_type_filters.assign([CardData.CardType.SPELL])
 	var spells: Array[CardData] = main.get_filtered_collection_cards()
-	_expect(spells.size() == 14 and spells.all(func(card: CardData) -> bool: return card.card_type == CardData.CardType.SPELL), "收藏法术种类筛选只显示 14 张法术")
+	_expect(spells.size() == 18 and spells.all(func(card: CardData) -> bool: return card.card_type == CardData.CardType.SPELL), "收藏法术种类筛选显示14张占位与4张正式法术")
 	main.active_card_type_filters.assign([CardData.CardType.EQUIPMENT])
 	var equipment: Array[CardData] = main.get_filtered_collection_cards()
 	_expect(equipment.size() == 20 and equipment.all(func(card: CardData) -> bool: return card.card_type == CardData.CardType.EQUIPMENT), "收藏装备种类筛选显示15张占位与5张正式装备")
@@ -200,8 +200,8 @@ func _test_collection_and_illegal_drops(cards: Array[CardData]) -> void:
 	main.search_query = "强化"
 	var searched: Array[CardData] = main.get_filtered_collection_cards()
 	_expect(
-		searched.size() == 7
-		and searched.filter(func(card: CardData) -> bool: return card.card_type == CardData.CardType.SPELL).size() == 3
+		searched.size() == 9
+		and searched.filter(func(card: CardData) -> bool: return card.card_type == CardData.CardType.SPELL).size() == 5
 		and searched.any(func(card: CardData) -> bool: return card.id == &"tide_archer"),
 		"搜索可同时匹配法术类型中文、灰烬卡正式文本与潮汐射手的暂存效果文本"
 	)
@@ -237,10 +237,30 @@ func _test_tuner() -> void:
 		await process_frame
 		group_counts.append(tuner.card_selector.item_count)
 	_expect(
-		group_counts == [24, 14, 20]
-		and group_counts.reduce(func(sum: int, count: int) -> int: return sum + count, 0) == 58,
-		"CardArtTuner 以随从/法术/装备滚动分组覆盖全部 58 张卡"
+		group_counts == [24, 18, 20]
+		and group_counts.reduce(func(sum: int, count: int) -> int: return sum + count, 0) == 62,
+		"CardArtTuner 以随从/法术/装备滚动分组覆盖新增正式法术"
 	)
+	var expected_formal_spell_paths := [
+		"res://resources/cards/battle_fury.tres",
+		"res://resources/cards/side_by_side.tres",
+		"res://resources/cards/return_to_battlefield.tres",
+		"res://resources/cards/volley_order.tres",
+	]
+	var spell_tuner_paths: Array[String] = []
+	tuner.card_type_selector.select(1)
+	tuner.card_type_selector.emit_signal("item_selected", 1)
+	await process_frame
+	for item_index: int in tuner.card_selector.item_count:
+		spell_tuner_paths.append(str(tuner.card_selector.get_item_metadata(item_index)))
+	for resource_path: String in expected_formal_spell_paths:
+		var formal_spell := load(resource_path) as CardData
+		_expect(
+			spell_tuner_paths.has(resource_path)
+			and formal_spell != null
+			and formal_spell.art_texture != null,
+			"卡面调整器包含正式法术且绑定立绘：%s" % resource_path.get_file()
+		)
 	tuner.queue_free()
 	await process_frame
 

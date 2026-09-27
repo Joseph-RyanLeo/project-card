@@ -116,15 +116,30 @@ func _test_main_drag_and_save() -> void:
 	_expect(controller._preview.get_visual_center().distance_to(old_center) < 0.01, "拿起第一帧保留屏幕可见位置，没有中心瞬移")
 	await create_timer(0.13).timeout
 	var card := slot.get_primary_card_view()
-	var intended := card.get_global_transform_with_canvas() * Vector2(49, 60)
+	var intended := card.get_global_transform_with_canvas() * Vector2(14, 40)
 	controller._preview.global_position += intended - controller._preview.get_visual_center()
+	var snap_target: Dictionary = controller._find_target(
+		intended,
+		item,
+		controller._get_carry_pointer_position()
+	)
+	var pointer_outside_card := card.get_global_transform_with_canvas() * Vector2(104, 40)
+	_expect(
+		not snap_target.is_empty()
+		and (snap_target.position as Vector2).distance_to(Vector2(14, 46)) > 1.0
+		and controller._find_target(intended, item, pointer_outside_card).is_empty(),
+		"卡内边缘的日月星吸附到遮罩合法点，卡外指针即使图标压在卡上也不接受"
+	)
 	controller.finish_drop()
 	var attached := slot.get_celestial_indicator(item.instance_id)
 	_expect(attached != null and slot.get_squad_data().has_indicator(item.kind), "点击携带可把独立指示物绑定到随从")
 	_expect((attached._indicator_visual.get_global_transform_with_canvas() * (attached.size * 0.5)).distance_to(intended) < 0.01, "放下第一帧与手持图标位置一致，再向下落到卡面")
 	await create_timer(0.17).timeout
 	var final_center := attached._indicator_visual.get_global_transform_with_canvas() * (attached.size * 0.5)
-	_expect(final_center.distance_to(card.get_global_transform_with_canvas() * Vector2(49, 66)) < 0.1, "放下后中心在松手位置下方6个逻辑像素")
+	_expect(
+		final_center.distance_to(card.get_global_transform_with_canvas() * (snap_target.position as Vector2)) < 0.1,
+		"日月星从原手持位置下落到吸附后的遮罩合法中心"
+	)
 	var path := "/private/tmp/project-card-celestial-save.json"
 	_expect(main.save_run_to_path(path) == OK and main.load_run_from_path(path), "真实主场景的指示物库存与阵容位置通过JSON存取")
 	await process_frame

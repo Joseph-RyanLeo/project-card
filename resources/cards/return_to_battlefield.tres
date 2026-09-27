@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/return_to_battlefield.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"return_to_battlefield"
+display_name = "重返战场"
+pack_id = &"ash_ledger"
+effect_ids = Array[StringName]([&"return_to_battlefield.effect.01"])
+keywords = Array[StringName]([&"延时释放", &"重新入场", &"最近死亡", &"非衍生", &"不重触突击"])
+card_type = 2
+rarity = 1
+spell_type = 1
+spell_trigger_kind = 3
+art_texture = ExtResource("2_art")
+effect_text = "15秒后：最近被消灭的非衍生友军以50%生命重新入场。"

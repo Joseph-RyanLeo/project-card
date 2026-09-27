@@ -11,12 +11,16 @@ extends Panel
 signal card_clicked(card_data: CardData)
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 signal effect_display_changed(card_data: CardData, is_showing_effect: bool)
+signal inspection_requested(card_view: CardView, card_data: CardData, owned_card: OwnedCard)
 signal collection_return_requested(
 	card_view: CardView,
 	return_global_position: Vector2
 )
 
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
+const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
+const StatusSlotLayerScript = preload("res://scripts/ui/status_slot_layer.gd")
+const StatusIndicatorStyle = preload("res://scripts/ui/status_indicator_style.gd")
 const EquipmentIndicatorStyleScript = preload(
 	"res://scripts/ui/equipment_indicator_style.gd"
 )
@@ -126,6 +130,15 @@ const ARMOR_VALUE_POSITIONS := {
 } # 护甲数值按“位数 -> 数字1数量”使用的绝对卡面坐标
 const COOLDOWN_VALUE_POSITION := Vector2(-3, 24) # 冷却整数、小数点和小数位组合节点的绝对卡面坐标
 const MAX_STATS_RIGHT_EDGE: float = 109.0 # 999生命在当前绝对坐标下到达的最右边界
+const ATTACHMENT_PLACEMENT_POSITION := Vector2(8, -4) # 用户白色精确区域相对卡框的左上角
+const ATTACHMENT_PLACEMENT_SIZE := Vector2(81, 105) # 用户白色精确区域的原生逻辑尺寸
+const ATTACHMENT_PLACEMENT_MASK: Texture2D = preload(
+	"res://assets/card_ui/status/source/attachment_placement_mask.png"
+)
+const ATTACHMENT_FAST_PATH_MAX_BLOCKED_PIXELS: int = 64 # 遮罩少量禁放像素时改查禁区，避免逐像素扫描指示物
+static var _attachment_offset_cache: Dictionary = {}
+static var _attachment_fast_offset_cache: Dictionary = {}
+static var _attachment_blocked_mask_cache: Dictionary = {}
 @export_group("Card Pixel Layout")
 @export var card_size: Vector2 = Vector2(99, 136) # 裸卡的基准像素尺寸
 @export var title_area_position: Vector2 = Vector2(21, 5) # 卡牌名字文字区域整体下移 1px 后的左上角坐标
@@ -161,7 +174,8 @@ const MAX_STATS_RIGHT_EDGE: float = 109.0 # 999生命在当前绝对坐标下到
 @export var effect_text_outline_color: Color = Color(0.03, 0.025, 0.02, 0.95) # 效果文字描边颜色；近黑但保留少量底色融合
 
 @export_group("Card Effect Transition")
-@export_range(0.0, 1.0, 0.05) var effect_rune_dim_alpha: float = 0.2 # 右键显示效果文字时符文保留的透明度
+@export_range(0.0, 1.0, 0.05) var effect_rune_dim_alpha: float = 0.2 # 描述模式下符文背景透明度；0为完全透明，1为完全不透明
+@export_range(0.05, 1.0, 0.05) var hover_effect_delay_seconds: float = 0.25 # 悬停多久后自动切换到描述模式（秒）
 @export_range(0.01, 1.0, 0.01) var effect_transition_duration: float = 0.2 # 符文与效果文字交叉淡化的动画时长（秒）
 
 @export var card_data: CardData:
@@ -185,15 +199,25 @@ var _layout_tween: Tween
 var _hover_punch_tween: Tween
 var _shadow_tween: Tween
 var _effect_transition_tween: Tween
+var _hover_effect_delay_tween: Tween
+var _hover_effect_active: bool = false
 var _layout_resting_position: Vector2 = Vector2.ZERO
 var _mouse_hovered: bool = false
 var _snapshot_mode: bool = false
 var _interaction_shadow: Panel
+var _status_slot_layer: Control
+var _owned_card: OwnedCard
+var _emblem_drop_handler: Callable
 var _external_lift: float = 0.0
 var _resting_z_index: int = 0
 # 高亮索引描述当前牌型参与的三个槽位；流光节点本身按需创建并等待全局周期。
 var _highlighted_rune_indices: Array[int] = []
 var _battle_masked_rune_indices: Array[int] = [] # 仅在本场战斗隐藏的符文槽，不修改CardData
+var _battle_rune_element_overrides: Dictionary = {} # 本场临时有效元素，不写回OwnedCard
+var _battle_spent_emblem_slots: Array[int] = [] # 已消耗的盾牌Ⅲ实例，仅改变本场视觉
+var _battle_masked_wound_slots: Array[int] = [] # 本场被随军医者等效果临时遮蔽的伤势槽，只暗淡显示
+var _status_slot_signature: Array = []
+var _has_status_slot_signature: bool = false
 var _rune_highlight_is_preview: bool = false
 var _dim_preview_active_runes: bool = true
 var _active_rune_icons: Dictionary = {}
@@ -212,6 +236,10 @@ var _battle_number_targets: Dictionary = {} # 保存每项动画的最终目标�
 var _squad_action_preview: int = -1 # 负值表示卡面使用自身行动值，非负值显示所在小队含装备的战前结果
 var _squad_health_preview: int = -1 # 负值表示卡面使用自身生命值，非负值显示所在小队含装备的战前结果
 var _squad_armor_preview: int = -1 # 负值表示卡面使用自身护甲值，非负值显示所在小队含装备的战前结果
+var _squad_action_preview_target: int = -1
+var _squad_health_preview_target: int = -1
+var _squad_armor_preview_target: int = -1
+var _target_priority_preview: int = -1 # 战斗中使用控制器的实际抽选权重；负数退回卡牌基础权重
 var _squad_cooldown_preview: float = -1.0 # 负值使用自身基础冷却，非负值显示装备热诚修正后的战前行动间隔
 
 # 所有真实卡共享一条静态时间轴；新加入的符文等到下一轮再同步开始。
@@ -254,6 +282,7 @@ func _ready() -> void:
 	# 左上角支点，避免稍后进入 SceneTree 时重新覆盖快照捕获变换。
 	pivot_offset = Vector2.ZERO if _snapshot_mode else card_size * 0.5
 	_create_interaction_shadow()
+	_create_status_slot_layer()
 	_apply_pixel_layout()
 	_ignore_mouse_on_children(self)
 	if not mouse_entered.is_connected(_on_mouse_entered):
@@ -276,6 +305,8 @@ func _gui_input(event: InputEvent) -> void:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
+				# 左键进入拖拽/堆叠预览时，取消尚未完成的悬停描述切换，避免预览结束后回写旧状态。
+				_cancel_hover_effect_display(true)
 				_left_button_pressed = true
 				if (
 					_drag_enabled
@@ -308,7 +339,12 @@ func _gui_input(event: InputEvent) -> void:
 			mouse_event.button_index == MOUSE_BUTTON_RIGHT
 			and mouse_event.pressed
 		):
-			toggle_effect_display()
+			_cancel_hover_effect_display(true)
+			if inspection_requested.get_connections().is_empty():
+				# 独立 CardView 测试或工具没有检视宿主时，保留旧的效果面兼容入口。
+				toggle_effect_display()
+			else:
+				inspection_requested.emit(self, card_data, _owned_card)
 			accept_event()
 
 
@@ -324,6 +360,7 @@ func _has_point(point: Vector2) -> bool:
 func _get_drag_data(at_position: Vector2) -> Variant:
 	if not _drag_enabled or card_data == null:
 		return null
+	_cancel_hover_effect_display(true)
 
 	var drag_data := _build_drag_data(at_position)
 	# Godot 把原生拖拽预览挂在当前 SubViewport 的拖拽层，而不是
@@ -403,6 +440,7 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 			squad_visual.add_child(squad_card)
 			squad_card.set_card_data(cards[index] as CardData)
 			if carried_squad != null:
+				squad_card.set_owned_card(carried_squad.get_owned_card(cards[index] as CardData))
 				squad_card.set_squad_attribute_preview_from_squad(carried_squad)
 			squad_card.configure_drag_source(false)
 			squad_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -425,6 +463,7 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 	preview_card.set_card_data(drag_data["card_data"] as CardData)
 	var carried_single := drag_data.get("squad_data") as SquadData
 	if carried_single != null and carried_single.get_card_count() == 1:
+		preview_card.set_owned_card(carried_single.get_owned_card(preview_card.card_data))
 		preview_card.set_squad_attribute_preview_from_squad(carried_single)
 	preview_card.configure_drag_source(false)
 	_add_attached_equipment_visual(preview_card, drag_data)
@@ -544,8 +583,14 @@ func set_snapshot_mode(value: bool) -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
+func is_snapshot_mode() -> bool:
+	return _snapshot_mode
+
+
 func _on_mouse_entered() -> void:
 	show_pointer_hover_feedback(true)
+	_refresh_priority_label()
+	_schedule_hover_effect_display()
 
 
 func show_pointer_hover_feedback(play_rotation_punch: bool = false) -> void:
@@ -568,6 +613,8 @@ func show_pointer_hover_feedback(play_rotation_punch: bool = false) -> void:
 
 func _on_mouse_exited() -> void:
 	_mouse_hovered = false
+	_refresh_priority_label()
+	_cancel_hover_effect_display(true)
 	if _drag_enabled and not _left_button_pressed:
 		z_index = _resting_z_index
 		_set_interaction_shadow_visible(false)
@@ -579,6 +626,7 @@ func clear_pointer_hover_feedback() -> void:
 	# 这里只清理持续反馈；已经开始的单次轻晃会自然回正，避免小队模式
 	# 在同一帧切换反馈对象时把战场卡的入场轻晃截断。
 	_mouse_hovered = false
+	_cancel_hover_effect_display(true)
 	if not _left_button_pressed:
 		z_index = _resting_z_index
 		_set_interaction_shadow_visible(false)
@@ -586,6 +634,7 @@ func clear_pointer_hover_feedback() -> void:
 
 
 func _reset_interaction_visual() -> void:
+	_cancel_hover_effect_display(true)
 	z_index = _resting_z_index
 	if _hover_punch_tween != null and _hover_punch_tween.is_valid():
 		_hover_punch_tween.kill()
@@ -756,20 +805,58 @@ func set_squad_attribute_preview(
 	action_interval: float = -1.0
 ) -> void:
 	if (
-		_squad_action_preview == action_value
-		and _squad_health_preview == max_health
-		and _squad_armor_preview == base_armor
+		_squad_action_preview_target == action_value
+		and _squad_health_preview_target == max_health
+		and _squad_armor_preview_target == base_armor
 		and is_equal_approx(_squad_cooldown_preview, action_interval)
 	):
 		return
-	_squad_action_preview = action_value
-	_squad_health_preview = max_health
-	_squad_armor_preview = base_armor
+	_set_squad_preview_number(&"squad_preview_action", action_value, _squad_action_preview_target, func(value: float) -> void:
+		_squad_action_preview = roundi(value)
+		if is_node_ready():
+			_refresh_action_value_text()
+	)
+	_set_squad_preview_number(&"squad_preview_health", max_health, _squad_health_preview_target, func(value: float) -> void:
+		_squad_health_preview = roundi(value)
+		if is_node_ready():
+			_refresh_vitals_text()
+	)
+	_set_squad_preview_number(&"squad_preview_armor", base_armor, _squad_armor_preview_target, func(value: float) -> void:
+		_squad_armor_preview = roundi(value)
+		if is_node_ready():
+			_refresh_vitals_text()
+	)
+	_squad_action_preview_target = action_value
+	_squad_health_preview_target = max_health
+	_squad_armor_preview_target = base_armor
 	_squad_cooldown_preview = action_interval
 	if is_node_ready() and card_data != null:
 		_refresh_action_value_text()
 		_refresh_vitals_text()
 		_refresh_cooldown_text()
+
+
+func _set_squad_preview_number(
+	key: StringName,
+	target_value: int,
+	previous_target: int,
+	apply_value: Callable
+) -> void:
+	if target_value < 0:
+		_kill_battle_number_tween(key)
+		_battle_number_targets.erase(key)
+		apply_value.call(-1.0)
+		return
+	if not is_node_ready() or previous_target < 0:
+		_kill_battle_number_tween(key)
+		_set_battle_number_target(key, float(target_value))
+		apply_value.call(float(target_value))
+		return
+	var current_value := float(_squad_action_preview)
+	match key:
+		&"squad_preview_health": current_value = float(_squad_health_preview)
+		&"squad_preview_armor": current_value = float(_squad_armor_preview)
+	_animate_battle_number(key, current_value, float(target_value), apply_value)
 
 
 func set_squad_attribute_preview_from_squad(squad: SquadData) -> void:
@@ -783,7 +870,7 @@ func set_squad_attribute_preview_from_squad(squad: SquadData) -> void:
 		if squad != null and card_data == squad.get_vitals_source() else -1,
 		BattleRules.get_action_interval(
 			action_source.cooldown_seconds,
-			squad.get_equipment_zeal_delta()
+			squad.get_equipment_zeal_delta() + squad.get_emblem_zeal_delta()
 		)
 		if action_source != null and card_data == action_source else -1.0
 	)
@@ -796,6 +883,64 @@ func toggle_effect_display() -> bool:
 	_animate_effect_transition()
 	effect_display_changed.emit(card_data, showing_effect)
 	return true
+
+
+func _schedule_hover_effect_display() -> void:
+	var can_display_hover_effect := _drag_source_type == &"collection"
+	if (
+		_drag_source_type == &"board"
+		and is_instance_valid(_drag_source_slot)
+		and _drag_source_slot.has_method("can_show_card_effect_on_hover")
+	):
+		can_display_hover_effect = bool(
+			_drag_source_slot.call("can_show_card_effect_on_hover", self)
+		)
+	if (
+		_snapshot_mode
+		or not can_display_hover_effect
+		or card_data == null
+		or card_data.card_type != CardData.CardType.MINION
+		or showing_effect
+		or _left_button_pressed
+	):
+		return
+	if _hover_effect_delay_tween != null and _hover_effect_delay_tween.is_valid():
+		_hover_effect_delay_tween.kill()
+	_hover_effect_delay_tween = create_tween()
+	_hover_effect_delay_tween.tween_interval(hover_effect_delay_seconds)
+	_hover_effect_delay_tween.tween_callback(_activate_hover_effect_display)
+
+
+func _activate_hover_effect_display() -> void:
+	_hover_effect_delay_tween = null
+	if (
+		not _mouse_hovered
+		or _left_button_pressed
+		or _snapshot_mode
+		or showing_effect
+		or (
+			_drag_source_type == &"board"
+			and is_instance_valid(_drag_source_slot)
+			and _drag_source_slot.has_method("can_show_card_effect_on_hover")
+			and not bool(_drag_source_slot.call("can_show_card_effect_on_hover", self))
+		)
+	):
+		return
+	_hover_effect_active = true
+	showing_effect = true
+	_animate_effect_transition()
+
+
+func _cancel_hover_effect_display(restore: bool) -> void:
+	if _hover_effect_delay_tween != null and _hover_effect_delay_tween.is_valid():
+		_hover_effect_delay_tween.kill()
+	_hover_effect_delay_tween = null
+	if not restore or not _hover_effect_active:
+		return
+	_hover_effect_active = false
+	showing_effect = false
+	if card_data != null and card_data.card_type == CardData.CardType.MINION:
+		_animate_effect_transition()
 
 
 func is_effect_transition_animating() -> bool:
@@ -821,9 +966,295 @@ func set_card_data(value: CardData) -> void:
 	if card_changed:
 		_battle_action_type_override = -1
 		_battle_masked_rune_indices.clear()
+		_battle_rune_element_overrides.clear()
+		_battle_spent_emblem_slots.clear()
+		_battle_masked_wound_slots.clear()
 
 	if is_node_ready():
 		_refresh()
+
+
+func set_owned_card(value: OwnedCard) -> void:
+	if _owned_card != value:
+		_battle_action_type_override = -1
+		_battle_masked_rune_indices.clear()
+		_battle_rune_element_overrides.clear()
+		_battle_spent_emblem_slots.clear()
+		_battle_masked_wound_slots.clear()
+	_owned_card = value
+	if is_node_ready():
+		_refresh_action_value_text()
+		_refresh_vitals_text()
+		_refresh_cooldown_text()
+		_refresh_status_slots()
+		_refresh_runes()
+
+
+func get_owned_card() -> OwnedCard:
+	return _owned_card
+
+
+func _get_tooltip(point: Vector2) -> String:
+	return get_sticker_tooltip(point)
+
+
+func get_sticker_tooltip(point: Vector2) -> String:
+	if _owned_card == null or card_data == null:
+		return ""
+	for slot: Dictionary in CardSlotLayout.get_slot_definitions(card_data, _owned_card):
+		if not Rect2(slot.position, Vector2(14, 14)).has_point(point):
+			continue
+		var states: Array[Dictionary] = _owned_card.emblem_slots if slot.kind == CardSlotLayout.Kind.EMBLEM else _owned_card.wound_slots
+		var index := int(slot.storage_index)
+		if index >= states.size() or states[index].is_empty():
+			return ""
+		if slot.kind == CardSlotLayout.Kind.EMBLEM:
+			return EmblemLibraryData.get_tooltip(StringName(states[index].get("emblem_id", "")))
+		return EmblemLibraryData.get_wound_tooltip(StringName(states[index].get("wound_id", "")))
+	for index: int in _owned_card.rune_stickers.size():
+		var origin := rune_area_position + Vector2(index * (rune_slot_size.x + rune_spacing), 0)
+		if Rect2(origin - Vector2(2, 2), Vector2(27, 27)).has_point(point) and not _rune_sticker_id(index).is_empty():
+			return EmblemLibraryData.get_tooltip(_rune_sticker_id(index))
+	return ""
+
+
+func set_emblem_drop_handler(handler: Callable) -> void:
+	_emblem_drop_handler = handler
+
+
+func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
+	return _emblem_drop_handler.is_valid() and bool(
+		_emblem_drop_handler.call("can_drop", self, _at_position, data)
+	)
+
+
+func _drop_data(at_position: Vector2, data: Variant) -> void:
+	if _emblem_drop_handler.is_valid():
+		_emblem_drop_handler.call("drop", self, at_position, data)
+
+
+static func get_attachment_center_bounds(texture: Texture2D, display_size: Vector2) -> Rect2:
+	# 判定可放置范围时只计算纹理实际非透明像素，不能把透明边框当成可见图案。
+	if texture == null or display_size.x <= 0.0 or display_size.y <= 0.0:
+		return Rect2()
+	var texture_size := Vector2(texture.get_size())
+	var visible := texture.get_image().get_used_rect()
+	var scale := display_size / texture_size
+	var visible_offset := Vector2(visible.position) * scale
+	var visible_size := Vector2(visible.size) * scale
+	return Rect2(
+		ATTACHMENT_PLACEMENT_POSITION + display_size * 0.5 - visible_offset,
+		ATTACHMENT_PLACEMENT_SIZE - visible_size
+	)
+
+
+static func find_nearest_attachment_center(
+	texture: Texture2D,
+	display_size: Vector2,
+	requested_start_center: Vector2,
+	drop_travel: Vector2
+) -> Vector2:
+	if texture == null or display_size.x <= 0.0 or display_size.y <= 0.0:
+		return Vector2.INF
+	var source := texture.get_image()
+	var mask := ATTACHMENT_PLACEMENT_MASK.get_image()
+	var cache_key := "%d:%.3f:%.3f" % [texture.get_instance_id(), display_size.x, display_size.y]
+	var opaque_offsets: Array[Vector2] = []
+	if _attachment_offset_cache.has(cache_key):
+		opaque_offsets.assign(_attachment_offset_cache[cache_key] as Array)
+	if opaque_offsets.is_empty():
+		var scale := display_size / Vector2(texture.get_size())
+		for y: int in source.get_height():
+			for x: int in source.get_width():
+				if source.get_pixel(x, y).a <= 0.01:
+					continue
+				var pixel_origin := Vector2(x, y) * scale - display_size * 0.5
+				var pixel_size := scale
+				opaque_offsets.append(pixel_origin + pixel_size * 0.5)
+				opaque_offsets.append(pixel_origin)
+				opaque_offsets.append(pixel_origin + Vector2(pixel_size.x, 0.0))
+				opaque_offsets.append(pixel_origin + pixel_size)
+				opaque_offsets.append(pixel_origin + Vector2(0.0, pixel_size.y))
+		_attachment_offset_cache[cache_key] = opaque_offsets
+	if opaque_offsets.is_empty():
+		return Vector2.INF
+	var fast_offset_data := _get_attachment_fast_offset_data(cache_key, opaque_offsets)
+	var blocked_mask_points := _get_attachment_blocked_mask_points(mask)
+	var wanted_end := requested_start_center + drop_travel
+	var nearest_grid := Vector2i(
+		roundi(wanted_end.x - ATTACHMENT_PLACEMENT_POSITION.x - 0.5),
+		roundi(wanted_end.y - ATTACHMENT_PLACEMENT_POSITION.y - 0.5)
+	)
+	var max_radius := maxi(mask.get_width(), mask.get_height())
+	var best_center := Vector2.INF
+	var best_distance_squared := INF
+	for radius: int in range(max_radius + 1):
+		for offset_y: int in range(-radius, radius + 1):
+			for offset_x: int in range(-radius, radius + 1):
+				if maxi(absi(offset_x), absi(offset_y)) != radius:
+					continue
+				var grid_point := nearest_grid + Vector2i(offset_x, offset_y)
+				if (
+					grid_point.x < 0
+					or grid_point.y < 0
+					or grid_point.x >= mask.get_width()
+					or grid_point.y >= mask.get_height()
+				):
+					continue
+				var candidate := ATTACHMENT_PLACEMENT_POSITION + Vector2(grid_point) + Vector2(0.5, 0.5)
+				var distance_squared := candidate.distance_squared_to(wanted_end)
+				if distance_squared >= best_distance_squared:
+					continue
+				if not _attachment_path_fits_mask(
+					mask,
+					opaque_offsets,
+					candidate,
+					drop_travel,
+					fast_offset_data,
+					blocked_mask_points
+				):
+					continue
+				best_center = candidate
+				best_distance_squared = distance_squared
+		if is_finite(best_distance_squared) and float(radius) + 0.5 > sqrt(best_distance_squared):
+			break
+	return best_center
+
+
+static func _attachment_path_fits_mask(
+	mask: Image,
+	opaque_offsets: Array[Vector2],
+	landing_center: Vector2,
+	drop_travel: Vector2,
+	fast_offset_data: Dictionary,
+	blocked_mask_points: Array[Vector2i]
+) -> bool:
+	var step_count := maxi(1, ceili(maxf(absf(drop_travel.x), absf(drop_travel.y)) * 2.0))
+	if (
+	fast_offset_data.get("supports_half_pixel_grid", false)
+	and blocked_mask_points.size() <= ATTACHMENT_FAST_PATH_MAX_BLOCKED_PIXELS
+	):
+		return _attachment_path_fits_sparse_mask(
+			mask,
+			landing_center,
+			drop_travel,
+			step_count,
+			fast_offset_data,
+			blocked_mask_points
+		)
+	for step: int in range(step_count + 1):
+		var center := landing_center - drop_travel * (1.0 - float(step) / step_count)
+		for offset: Vector2 in opaque_offsets:
+			var mask_point := (center + offset - ATTACHMENT_PLACEMENT_POSITION).floor()
+			if (
+				mask_point.x < 0.0
+				or mask_point.y < 0.0
+				or mask_point.x >= mask.get_width()
+				or mask_point.y >= mask.get_height()
+			):
+				return false
+			var color := mask.get_pixelv(Vector2i(mask_point))
+			if color.a * color.get_luminance() < 0.5:
+				return false
+	return true
+
+
+static func _get_attachment_fast_offset_data(
+	cache_key: String,
+	opaque_offsets: Array[Vector2]
+) -> Dictionary:
+	if _attachment_fast_offset_cache.has(cache_key):
+		return _attachment_fast_offset_cache[cache_key] as Dictionary
+	var opaque_offset_lookup: Dictionary = {}
+	var minimum_offset := Vector2(INF, INF)
+	var maximum_offset := Vector2(-INF, -INF)
+	var supports_half_pixel_grid := true
+	for offset: Vector2 in opaque_offsets:
+		minimum_offset.x = minf(minimum_offset.x, offset.x)
+		minimum_offset.y = minf(minimum_offset.y, offset.y)
+		maximum_offset.x = maxf(maximum_offset.x, offset.x)
+		maximum_offset.y = maxf(maximum_offset.y, offset.y)
+		var doubled_offset := offset * 2.0
+		var doubled_key := Vector2i(roundi(doubled_offset.x), roundi(doubled_offset.y))
+		if (
+			not is_equal_approx(doubled_offset.x, float(doubled_key.x))
+			or not is_equal_approx(doubled_offset.y, float(doubled_key.y))
+		):
+			supports_half_pixel_grid = false
+			break
+		opaque_offset_lookup[doubled_key] = true
+	var result := {
+		"supports_half_pixel_grid": supports_half_pixel_grid,
+		"opaque_offset_lookup": opaque_offset_lookup,
+		"opaque_offset_bounds": Rect2(minimum_offset, maximum_offset - minimum_offset),
+	}
+	_attachment_fast_offset_cache[cache_key] = result
+	return result
+
+
+static func _get_attachment_blocked_mask_points(mask: Image) -> Array[Vector2i]:
+	var cache_key := ATTACHMENT_PLACEMENT_MASK.get_instance_id()
+	if _attachment_blocked_mask_cache.has(cache_key):
+		return _attachment_blocked_mask_cache[cache_key] as Array[Vector2i]
+	var blocked_points: Array[Vector2i] = []
+	for y: int in mask.get_height():
+		for x: int in mask.get_width():
+			var color := mask.get_pixel(x, y)
+			if color.a * color.get_luminance() < 0.5:
+				blocked_points.append(Vector2i(x, y))
+	_attachment_blocked_mask_cache[cache_key] = blocked_points
+	return blocked_points
+
+
+static func _attachment_path_fits_sparse_mask(
+	mask: Image,
+	landing_center: Vector2,
+	drop_travel: Vector2,
+	step_count: int,
+	fast_offset_data: Dictionary,
+	blocked_mask_points: Array[Vector2i]
+) -> bool:
+	var offset_bounds: Rect2 = fast_offset_data["opaque_offset_bounds"]
+	var first_center := landing_center - Vector2(
+		maxf(drop_travel.x, 0.0),
+		maxf(drop_travel.y, 0.0)
+	)
+	var last_center := landing_center + Vector2(
+		maxf(-drop_travel.x, 0.0),
+		maxf(-drop_travel.y, 0.0)
+	)
+	var minimum_mask_point := (
+		first_center + offset_bounds.position - ATTACHMENT_PLACEMENT_POSITION
+	).floor()
+	var maximum_mask_point := (
+		last_center + offset_bounds.end - ATTACHMENT_PLACEMENT_POSITION
+	).floor()
+	var mask_size := Vector2(mask.get_width(), mask.get_height())
+	if (
+		minimum_mask_point.x < 0.0
+		or minimum_mask_point.y < 0.0
+		or maximum_mask_point.x >= mask_size.x
+		or maximum_mask_point.y >= mask_size.y
+	):
+		return false
+	var opaque_offset_lookup := fast_offset_data["opaque_offset_lookup"] as Dictionary
+	for step: int in range(step_count + 1):
+		var center := landing_center - drop_travel * (1.0 - float(step) / step_count)
+		for blocked_point: Vector2i in blocked_mask_points:
+			var offset_start := (
+				Vector2(blocked_point)
+				+ ATTACHMENT_PLACEMENT_POSITION
+				- center
+			)
+			var first_x := ceili(offset_start.x * 2.0 - 0.00001)
+			var first_y := ceili(offset_start.y * 2.0 - 0.00001)
+			var end_x := ceili((offset_start.x + 1.0) * 2.0 - 0.00001)
+			var end_y := ceili((offset_start.y + 1.0) * 2.0 - 0.00001)
+			for offset_y: int in range(first_y, end_y):
+				for offset_x: int in range(first_x, end_x):
+					if opaque_offset_lookup.has(Vector2i(offset_x, offset_y)):
+						return false
+	return true
 
 
 func copy_runtime_display_state_from(source: CardView) -> void:
@@ -842,8 +1273,12 @@ func copy_runtime_display_state_from(source: CardView) -> void:
 	_squad_action_preview = source._squad_action_preview
 	_squad_health_preview = source._squad_health_preview
 	_squad_armor_preview = source._squad_armor_preview
+	_squad_action_preview_target = source._squad_action_preview_target
+	_squad_health_preview_target = source._squad_health_preview_target
+	_squad_armor_preview_target = source._squad_armor_preview_target
 	_squad_cooldown_preview = source._squad_cooldown_preview
 	_battle_masked_rune_indices.assign(source._battle_masked_rune_indices)
+	_battle_rune_element_overrides = source._battle_rune_element_overrides.duplicate(true)
 	_battle_number_targets.clear()
 	if is_node_ready():
 		_refresh()
@@ -962,7 +1397,7 @@ func set_battle_action_type(action_type: CardData.ActionType) -> void:
 	_battle_action_type_override = int(action_type)
 	if is_node_ready() and card_data != null:
 		action_icon.texture = _get_action_texture(action_type)
-		priority_label.text = str(CardData.get_base_target_priority_for_action(action_type))
+		_refresh_priority_label()
 		_apply_action_layout(action_type)
 
 
@@ -970,8 +1405,37 @@ func clear_battle_action_type() -> void:
 	_battle_action_type_override = -1
 	if is_node_ready() and card_data != null:
 		action_icon.texture = _get_action_texture(card_data.action_type)
-		priority_label.text = str(card_data.get_base_target_priority())
+		_refresh_priority_label()
 		_apply_action_layout(card_data.action_type)
+
+
+func set_battle_target_weight(target_weight: int) -> void:
+	_target_priority_preview = target_weight
+	if is_node_ready():
+		_refresh_priority_label()
+
+
+func clear_battle_target_weight() -> void:
+	_target_priority_preview = -1
+	if is_node_ready():
+		_refresh_priority_label()
+
+
+func _refresh_priority_label() -> void:
+	if card_data == null:
+		priority_label.visible = false
+		return
+	var action_type := _get_display_action_type()
+	priority_label.text = str(
+		_target_priority_preview
+		if _target_priority_preview >= 0
+		else CardData.get_base_target_priority_for_action(action_type)
+	)
+	priority_label.visible = (
+		_mouse_hovered
+		and not _snapshot_mode
+		and card_data.card_type == CardData.CardType.MINION
+	)
 
 
 func _get_display_action_type() -> CardData.ActionType:
@@ -1056,6 +1520,37 @@ func clear_battle_masked_runes() -> void:
 		_refresh_runes()
 
 
+func set_battle_rune_element_overrides(overrides: Dictionary) -> void:
+	if _battle_rune_element_overrides == overrides:
+		return
+	_battle_rune_element_overrides = overrides.duplicate(true)
+	if is_node_ready():
+		_refresh_runes()
+
+
+func clear_battle_rune_element_overrides() -> void:
+	if _battle_rune_element_overrides.is_empty():
+		return
+	_battle_rune_element_overrides.clear()
+	if is_node_ready():
+		_refresh_runes()
+
+
+func set_battle_status_slot_states(
+	spent_emblem_indices: Array[int],
+	masked_wound_indices: Array[int]
+) -> void:
+	if (
+		_battle_spent_emblem_slots == spent_emblem_indices
+		and _battle_masked_wound_slots == masked_wound_indices
+	):
+		return
+	_battle_spent_emblem_slots.assign(spent_emblem_indices)
+	_battle_masked_wound_slots.assign(masked_wound_indices)
+	if is_node_ready():
+		_refresh_status_slots()
+
+
 func get_battle_masked_rune_indices() -> Array[int]:
 	return _battle_masked_rune_indices.duplicate()
 
@@ -1091,6 +1586,8 @@ func is_rune_using_active_animation(slot_index: int) -> bool:
 	if not _active_rune_icons.has(slot_index):
 		return false
 	var rune_icon := _active_rune_icons[slot_index] as TextureRect
+	if not _rune_sticker_id(slot_index).is_empty():
+		return rune_icon != null and _get_global_flow_cycle() >= int(_active_rune_join_cycles.get(slot_index, 0))
 	return rune_icon != null and rune_icon.texture is AtlasTexture
 
 
@@ -1120,12 +1617,100 @@ func _refresh() -> void:
 	_refresh_card_type_visuals()
 	_refresh_vitals_text()
 	_refresh_cooldown_text()
-	priority_label.text = str(CardData.get_base_target_priority_for_action(display_action_type))
+	_refresh_priority_label()
 	card_name_frame.visible = true
 	_refresh_card_frame()
 	_refresh_art()
 	_refresh_race_icon()
 	_refresh_bottom_text()
+	_refresh_status_slots()
+
+
+func _create_status_slot_layer() -> void:
+	_status_slot_layer = StatusSlotLayerScript.new() as Control
+	_status_slot_layer.name = "StatusSlotLayer"
+	_status_slot_layer.size = card_size
+	_status_slot_layer.custom_minimum_size = card_size
+	_status_slot_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_status_slot_layer.z_index = 12
+	add_child(_status_slot_layer)
+
+
+func _refresh_status_slots() -> void:
+	if not is_instance_valid(_status_slot_layer):
+		return
+	var is_minion := card_data != null and card_data.card_type == CardData.CardType.MINION
+	var definitions: Array[Dictionary] = []
+	if is_minion:
+		definitions = CardSlotLayout.get_slot_definitions(card_data, _owned_card)
+	var signature: Array = [
+		card_data,
+		_owned_card,
+		definitions,
+		_owned_card.emblem_slots.duplicate(true) if _owned_card != null else [],
+		_owned_card.wound_slots.duplicate(true) if _owned_card != null else [],
+		_battle_spent_emblem_slots.duplicate(),
+		_battle_masked_wound_slots.duplicate(),
+	]
+	if _has_status_slot_signature and _status_slot_signature == signature:
+		return
+	_status_slot_signature = signature
+	_has_status_slot_signature = true
+	_status_slot_layer.call("set_slot_source", card_data, _owned_card, definitions)
+	_status_slot_layer.queue_redraw()
+	if not is_minion:
+		_status_slot_layer.visible = false
+		return
+	var wanted_slots: Dictionary = {}
+	for definition: Dictionary in definitions:
+		var kind := int(definition["kind"])
+		var storage_index := int(definition["storage_index"])
+		var states: Array[Dictionary] = []
+		if _owned_card != null:
+			states = (
+				_owned_card.emblem_slots
+				if kind == CardSlotLayout.Kind.EMBLEM
+				else _owned_card.wound_slots
+			)
+		if storage_index < 0 or storage_index >= states.size():
+			continue
+		var slot_state := states[storage_index]
+		var status_id := StringName(String(
+			slot_state.get(
+				"emblem_id" if kind == CardSlotLayout.Kind.EMBLEM else "wound_id",
+				""
+			)
+		))
+		if status_id.is_empty():
+			continue
+		var texture := StatusIndicatorStyle.get_texture(kind, status_id)
+		if texture == null:
+			continue
+		var slot_name := "Status_%d" % int(definition["slot_index"])
+		wanted_slots[slot_name] = {
+			"kind": kind,
+			"status_id": status_id,
+			"texture": texture,
+			"position": definition["position"],
+			"alpha": 0.45 if kind == CardSlotLayout.Kind.EMBLEM and storage_index in _battle_spent_emblem_slots else (0.35 if kind == CardSlotLayout.Kind.WOUND and storage_index in _battle_masked_wound_slots else 1.0),
+		}
+	for child: Node in _status_slot_layer.get_children():
+		if not wanted_slots.has(String(child.name)):
+			_status_slot_layer.remove_child(child)
+			child.queue_free()
+	for slot_name: String in wanted_slots:
+		var visual := _status_slot_layer.get_node_or_null(NodePath(slot_name)) as TextureRect
+		if visual == null:
+			visual = StatusIndicatorStyle.create_visual(
+				int(wanted_slots[slot_name]["kind"]),
+				StringName(wanted_slots[slot_name]["status_id"])
+			)
+			visual.name = slot_name
+			_status_slot_layer.add_child(visual)
+		visual.texture = wanted_slots[slot_name]["texture"] as Texture2D
+		visual.position = wanted_slots[slot_name]["position"] as Vector2
+		visual.modulate.a = float(wanted_slots[slot_name]["alpha"])
+	_status_slot_layer.visible = true
 
 
 func _refresh_action_value_text() -> void:
@@ -1138,7 +1723,11 @@ func _refresh_action_value_text() -> void:
 		else (
 			_squad_action_preview
 			if card_data.card_type == CardData.CardType.MINION and _squad_action_preview >= 0
-			else card_data.base_value
+			else (
+				_owned_card.get_effective_base_value()
+				if _owned_card != null and _owned_card.card_data == card_data
+				else card_data.base_value
+			)
 		)
 	)
 	_apply_action_layout(_get_display_action_type())
@@ -1163,16 +1752,20 @@ func _refresh_vitals_text() -> void:
 		armor_label.text = str(card_data.equipment_armor_delta)
 		_layout_vitals_numbers()
 		return
-	health_label.text = str(
-		_battle_current_health
-		if _battle_vitals_active
-		else (_squad_health_preview if _squad_health_preview >= 0 else card_data.max_health)
-	)
-	armor_label.text = str(
-		_battle_current_armor
-		if _battle_vitals_active
-		else (_squad_armor_preview if _squad_armor_preview >= 0 else card_data.armor)
-	)
+	var health_value := card_data.max_health
+	var armor_value := card_data.armor
+	if _owned_card != null and _owned_card.card_data == card_data:
+		health_value = _owned_card.get_effective_max_health()
+		armor_value = _owned_card.get_effective_base_armor()
+	if _squad_health_preview >= 0:
+		health_value = _squad_health_preview
+	if _squad_armor_preview >= 0:
+		armor_value = _squad_armor_preview
+	if _battle_vitals_active:
+		health_value = _battle_current_health
+		armor_value = _battle_current_armor
+	health_label.text = str(health_value)
+	armor_label.text = str(armor_value)
 	_layout_vitals_numbers()
 
 
@@ -1193,6 +1786,11 @@ func _refresh_cooldown_text() -> void:
 			seconds = _battle_remaining_cooldown
 		elif _squad_cooldown_preview >= 0.0:
 			seconds = _squad_cooldown_preview
+		elif _owned_card != null and _owned_card.card_data == card_data:
+			seconds = BattleRules.get_action_interval(
+				card_data.cooldown_seconds,
+				_owned_card.get_status_zeal()
+			)
 		cooldown_label.text = format_cooldown_seconds(seconds)
 		cooldown_icon.tooltip_text = ""
 	_set_control_rect(
@@ -1278,6 +1876,8 @@ func _stop_effect_transition() -> void:
 
 
 func _show_empty_card() -> void:
+	if is_instance_valid(_status_slot_layer):
+		_status_slot_layer.visible = false
 	_stop_effect_transition()
 	_active_rune_icons.clear()
 	_active_rune_join_cycles.clear()
@@ -1619,6 +2219,10 @@ func _refresh_runes() -> void:
 		rune_row.add_child(rune_slot)
 		if slot_index < card_data.runes.size():
 			var rune := card_data.runes[slot_index]
+			if _owned_card != null:
+				rune = _owned_card.get_effective_rune(slot_index)
+			if _battle_rune_element_overrides.has(slot_index):
+				rune = int(_battle_rune_element_overrides[slot_index]) as CardData.ElementType
 			var is_masked := _battle_masked_rune_indices.has(slot_index)
 			var is_active := _highlighted_rune_indices.has(slot_index) and not is_masked
 			var join_cycle: int = -1
@@ -1634,6 +2238,12 @@ func _refresh_runes() -> void:
 				_active_rune_join_cycles[slot_index] = join_cycle
 			var show_active_frame := is_active and current_cycle >= join_cycle
 			var rune_icon := _create_rune_icon(rune, show_active_frame)
+			var sticker_id := _rune_sticker_id(slot_index)
+			if not sticker_id.is_empty():
+				rune_icon.texture = RuneStickerStyle.get_texture_by_id(_get_rune_sticker_display_id(slot_index))
+				rune_icon.size = Vector2(27, 27)
+				rune_icon.custom_minimum_size = Vector2(27, 27)
+				rune_icon.position = (rune_slot_size - Vector2(27, 27)) * 0.5
 			rune_icon.visible = not is_masked
 			rune_slot.add_child(rune_icon)
 			if is_active:
@@ -1729,15 +2339,20 @@ func _update_active_rune_frames() -> void:
 		var slot_index := int(slot_value)
 		var rune_icon := _active_rune_icons[slot_index] as TextureRect
 		var join_cycle := int(_active_rune_join_cycles[slot_index])
+		var sticker_id := _rune_sticker_id(slot_index)
+		if not sticker_id.is_empty():
+			var display_id := _get_rune_sticker_display_id(slot_index)
+			rune_icon.texture = RuneStickerStyle.get_frame_by_id(display_id, cycle_time / ACTIVE_RUNE_CYCLE_SECONDS) if current_cycle >= join_cycle else RuneStickerStyle.get_texture_by_id(display_id)
+			continue
 		if current_cycle < join_cycle:
 			if rune_icon.texture is AtlasTexture:
 				rune_icon.texture = _get_rune_texture(
-					card_data.runes[slot_index]
+					_get_display_rune_element(slot_index)
 				)
 			continue
 		if not rune_icon.texture is AtlasTexture:
 			rune_icon.texture = _create_active_rune_atlas(
-				card_data.runes[slot_index]
+				_get_display_rune_element(slot_index)
 			)
 		var atlas_texture := rune_icon.texture as AtlasTexture
 		var region := atlas_texture.region
@@ -1810,6 +2425,36 @@ func _get_rune_texture(rune: CardData.ElementType) -> Texture2D:
 			return RUNE_DARK_TEXTURE
 		_:
 			return RUNE_FIRE_TEXTURE
+
+
+func _rune_sticker_id(index: int) -> StringName:
+	if _owned_card == null or index >= _owned_card.rune_stickers.size():
+		return &""
+	return StringName(_owned_card.rune_stickers[index].get("emblem_id", ""))
+
+
+func _get_display_rune_element(index: int) -> CardData.ElementType:
+	if _battle_rune_element_overrides.has(index):
+		return int(_battle_rune_element_overrides[index]) as CardData.ElementType
+	if _owned_card != null and index < _owned_card.rune_stickers.size():
+		var sticker_id := StringName(_owned_card.rune_stickers[index].get("emblem_id", ""))
+		if not sticker_id.is_empty():
+			var sticker_element := RuneStickerStyle.get_element_type(RuneStickerStyle.RUNE_IDS.find(sticker_id))
+			if sticker_element >= 0:
+				return sticker_element as CardData.ElementType
+	return card_data.runes[index] as CardData.ElementType if card_data != null and index < card_data.runes.size() else CardData.ElementType.FIRE
+
+
+func _get_rune_sticker_display_id(index: int) -> StringName:
+	if _battle_rune_element_overrides.has(index):
+		return RuneStickerStyle.get_display_id_for_element(
+			int(_battle_rune_element_overrides[index]) as CardData.ElementType
+		)
+	var sticker_id := _rune_sticker_id(index)
+	if sticker_id != &"混沌贴纸" or _owned_card == null or index >= _owned_card.rune_stickers.size():
+		return sticker_id
+	var element := int(_owned_card.rune_stickers[index].get("element", -1)) as CardData.ElementType
+	return RuneStickerStyle.get_display_id_for_element(element)
 
 
 func _get_action_texture(action_type: CardData.ActionType) -> Texture2D:
@@ -2105,8 +2750,23 @@ func _layout_vitals_numbers() -> void:
 			health_value = card_data.equipment_health_delta
 			armor_value = card_data.equipment_armor_delta
 		else:
-			health_value = _battle_current_health if _battle_vitals_active else card_data.max_health
-			armor_value = _battle_current_armor if _battle_vitals_active else card_data.armor
+			health_value = (
+				_owned_card.get_effective_max_health()
+				if _owned_card != null and _owned_card.card_data == card_data
+				else card_data.max_health
+			)
+			armor_value = (
+				_owned_card.get_effective_base_armor()
+				if _owned_card != null and _owned_card.card_data == card_data
+				else card_data.armor
+			)
+			if _squad_health_preview >= 0:
+				health_value = _squad_health_preview
+			if _squad_armor_preview >= 0:
+				armor_value = _squad_armor_preview
+			if _battle_vitals_active:
+				health_value = _battle_current_health
+				armor_value = _battle_current_armor
 	_set_control_rect(
 		health_label,
 		get_health_value_position(health_value),

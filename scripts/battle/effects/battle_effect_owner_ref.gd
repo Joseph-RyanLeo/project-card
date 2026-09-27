@@ -45,6 +45,25 @@ static func for_state(
 	return result
 
 
+static func for_owned_card_in_state(
+	value: BattleSquadState,
+	owned: OwnedCard
+) -> BattleEffectOwnerRef:
+	var result := BattleEffectOwnerRef.new()
+	result.state = value
+	result.owner_kind = BattleEffectDefinition.OwnerKind.MINION_CARD_INSTANCE
+	result.runtime_id = value.runtime_id if value != null else 0
+	result.owned_card = owned
+	result.card_data = owned.card_data if owned != null else null
+	result.owned_card_instance_id = owned.instance_id if owned != null else &""
+	result.card_index = (
+		value.squad_data.horizontal_cards.find(owned.card_data)
+		if value != null and value.squad_data != null and owned != null
+		else -1
+	)
+	return result
+
+
 func is_valid() -> bool:
 	if state != null:
 		return state.runtime_id == runtime_id

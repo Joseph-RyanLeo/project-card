@@ -1,0 +1,478 @@
+{
+  "schema_version": 1,
+  "retrieved_at": "2026-09-23",
+  "source": {
+    "url": "https://my.feishu.cn/base/IcuQbyEQtaPWPgsOOOrcu5shnKh?table=tbl6qIMmgLoYgMpX&view=vewSOt9OTH",
+    "base_id": "IcuQbyEQtaPWPgsOOOrcu5shnKh",
+    "table_id": "tbl6qIMmgLoYgMpX",
+    "table_name": "卡牌审阅",
+    "access": "read-only",
+    "fields": [
+      "卡牌名",
+      "源单元格",
+      "卡牌类型",
+      "品级",
+      "子类型/种族",
+      "原特效",
+      "卡面短文本",
+      "完整规则说明",
+      "建议行动冷却",
+      "审阅状态",
+      "风险等级",
+      "标准词条",
+      "稳定卡牌ID"
+    ]
+  },
+  "cards": [
+    {
+      "card_id": "battle_fury",
+      "display_name": "战斗怒火",
+      "record_id": "recvudySZqphlg",
+      "source_cell": "C84",
+      "rarity": "Ⅳ",
+      "spell_type": "支援",
+      "trigger": "友方即将被消灭",
+      "source_fields": {
+        "卡牌名": "战斗怒火",
+        "源单元格": "C84",
+        "卡牌类型": "法术",
+        "品级": "Ⅳ",
+        "子类型/种族": "支援",
+        "原特效": "所有友军在5秒内无法被消灭",
+        "卡面短文本": "触发：友方即将被消灭。友军5秒内生命最低为1。",
+        "完整规则说明": "当一名友军即将因生命值归零被消灭时释放。此后5秒内，所有友军的生命值最低降至1；期间仍可损失护甲，护甲型单位仍会在护甲归零时正常被消灭。效果结束后不追溯结算被阻止的生命伤害。",
+        "建议行动冷却": "友方即将被消灭时",
+        "审阅状态": "已确认",
+        "风险等级": "高",
+        "标准词条": [
+          {
+            "record_ids": [
+              "recvuuOcFAoK1K",
+              "recvuuOcFA5Yov",
+              "recvuuOdUHSEPJ",
+              "recvuuOdUHzxbi"
+            ],
+            "table_id": "tblx7PuFx6SCvjqX",
+            "text": "条件释放,无法被消灭,生命下限,持续时间",
+            "text_arr": [
+              "条件释放",
+              "无法被消灭",
+              "生命下限",
+              "持续时间"
+            ],
+            "type": "text"
+          }
+        ],
+        "稳定卡牌ID": "battle_fury"
+      },
+      "effect_ids": [
+        "battle_fury.effect.01"
+      ],
+      "effects": [
+        {
+          "effect_id": "battle_fury.effect.01",
+          "end_conditions": [
+            "持续时间到期"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "从施加时起5秒，与持续参数一致",
+          "trigger": "ally_about_to_be_destroyed",
+          "conditions": [
+            "destruction_caused_by_health_reaching_zero"
+          ],
+          "target": "all_friendly_combat_units",
+          "operation": "set_minimum_health",
+          "value": {
+            "kind": "fixed",
+            "amount": 1
+          },
+          "duration": {
+            "kind": "seconds",
+            "amount": 5
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "spell_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_operation": "移除此来源的生命下限，不补算被阻止的伤害",
+          "parameters": {
+            "armor_based_destruction_unaffected": true,
+            "no_deferred_damage_on_expire": true
+          },
+          "review_status": "confirmed",
+          "effect_group": "battle_fury.group.01",
+          "group_order": 1,
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "questions": [],
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1,
+            "reset_on_reentry": false
+          },
+          "reading": "当一名友军即将因生命值归零被消灭时释放。此后5秒内，所有友军的生命值最低降至1；期间仍可损失护甲，护甲型单位仍会在护甲归零时正常被消灭。效果结束后不追溯结算被阻止的生命伤害。"
+        }
+      ]
+    },
+    {
+      "card_id": "side_by_side",
+      "display_name": "并肩作战",
+      "record_id": "recvudySZqMiOe",
+      "source_cell": "G84",
+      "rarity": "Ⅲ",
+      "spell_type": "强化",
+      "trigger": "战斗开始时",
+      "source_fields": {
+        "卡牌名": "并肩作战",
+        "源单元格": "G84",
+        "卡牌类型": "法术",
+        "品级": "Ⅲ",
+        "子类型/种族": "强化",
+        "原特效": "所有友军获得乡邻：受到的所有攻击伤害-1",
+        "卡面短文本": "所有友军获得乡邻：受到的所有攻击伤害-1。",
+        "完整规则说明": "所有友军获得“乡邻：受到的所有攻击伤害-1”；仅乡邻生效者自身享有减伤，不向全体重复发放。同名减伤通常不重复叠加。",
+        "建议行动冷却": "战斗开始时",
+        "审阅状态": "已确认",
+        "风险等级": "高",
+        "标准词条": [
+          {
+            "record_ids": [
+              "recvujvxMx2I1k",
+              "recvuuOdUHiEDV"
+            ],
+            "table_id": "tblx7PuFx6SCvjqX",
+            "text": "乡邻,固定减伤",
+            "text_arr": [
+              "乡邻",
+              "固定减伤"
+            ],
+            "type": "text"
+          }
+        ],
+        "稳定卡牌ID": null
+      },
+      "effect_ids": [
+        "side_by_side.effect.01",
+        "side_by_side.effect.02"
+      ],
+      "effects": [
+        {
+          "effect_id": "side_by_side.effect.01",
+          "review_status": "confirmed",
+          "effect_group": "side_by_side.group.01",
+          "group_order": 1,
+          "trigger": "battle_start_spell",
+          "conditions": [
+            "always"
+          ],
+          "target": "all_friendly_combat_units",
+          "operation": "grant_effect",
+          "value": {
+            "kind": "effect_ref",
+            "effect_id": "side_by_side.effect.02"
+          },
+          "duration": {
+            "kind": "battle"
+          },
+          "stacking": {
+            "kind": "additive"
+          },
+          "source_owner": "spell_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "战斗结束"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本场结束后清理",
+          "end_operation": "移除本场效果",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1,
+            "reset_on_reentry": false
+          },
+          "tags": [],
+          "related_effects": [
+            {
+              "effect_id": "side_by_side.effect.02",
+              "relation": "grant"
+            }
+          ],
+          "modifier": null,
+          "parameters": {
+            "recipient_scope": "cast_time_friendly_units",
+            "grant_to_later_summons": false,
+            "grant_to_revived_units": false,
+            "human_confirmation": {
+              "question": "后续召唤/复活的友军是否也获得授予效果？当前按施法时友军列作待核对。",
+              "reply": "不获得"
+            }
+          },
+          "reading": "开场法术给所有友军授予本场乡邻减伤效果；授予与实际减伤分别记录。 人工确认：不获得",
+          "questions": []
+        },
+        {
+          "effect_id": "side_by_side.effect.02",
+          "review_status": "confirmed",
+          "effect_group": "side_by_side.group.02",
+          "group_order": 1,
+          "trigger": "continuous",
+          "conditions": [
+            "has_granted_effect",
+            "neighbor_active"
+          ],
+          "target": "granted_effect_holder",
+          "operation": "modify_effect",
+          "value": {
+            "kind": "fixed",
+            "amount": -1
+          },
+          "duration": {
+            "kind": "while_active"
+          },
+          "stacking": {
+            "kind": "same_name_nonstacking"
+          },
+          "source_owner": "spell_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "战斗结束",
+            "乡邻失效"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "战后移除授予；乡邻失效仅停止减伤，恢复后可再次生效",
+          "end_operation": "移除本来源修正，保留其他来源",
+          "trigger_limit": {
+            "scope": "continuous"
+          },
+          "tags": [
+            "乡邻",
+            "效果修改"
+          ],
+          "related_effects": [
+            {
+              "effect_id": "side_by_side.effect.01",
+              "relation": "granted_by"
+            }
+          ],
+          "modifier": {
+            "mode": "add_value",
+            "filter": {
+              "target": "holder",
+              "event": "incoming_attack_damage"
+            },
+            "amount": -1,
+            "recursive": false
+          },
+          "parameters": {
+            "minimum_damage": 0,
+            "wolf_extra_execution_allowed": true,
+            "human_confirmation": {
+              "question": "与老狼的额外执行冲突规则待确认。",
+              "reply": "可被老狼额外触发"
+            }
+          },
+          "reading": "被授予者自身乡邻成立时，其受到的攻击伤害-1；不向全体重复提供减伤，同名减伤通常不叠加。 人工确认：可被老狼额外触发",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "return_to_battlefield",
+      "display_name": "重返战场",
+      "record_id": "recvudySZqJCuO",
+      "source_cell": "K84",
+      "rarity": "Ⅱ",
+      "spell_type": "召唤",
+      "trigger": "战斗开始后15秒",
+      "source_fields": {
+        "卡牌名": "重返战场",
+        "源单元格": "K84",
+        "卡牌类型": "法术",
+        "品级": "Ⅱ",
+        "子类型/种族": "召唤",
+        "原特效": "上一张被消灭的友军以50%的生命值重新加入战斗。",
+        "卡面短文本": "15秒后：最近被消灭的非衍生友军以50%生命重新入场。",
+        "完整规则说明": "战斗开始15秒后释放。使最近被消灭的非衍生友方随从以50%最大生命值重新入场；原位置被占用时插入其右侧，没有可容纳位置或没有合法目标时失效，且不会再次触发突击。",
+        "建议行动冷却": "战斗开始后15秒",
+        "审阅状态": "已确认",
+        "风险等级": "高",
+        "标准词条": [
+          {
+            "record_ids": [
+              "recvuuOdUH4JJ1",
+              "recvuuOcFAgpCR",
+              "recvuuOcFArCrl",
+              "recvuuOdUHgi66",
+              "recvuuOcFAJQOC"
+            ],
+            "table_id": "tblx7PuFx6SCvjqX",
+            "text": "延时释放,重新入场,最近死亡,非衍生,不重触突击",
+            "text_arr": [
+              "延时释放",
+              "重新入场",
+              "最近死亡",
+              "非衍生",
+              "不重触突击"
+            ],
+            "type": "text"
+          }
+        ],
+        "稳定卡牌ID": null
+      },
+      "effect_ids": [
+        "return_to_battlefield.effect.01"
+      ],
+      "effects": [
+        {
+          "effect_id": "return_to_battlefield.effect.01",
+          "review_status": "confirmed",
+          "effect_group": "return_to_battlefield.group.01",
+          "group_order": 1,
+          "trigger": "elapsed_battle_time",
+          "conditions": [
+            "legal_dead_target",
+            "summon_space_available"
+          ],
+          "target": "latest_dead_nonderived_ally",
+          "operation": "revive",
+          "value": {
+            "kind": "health_fraction",
+            "amount": 0.5
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "spell_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本次操作完成；不自动撤销已产生的结果",
+          "end_operation": "无额外结束动作",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1,
+            "reset_on_reentry": false
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "at_seconds": 15,
+            "position": "original_else_right",
+            "retrigger_rush": false,
+            "single_copy_attempts": 1,
+            "restore_armor": "base_armor",
+            "multiple_copy_schedule": "same_battle_timestamp",
+            "on_no_target": "consume_attempt",
+            "retry": false,
+            "consume_attempt_at": "scheduled_trigger"
+          },
+          "reading": "战斗计时15秒时，使最近死亡的非衍生友军以50%最大生命重新入场；不重复突击，无目标或空间按法术通则跳过。 每张在第15秒同时获得一次触发机会，无合法目标也消耗，不重试、不延后。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "volley_order",
+      "display_name": "齐射令",
+      "record_id": "recvudySZrZJUe",
+      "source_cell": "O84",
+      "rarity": "Ⅰ",
+      "spell_type": "强化",
+      "trigger": "战斗开始后8秒",
+      "source_fields": {
+        "卡牌名": "齐射令",
+        "源单元格": "O84",
+        "卡牌类型": "法术",
+        "品级": "Ⅰ",
+        "子类型/种族": "强化",
+        "原特效": "所有远程行动的友军立即进行一次行动",
+        "卡面短文本": "后排远程友军立即行动1次。",
+        "完整规则说明": "只使后排当前远程行动的友军立即行动1次，消耗强化并重置冷却；回响、元素与命中按通则结算。",
+        "建议行动冷却": "战斗开始后8秒",
+        "审阅状态": "已确认",
+        "风险等级": "高",
+        "标准词条": [
+          {
+            "record_ids": [
+              "recvujvxMx3ihg",
+              "recvuuOcFAQ8Gb",
+              "recvuuOdUHwoID"
+            ],
+            "table_id": "tblx7PuFx6SCvjqX",
+            "text": "立即行动,远程,群体行动",
+            "text_arr": [
+              "立即行动",
+              "远程",
+              "群体行动"
+            ],
+            "type": "text"
+          }
+        ],
+        "稳定卡牌ID": null
+      },
+      "effect_ids": [
+        "volley_order.effect.01"
+      ],
+      "effects": [
+        {
+          "effect_id": "volley_order.effect.01",
+          "review_status": "confirmed",
+          "effect_group": "volley_order.group.01",
+          "group_order": 1,
+          "trigger": "elapsed_battle_time",
+          "conditions": [
+            "always"
+          ],
+          "target": "back_row_ranged_allies",
+          "operation": "immediate_action",
+          "value": {
+            "kind": "fixed",
+            "amount": 1
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "spell_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本次操作完成；不自动撤销已产生的结果",
+          "end_operation": "无额外结束动作",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1,
+            "reset_on_reentry": false
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "at_seconds": 8,
+            "consume_reinforcement": true,
+            "reset_cooldown": true,
+            "single_copy_attempts": 1,
+            "multiple_copy_schedule": "same_battle_timestamp",
+            "on_no_target": "consume_attempt",
+            "retry": false,
+            "consume_attempt_at": "scheduled_trigger"
+          },
+          "reading": "战斗计时8秒时，后排当前远程行动的友军各立即行动1次；消耗强化、重置冷却，正常触发回响、元素与命中。 每张在第8秒同时获得一次触发机会，无合法目标也消耗，不重试、不延后。",
+          "questions": []
+        }
+      ]
+    }
+  ]
+}

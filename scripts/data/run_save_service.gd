@@ -9,8 +9,10 @@ const OwnedCardCollection = preload("res://scripts/data/owned_card_collection.gd
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const RunRewardState = preload("res://scripts/data/run_reward_state.gd")
 const RunSettlementJournal = preload("res://scripts/data/run_settlement_journal.gd")
+const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 
-const SCHEMA_VERSION: int = 1
+const SCHEMA_VERSION: int = 2
+const STATUS_SLOT_MIGRATION_VERSION: int = 1
 const ROW_KEYS: Array[StringName] = [
 	&"player_front",
 	&"player_back",
@@ -36,6 +38,7 @@ func create_checkpoint(
 		return {}
 	return {
 		"schema_version": SCHEMA_VERSION,
+		"status_slot_migration_version": STATUS_SLOT_MIGRATION_VERSION,
 		"collection": encoded_collection,
 		"rows": encoded_rows,
 		"battle_seed": battle_seed,
@@ -68,7 +71,7 @@ func load_checkpoint(path: String) -> Dictionary:
 	if not parsed is Dictionary:
 		return _failure("save_json_invalid")
 	var checkpoint := parsed as Dictionary
-	if int(checkpoint.get("schema_version", 0)) != SCHEMA_VERSION:
+	if int(checkpoint.get("schema_version", 0)) < 1 or int(checkpoint.get("schema_version", 0)) > SCHEMA_VERSION:
 		return _failure("save_schema_unsupported")
 	return {"success": true, "checkpoint": checkpoint}
 
@@ -78,10 +81,12 @@ func restore_checkpoint(
 	owned_collection: OwnedCardCollection,
 	reward_state: RunRewardState,
 	settlement_journal: RunSettlementJournal,
-	card_registry: Dictionary
+	card_registry: Dictionary,
+	test_mode: bool = true
 ) -> Dictionary:
 	if (
-		int(checkpoint.get("schema_version", 0)) != SCHEMA_VERSION
+		int(checkpoint.get("schema_version", 0)) < 1
+		or int(checkpoint.get("schema_version", 0)) > SCHEMA_VERSION
 		or owned_collection == null
 		or reward_state == null
 		or settlement_journal == null
@@ -89,7 +94,10 @@ func restore_checkpoint(
 		return _failure("save_context_invalid")
 	var decoded_collection_result := _decode_collection_state(
 		checkpoint.get("collection", {}) as Dictionary,
-		card_registry
+		card_registry,
+		test_mode,
+		int(checkpoint.get("schema_version", 0)) < SCHEMA_VERSION
+		or int(checkpoint.get("status_slot_migration_version", 0)) < STATUS_SLOT_MIGRATION_VERSION
 	)
 	if not bool(decoded_collection_result.get("success", false)):
 		return decoded_collection_result
@@ -148,6 +156,7 @@ func restore_checkpoint(
 		),
 		"phase_on_save": int(checkpoint.get("phase_on_save", 0)),
 		"indicator_inventory": inventory.duplicate(true),
+		"slot_migration_returns": decoded_collection_result.get("migration_returns", []).duplicate(true),
 	}
 
 
@@ -169,10 +178,14 @@ func _encode_collection_state(collection_state: Dictionary) -> Dictionary:
 			"resolved_action_type": int(state.get("resolved_action_type", -1)),
 			"spell_durability": int(state.get("spell_durability", -1)),
 			"permanent_growth": _json_safe(state.get("permanent_growth", {})),
+			"crystallization_health_loss": maxi(int(state.get("crystallization_health_loss", 0)), 0),
 			"wound_slots": _json_safe(state.get("wound_slots", [])),
 			"emblem_slots": _json_safe(state.get("emblem_slots", [])),
+			"slot_layout": _json_safe(state.get("slot_layout", [])),
 			"rune_revealed": _json_safe(state.get("rune_revealed", [])),
+			"rune_stickers": _json_safe(state.get("rune_stickers", [])),
 			"progress_by_source": _json_safe(state.get("progress_by_source", {})),
+			"wound_battle_counters": _json_safe(state.get("wound_battle_counters", {})),
 		})
 	return {
 		"next_instance_sequence": maxi(int(collection_state.get("next_instance_sequence", 1)), 1),
@@ -180,10 +193,16 @@ func _encode_collection_state(collection_state: Dictionary) -> Dictionary:
 	}
 
 
-func _decode_collection_state(data: Dictionary, card_registry: Dictionary) -> Dictionary:
+func _decode_collection_state(
+	data: Dictionary,
+	card_registry: Dictionary,
+	test_mode: bool = true,
+	migrate_status_slots: bool = true
+) -> Dictionary:
 	if not data.get("cards", []) is Array:
 		return _failure("save_collection_cards_invalid")
 	var card_states: Array[Dictionary] = []
+	var migration_returns: Array[Dictionary] = []
 	var seen_instance_ids: Dictionary = {}
 	for value: Variant in data.get("cards", []) as Array:
 		if not value is Dictionary:
@@ -200,12 +219,14 @@ func _decode_collection_state(data: Dictionary, card_registry: Dictionary) -> Di
 		var encoded_wound_slots := encoded.get("wound_slots", []) as Array
 		var encoded_emblem_slots := encoded.get("emblem_slots", []) as Array
 		var encoded_rune_revealed := encoded.get("rune_revealed", []) as Array
-		if (
-			encoded_wound_slots.size() != card_data.wound_slot_count
-			or encoded_emblem_slots.size() != card_data.emblem_slot_count
-			or encoded_rune_revealed.size() != card_data.runes.size()
-		):
-			return _failure("save_card_slot_count_invalid")
+		var stickers: Array = encoded.get("rune_stickers", OwnedCard._empty_slot_array(card_data.runes.size()))
+		if stickers.size() != card_data.runes.size():
+			return _failure("save_rune_sticker_count_invalid")
+		for sticker: Variant in stickers:
+			if not sticker is Dictionary:
+				return _failure("save_rune_sticker_invalid")
+			if not sticker.is_empty() and (int(sticker.get("element", -1)) < 0 or int(sticker.get("element", -1)) > 4 or String(sticker.get("emblem_id", "")).is_empty()):
+				return _failure("save_rune_sticker_invalid")
 		var wound_slots := _decode_slot_array(encoded_wound_slots, true)
 		var emblem_slots := _decode_slot_array(encoded_emblem_slots, false)
 		if (
@@ -213,6 +234,56 @@ func _decode_collection_state(data: Dictionary, card_registry: Dictionary) -> Di
 			or emblem_slots.size() != encoded_emblem_slots.size()
 		):
 			return _failure("save_card_slot_state_invalid")
+		if encoded_rune_revealed.size() != card_data.runes.size():
+			return _failure("save_rune_revealed_count_invalid")
+		var resolved_counts := CardSlotLayout.resolve_counts(card_data)
+		var saved_layout: Array = encoded.get("slot_layout", [])
+		var saved_layout_is_valid := CardSlotLayout.is_valid_layout(card_data, saved_layout)
+		if not migrate_status_slots and (
+			wound_slots.size() != resolved_counts.x
+			or emblem_slots.size() != resolved_counts.y
+			or not saved_layout_is_valid
+		):
+			return _failure("save_status_slot_migration_marker_invalid")
+		if not saved_layout_is_valid:
+			saved_layout = CardSlotLayout.get_stable_layout(card_data)
+		var progress_by_source := _decode_number_dictionary(
+			encoded.get("progress_by_source", {}) as Dictionary
+		)
+		if _occupied_count(emblem_slots) > resolved_counts.y:
+			if not migrate_status_slots:
+				return _failure("save_status_slot_migration_marker_invalid")
+			for emblem_index: int in emblem_slots.size():
+				var state := emblem_slots[emblem_index]
+				if state.is_empty():
+					continue
+				var returned_emblem := state.duplicate(true)
+				var emblem_instance_id := StringName(String(returned_emblem.get("instance_id", "")))
+				if emblem_instance_id.is_empty():
+					emblem_instance_id = StringName("migrated_emblem_%s_%d" % [String(instance_id), emblem_index])
+					returned_emblem["instance_id"] = emblem_instance_id
+				if not emblem_instance_id.is_empty() and progress_by_source.has(emblem_instance_id):
+					returned_emblem["saved_progress"] = progress_by_source[emblem_instance_id]
+					progress_by_source.erase(emblem_instance_id)
+				migration_returns.append({"kind": "emblem", "state": returned_emblem})
+			emblem_slots = OwnedCard._empty_slot_array(resolved_counts.y)
+		if _occupied_count(wound_slots) > resolved_counts.x:
+			if not migrate_status_slots:
+				return _failure("save_status_slot_migration_marker_invalid")
+			if test_mode:
+				for wound_index: int in wound_slots.size():
+					var state := wound_slots[wound_index]
+					if state.is_empty():
+						continue
+					var returned_wound := state.duplicate(true)
+					if String(returned_wound.get("instance_id", "")).is_empty():
+						returned_wound["instance_id"] = "migrated_wound_%s_%d" % [String(instance_id), wound_index]
+					migration_returns.append({"kind": "wound", "state": returned_wound})
+			wound_slots = OwnedCard._empty_slot_array(resolved_counts.x)
+		else:
+			wound_slots = _fit_status_slot_array(wound_slots, resolved_counts.x)
+		if _occupied_count(emblem_slots) <= resolved_counts.y:
+			emblem_slots = _fit_status_slot_array(emblem_slots, resolved_counts.y)
 		card_states.append({
 			"instance_id": instance_id,
 			"card_data": card_data,
@@ -222,16 +293,21 @@ func _decode_collection_state(data: Dictionary, card_registry: Dictionary) -> Di
 			"permanent_growth": _decode_number_dictionary(
 				encoded.get("permanent_growth", {}) as Dictionary
 			),
+			"crystallization_health_loss": maxi(int(encoded.get("crystallization_health_loss", 0)), 0),
 			"wound_slots": wound_slots,
 			"emblem_slots": emblem_slots,
+			"slot_layout": saved_layout.duplicate(),
 			"rune_revealed": _decode_bool_array(encoded_rune_revealed),
-			"progress_by_source": _decode_number_dictionary(
-				encoded.get("progress_by_source", {}) as Dictionary
+			"rune_stickers": stickers.duplicate(true),
+			"progress_by_source": progress_by_source,
+			"wound_battle_counters": _decode_number_dictionary(
+				encoded.get("wound_battle_counters", {}) as Dictionary
 			),
 		})
 		seen_instance_ids[instance_id] = true
 	return {
 		"success": true,
+		"migration_returns": migration_returns,
 		"state": {
 			"next_instance_sequence": maxi(int(data.get("next_instance_sequence", 1)), 1),
 			"cards": card_states,
@@ -435,6 +511,28 @@ func _decode_slot_array(values: Array, wound_slots: bool) -> Array[Dictionary]:
 	return result
 
 
+func _occupied_count(values: Array[Dictionary]) -> int:
+	var count := 0
+	for value: Dictionary in values:
+		if not value.is_empty():
+			count += 1
+	return count
+
+
+func _fit_status_slot_array(values: Array[Dictionary], capacity: int) -> Array[Dictionary]:
+	if values.size() <= capacity:
+		values.resize(capacity)
+		return values
+	var result := OwnedCard._empty_slot_array(capacity)
+	var next_index := 0
+	for state: Dictionary in values:
+		if state.is_empty() or next_index >= capacity:
+			continue
+		result[next_index] = state.duplicate(true)
+		next_index += 1
+	return result
+
+
 func _decode_number_dictionary(data: Dictionary) -> Dictionary:
 	var result: Dictionary = {}
 	for key: Variant in data:
@@ -458,7 +556,15 @@ func _decode_reward_state(data: Dictionary) -> Dictionary:
 		for key: String in ["entry_id", "battle_instance_id", "effect_id"]:
 			request[key] = StringName(String(request.get(key, "")))
 		requests.append(request)
-	return {"gold": int(data.get("gold", 0)), "pending_random_card_requests": requests}
+	var emblem_instances: Array[Dictionary] = []
+	for value: Variant in data.get("pending_emblem_instances", []) as Array:
+		if not value is Dictionary:
+			continue
+		var entry := (value as Dictionary).duplicate(true)
+		for key: String in ["entry_id", "battle_instance_id", "emblem_instance_id", "emblem_id"]:
+			entry[key] = StringName(String(entry.get(key, "")))
+		emblem_instances.append(entry)
+	return {"gold": int(data.get("gold", 0)), "pending_random_card_requests": requests, "pending_emblem_instances": emblem_instances}
 
 
 func _encode_committed_battles(state: Dictionary) -> Array[String]:

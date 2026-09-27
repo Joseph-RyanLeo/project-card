@@ -33,6 +33,7 @@ func _run() -> void:
 	await _test_drag_transition_animation()
 	await _test_equipment_placement_bounds()
 	await _test_equipment_follows_top_card_after_stacking()
+	await _test_native_equipment_drag_preview_stability()
 	await _test_main_drag_transformation_round_trip()
 	await _test_click_carry_drop_hover_reentry()
 	await _test_owned_minion_ghost_and_conflict_return()
@@ -69,6 +70,7 @@ func _test_equipment_identity_and_split_return() -> void:
 
 func _test_equipment_attributes_and_preparation_view() -> void:
 	var minion := _minion_definition(&"equipped_attribute_minion")
+	minion.runes.clear()
 	minion.base_value = 7
 	minion.max_health = 11
 	minion.armor = 2
@@ -129,10 +131,21 @@ func _test_equipment_attributes_and_preparation_view() -> void:
 		squad.get_effective_action_base_value() == 9
 		and squad.get_effective_max_health() == 11
 		and squad.get_effective_base_armor() == 2
-		and card_view.value_label.text == "9"
+		and slot.get_card_view(minion) == card_view
+		and int(card_view.value_label.text) >= 7
+		and int(card_view.value_label.text) <= 9
+		and int(card_view.health_label.text) >= 11
+		and int(card_view.health_label.text) <= 15
+		and int(card_view.armor_label.text) >= 2
+		and int(card_view.armor_label.text) <= 5,
+		"卸下装备即时提交属性，保留卡面节点并显示补间过程"
+	)
+	await create_timer(CardView.BATTLE_NUMBER_TWEEN_DURATION + 0.05).timeout
+	_expect(
+		card_view.value_label.text == "9"
 		and card_view.health_label.text == "11"
 		and card_view.armor_label.text == "2",
-		"卸下装备后立即恢复小队属性与战前卡面数值"
+		"卸下装备后行动值、生命与护甲补间抵达小队属性"
 	)
 	slot.queue_free()
 	await process_frame
@@ -554,12 +567,36 @@ func _test_equipment_placement_bounds() -> void:
 	var lower_center := overlay_inverse * (
 		lower_card.get_global_transform_with_canvas() * Vector2(79.0, 55.0)
 	)
+	var card_outer_edge := overlay_inverse * (
+		top_card.get_global_transform_with_canvas() * Vector2(104.0, 55.0)
+	)
+	var placement_drag := {"card_data": _equipment_definition(&"equipment_top_card")}
+	var edge_is_candidate: bool = main.front_row._find_equipment_candidate_slot(top_art_edge, placement_drag) == slot
+	var snapped_center: Vector2 = main.front_row._find_exact_equipment_snap(
+		top_art_edge,
+		placement_drag,
+		slot,
+		top_card,
+		main.front_row._get_equipment_held_center_global(top_art_edge, placement_drag)
+	)
+	var equipment_texture := EquipmentIndicatorStyle.get_texture(placement_drag.card_data)
+	var equipment_bounds := CardView.get_attachment_center_bounds(
+		equipment_texture,
+		EquipmentIndicatorStyle.DISPLAY_SIZE
+	)
+	var center_target: BoardSlot = main.front_row._find_equipment_candidate_slot(top_center, placement_drag)
+	var bottom_target: BoardSlot = main.front_row._find_equipment_candidate_slot(top_art_bottom, placement_drag)
+	var outside_target: BoardSlot = main.front_row._find_equipment_candidate_slot(card_outer_edge, placement_drag)
+	var lower_target: BoardSlot = main.front_row._find_equipment_candidate_slot(lower_center, placement_drag)
 	_expect(
-		main.front_row._find_equipment_target_slot(top_center) == slot
-		and main.front_row._find_equipment_target_slot(top_art_edge) == null
-		and main.front_row._find_equipment_target_slot(top_art_bottom) == null
-		and main.front_row._find_equipment_target_slot(lower_center) == null,
-		"装备指示物必须完整位于小队最上层卡牌立绘内，侧边、底边和下层卡不可放置"
+		center_target == slot
+		and edge_is_candidate
+		and snapped_center.distance_to(Vector2(14.0, 61.0)) > 0.1
+		and equipment_bounds.has_point(snapped_center)
+		and bottom_target == slot
+		and outside_target == null
+		and lower_target == null,
+		"拖动候选用卡面内扩展矩形命中，松手精确按纹理边界吸附，卡外与下层卡不可放置"
 	)
 	main.queue_free()
 	await process_frame
@@ -678,18 +715,28 @@ func _test_main_drag_transformation_round_trip() -> void:
 		main.front_row.placement_overlay.get_global_transform_with_canvas().affine_inverse()
 		* (target_card.get_global_transform_with_canvas() * Vector2(49.5, 55.0))
 	)
-	var expected_indicator_position: Vector2 = (
-		target_slot.get_global_transform_with_canvas().affine_inverse()
-		* (
-			target_card.get_global_transform_with_canvas()
-			* (Vector2(49.5, 55.0) + BattlefieldRow.EQUIPMENT_DROP_TRAVEL)
-		)
-	)
 	equipment_drag_visual.global_position = (
 		main.front_row.placement_overlay.get_global_transform_with_canvas()
 		* target_position
 	)
-	var previewed: bool = main.front_row.preview_card_drop(target_position, equipment_drag)
+	var target_global_position: Vector2 = (
+		main.front_row.placement_overlay.get_global_transform_with_canvas()
+		* target_position
+	)
+	main._native_carry_data = equipment_drag.duplicate()
+	main._update_card_carry_target(target_global_position, equipment_drag)
+	var previewed: bool = main.front_row._equipment_target_slot == target_slot
+	var snapped_release_center: Vector2 = main.front_row._find_exact_equipment_snap(
+		target_position,
+		equipment_drag,
+		target_slot,
+		target_card,
+		equipment_drag_visual.get_equipment_indicator_rest_global_center()
+	)
+	var expected_indicator_position: Vector2 = (
+		target_slot.get_global_transform_with_canvas().affine_inverse()
+		* (target_card.get_global_transform_with_canvas() * snapped_release_center)
+	)
 	var transformed_while_hovering := equipment_drag_visual.is_equipment_indicator_mode()
 	var release_center := equipment_drag_visual.get_equipment_indicator_visual_global_center()
 	main.front_row.commit_card_drop(target_position, equipment_drag)
@@ -904,8 +951,9 @@ func _test_main_drag_transformation_round_trip() -> void:
 	)
 	# headless 的 push_input 不会更新 Viewport.get_mouse_position()；直接调用的正是
 	# Main 在实际运行中由 _input / _process 持续执行的同一条坐标刷新路径。
-	main._update_native_equipment_drag_preview(
-		indicator_source_position + Vector2(16.0, 0.0)
+	main._update_card_carry_target(
+		indicator_source_position + Vector2(16.0, 0.0),
+		main._native_carry_data
 	)
 	var began_as_indicator: bool = (
 		native_indicator_drag.get("kind") == &"equipment_indicator"
@@ -945,6 +993,176 @@ func _test_main_drag_transformation_round_trip() -> void:
 		and not bool(restored_card_slot.get_meta("is_deployed_ghost", false)),
 		"无效区域松手后自动卸下，并从松手位置动画返还收藏"
 	)
+	main.queue_free()
+	await process_frame
+
+
+func _test_native_equipment_drag_preview_stability() -> void:
+	root.size = Vector2i(1280, 720)
+	var main = MAIN_SCENE.instantiate()
+	root.add_child(main)
+	await process_frame
+	await process_frame
+	main.front_row.clear_squads()
+	main.back_row.clear_squads()
+	var minions: Array[OwnedCard] = []
+	var owned_item: OwnedCard
+	for owned_card: OwnedCard in main.owned_card_collection.get_cards():
+		if owned_card.card_data.card_type == CardData.CardType.MINION and minions.size() < 2:
+			minions.append(owned_card)
+		elif owned_card.card_data.card_type == CardData.CardType.EQUIPMENT and owned_item == null:
+			owned_item = owned_card
+	var front_slot: BoardSlot
+	var back_slot: BoardSlot
+	if minions.size() == 2:
+		front_slot = main.front_row.add_squad(SquadData.from_owned_card(minions[0]), 0)
+		back_slot = main.back_row.add_squad(SquadData.from_owned_card(minions[1]), 0)
+	if owned_item == null or front_slot == null or back_slot == null:
+		_expect(false, "原生长按装备预览测试拥有真实装备与前后排目标")
+		main.queue_free()
+		await process_frame
+		return
+	# 等待真实行布局动画完成，避免测试指针落在正在移动的卡牌旧位置。
+	await create_timer(0.4).timeout
+	var drag_data := {
+		"kind": &"equipment_card",
+		"card_data": owned_item.card_data,
+		"owned_card": owned_item,
+		"source_type": &"collection",
+		"grab_local_position": Vector2(49.5, 68.0),
+		"preview_scale": Vector2.ONE,
+	}
+	var drag_visual := CardView.create_drag_visual(drag_data)
+	root.add_child(drag_visual)
+	drag_data["drag_visual"] = drag_visual
+	main._native_carry_data = drag_data.duplicate()
+	var front_card := front_slot.get_card_view(front_slot.get_squad_data().get_effect_source())
+	var front_edge_pointer := front_card.get_global_transform_with_canvas() * Vector2(14.0, 55.0)
+	drag_visual.global_position = front_edge_pointer
+	main._native_carry_update_frame = -1
+	main._update_card_carry_target(front_edge_pointer, drag_data)
+	await create_timer(CardDragPreview.EQUIPMENT_TRANSITION_DURATION + 0.03).timeout
+	_expect(
+		main.front_row._equipment_target_slot == front_slot
+		and drag_visual.is_equipment_indicator_mode(),
+		"装备拖过随从卡面侧边时，轻量候选命中并立即启动卡到指示物的渐变"
+	)
+	var front_pointer := front_card.get_global_transform_with_canvas() * Vector2(49.5, 55.0)
+	drag_visual.global_position = front_pointer
+	main._native_carry_update_frame = -1
+	main._update_card_carry_target(front_pointer, drag_data)
+	await create_timer(CardDragPreview.EQUIPMENT_TRANSITION_DURATION + 0.03).timeout
+	var visual := drag_visual.get_node("EquipmentIndicatorVisual") as TextureRect
+	var snapshot := drag_visual.get_node("CardSnapshotVisual") as Control
+	var first_transition: Tween = drag_visual._equipment_transition
+	await process_frame
+	main._update_card_carry_target(front_pointer, drag_data)
+	_expect(
+		main.front_row._equipment_target_slot == front_slot
+		and drag_visual.is_equipment_indicator_mode()
+		and drag_visual._equipment_transition == first_transition,
+		"原生长按经过前排卡边缘后由主界面统一设为指示物，重算不会重启渐变"
+	)
+	var back_card := back_slot.get_card_view(back_slot.get_squad_data().get_effect_source())
+	var back_pointer := back_card.get_global_transform_with_canvas() * Vector2(49.5, 55.0)
+	drag_visual.global_position = back_pointer
+	main._update_card_carry_target(back_pointer, drag_data)
+	var rear_transition: Tween = drag_visual._equipment_transition
+	for _frame_index: int in 25:
+		await create_timer(0.02).timeout
+		drag_visual.global_position = back_pointer
+		main._update_card_carry_target(back_pointer, drag_data)
+	_expect(
+		main.back_row._equipment_target_slot == back_slot
+		and drag_visual.is_equipment_indicator_mode()
+		and rear_transition == first_transition
+		and drag_visual._equipment_transition == rear_transition
+		and visual.visible
+		and visual.size.is_equal_approx(EquipmentIndicatorStyle.DISPLAY_SIZE)
+		and visual.scale.is_equal_approx(Vector2.ONE)
+		and is_equal_approx(visual.modulate.a, 1.0)
+		and not snapshot.visible,
+		"后排停留0.5秒后仍是完整尺寸、不透明的指示物，卡牌快照不再与它竞争"
+	)
+	var outside_pointer := Vector2(-100.0, -100.0)
+	drag_visual.global_position = outside_pointer
+	main._update_card_carry_target(outside_pointer, drag_data)
+	await create_timer(CardDragPreview.EQUIPMENT_TRANSITION_DURATION + 0.03).timeout
+	var snapshot_card := drag_visual.get_card_visual()
+	_expect(
+		not drag_visual.is_equipment_indicator_mode()
+		and snapshot.visible
+		and snapshot.modulate.a > 0.95
+		and snapshot_card.size.x >= 99.0
+		and snapshot_card.size.y >= 136.0
+		and not visual.visible,
+		"离开所有卡面后原生拖拽平滑恢复不透明的完整装备卡"
+	)
+	drag_visual.global_position = back_pointer
+	main._update_card_carry_target(back_pointer, drag_data)
+	var back_row_pointer: Vector2 = main._to_row_drop_position(main.back_row, back_pointer)
+	main.back_row.commit_card_drop(back_row_pointer, drag_data)
+	await process_frame
+	var equipped_indicator := back_slot.get_equipment_indicator()
+	_expect(
+		back_slot.get_squad_data().get_equipped_item() == owned_item
+		and equipped_indicator != null,
+		"原生长按松手后装备绑定到后排随从"
+	)
+	if equipped_indicator != null:
+		var indicator_drag_data: Dictionary = equipped_indicator.build_drag_data(Vector2(15.0, 15.0))
+		var indicator_drag_visual := CardView.create_drag_visual(indicator_drag_data)
+		root.add_child(indicator_drag_visual)
+		indicator_drag_visual.set_equipment_indicator_mode(true, false)
+		indicator_drag_visual.continue_equipment_pickup(
+			indicator_drag_data["indicator_lifted_grab_local_position"]
+		)
+		indicator_drag_data["drag_visual"] = indicator_drag_visual
+		var front_indicator_center := indicator_drag_visual.get_equipment_indicator_rest_global_center()
+		indicator_drag_visual.global_position += front_pointer - front_indicator_center
+		main._native_carry_data = indicator_drag_data.duplicate()
+		main._native_carry_update_frame = -1
+		main._update_card_carry_target(front_pointer, indicator_drag_data)
+		await create_timer(CardDragPreview.EQUIPMENT_TRANSITION_DURATION + 0.03).timeout
+		var front_row_pointer: Vector2 = main._to_row_drop_position(main.front_row, front_pointer)
+		main.front_row.commit_card_drop(front_row_pointer, indicator_drag_data)
+		await process_frame
+		_expect(
+			front_slot.get_squad_data().get_equipped_item() == owned_item
+			and back_slot.get_squad_data().get_equipped_item() == null,
+			"原生长按拖动装备指示物到另一排后，装备实例换到新随从"
+		)
+		var moved_indicator := front_slot.get_equipment_indicator()
+		var return_data: Dictionary = moved_indicator.build_drag_data(Vector2(15.0, 15.0))
+		var return_visual := CardView.create_drag_visual(return_data)
+		root.add_child(return_visual)
+		return_visual.set_equipment_indicator_mode(true, false)
+		return_visual.continue_equipment_pickup(
+			return_data["indicator_lifted_grab_local_position"]
+		)
+		return_data["drag_visual"] = return_visual
+		var collection_center: Vector2 = main.collection_drop_zone.get_global_rect().get_center()
+		var return_center := return_visual.get_equipment_indicator_rest_global_center()
+		return_visual.global_position += collection_center - return_center
+		main._native_carry_data = return_data.duplicate()
+		main._native_carry_update_frame = -1
+		main._update_card_carry_target(collection_center, return_data)
+		var collection_accepts: bool = main.collection_drop_zone.preview_card_drop(
+			collection_center,
+			return_data
+		)
+		main.collection_drop_zone.commit_card_drop(collection_center, return_data)
+		await process_frame
+		_expect(
+			collection_accepts
+			and front_slot.get_squad_data().get_equipped_item() == null
+			and not main._is_owned_card_deployed(owned_item)
+			and main.owned_card_collection.get_by_instance_id(owned_item.instance_id) == owned_item,
+			"原生长按可将装备指示物拖回收藏并解除原随从装备"
+		)
+		indicator_drag_visual.queue_free()
+		return_visual.queue_free()
+	drag_visual.queue_free()
 	main.queue_free()
 	await process_frame
 

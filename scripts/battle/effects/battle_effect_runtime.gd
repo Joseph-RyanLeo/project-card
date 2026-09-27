@@ -8,6 +8,7 @@ const BattleRunRewardLedger = preload("res://scripts/battle/battle_run_reward_le
 ## BattleController 负责战斗主循环；本对象负责效果定义、目标、生命周期、叠加与因果日志。
 
 signal trace_emitted(entry: BattleEffectTraceEntry)
+signal direct_effect_resolved(record: Dictionary)
 
 var controller: Node
 var queue := BattleEventQueue.new()
@@ -106,6 +107,20 @@ func process_next_due_us(logical_time_us: int) -> bool:
 	var event := queue.pop_next_due(logical_time_us)
 	if event == null:
 		return false
+	_dispatch_due_event(event)
+	return true
+
+
+func process_due_for_root(seconds: float, root_event_id: int) -> void:
+	var time_us := BattleEventQueue.seconds_to_us(seconds)
+	while true:
+		var event := queue.pop_next_due_for_root(time_us, root_event_id)
+		if event == null:
+			return
+		_dispatch_due_event(event)
+
+
+func _dispatch_due_event(event: BattleRuntimeEvent) -> void:
 	match event.kind:
 		BattleRuntimeEvent.Kind.TRIGGER:
 			_handle_trigger(event)
@@ -123,7 +138,6 @@ func process_next_due_us(logical_time_us: int) -> bool:
 			_handle_source_defeated(event)
 		BattleRuntimeEvent.Kind.BATTLE_END:
 			_handle_battle_end(event)
-	return true
 
 
 func get_next_event_time_seconds() -> float:
@@ -157,7 +171,7 @@ func notify_battle_end(parent: BattleRuntimeEvent = null) -> void:
 	queue.schedule(event, parent)
 
 
-func recheck_continuous_conditions(parent: BattleRuntimeEvent = null) -> void:
+func recheck_continuous_conditions(parent: BattleRuntimeEvent = null) -> BattleRuntimeEvent:
 	var instances := active_instances.duplicate()
 	for instance_value: Variant in instances:
 		var instance := instance_value as BattleEffectInstance
@@ -180,7 +194,7 @@ func recheck_continuous_conditions(parent: BattleRuntimeEvent = null) -> void:
 				invalid_condition = BattleEffectDefinition.EndCondition.EQUIPMENT_UNEQUIPPED
 			_mark_end_condition(instance, invalid_condition, event)
 	# 持续定义在条件恢复后可以重新安装；叠加规则会阻止重复发放。
-	emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS, {}, parent)
+	return emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS, {}, parent)
 
 
 func get_trace_signatures() -> Array[String]:
@@ -193,7 +207,14 @@ func get_trace_signatures() -> Array[String]:
 func resolve_armor_gain_modifiers(target: BattleSquadState) -> Dictionary:
 	# 护甲获得属于正式行动公式的一部分，必须在数值写入前同步读取拦截器。
 	# 返回乘法与加法两个区段，让控制器固定执行“先乘后加”。
-	var result := {"multiplier": 1.0, "addition": 0.0}
+	var multiplier_sources: Array[Dictionary] = []
+	var addition_sources: Array[Dictionary] = []
+	var result := {
+		"multiplier": 1.0,
+		"addition": 0.0,
+		"multiplier_sources": multiplier_sources,
+		"addition_sources": addition_sources,
+	}
 	if target == null:
 		return result
 	var event := BattleRuntimeEvent.new()
@@ -224,8 +245,14 @@ func resolve_armor_gain_modifiers(target: BattleSquadState) -> Dictionary:
 		match definition.modifier.mode:
 			BattleEffectModifierSpec.Mode.MULTIPLY_VALUE:
 				result["multiplier"] = float(result["multiplier"]) * definition.modifier.amount
+				multiplier_sources.append(
+					_snapshot_contribution_source(definition, binding.source, definition.modifier.amount, "护甲倍率")
+				)
 			BattleEffectModifierSpec.Mode.ADD_VALUE:
 				result["addition"] = float(result["addition"]) + definition.modifier.amount
+				addition_sources.append(
+					_snapshot_contribution_source(definition, binding.source, definition.modifier.amount, "固定加成")
+				)
 			_:
 				continue
 		used_nonstacking_effects[definition.effect_id] = true
@@ -335,8 +362,23 @@ func _handle_apply_operation(event: BattleRuntimeEvent) -> void:
 		)
 	# 当前灰烬乡邻效果均为加法数值；把各次执行聚合为同一来源实例，
 	# 才能同时满足“老狼可额外执行”与“同名来源本身不叠加”。
-	var value := _resolve_value(definition, event.source, target, event) * float(execution_count)
-	_apply_definition(definition, event.source, target, value, event)
+	var single_value := _resolve_value(definition, event.source, target, event)
+	var value := single_value * float(execution_count)
+	var contribution_sources: Array[Dictionary] = [
+		_snapshot_contribution_source(definition, event.source, single_value, "本身执行")
+	]
+	for modifier_binding: BattleEffectBinding in neighbor_modifiers:
+		if contribution_sources.size() >= execution_count:
+			break
+		contribution_sources.append(
+			_snapshot_contribution_source(
+				modifier_binding.definition,
+				modifier_binding.source,
+				single_value,
+				"额外执行"
+			)
+		)
+	_apply_definition(definition, event.source, target, value, event, contribution_sources)
 
 
 func _apply_definition(
@@ -344,7 +386,8 @@ func _apply_definition(
 	source: BattleEffectOwnerRef,
 	target: BattleSquadState,
 	value: float,
-	event: BattleRuntimeEvent
+	event: BattleRuntimeEvent,
+	contribution_sources: Array[Dictionary] = []
 ) -> void:
 	var existing := _find_active_source_instance(definition, source, target)
 	if definition.stacking.kind == BattleEffectStacking.Kind.REFRESH and existing != null:
@@ -366,9 +409,16 @@ func _apply_definition(
 			target.modifiers.update_source_instance_value(existing.instance_id, value)
 			target.refresh_cooldown_after_modifier_change()
 			_adjust_current_health_for_maximum_modifier(existing, value - previous_value)
+			_adjust_crystallized_temporary_armor(target, value - previous_value)
 			_trace(event, definition, source, target, &"stack", &"recalculated", "持续效果实时重算为%.2f" % value)
 		else:
 			_trace(event, definition, source, target, &"stack", &"already_active", "持续检查不重复发放")
+		existing.contribution_sources.assign(contribution_sources.duplicate(true))
+		if definition.operation == BattleEffectDefinition.Operation.ADD_ATTRIBUTE:
+			target.modifiers.set_source_instance_contribution_sources(
+				existing.instance_id,
+				contribution_sources
+			)
 		return
 
 	var instance := BattleEffectInstance.new()
@@ -381,6 +431,7 @@ func _apply_definition(
 	instance.started_at_us = event.logical_time_us
 	instance.applied_value = minf(value, definition.stacking.cap) if definition.stacking.kind == BattleEffectStacking.Kind.CAPPED_ADDITIVE else value
 	instance.execution_count = 1
+	instance.contribution_sources.assign(contribution_sources.duplicate(true))
 	active_instances.append(instance)
 
 	var supported := _apply_operation(instance, event)
@@ -425,14 +476,21 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 		BattleEffectDefinition.Operation.GAIN_ARMOR:
 			var armor_amount := instance.applied_value * target.modifiers.get_multiplier(BattleModifier.Stat.ARMOR_GAIN)
 			armor_amount += target.modifiers.get_additive(BattleModifier.Stat.ARMOR_GAIN)
-			target.apply_armor_exact(maxf(armor_amount, 0.0), instance.source.state)
+			var effective_armor := target.apply_armor_exact(maxf(armor_amount, 0.0), instance.source.state)
+			_emit_direct_effect_resolved(instance, "armor", armor_amount, effective_armor)
 			emit_trigger(
 				BattleEffectDefinition.Trigger.SOURCE_ARMOR_GAINED,
 				{"actor": target, "amount": armor_amount, "generated_effect_id": definition.effect_id},
 				event
 			)
 		BattleEffectDefinition.Operation.DEAL_NON_ACTION_DAMAGE:
-			target.apply_damage_exact(maxf(instance.applied_value, 0.0), instance.source.state)
+			var damage_split: Dictionary = target.apply_damage_exact(maxf(instance.applied_value, 0.0), instance.source.state)
+			_emit_direct_effect_resolved(
+				instance,
+				"damage",
+				instance.applied_value,
+				float(damage_split.get("total", 0.0))
+			)
 		BattleEffectDefinition.Operation.GAIN_GOLD, BattleEffectDefinition.Operation.GRANT_RANDOM_CARD:
 			if controller == null or not controller.has_method("record_pending_run_reward"):
 				return false
@@ -470,7 +528,22 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 			controller.execute_immediate_action(
 				target,
 				forced_action as CardData.ActionType,
-				float(definition.parameters.get("action_value_delta", 0.0))
+				float(definition.parameters.get("reinforcement", 0.0)),
+				{
+					"effect_id": definition.effect_id,
+					"effect_instance_id": instance.instance_id,
+					"source_card_name": instance.source.card_data.display_name if instance.source != null and instance.source.card_data != null else "未知来源",
+					"source_runtime_id": instance.source.runtime_id if instance.source != null else 0,
+					"source_owner_kind": int(instance.source.owner_kind) if instance.source != null else -1,
+					"source_owned_card_instance_id": String(instance.source.owned_card_instance_id) if instance.source != null else "",
+					"source_card_id": String(instance.source.card_data.id) if instance.source != null and instance.source.card_data != null else "",
+					"source_name": _trigger_display_name(definition.trigger),
+					"trigger_name": _trigger_display_name(definition.trigger),
+					"tags": definition.tags.duplicate(),
+					"reading": definition.reading,
+					"source_status": "resolved" if instance.source != null and instance.source.card_data != null else "unknown",
+					"timing": "immediate_action_operation",
+				}
 			)
 		BattleEffectDefinition.Operation.SET_ACTION_TYPE:
 			var action_name := definition.value.enum_value
@@ -480,6 +553,10 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 			if action_type < 0:
 				return false
 			target.set_runtime_action_type(action_type as CardData.ActionType)
+			# 变更基础数值时只乘永久/符文层，不把装备、纹章和伤势一并减半。
+			target.runtime_base_action_multiplier = float(
+				definition.parameters.get("base_value_multiplier", 1.0)
+			)
 		BattleEffectDefinition.Operation.FORBID_STACKING:
 			# 编队限制在 SquadData 中先行执行；这里登记持续实例，使战斗效果
 			# 审计不会把已经生效的固有规则误报成“未支持操作”。
@@ -554,12 +631,12 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 				event.logical_time_us
 			):
 				return false
-			var modifier_stat := (
-				BattleModifier.Stat.ACTION_VALUE
-				if growth_stat == BattlePermanentGrowthLedger.STAT_BASE_VALUE
-				else BattleModifier.Stat.BASE_ARMOR
-			)
-			_add_modifier(instance, modifier_stat, BattleModifier.Mode.ADD, instance.applied_value)
+			# 战后才写回 OwnedCard；本场先保存在独立的基础成长层，
+			# 不再伪装成会被倍乘/减半排除的临时 ACTION_VALUE 修正。
+			if growth_stat == BattlePermanentGrowthLedger.STAT_BASE_VALUE:
+				target.runtime_permanent_action_growth += instance.applied_value
+			else:
+				target.runtime_permanent_armor_growth += instance.applied_value
 			if (
 				growth_stat == BattlePermanentGrowthLedger.STAT_BASE_ARMOR
 				and bool(definition.parameters.get("increase_current_armor", false))
@@ -588,8 +665,75 @@ func _add_modifier(
 	modifier.stat = stat
 	modifier.mode = mode
 	modifier.value = value
+	modifier.contribution_sources.assign(instance.contribution_sources.duplicate(true))
 	instance.target.modifiers.add_modifier(modifier)
 	instance.target.refresh_cooldown_after_modifier_change()
+	if stat == BattleModifier.Stat.MAX_HEALTH and mode == BattleModifier.Mode.ADD:
+		_adjust_crystallized_temporary_armor(instance.target, value)
+
+
+func _snapshot_contribution_source(
+	definition: BattleEffectDefinition,
+	owner: BattleEffectOwnerRef,
+	amount: float,
+	role: String
+) -> Dictionary:
+	var card := owner.card_data if owner != null else null
+	var owned := owner.owned_card if owner != null else null
+	var trigger_name := "未知触发"
+	if definition != null:
+		match definition.trigger:
+			BattleEffectDefinition.Trigger.RUSH:
+				trigger_name = "突击"
+			BattleEffectDefinition.Trigger.ECHO:
+				trigger_name = "回响"
+			BattleEffectDefinition.Trigger.CONTINUOUS:
+				trigger_name = "持续"
+			BattleEffectDefinition.Trigger.LAST_WISH:
+				trigger_name = "遗愿"
+	return {
+		"role": role,
+		"amount": amount,
+		"source_name": card.display_name if card != null else "未知来源",
+		"effect_id": String(definition.effect_id) if definition != null else "",
+		"trigger_name": trigger_name,
+		"tags": definition.tags.duplicate() if definition != null else [],
+		"reading": definition.reading if definition != null else "",
+		"source_card_id": String(card.id) if card != null else "",
+		"source_card_name": card.display_name if card != null else "未知来源",
+		"source_owned_card_instance_id": String(owned.instance_id) if owned != null else "",
+		"source_owner_kind": int(owner.owner_kind) if owner != null else -1,
+		"source_status": "resolved" if card != null else "unknown",
+		"unknown_reason": "" if card != null else "效果来源没有卡牌引用",
+	}
+
+
+func _emit_direct_effect_resolved(
+	instance: BattleEffectInstance,
+	kind: String,
+	calculated_amount: float,
+	effective_amount: float
+) -> void:
+	if instance == null or instance.definition == null:
+		return
+	var owner := instance.source
+	var target_card := instance.target.get_effect_source() if instance.target != null else null
+	direct_effect_resolved.emit({
+		"logical_time_seconds": controller.elapsed_seconds if controller != null else 0.0,
+		"kind": kind,
+		"effect_id": String(instance.definition.effect_id),
+		"trigger_name": _trigger_display_name(instance.definition.trigger),
+		"effect_reading": instance.definition.reading,
+		"tags": instance.definition.tags.duplicate(),
+		"source_card_id": String(owner.card_data.id) if owner != null and owner.card_data != null else "",
+		"source_card_name": owner.card_data.display_name if owner != null and owner.card_data != null else "未知来源",
+		"source_owned_card_instance_id": String(owner.owned_card_instance_id) if owner != null else "",
+		"source_status": "resolved" if owner != null and owner.card_data != null else "unknown",
+		"target_card_id": String(target_card.id) if target_card != null else "",
+		"target_card_name": target_card.display_name if target_card != null else "未知目标",
+		"calculated_amount": calculated_amount,
+		"effective_amount": effective_amount,
+	})
 
 
 func _schedule_expiry(instance: BattleEffectInstance, parent: BattleRuntimeEvent) -> void:
@@ -685,10 +829,16 @@ func _end_instance(
 	instance.active = false
 	instance.end_reason = reason
 	queue.cancel_instance(instance.instance_id)
+	var removed_crystallized_health := 0.0
+	for modifier: BattleModifier in instance.target.modifiers.modifiers:
+		if modifier.source_instance_id == instance.instance_id and modifier.active and modifier.stat == BattleModifier.Stat.MAX_HEALTH and modifier.mode == BattleModifier.Mode.ADD:
+			removed_crystallized_health += modifier.value
 	instance.target.modifiers.remove_source_instance(instance.instance_id)
 	instance.target.refresh_cooldown_after_modifier_change()
+	_adjust_crystallized_temporary_armor(instance.target, -removed_crystallized_health)
 	if instance.definition.operation == BattleEffectDefinition.Operation.SET_ACTION_TYPE:
 		instance.target.clear_runtime_action_type()
+		instance.target.runtime_base_action_multiplier = 1.0
 	if instance.definition.operation == BattleEffectDefinition.Operation.GRANT_KEYWORD:
 		instance.target.revoke_runtime_keyword(
 			instance.definition.value.enum_value,
@@ -708,6 +858,16 @@ func _end_instance(
 	_trace(event, instance.definition, instance.source, instance.target, &"end", StringName(BattleEffectInstance.EndReason.keys()[reason].to_lower()), detail)
 	if instance.definition.stacking.kind == BattleEffectStacking.Kind.SAME_NAME_NONSTACKING:
 		_recompute_same_name_group(instance.stack_key(), event)
+
+
+func _adjust_crystallized_temporary_armor(state: BattleSquadState, health_delta: float) -> void:
+	if state == null or not state.has_unmasked_wound(&"晶体化") or is_zero_approx(health_delta):
+		return
+	var converted_delta := maxf(health_delta, 0.0)
+	if converted_delta > 0.0:
+		state.current_armor += converted_delta
+	else:
+		state.current_armor = maxf(state.current_armor + health_delta, 0.0)
 
 
 func _recompute_same_name_group(stack_key: String, event: BattleRuntimeEvent) -> void:
@@ -1004,8 +1164,7 @@ func _has_living_same_race_neighbors_on_both_sides(source_state: BattleSquadStat
 	for state: BattleSquadState in controller.get_living_states(source_state.side):
 		if state == source_state or state.row_key != source_state.row_key:
 			continue
-		var neighbor_card := state.get_effect_source()
-		if neighbor_card == null or neighbor_card.race_type != source_card.race_type:
+		if source_card == null or not state.has_effective_race(source_card.race_type):
 			continue
 		if state.formation_index == source_state.formation_index - 1:
 			has_left = true
@@ -1089,6 +1248,21 @@ func _action_type_from_name(value: StringName) -> int:
 		&"heal": return CardData.ActionType.HEAL
 		&"defense": return CardData.ActionType.DEFENSE
 		_: return -1
+
+
+func _trigger_display_name(trigger: BattleEffectDefinition.Trigger) -> String:
+	match trigger:
+		BattleEffectDefinition.Trigger.RUSH:
+			return "突击"
+		BattleEffectDefinition.Trigger.ECHO:
+			return "回响"
+		BattleEffectDefinition.Trigger.CONTINUOUS:
+			return "持续"
+		BattleEffectDefinition.Trigger.LAST_WISH:
+			return "遗愿"
+		BattleEffectDefinition.Trigger.ELAPSED_BATTLE_TIME:
+			return "战斗计时"
+	return "条件触发"
 
 
 func _adjust_current_health_for_maximum_modifier(instance: BattleEffectInstance, modifier_delta: float = 0.0) -> void:

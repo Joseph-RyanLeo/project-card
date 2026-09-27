@@ -30,12 +30,6 @@ func preview_card_drop(
 	_pointer_global_position: Vector2,
 	data: Variant
 ) -> bool:
-	if data is Dictionary:
-		var drag_data := data as Dictionary
-		if drag_data.get("kind") == &"equipment_indicator":
-			var drag_visual := drag_data.get("drag_visual") as CardDragPreview
-			if is_instance_valid(drag_visual):
-				drag_visual.set_equipment_indicator_mode(false)
 	var can_drop := _is_card_drag(data)
 	_set_highlighted(can_drop)
 	return can_drop

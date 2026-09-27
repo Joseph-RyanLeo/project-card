@@ -24,6 +24,12 @@ func _run() -> void:
 	await _test_compact_double_squad_merges_with_single()
 	await _test_card_crosses_multi_squad_smoothly()
 	await _test_stationary_pointer_keeps_reservation_stable()
+	await _test_native_drag_starts_with_source_reservation()
+	await _test_reservation_removal_animates_visible_layout()
+	await _test_native_return_to_collection_in_display_shell()
+	await _test_click_carry_real_input_cross_row_cancel_and_return()
+	await _test_click_carry_real_input_return_to_collection()
+	await _test_prefer_squad_native_collection_drop()
 	await _test_full_row_rightmost_top_card_click_preview()
 	await _test_capacity_rules_and_cancel_restore()
 	if _failure_count == 0:
@@ -1735,6 +1741,275 @@ func _test_stationary_pointer_keeps_reservation_stable() -> void:
 	await _dispose_main(main)
 
 
+func _test_native_drag_starts_with_source_reservation() -> void:
+	var main: Variant = await _create_main()
+	var front_row := main.get_node("%FrontRow") as BattlefieldRow
+	var cards := _make_cards(2)
+	front_row.add_card(cards[0], 0)
+	front_row.add_card(cards[1], 1)
+	await process_frame
+	await process_frame
+	var source := front_row.get_squads()[0] as BoardSlot
+	var neighbor := front_row.get_squads()[1] as BoardSlot
+	var neighbor_start := neighbor.global_position
+	var pointer_global := source.get_global_rect().get_center()
+	var pointer_local := (
+		front_row.placement_overlay.get_global_transform_with_canvas().affine_inverse()
+		* pointer_global
+	)
+	var drag_data := {
+		"kind": &"card",
+		"card_data": cards[0],
+		"squad_data": source.get_squad_data(),
+		"source_type": &"board",
+		"source_row": front_row,
+		"source_slot": source,
+		"grab_local_position": Vector2(49.5, 68.0),
+		"preview_offset": Vector2(49.5, 68.0),
+		"preview_scale": Vector2.ONE,
+	}
+	front_row._begin_card_drag(drag_data)
+	front_row.preview_card_drop(pointer_local, drag_data)
+	await process_frame
+	_expect(
+		front_row.has_drop_reservation()
+		and neighbor.global_position.distance_to(neighbor_start) < 0.5,
+		"原生长按拖起时同一输入轮建立原位虚影，邻卡不先居中再让位"
+	)
+	await _dispose_main(main)
+
+
+func _test_reservation_removal_animates_visible_layout() -> void:
+	var main: Variant = await _create_main()
+	var front_row := main.get_node("%FrontRow") as BattlefieldRow
+	var cards: Array[CardData] = main.collection_cards.duplicate()
+	var first_slot := front_row.add_card(cards[0], 0)
+	front_row.add_card(cards[1], 1)
+	var right := front_row.add_card(cards[2], 2)
+	await process_frame
+	await process_frame
+
+	var drag_data := _collection_drag(cards[3])
+	drag_data["grab_local_position"] = Vector2(49.5, 68.0)
+	drag_data["preview_scale"] = Vector2.ONE
+	front_row.preview_card_drop(Vector2(790.0, 68.0), drag_data)
+	await create_timer(SquadView.LAYOUT_TWEEN_DURATION + 0.02).timeout
+	var reserved_x := _visible_card_layer_x(right)
+	_expect(front_row.has_drop_reservation(), "布局动画采样前已显示稳定的唯一预留位")
+
+	front_row.clear_drop_preview()
+	var sampled_x: Array[float] = []
+	var sampled_animation: Array[bool] = []
+	for _frame_index: int in 6:
+		await process_frame
+		sampled_x.append(_visible_card_layer_x(right))
+		sampled_animation.append(right.is_layout_animating())
+	var positions_move_smoothly := sampled_animation[0]
+	for frame_index: int in range(1, sampled_x.size()):
+		positions_move_smoothly = (
+			positions_move_smoothly
+			and sampled_x[frame_index] >= sampled_x[frame_index - 1]
+			and sampled_x[frame_index] - sampled_x[frame_index - 1] < 59.0
+		)
+	_expect(
+		absf(sampled_x[0] - reserved_x) < 0.5
+		and positions_move_smoothly
+		and sampled_x[-1] > reserved_x + 1.0,
+		"预留位消失时邻卡从当前可见位置连续归位，起点 %.1f、逐帧位置 %s / 动画 %s"
+		% [reserved_x, str(sampled_x), str(sampled_animation)]
+	)
+	await create_timer(SquadView.LAYOUT_TWEEN_DURATION + 0.02).timeout
+	front_row.preview_card_drop(Vector2(790.0, 68.0), drag_data)
+	await process_frame
+	var reverse_start_x := _visible_card_layer_x(right)
+	front_row.preview_card_drop(Vector2(10.0, 68.0), drag_data)
+	await process_frame
+	var reverse_first_x := _visible_card_layer_x(right)
+	var reverse_animating := right.is_layout_animating()
+	await process_frame
+	var reverse_second_x := _visible_card_layer_x(right)
+	_expect(
+		absf(reverse_first_x - reverse_start_x) < 0.5
+		and reverse_animating
+		and absf(reverse_second_x - reverse_first_x) < 59.0
+		and front_row.get_drop_reservation_index() == 0,
+		"动画中的反向预留位变更从当前可见坐标续接（%.1f→%.1f→%.1f）"
+		% [reverse_start_x, reverse_first_x, reverse_second_x]
+	)
+	front_row.clear_drop_preview()
+	await create_timer(SquadView.LAYOUT_TWEEN_DURATION + 0.02).timeout
+	var death_return_start_x := _visible_card_layer_x(right)
+	var removed_squad := front_row.remove_squad_slot(first_slot)
+	var death_return_x := _visible_card_layer_x(right)
+	_expect(
+		removed_squad != null
+		and right.is_layout_animating()
+		and absf(death_return_x - death_return_start_x) < 0.5,
+		"阵亡复用批量移除时，幸存卡立即从原可见位置开始平滑收拢"
+	)
+	await _dispose_main(main)
+
+
+func _test_native_return_to_collection_in_display_shell() -> void:
+	var display := load("res://scenes/GameDisplay.tscn").instantiate() as GameDisplay
+	root.add_child(display)
+	await process_frame
+	await process_frame
+	var main := display.main_screen
+	var input_transform := display.render_container.get_global_transform_with_canvas()
+	var input_viewport := display.internal_viewport
+	input_viewport.notify_mouse_entered()
+	main.collection_drop_zone.drop_enabled = true
+	var front_row := main.get_node("%FrontRow") as BattlefieldRow
+	var cards: Array[CardData] = main.collection_cards.duplicate()
+	var source := front_row.add_card(cards[0], 0)
+	var target := front_row.add_card(cards[1], 1)
+	front_row.set_drag_enabled(true)
+	await process_frame
+	await process_frame
+	var pointer := source.get_card_view(cards[0]).get_global_rect().get_center()
+	await _send_display_motion(input_transform, pointer, Vector2.ZERO, false)
+	await _send_display_button(input_transform, pointer, true)
+	await _send_display_motion(input_transform, pointer + Vector2(32.0, -16.0), Vector2(32.0, -16.0), true)
+	var drag_data := input_viewport.gui_get_drag_data() as Dictionary
+	var started_native_drag: bool = (
+		input_viewport.gui_is_dragging()
+		and drag_data.get("source_type") == &"board"
+		and drag_data.get("kind") == &"card"
+	)
+	_expect(started_native_drag, "GameDisplay 内部视口的真实输入开始场上单卡长按拖动")
+	if not started_native_drag:
+		display.queue_free()
+		await process_frame
+		return
+
+	var target_local := Vector2(
+		_pointer_for_stack_overlap(front_row, target, drag_data, 30.0, true),
+		68.0
+	)
+	var target_pointer := front_row.placement_overlay.get_global_transform_with_canvas() * target_local
+	await _send_display_motion(input_transform, target_pointer, target_pointer - pointer, true)
+	var preview_started := front_row.has_active_drop_preview() and front_row.has_drop_reservation()
+	_expect(preview_started, "拖动中的卡牌经过实体小队时先建立有效战场预览")
+	# 有些窗口/缩放事件序列不会送达战场接收层的 mouse_exited。
+	# 断开这个通知后仍通过真实 SubViewport 鼠标移动进入收藏，模拟该缺失事件。
+	var drop_zone := front_row.placement_overlay
+	drop_zone.mouse_exited.disconnect(drop_zone._on_mouse_exited)
+
+	var collection_zone := main.collection_drop_zone as Control
+	var collection_pointer := collection_zone.get_global_rect().get_center()
+	await _send_display_motion(input_transform, collection_pointer, collection_pointer - target_pointer, true)
+	var target_samples: Array[Dictionary] = []
+	for _frame_index: int in 12:
+		await process_frame
+		target_samples.append({
+			"collection": bool(collection_zone.get("_highlighted")),
+			"preview": front_row.has_active_drop_preview(),
+			"reservation": front_row.has_drop_reservation(),
+		})
+	var held_in_collection_is_clean: bool = not target_samples.is_empty()
+	for sample: Dictionary in target_samples:
+		held_in_collection_is_clean = (
+			held_in_collection_is_clean
+			and bool(sample.get("collection", false))
+			and not bool(sample.get("preview", true))
+			and not bool(sample.get("reservation", true))
+		)
+	_expect(
+		held_in_collection_is_clean,
+		"长按拖到收藏后停留多帧时只显示收藏高亮，战场虚影和预留位均已清除（采样=%s）"
+		% str(target_samples)
+	)
+	await _send_display_button(input_transform, collection_pointer, false)
+	await process_frame
+	_expect(
+		front_row.get_squad_count() == 1
+		and front_row.get_squads()[0].get_squad_data().contains(cards[1])
+		and main.collection_cards.has(cards[0]),
+		"GameDisplay 内部视口松手只回收来源卡，目标卡仍留在战场"
+	)
+	display.queue_free()
+	await process_frame
+
+
+func _visible_card_layer_x(slot: BoardSlot) -> float:
+	return slot.card_visual_layer.get_global_transform_with_canvas().origin.x
+
+
+func _test_click_carry_real_input_cross_row_cancel_and_return() -> void:
+	var main: Variant = await _create_main()
+	var front_row := main.get_node("%FrontRow") as BattlefieldRow
+	var back_row := main.get_node("%BackRow") as BattlefieldRow
+	var source_card := _make_cards(2)[0]
+	var target_card := _make_cards(2)[1]
+	var source := front_row.add_card(source_card, 0)
+	back_row.add_card(target_card, 0)
+	await process_frame
+	await process_frame
+
+	var source_center := source.get_card_view(source_card).get_global_rect().get_center()
+	await _send_left_button(source_center, true)
+	await _send_left_button(source_center, false)
+	_expect(
+		not main._click_carry_data.is_empty()
+		and front_row.has_drop_reservation(),
+		"真实鼠标点按场上卡牌后进入点击携带，并保留来源位置"
+	)
+
+	var back_pointer := back_row.placement_overlay.get_global_rect().get_center()
+	await _send_mouse_motion(back_pointer, Vector2.ZERO, 0)
+	_expect(
+		back_row.has_drop_reservation()
+		and not front_row.has_drop_reservation(),
+		"真实鼠标把卡牌带到后排时，来源排收拢、目标排建立唯一预留位"
+	)
+	await _send_key(KEY_ESCAPE)
+	_expect(
+		main._click_carry_data.is_empty()
+		and source.visible
+		and front_row.get_squad_count() == 1
+		and not front_row.has_drop_reservation()
+		and not back_row.has_drop_reservation(),
+		"Esc 取消点击携带只恢复来源实体并清理两排预留位"
+	)
+	source_center = source.get_card_view(source_card).get_global_rect().get_center()
+	await _send_left_button(source_center, true)
+	await _send_left_button(source_center, false)
+	await _send_right_button(source_center, true)
+	await _send_right_button(source_center, false)
+	_expect(
+		main._click_carry_data.is_empty()
+		and source.visible
+		and front_row.get_squad_count() == 1,
+		"右键取消点击携带后真实卡仍留在来源排"
+	)
+	await _dispose_main(main)
+
+
+func _test_click_carry_real_input_return_to_collection() -> void:
+	var main: Variant = await _create_main()
+	var front_row := main.get_node("%FrontRow") as BattlefieldRow
+	var source_card := _make_cards(1)[0]
+	front_row.add_card(source_card, 0)
+	await process_frame
+	await process_frame
+	var source_view := front_row.get_squads()[0].get_card_view(source_card)
+	var source_center := source_view.get_global_rect().get_center()
+	await _send_left_button(source_center, true)
+	await _send_left_button(source_center, false)
+	var collection_zone := main.get_node("%CollectionDropZone") as Control
+	var collection_pointer := collection_zone.get_global_rect().get_center()
+	await _send_mouse_motion(collection_pointer, Vector2.ZERO, 0)
+	await _send_left_button(collection_pointer, true)
+	_expect(
+		main._click_carry_data.is_empty()
+		and front_row.get_squad_count() == 0
+		and main.collection_cards.has(source_card),
+		"真实鼠标点击收藏区后只把来源卡归还收藏一次"
+	)
+	await _dispose_main(main)
+
+
 func _test_full_row_rightmost_top_card_click_preview() -> void:
 	var main: Variant = await _create_main()
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
@@ -2267,11 +2542,12 @@ func _test_collection_carry_clears_stale_board_hover() -> void:
 
 
 # --- “优先小队”模式的原生拖拽回归 ---
-func _test_prefer_squad_native_collection_stack() -> void:
+func _test_prefer_squad_native_collection_drop() -> void:
 	var main: Variant = await _create_main()
 	var front_row := main.get_node("%FrontRow") as BattlefieldRow
-	var cards: Array[CardData] = main.collection_cards.duplicate()
-	var target := front_row.add_card(cards[0], 0)
+	var incoming_card: CardData
+	var target_card := _make_cards(1)[0]
+	var target := front_row.add_card(target_card, 0)
 	await process_frame
 	await process_frame
 	var mode_button := main.get_node("%DragModeButton") as Button
@@ -2281,8 +2557,12 @@ func _test_prefer_squad_native_collection_stack() -> void:
 	var hand_view: CardView
 	for hand_slot: Control in main.get_node("%CollectionCardRow").get_children():
 		var candidate := hand_slot.get_child(0) as CardView
-		if candidate.card_data == cards[1]:
+		if (
+			candidate != null
+			and candidate.card_data.card_type == CardData.CardType.MINION
+		):
 			hand_view = candidate
+			incoming_card = candidate.card_data
 			break
 	var source_position := hand_view.get_global_rect().get_center()
 	var initial_collection_count: int = main.collection_cards.size()
@@ -2318,29 +2598,17 @@ func _test_prefer_squad_native_collection_stack() -> void:
 		and native_drag_data.get("source_type") == &"collection",
 		"优先小队模式下 Godot 原生收藏拖拽仍锁定为单卡来源"
 	)
-	var target_position := source_position + Vector2(32.0, -16.0)
-	target_position.y = (
+	var target_position := (
 		front_row.placement_overlay.get_global_transform_with_canvas()
-		* Vector2(0.0, 68.0)
-	).y
-	target_position = await _settle_native_stack_overlap(
-		front_row,
-		target,
-		native_drag_data,
-		30.0,
-		true,
-		target_position
+		* Vector2(front_row.placement_overlay.size.x - 50.0, 68.0)
 	)
+	await _send_mouse_motion(target_position, target_position - source_position, MOUSE_BUTTON_MASK_LEFT)
 	await process_frame
 	var native_intent := (front_row.get("_preview_intent") as Dictionary).duplicate()
-	var native_result := native_intent.get("result_squad") as SquadData
 	_expect(
 		front_row.has_active_drop_preview()
-		and native_intent.get("operation") == &"merge_card"
-		and native_result != null
-		and native_result.two_card_layout == SquadData.TwoCardLayout.EXPANDED
-		and native_result.get_visible_rune_counts() == [2, 3],
-		"收藏卡从右向左覆盖 30px 时显示 2+3 展开双卡虚影"
+		and native_intent.get("operation") == &"new_squad",
+		"真实原生鼠标拖动把收藏随从带到排尾时显示独立部署虚影"
 	)
 	var native_drag_visual := native_drag_data.get("drag_visual") as CardDragPreview
 	# 模拟快速拖动时快照明显落后鼠标；叠卡意图已经由屏幕快照确定，
@@ -2362,13 +2630,9 @@ func _test_prefer_squad_native_collection_stack() -> void:
 	)
 	_expect(
 		native_drop_operations.size() == 1
-		and native_drop_operations[0] == &"merge_card",
-		"优先小队模式下原生松手仍提交叠卡操作（实际：%s）"
+		and native_drop_operations[0] == &"new_squad",
+		"优先小队模式下原生松手仍提交唯一部署操作（实际：%s）"
 		% [native_drop_operations[0] if not native_drop_operations.is_empty() else &"none"]
-	)
-	_expect(
-		native_drop_targets.size() == 1 and native_drop_targets[0] == target,
-		"优先小队模式下原生松手仍指向吸附预览的原目标小队"
 	)
 	_expect(
 		native_drop_positions.size() == 1
@@ -2383,12 +2647,14 @@ func _test_prefer_squad_native_collection_stack() -> void:
 		]
 	)
 	_expect(
-		target.get_squad_data().get_card_count() == 2,
-		"优先小队模式下原生鼠标松手会把收藏加入目标小队"
+		front_row.get_squad_count() == 2,
+		"优先小队模式下原生鼠标松手会把收藏部署为一个小队"
 	)
 	_expect(
-		target.get_squad_data().get_effect_source() == cards[1],
-		"优先小队模式下原生鼠标叠入的新卡成为最上层"
+		front_row.get_squads().any(
+			func(slot: BoardSlot) -> bool: return slot.get_squad_data().contains(incoming_card)
+		),
+		"优先小队模式下原生部署保留正确的卡牌实例"
 	)
 	_expect(
 		main.collection_cards.size() == initial_collection_count,
@@ -3983,6 +4249,46 @@ func _send_left_button(position: Vector2, pressed: bool) -> void:
 	await process_frame
 
 
+func _send_display_motion(
+	input_transform: Transform2D,
+	position: Vector2,
+	relative: Vector2,
+	held: bool
+) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = input_transform * position
+	event.global_position = event.position
+	event.relative = input_transform.basis_xform(relative)
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT if held else 0
+	root.push_input(event, true)
+	await process_frame
+
+
+func _send_display_button(
+	input_transform: Transform2D,
+	position: Vector2,
+	pressed: bool
+) -> void:
+	var event := InputEventMouseButton.new()
+	event.position = input_transform * position
+	event.global_position = event.position
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+	event.pressed = pressed
+	root.push_input(event, true)
+	await process_frame
+
+
+func _send_right_button(position: Vector2, pressed: bool) -> void:
+	var event := InputEventMouseButton.new()
+	event.position = position
+	event.global_position = position
+	event.button_index = MOUSE_BUTTON_RIGHT
+	event.pressed = pressed
+	root.push_input(event, true)
+	await process_frame
+
+
 func _send_mouse_motion(
 	position: Vector2,
 	relative: Vector2,
@@ -3993,6 +4299,14 @@ func _send_mouse_motion(
 	event.global_position = position
 	event.relative = relative
 	event.button_mask = button_mask
+	root.push_input(event, true)
+	await process_frame
+
+
+func _send_key(keycode: Key) -> void:
+	var event := InputEventKey.new()
+	event.keycode = keycode
+	event.pressed = true
 	root.push_input(event, true)
 	await process_frame
 

@@ -69,6 +69,40 @@ static func identify(
 	return result
 
 
+static func identify_slots(slots: Array[Dictionary]) -> RunePatternResult:
+	var runes: Array[CardData.ElementType] = []
+	var wildcard := -1
+	var candidates: Array[int] = []
+	for index: int in slots.size():
+		runes.append(int(slots[index].element) as CardData.ElementType)
+		if String(slots[index].get("sticker_id", "")) == "万能贴纸":
+			wildcard = index
+		elif not candidates.has(int(slots[index].element)):
+			candidates.append(int(slots[index].element))
+	for element: int in 5:
+		if not candidates.has(element):
+			candidates.append(element)
+	var result := identify(runes)
+	if wildcard >= 0:
+		var best_score := -1
+		# 相同牌型保留最左侧已出现元素；普通元素枚举仅补全未出现的候选。
+		for element: int in candidates:
+			runes[wildcard] = element as CardData.ElementType
+			var candidate := identify(runes)
+			var score := 1 if candidate.pattern_type == RunePatternResult.PatternType.STRAIGHT else int(candidate.pattern_type) * 2
+			if score > best_score or (score == best_score and _is_leftmost(candidate.participating_indices, result.participating_indices)):
+				best_score = score
+				result = candidate
+	return result
+
+
+static func _is_leftmost(left: Array[int], right: Array[int]) -> bool:
+	for index: int in mini(left.size(), right.size()):
+		if left[index] != right[index]:
+			return left[index] < right[index]
+	return false
+
+
 static func _build_consecutive_runs(
 	visible_runes: Array[CardData.ElementType]
 ) -> Array[Dictionary]:

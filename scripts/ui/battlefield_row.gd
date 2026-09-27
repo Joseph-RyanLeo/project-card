@@ -16,6 +16,7 @@ signal card_dropped(
 )
 signal card_click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 signal squads_changed
+signal card_inspection_requested(card_view: CardView, card_data: CardData, owned_card: OwnedCard)
 
 const BOARD_SLOT_SCENE: PackedScene = preload("res://scenes/ui/BoardSlot.tscn")
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
@@ -59,6 +60,9 @@ var _reservation_insert_index: int = -1
 var _reservation_width: float = 0.0
 var _reservation_empty_width: float = 0.0
 var _reservation_move_in_progress: bool = false
+var _pending_layout_positions: Dictionary = {}
+var _layout_transaction_scheduled: bool = false
+var _layout_transaction_revision: int = 0
 # 来源槽仅在拖动视觉中隐藏，真实 SquadData 在成功 drop 前保持不变。
 var _hidden_source_slot: BoardSlot
 var _active_drag_preview_offset: Vector2 = Vector2.ZERO
@@ -68,11 +72,17 @@ var _merge_preview_anchor_card: CardData
 var _merge_preview_alignment_revision: int = 0
 var _preview_drag_visual: CardDragPreview
 var _equipment_target_slot: BoardSlot
-var _equipment_drag_visual: CardDragPreview
+var last_equipment_exact_snap_usec: int = 0
+var equipment_exact_snap_total_usec: int = 0
+var performance_trace_enabled: bool = false
 
 
 # --- 生命周期、行内容查询与真实槽增删 ---
 func _ready() -> void:
+	performance_trace_enabled = (
+		"--trace-battle-performance" in OS.get_cmdline_user_args()
+		or OS.get_environment("PROJECT_CARD_TRACE_BATTLE_PERFORMANCE") == "1"
+	)
 	row_title_label.text = row_title
 	row_display_area.custom_minimum_size.x = FULL_ROW_DISPLAY_WIDTH
 	squad_row.add_theme_constant_override("separation", SQUAD_GAP)
@@ -83,15 +93,6 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _active_stack_feedback_drag_data.is_empty():
 		set_process(false)
-		return
-	if (has_active_drop_preview() or has_drop_reservation()) and is_finite(_preview_pointer_x):
-		# 鼠标停下后拖拽实体仍会继续追赶；每帧沿用最后一个逻辑坐标，
-		# 重新读取实体卡边界，避免虚影停在反向移动前的旧堆叠方向。
-		preview_card_drop(
-			Vector2(_preview_pointer_x, SquadView.CARD_SIZE.y * 0.5),
-			_active_stack_feedback_drag_data,
-			true
-		)
 		return
 	var local_position := (
 		placement_overlay
@@ -233,10 +234,12 @@ func remove_card_from_squad(slot: BoardSlot, card_data: CardData) -> bool:
 	if squad.get_card_count() == 1:
 		remove_squad_slot(slot)
 	else:
+		var previous_positions := _capture_visible_slot_positions()
 		squad.indicator_attachments.clear()
 		squad.remove_card(card_data)
 		slot.set_squad_data(squad)
 		slot.configure_drag_source(_drag_enabled, self)
+		_animate_layout_next_frame(previous_positions)
 		squads_changed.emit()
 	return true
 
@@ -374,12 +377,31 @@ func commit_card_drop(at_position: Vector2, data: Variant) -> void:
 		if not preview_card_drop(at_position, data):
 			return
 		var target_slot := _equipment_target_slot
-		var held_center := _get_equipment_held_center_global(at_position, incoming_data)
+		if not is_instance_valid(target_slot):
+			return
 		var target_squad := target_slot.get_squad_data()
+		if target_squad == null:
+			_clear_equipment_target_preview()
+			return
 		var top_card := target_slot.get_card_view(target_squad.get_effect_source())
-		var landing_global_position := top_card.get_global_transform_with_canvas() * (
-			top_card.get_global_transform_with_canvas().affine_inverse()
-			* held_center + EQUIPMENT_DROP_TRAVEL
+		if top_card == null:
+			_clear_equipment_target_preview()
+			return
+		var held_center := _get_equipment_held_center_global(at_position, incoming_data)
+		# 精确纹理遮罩搜索只在松手时执行一次，起点从当前手持指示物读取。
+		# 拖动预览阶段不缓存吸附终点，避免卡面移动后沿用过期坐标。
+		var snapped_center := _find_exact_equipment_snap(
+			at_position,
+			incoming_data,
+			target_slot,
+			top_card,
+			held_center
+		)
+		if not snapped_center.is_finite():
+			_clear_equipment_target_preview()
+			return
+		var landing_global_position := (
+			top_card.get_global_transform_with_canvas() * snapped_center
 		)
 		var indicator_local_position := (
 			target_slot.get_global_transform_with_canvas().affine_inverse()
@@ -466,7 +488,6 @@ func _preview_equipment_drop(at_position: Vector2, drag_data: Dictionary) -> boo
 	_clear_intent_preview()
 	_clear_drop_reservation()
 	_clear_stack_target_feedback()
-	_equipment_drag_visual = drag_data.get("drag_visual") as CardDragPreview
 	var owned_item := drag_data.get("owned_card") as OwnedCard
 	if (
 		owned_item == null
@@ -475,7 +496,7 @@ func _preview_equipment_drop(at_position: Vector2, drag_data: Dictionary) -> boo
 	):
 		_clear_equipment_target_preview()
 		return false
-	var target_slot := _find_equipment_target_slot(at_position, drag_data)
+	var target_slot := _find_equipment_candidate_slot(at_position, drag_data)
 	var target_squad := target_slot.get_squad_data() if target_slot != null else null
 	if (
 		target_slot == null
@@ -492,19 +513,22 @@ func _preview_equipment_drop(at_position: Vector2, drag_data: Dictionary) -> boo
 			_equipment_target_slot.modulate = Color.WHITE
 		_equipment_target_slot = target_slot
 		_equipment_target_slot.modulate = Color(0.78, 1.0, 0.82, 1.0)
-	_set_equipment_drag_indicator_mode(true)
 	return true
 
 
 func _get_equipment_held_center_global(at_position: Vector2, drag_data: Dictionary) -> Vector2:
-	var drag_visual := drag_data.get("drag_visual") as CardDragPreview
-	if is_instance_valid(drag_visual):
+	var drag_visual_value: Variant = drag_data.get("drag_visual")
+	if is_instance_valid(drag_visual_value):
+		var drag_visual := drag_visual_value as CardDragPreview
 		return drag_visual.get_equipment_indicator_rest_global_center()
 	return placement_overlay.get_global_transform_with_canvas() * at_position
 
 
-func _find_equipment_target_slot(at_position: Vector2, drag_data: Dictionary = {}) -> BoardSlot:
-	var held_center := _get_equipment_held_center_global(at_position, drag_data)
+func _find_equipment_candidate_slot(
+	at_position: Vector2,
+	drag_data: Dictionary = {}
+) -> BoardSlot:
+	var pointer_global := placement_overlay.get_global_transform_with_canvas() * at_position
 	for slot: BoardSlot in _get_visible_real_slots():
 		var squad := slot.get_squad_data()
 		if squad == null:
@@ -512,41 +536,68 @@ func _find_equipment_target_slot(at_position: Vector2, drag_data: Dictionary = {
 		var top_card := slot.get_card_view(squad.get_effect_source())
 		if top_card == null:
 			continue
-		# 落点是指示物中心；四周必须完整落入最上层卡牌的立绘窗。
-		# 在 CardView 局部坐标判定，可自动跟随多卡错位、悬停上抬和旋转。
-		var held_card_position := (
-			top_card.get_global_transform_with_canvas().affine_inverse()
-			* held_center
-		)
-		var icon_half_size := EquipmentIndicatorStyle.DISPLAY_SIZE * 0.5
-		var allowed_center_rect := Rect2(
-			top_card.art_area_position + icon_half_size,
-			top_card.art_area_size - EquipmentIndicatorStyle.DISPLAY_SIZE
-		)
-		if (
-			allowed_center_rect.has_point(held_card_position)
-			and allowed_center_rect.has_point(held_card_position + EQUIPMENT_DROP_TRAVEL)
-		):
+		var card_transform := top_card.get_global_transform_with_canvas()
+		var pointer_card_position := card_transform.affine_inverse() * pointer_global
+		# 拖动时只检查放大后的廉价矩形，并裁切在顶层卡面内；
+		# 纹理遮罩搜索留到松手，避免边缘处的计算阻塞指针反馈。
+		var candidate_rect := Rect2(
+			CardView.ATTACHMENT_PLACEMENT_POSITION,
+			CardView.ATTACHMENT_PLACEMENT_SIZE
+		).grow_individual(
+			EquipmentIndicatorStyle.DISPLAY_SIZE.x * 0.5,
+			EquipmentIndicatorStyle.DISPLAY_SIZE.y * 0.5,
+			EquipmentIndicatorStyle.DISPLAY_SIZE.x * 0.5,
+			EquipmentIndicatorStyle.DISPLAY_SIZE.y * 0.5
+		).intersection(Rect2(Vector2.ZERO, top_card.card_size))
+		if candidate_rect.has_point(pointer_card_position):
 			return slot
 	return null
+
+
+func _find_exact_equipment_snap(
+	at_position: Vector2,
+	drag_data: Dictionary,
+	target_slot: BoardSlot,
+	top_card: CardView,
+	held_center_global: Vector2
+) -> Vector2:
+	last_equipment_exact_snap_usec = 0
+	if (
+		not is_instance_valid(target_slot)
+		or not is_instance_valid(top_card)
+		or _find_equipment_candidate_slot(at_position, drag_data) != target_slot
+	):
+		return Vector2.INF
+	var equipment_data := drag_data.get("card_data") as CardData
+	var equipment_texture := EquipmentIndicatorStyle.get_texture(equipment_data)
+	var inverse := top_card.get_global_transform_with_canvas().affine_inverse()
+	var profile_started_usec := Time.get_ticks_usec() if performance_trace_enabled else 0
+	var snapped_center := CardView.find_nearest_attachment_center(
+		equipment_texture,
+		EquipmentIndicatorStyle.DISPLAY_SIZE,
+		inverse * held_center_global,
+		EQUIPMENT_DROP_TRAVEL
+	)
+	if profile_started_usec > 0:
+		last_equipment_exact_snap_usec = Time.get_ticks_usec() - profile_started_usec
+		equipment_exact_snap_total_usec += last_equipment_exact_snap_usec
+	return snapped_center
 
 
 func _clear_equipment_target_preview() -> void:
 	if is_instance_valid(_equipment_target_slot):
 		_equipment_target_slot.modulate = Color.WHITE
 	_equipment_target_slot = null
-	_set_equipment_drag_indicator_mode(false)
-
-
-func _set_equipment_drag_indicator_mode(enabled: bool) -> void:
-	if is_instance_valid(_equipment_drag_visual):
-		_equipment_drag_visual.set_equipment_indicator_mode(enabled)
-	if not enabled:
-		_equipment_drag_visual = null
 
 
 # --- 唯一预留位：宽度由来源离场后的可用容量决定，位置随实体越过中线换位 ---
 func _clear_intent_preview() -> void:
+	var previous_positions := _capture_visible_slot_positions()
+	var changes_row_layout := (
+		is_instance_valid(_preview_slot)
+		and _preview_slot.get_parent() == squad_row
+		and _preview_slot.visible
+	)
 	if is_instance_valid(_preview_drag_visual):
 		_preview_drag_visual.set_preview_rune_highlights([])
 	_preview_drag_visual = null
@@ -568,6 +619,8 @@ func _clear_intent_preview() -> void:
 	_preview_pointer_x = INF
 	if has_drop_reservation():
 		_set_drop_reservation_empty_width(_reservation_width)
+	if changes_row_layout:
+		_animate_layout_next_frame(previous_positions)
 
 
 func _ensure_drop_reservation(
@@ -700,11 +753,15 @@ func _update_drop_reservation_width(intent: Dictionary) -> void:
 
 
 func _clear_drop_reservation() -> void:
-	if is_instance_valid(_reservation_slot):
-		var reservation_parent := _reservation_slot.get_parent()
+	var reservation := _reservation_slot
+	if is_instance_valid(reservation):
+		var previous_positions := _capture_visible_slot_positions()
+		var reservation_parent := reservation.get_parent()
 		if reservation_parent != null:
-			reservation_parent.remove_child(_reservation_slot)
-		_reservation_slot.queue_free()
+			reservation_parent.remove_child(reservation)
+		reservation.queue_free()
+		if reservation_parent == squad_row:
+			_animate_layout_next_frame(previous_positions)
 	_reservation_slot = null
 	_reservation_insert_index = -1
 	_reservation_width = 0.0
@@ -1332,6 +1389,19 @@ func _notification(what: int) -> void:
 		var drag_data: Variant = get_viewport().gui_get_drag_data()
 		_begin_card_drag(drag_data)
 		if drag_data is Dictionary:
+			# 与点按携带一样，在来源缩小的同一轮输入里建立原位虚影。
+			# 若等到下一次 mouse motion，HBox 会先把剩余卡居中一帧。
+			var board_drag := drag_data as Dictionary
+			if (
+				board_drag.get("source_row") == self
+				and board_drag.get("kind") in [&"card", &"squad"]
+			):
+				var pointer_local := (
+					placement_overlay.get_global_transform_with_canvas().affine_inverse()
+					* get_viewport().get_mouse_position()
+				)
+				if Rect2(Vector2.ZERO, placement_overlay.size).has_point(pointer_local):
+					preview_card_drop(pointer_local, board_drag)
 			update_stack_target_feedback_global(
 				get_viewport().get_mouse_position(),
 				drag_data as Dictionary
@@ -1387,9 +1457,11 @@ func _finish_card_drag(return_global_position: Variant = null) -> void:
 func _restore_hidden_source_slot(return_global_position: Variant = null) -> void:
 	if is_instance_valid(_hidden_source_slot) and _hidden_source_slot.get_parent() == squad_row:
 		var restored_slot := _hidden_source_slot
+		var previous_positions := _capture_visible_slot_positions()
 		restored_slot.visible = true
 		restored_slot.clear_drag_hidden_card()
 		restored_slot.unlock_drag_subject()
+		_animate_layout_next_frame(previous_positions)
 		if return_global_position is Vector2:
 			_animate_restored_slot_return.call_deferred(restored_slot, return_global_position)
 	_hidden_source_slot = null
@@ -1403,6 +1475,7 @@ func _animate_restored_slot_return(slot_value: Variant, return_global_position: 
 
 func _connect_slot(slot: BoardSlot) -> void:
 	slot.slot_clicked.connect(_on_occupied_slot_clicked)
+	slot.card_inspection_requested.connect(_on_card_inspection_requested)
 	slot.click_carry_requested.connect(_on_click_carry_requested)
 	slot.set_prefer_minion(_prefer_minion)
 	slot.configure_drag_source(_drag_enabled, self)
@@ -1414,6 +1487,14 @@ func _on_occupied_slot_clicked(slot: BoardSlot) -> void:
 
 func _on_click_carry_requested(data: Dictionary, pointer_global_position: Vector2) -> void:
 	card_click_carry_requested.emit(data, pointer_global_position)
+
+
+func _on_card_inspection_requested(
+	card_view: CardView,
+	card_data: CardData,
+	owned_card: OwnedCard
+) -> void:
+	card_inspection_requested.emit(card_view, card_data, owned_card)
 
 
 # --- 以实体边界寻找堆叠目标或独立插入位置 ---
@@ -1935,16 +2016,40 @@ func _animate_layout_next_frame(previous_positions: Dictionary) -> void:
 		return
 	# 换位期间不叠加合法堆叠的旋转颤动；补间结束后下一帧会自然重算。
 	_clear_stack_target_feedback()
-	await get_tree().process_frame
-	_start_layout_animation(previous_positions)
+	for slot_value: Variant in previous_positions:
+		if not _pending_layout_positions.has(slot_value):
+			_pending_layout_positions[slot_value] = previous_positions[slot_value]
+	if _layout_transaction_scheduled:
+		return
+	_layout_transaction_scheduled = true
+	_layout_transaction_revision += 1
+	_finish_layout_transaction(_layout_transaction_revision)
 
 
 func _animate_layout_immediately(previous_positions: Dictionary) -> void:
 	if previous_positions.is_empty():
 		return
 	_clear_stack_target_feedback()
+	# 同步退场优先沿用同帧已捕获的起点，并使等待中的旧回调失效。
+	for slot_value: Variant in _pending_layout_positions:
+		previous_positions[slot_value] = _pending_layout_positions[slot_value]
+	_pending_layout_positions.clear()
+	_layout_transaction_scheduled = false
+	_layout_transaction_revision += 1
 	# 阵亡退场不能等待一帧：容器先算终点，再立即给视觉补回旧坐标偏移。
 	# 普通拖放仍保留下一帧路径，因为其预留位需要等待新节点完成尺寸刷新。
+	squad_row.queue_sort()
+	squad_row.notification(Container.NOTIFICATION_SORT_CHILDREN)
+	_start_layout_animation(previous_positions)
+
+
+func _finish_layout_transaction(revision: int) -> void:
+	await get_tree().process_frame
+	if revision != _layout_transaction_revision:
+		return
+	var previous_positions := _pending_layout_positions
+	_pending_layout_positions = {}
+	_layout_transaction_scheduled = false
 	squad_row.queue_sort()
 	squad_row.notification(Container.NOTIFICATION_SORT_CHILDREN)
 	_start_layout_animation(previous_positions)

@@ -60,7 +60,7 @@ func _test_spell_assignments_and_badges() -> void:
 		if not filename.ends_with(".tres"):
 			continue
 		var card := load("res://resources/cards/%s" % filename) as CardData
-		if card == null or card.card_type != CardData.CardType.SPELL:
+		if card == null or card.card_type != CardData.CardType.SPELL or card.pack_id == &"ash_ledger":
 			continue
 		counts[card.spell_trigger_kind] = int(counts.get(card.spell_trigger_kind, 0)) + 1
 		_expect(card.get_spell_preparation_column() in [0, 1, 2] and SpellPreparationIconStyle.source_column_for_trigger(card.spell_trigger_kind) in [0, 1, 2], "占位法术有固定准备栏列与素材列：%s" % card.id)

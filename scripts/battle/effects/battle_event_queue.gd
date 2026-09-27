@@ -48,6 +48,22 @@ func pop_next_due(logical_time_us: int) -> BattleRuntimeEvent:
 	return null
 
 
+func pop_next_due_for_root(logical_time_us: int, root_event_id: int) -> BattleRuntimeEvent:
+	# 屏障只排空指定触发及其子事件；同一时刻其他独立事件留在原队列。
+	var index := 0
+	while index < _events.size():
+		var event := _events[index]
+		if event.logical_time_us > logical_time_us:
+			break
+		if event.root_event_id != root_event_id:
+			index += 1
+			continue
+		_events.remove_at(index)
+		if not event.cancelled:
+			return event
+	return null
+
+
 func get_next_time_us() -> int:
 	return _events[0].logical_time_us if not _events.is_empty() else -1
 

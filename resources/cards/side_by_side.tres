@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/side_by_side.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"side_by_side"
+display_name = "并肩作战"
+pack_id = &"ash_ledger"
+effect_ids = Array[StringName]([&"side_by_side.effect.01", &"side_by_side.effect.02"])
+keywords = Array[StringName]([&"乡邻", &"固定减伤"])
+card_type = 2
+rarity = 2
+spell_trigger_kind = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-1, 14)
+effect_text = "所有友军获得乡邻：受到的所有攻击伤害-1。"

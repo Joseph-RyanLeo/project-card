@@ -206,18 +206,34 @@ func _can_drop_data(_point: Vector2, value: Variant) -> bool:
 func _drop_data(_point: Vector2, _value: Variant) -> void:
 	finish_drop()
 
-func _find_target(center: Vector2, item: CelestialIndicator) -> Dictionary:
-	var half := CelestialIndicatorStyle.get_texture(item.kind).get_size() * 0.5
+func _find_target(
+	center: Vector2,
+	item: CelestialIndicator,
+	pointer_global: Vector2
+) -> Dictionary:
+	var texture := CelestialIndicatorStyle.get_texture(item.kind)
+	var display_size := texture.get_size()
 	for row: BattlefieldRow in _rows():
-		for slot: BoardSlot in row.get_squads():
+		for slot: BoardSlot in row._get_visible_real_slots():
 			var squad := slot.get_squad_data()
 			if squad.has_indicator(item.kind) and slot != _data.get("source_slot"):
 				continue
 			var card := slot.get_card_view(squad.get_effect_source())
-			var point := card.get_global_transform_with_canvas().affine_inverse() * center
-			var bounds := Rect2(card.art_area_position + half, card.art_area_size - half * 2.0)
-			if bounds.has_point(point) and bounds.has_point(point + DROP_TRAVEL):
-				return {"slot": slot, "position": point + DROP_TRAVEL}
+			if card == null:
+				continue
+			var card_transform := card.get_global_transform_with_canvas()
+			var pointer_card_position := card_transform.affine_inverse() * pointer_global
+			if not Rect2(Vector2.ZERO, card.card_size).has_point(pointer_card_position):
+				continue
+			var start_center := card_transform.affine_inverse() * center
+			var snapped_center := CardView.find_nearest_attachment_center(
+				texture,
+				display_size,
+				start_center,
+				DROP_TRAVEL
+			)
+			if snapped_center.is_finite():
+				return {"slot": slot, "position": snapped_center}
 	return {}
 
 
@@ -253,12 +269,20 @@ func _get_carry_center() -> Vector2:
 	var scale := _data.get("scale", Vector2.ONE) as Vector2
 	return _native_pointer + (texture_size * 0.5 - grab) * scale
 
+
+func _get_carry_pointer_position() -> Vector2:
+	return _native_pointer if _native else _preview.global_position
+
 func finish_drop() -> void:
 	if _data.is_empty():
 		return
 	var item := _data["indicator"] as CelestialIndicator
 	var center := _get_carry_center() if not _data.is_empty() else get_viewport().get_mouse_position()
-	var target := _find_target(center, item) if main.current_phase == main.GamePhase.PREPARE else {}
+	var target := _find_target(
+		center,
+		item,
+		_get_carry_pointer_position()
+	) if main.current_phase == main.GamePhase.PREPARE else {}
 	var tray_target := _find_tray_target(center, item) if main.current_phase == main.GamePhase.PREPARE else {}
 	var old_slot := _data.get("source_slot") as BoardSlot
 	var order := next_attachment_order

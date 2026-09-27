@@ -9,8 +9,10 @@ extends PanelContainer
 
 signal squad_clicked(squad_view: SquadView, card_data: CardData)
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
+signal card_inspection_requested(card_view: CardView, card_data: CardData, owned_card: OwnedCard)
 
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
+const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const EQUIPMENT_INDICATOR_SCRIPT: Script = preload(
 	"res://scripts/ui/equipment_indicator.gd"
 )
@@ -105,6 +107,8 @@ var _battle_result_overlay: Control
 var _battle_result_rows: VBoxContainer
 var _battle_result_death_icon: TextureRect
 var _battle_result_active: bool = false
+var _battle_result_statistics_suppressed: bool = false
+var _inspection_pattern_suppressed: bool = false
 var _battle_result_statistics: Dictionary = {}
 var _battle_result_defeated: bool = false
 var _battle_result_action_type: CardData.ActionType = CardData.ActionType.MELEE
@@ -202,7 +206,11 @@ func set_battle_status(
 	action_type: int = -1,
 	pattern_result: RunePatternResult = null,
 	active_rune_slots: Array[Dictionary] = [],
-	masked_runes_by_card: Dictionary = {}
+	masked_runes_by_card: Dictionary = {},
+	spent_emblem_slots_by_card: Dictionary = {},
+	rune_element_overrides_by_card: Dictionary = {},
+	target_weight: int = -1,
+	masked_wounds_by_card: Dictionary = {}
 ) -> void:
 	if not is_node_ready():
 		return
@@ -221,10 +229,20 @@ func set_battle_status(
 		var masked_indices: Array[int] = []
 		masked_indices.assign(masked_runes_by_card.get(card_view.card_data, []))
 		card_view.set_battle_masked_runes(masked_indices)
+		card_view.set_battle_rune_element_overrides(rune_element_overrides_by_card.get(card_view.card_data, {}))
+		var spent_indices: Array[int] = []
+		spent_indices.assign(spent_emblem_slots_by_card.get(card_view.card_data, []))
+		var masked_wound_indices: Array[int] = []
+		masked_wound_indices.assign(masked_wounds_by_card.get(card_view.card_data, []))
+		card_view.set_battle_status_slot_states(spent_indices, masked_wound_indices)
 		card_view.set_rune_pattern_highlights(
 			_get_card_highlight_indices(highlighted_runes_by_card, card_view.card_data)
 		)
 		if card_view.card_data == action_source:
+			if target_weight >= 0:
+				card_view.set_battle_target_weight(target_weight)
+			else:
+				card_view.clear_battle_target_weight()
 			card_view.set_battle_remaining_cooldown(remaining_cooldown)
 			if action_type >= 0:
 				card_view.set_battle_action_type(action_type as CardData.ActionType)
@@ -235,6 +253,7 @@ func set_battle_status(
 			else:
 				card_view.clear_battle_action_value()
 		else:
+			card_view.clear_battle_target_weight()
 			card_view.clear_battle_remaining_cooldown()
 			card_view.clear_battle_action_value()
 			card_view.clear_battle_action_type()
@@ -257,6 +276,8 @@ func clear_battle_status() -> void:
 	_battle_active_rune_slots.clear()
 	for card_view: CardView in get_card_views():
 		card_view.clear_battle_masked_runes()
+		card_view.clear_battle_rune_element_overrides()
+		card_view.set_battle_status_slot_states([], [])
 		card_view.clear_battle_vitals()
 		card_view.clear_battle_remaining_cooldown()
 		card_view.clear_battle_action_value()
@@ -287,6 +308,16 @@ func clear_battle_result_statistics() -> void:
 	_battle_result_defeated = false
 	_battle_result_active = false
 	_refresh()
+
+
+func set_battle_result_statistics_suppressed(suppressed: bool) -> void:
+	_battle_result_statistics_suppressed = suppressed
+	if is_instance_valid(_battle_result_overlay):
+		_battle_result_overlay.visible = _battle_result_active and not suppressed
+
+
+func is_battle_result_statistics_suppressed() -> bool:
+	return _battle_result_statistics_suppressed
 
 
 func is_showing_battle_result_statistics() -> bool:
@@ -336,7 +367,7 @@ func play_battle_action_lift(speed_multiplier: float = 1.0) -> void:
 		return
 	if _battle_action_lift_tween != null and _battle_action_lift_tween.is_valid():
 		_battle_action_lift_tween.kill()
-	var duration := BATTLE_ACTION_LIFT_SECONDS / maxf(speed_multiplier, 1.0)
+	var duration := BATTLE_ACTION_LIFT_SECONDS / clampf(speed_multiplier, 0.5, 3.0)
 	_battle_action_lift_tween = create_tween()
 	_battle_action_lift_tween.set_trans(Tween.TRANS_SINE)
 	_battle_action_lift_tween.set_ease(Tween.EASE_OUT)
@@ -550,6 +581,27 @@ func get_card_views() -> Array[CardView]:
 		if view != null:
 			views.append(view)
 	return views
+
+
+func can_show_card_effect_on_hover(card_view: CardView) -> bool:
+	# 只有当前 SquadData 中实际显示、可接收鼠标的实体 CardView 才可自动翻到效果面。
+	# 鼠标进入事件由 Control 的最终命中测试产生，因此堆叠中被遮挡的卡不会抢悬停。
+	if (
+		card_view == null
+		or is_preview()
+		or card_view.is_snapshot_mode()
+		or card_view.card_data == null
+		or card_view.card_data.card_type != CardData.CardType.MINION
+		or card_view.mouse_filter == Control.MOUSE_FILTER_IGNORE
+		or not card_view.is_visible_in_tree()
+	):
+		return false
+	var display_data := get_display_data()
+	return (
+		display_data != null
+		and display_data.horizontal_cards.has(card_view.card_data)
+		and get_card_view(card_view.card_data) == card_view
+	)
 
 
 # --- 拖拽对象选择、来源数据与临时隐藏 ---
@@ -772,6 +824,7 @@ func _refresh() -> void:
 			Vector2(x_positions[horizontal_index], 0.0)
 		)
 		card_view.set_card_data(card_data)
+		card_view.set_owned_card(display_data.get_owned_card(card_data))
 		card_view.set_squad_attribute_preview_from_squad(display_data)
 		card_view.set_rune_pattern_highlights(
 			_get_card_highlight_indices(highlighted_runes_by_card, card_data),
@@ -942,7 +995,7 @@ func _ensure_battle_result_overlay() -> void:
 
 
 func _refresh_battle_result_overlay(display_width: float) -> void:
-	_battle_result_overlay.visible = true
+	_battle_result_overlay.visible = not _battle_result_statistics_suppressed
 	_battle_result_overlay.size = Vector2(display_width, CARD_SIZE.y)
 	for child: Node in _battle_result_rows.get_children():
 		_battle_result_rows.remove_child(child)
@@ -1062,7 +1115,13 @@ func _refresh_pattern_label(data: SquadData, display_width: float) -> void:
 		floorf((display_width - PATTERN_LABEL_SIZE.x) * 0.5),
 		PATTERN_LABEL_TOP
 	)
-	pattern_label.visible = true
+	pattern_label.visible = not _inspection_pattern_suppressed and not _battle_result_active
+
+
+func set_inspection_pattern_suppressed(suppressed: bool) -> void:
+	_inspection_pattern_suppressed = suppressed
+	if is_instance_valid(pattern_label):
+		pattern_label.visible = not suppressed and not _battle_result_active
 
 
 func _get_highlighted_runes_by_card(
@@ -1119,6 +1178,7 @@ func _sync_card_views(data: SquadData) -> void:
 		card_view.position = Vector2(x_positions[horizontal_index], 0.0)
 		card_view.set_card_data(card_data)
 		card_view.card_clicked.connect(_on_card_clicked.bind(card_data))
+		card_view.inspection_requested.connect(_on_card_inspection_requested)
 		card_view.click_carry_requested.connect(_on_card_click_carry_requested)
 		card_view.mouse_entered.connect(_on_card_mouse_entered.bind(card_data))
 		card_view.mouse_exited.connect(_on_card_mouse_exited.bind(card_data))
@@ -1184,6 +1244,7 @@ func _ensure_stack_target_snapshots() -> void:
 		var snapshot_card := CARD_VIEW_SCENE.instantiate() as CardView
 		var live_card := get_card_view(card_data)
 		snapshot_card.set_card_data(card_data)
+		snapshot_card.set_owned_card(data.get_owned_card(card_data))
 		if live_card != null:
 			snapshot_card.showing_effect = live_card.showing_effect
 			snapshot_card.copy_runtime_display_state_from(live_card)
@@ -1293,6 +1354,16 @@ func _create_squad_shadow() -> void:
 func _on_card_clicked(_ignored: CardData, clicked_card: CardData) -> void:
 	_last_clicked_card = clicked_card
 	squad_clicked.emit(self, clicked_card)
+
+
+func _on_card_inspection_requested(
+	card_view: CardView,
+	card_data: CardData,
+	owned_card: OwnedCard
+) -> void:
+	if is_preview():
+		return
+	card_inspection_requested.emit(card_view, card_data, owned_card)
 
 
 func _on_card_click_carry_requested(data: Dictionary, pointer_global_position: Vector2) -> void:

@@ -27,3 +27,4 @@ var mode: Mode = Mode.ADD
 var value: float = 0.0
 var created_order: int = 0
 var active: bool = true
+var contribution_sources: Array[Dictionary] = [] # 数值合并时一并冻结的逐来源解释

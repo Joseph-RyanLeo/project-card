@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/volley_order.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_card_data")
+id = &"volley_order"
+display_name = "齐射令"
+pack_id = &"ash_ledger"
+effect_ids = Array[StringName]([&"volley_order.effect.01"])
+keywords = Array[StringName]([&"立即行动", &"远程", &"群体行动"])
+card_type = 2
+spell_trigger_kind = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(16, -4)
+effect_text = "后排远程友军立即行动1次。"

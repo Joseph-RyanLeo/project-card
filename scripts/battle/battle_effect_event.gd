@@ -12,6 +12,8 @@ var timestamp: float = 0.0
 var source: BattleSquadState
 var target: BattleSquadState
 var anchor: BattleSquadState
+var source_emblem_instance_id: StringName = &"" # 纹章生成事件保留纹章实例身份
+var source_owned_card_instance_id: StringName = &"" # 纹章所在OwnedCard，不等同于效果目标小队
 var action_type: CardData.ActionType = CardData.ActionType.MELEE
 var effect_kind: EffectKind = EffectKind.DAMAGE
 var element_type: int = -1
@@ -36,6 +38,7 @@ var impact_time: float = 0.0
 var formula: BattleFormulaData
 var visual_kind: StringName = &""
 var log_qualifier: String = ""
+var fractional_channel_snapshots: Array[Dictionary] = []
 
 
 func is_damage() -> bool:

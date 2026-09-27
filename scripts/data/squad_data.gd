@@ -6,6 +6,7 @@ extends Resource
 ## two_card_layout 决定双卡间距；显示节点只能据此绘制，不能另存一套顺序。
 
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
+const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 
 enum TwoCardLayout {
 	COMPACT,
@@ -73,7 +74,9 @@ func duplicate_squad() -> SquadData:
 	copy._equipped_item = _equipped_item
 	copy._equipment_indicator_card_position = _equipment_indicator_card_position
 	for attachment: Dictionary in indicator_attachments:
-		copy.indicator_attachments.append(attachment.duplicate())
+		var copied_attachment := attachment.duplicate()
+		copied_attachment["indicator"] = (attachment["indicator"] as CelestialIndicator).duplicate_instance()
+		copy.indicator_attachments.append(copied_attachment)
 	return copy
 
 
@@ -203,6 +206,56 @@ func get_equipment_zeal_delta() -> int:
 	)
 
 
+func get_emblem_zeal_delta() -> int:
+	return get_visible_status_static_modifier(&"zeal")
+
+
+func get_visible_status_static_modifier(
+	stat: StringName,
+	active_wound_ids: Array[StringName] = [],
+	filter_wounds_by_active_ids: bool = false
+) -> int:
+	# 纹章和伤势修正归小队；基础卡面值及永久成长仍由原属性来源卡提供。
+	var total := 0
+	var visible_wounds := get_visible_wound_slots()
+	for card_data: CardData in horizontal_cards:
+		var owned_card := get_owned_card(card_data)
+		if owned_card == null:
+			continue
+		total += owned_card.get_emblem_static_modifier(
+			stat,
+			get_visible_emblem_slot_indices(card_data)
+		)
+		for wound_slot: Dictionary in visible_wounds:
+			if wound_slot.get("card") != card_data:
+				continue
+			var slot_index := int(wound_slot.get("slot_index", -1))
+			if slot_index < 0 or slot_index >= owned_card.wound_slots.size():
+				continue
+			var injury_id := StringName("%s:wound:%d" % [owned_card.instance_id, slot_index])
+			if filter_wounds_by_active_ids and not active_wound_ids.has(injury_id):
+				continue
+			total += owned_card.get_wound_static_modifier(stat, [slot_index])
+	return total
+
+
+func get_visible_rune_stat_bonus(stat: StringName) -> int:
+	# 槽位的可见性由小队遮挡规则唯一决定；贴纸覆盖元素时读取贴纸元素。
+	var total := 0
+	for slot: Dictionary in get_visible_rune_slots():
+		match int(slot.get("element", -1)):
+			CardData.ElementType.WATER:
+				if stat == &"max_health": total += 2
+			CardData.ElementType.WOOD:
+				if stat == &"base_armor": total += 3
+			CardData.ElementType.LIGHT:
+				if stat in [&"max_health", &"base_armor", &"target_priority"]: total += 1
+			CardData.ElementType.DARK:
+				if stat == &"zeal": total += 1
+				elif stat == &"target_priority": total -= 1
+	return total
+
+
 func get_equipment_indicator_position() -> Vector2:
 	# 对显示、拖拽和存档仍提供小队局部坐标；内部落点跟随当前顶牌移动。
 	if _equipped_item == null:
@@ -256,36 +309,82 @@ func merge_equipment_from(other_squad: SquadData) -> Array[OwnedCard]:
 	return returned_items
 
 
-func get_effective_action_base_value() -> int:
+func get_effective_action_base_value(
+	active_wound_ids: Array[StringName] = [],
+	filter_wounds_by_active_ids: bool = false,
+	include_visible_greed: bool = true,
+	base_multiplier: float = 1.0,
+	runtime_permanent_growth: float = 0.0
+) -> int:
 	var owned_card := get_action_source_instance()
 	var source := get_action_source()
-	var base := (
-		owned_card.get_effective_base_value()
+	var base: float = (
+		owned_card.get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_VALUE)
 		if owned_card != null
 		else (source.base_value if source != null else 0)
 	)
 	var equipment := _equipped_item.card_data if _equipped_item != null else null
+	var visible_greed := false
+	for wound_slot: Dictionary in get_visible_wound_slots():
+		var wound_card := wound_slot.get("card") as CardData
+		var wound_owner := get_owned_card(wound_card)
+		var slot_index := int(wound_slot.get("slot_index", -1))
+		if wound_owner == null or slot_index < 0 or slot_index >= wound_owner.wound_slots.size():
+			continue
+		if StringName(String(wound_owner.wound_slots[slot_index].get("wound_id", ""))) != &"贪婪":
+			continue
+		var injury_id := StringName("%s:wound:%d" % [wound_owner.instance_id, slot_index])
+		if not filter_wounds_by_active_ids or active_wound_ids.has(injury_id):
+			visible_greed = true
+			break
+	if visible_greed and include_visible_greed:
+		return 1
 	return clampi(
-		base + (equipment.equipment_action_delta if equipment != null else 0)
-		+ (CelestialIndicator.SUN_VALUE if has_indicator(CelestialIndicator.Kind.SUN) else 0)
-		+ (CelestialIndicator.STAR_VALUE if has_indicator(CelestialIndicator.Kind.STAR) else 0),
+		roundi(
+			(base + runtime_permanent_growth) * base_multiplier
+			+ get_visible_status_static_modifier(
+				&"base_value",
+				active_wound_ids,
+				filter_wounds_by_active_ids
+			)
+			+ (equipment.equipment_action_delta if equipment != null else 0)
+			+ (CelestialIndicator.SUN_VALUE if has_indicator(CelestialIndicator.Kind.SUN) else 0)
+			+ _get_star_action_value()
+		),
 		0,
 		CardData.MAXIMUM_BASE_VALUE
 	)
 
 
+func _get_star_action_value() -> int:
+	for attachment: Dictionary in indicator_attachments:
+		var indicator := attachment["indicator"] as CelestialIndicator
+		if indicator.kind == CelestialIndicator.Kind.STAR:
+			return CelestialIndicator.STAR_VALUE
+	return 0
+
+
 func get_effective_max_health() -> int:
 	var owned_card := get_vitals_source_instance()
 	var source := get_vitals_source()
-	var base := (
-		owned_card.get_effective_max_health()
+	var base: float = (
+		owned_card.get_base_stat_with_permanent_growth(OwnedCard.STAT_MAX_HEALTH)
 		if owned_card != null
 		else (source.max_health if source != null else 0)
 	)
 	var equipment := _equipped_item.card_data if _equipped_item != null else null
+	var added_health := (
+		get_visible_status_static_modifier(&"max_health")
+		+ (equipment.equipment_health_delta if equipment != null else 0)
+		+ (CelestialIndicator.SUN_HEALTH if has_indicator(CelestialIndicator.Kind.SUN) else 0)
+	)
+	if _has_visible_crystallization():
+		return _get_crystallization_base_health()
 	return clampi(
-		base + (equipment.equipment_health_delta if equipment != null else 0)
-		+ (CelestialIndicator.SUN_HEALTH if has_indicator(CelestialIndicator.Kind.SUN) else 0),
+		 roundi(
+			base + get_visible_rune_stat_bonus(&"max_health")
+			+ added_health
+		),
 		0,
 		CardData.MAXIMUM_HEALTH
 	)
@@ -294,18 +393,71 @@ func get_effective_max_health() -> int:
 func get_effective_base_armor() -> int:
 	var owned_card := get_vitals_source_instance()
 	var source := get_vitals_source()
-	var base := (
-		owned_card.get_effective_base_armor()
+	var base: float = (
+		owned_card.get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_ARMOR)
 		if owned_card != null
 		else (source.armor if source != null else 0)
 	)
 	var equipment := _equipped_item.card_data if _equipped_item != null else null
+	var crystallized_health := get_crystallization_extra_health()
 	return clampi(
-		base + (equipment.equipment_armor_delta if equipment != null else 0)
-		+ (CelestialIndicator.MOON_ARMOR if has_indicator(CelestialIndicator.Kind.MOON) else 0),
+		roundi(
+			base + get_visible_rune_stat_bonus(&"base_armor")
+			+ get_visible_status_static_modifier(&"base_armor")
+			+ (equipment.equipment_armor_delta if equipment != null else 0)
+			+ (CelestialIndicator.MOON_ARMOR if has_indicator(CelestialIndicator.Kind.MOON) else 0)
+			+ crystallized_health
+		),
 		0,
 		CardData.MAXIMUM_ARMOR
 	)
+
+
+func get_crystallization_extra_health() -> int:
+	if not _has_visible_crystallization():
+		return 0
+	var owned_card := get_vitals_source_instance()
+	var source := get_vitals_source()
+	var base := (
+		owned_card.get_base_stat_with_permanent_growth(OwnedCard.STAT_MAX_HEALTH)
+		if owned_card != null
+		else float(source.max_health if source != null else 0)
+	)
+	var equipment := _equipped_item.card_data if _equipped_item != null else null
+	var extras := (
+		get_visible_status_static_modifier(&"max_health")
+		+ (equipment.equipment_health_delta if equipment != null else 0)
+		+ (CelestialIndicator.SUN_HEALTH if has_indicator(CelestialIndicator.Kind.SUN) else 0)
+	)
+	var base_health := _get_crystallization_base_health()
+	var full_health := maxi(roundi(base + get_visible_rune_stat_bonus(&"max_health") + extras), base_health)
+	return full_health - base_health
+
+
+func _get_crystallization_base_health() -> int:
+	var owned_card := get_vitals_source_instance()
+	var source := get_vitals_source()
+	var base := (
+		owned_card.get_base_stat_with_permanent_growth(OwnedCard.STAT_MAX_HEALTH)
+		if owned_card != null
+		else float(source.max_health if source != null else 0)
+	)
+	if owned_card != null:
+		# 正向永久生命成长也是额外生命，要转成护甲；负成长仍降低基础生命。
+		base -= maxf(owned_card.get_permanent_growth(OwnedCard.STAT_MAX_HEALTH), 0.0)
+	return clampi(maxi(roundi(base + get_visible_rune_stat_bonus(&"max_health")), 1), 0, CardData.MAXIMUM_HEALTH)
+
+
+func _has_visible_crystallization() -> bool:
+	for slot: Dictionary in get_visible_wound_slots():
+		var card := slot.get("card") as CardData
+		var owner := get_owned_card(card)
+		var slot_index := int(slot.get("slot_index", -1))
+		if owner == null or slot_index < 0 or slot_index >= owner.wound_slots.size():
+			continue
+		if StringName(String(owner.wound_slots[slot_index].get("wound_id", ""))) == &"晶体化":
+			return true
+	return false
 
 
 func get_effective_action_type() -> CardData.ActionType:
@@ -428,13 +580,14 @@ func get_visible_rune_slots() -> Array[Dictionary]:
 			var world_center_x := (
 				x_positions[card_index] + RUNE_SLOT_CENTER_X[rune_index]
 			)
-			if _is_rune_center_covered(world_center_x, card_layer_index, x_positions):
+			if _is_card_center_covered_by_upper_layer(world_center_x, card_layer_index, x_positions):
 				continue
 			visible_slots.append({
 				"card": card_data,
 				"card_index": card_index,
 				"rune_index": rune_index,
-				"element": card_data.runes[rune_index],
+				"element": get_owned_card(card_data).get_effective_rune(rune_index) if get_owned_card(card_data) != null else card_data.runes[rune_index],
+				"sticker_id": get_owned_card(card_data).rune_stickers[rune_index].get("emblem_id", &"") if get_owned_card(card_data) != null and rune_index < get_owned_card(card_data).rune_stickers.size() else &"",
 				"world_center_x": world_center_x,
 			})
 
@@ -446,26 +599,68 @@ func get_visible_rune_slots() -> Array[Dictionary]:
 	return visible_slots
 
 
+func get_visible_wound_slots() -> Array[Dictionary]:
+	# 使用贴纸中心判定遮挡，并沿用OwnedCard伤势数组的storage_index。
+	var visible_slots: Array[Dictionary] = []
+	var x_positions := get_card_x_positions()
+	for card_data: CardData in horizontal_cards:
+		var horizontal_index := horizontal_cards.find(card_data)
+		var layer_index := layer_cards.find(card_data)
+		if horizontal_index < 0 or layer_index < 0:
+			continue
+		for definition: Dictionary in CardSlotLayout.get_slot_definitions(card_data, get_owned_card(card_data)):
+			if int(definition.get("kind", -1)) != CardSlotLayout.Kind.WOUND:
+				continue
+			var slot_index := int(definition.get("storage_index", -1))
+			var position := definition.get("position", Vector2.ZERO) as Vector2
+			var marker_center_x := x_positions[horizontal_index] + position.x + 7.0
+			if _is_card_center_covered_by_upper_layer(marker_center_x, layer_index, x_positions):
+				continue
+			visible_slots.append({
+				"card": card_data,
+				"slot_index": slot_index,
+				"world_center_x": marker_center_x,
+			})
+	return visible_slots
+
+
+func get_visible_emblem_slot_indices(card_data: CardData) -> Array[int]:
+	# 属性只读取该小队实际属性来源卡上、未被上层卡遮住的纹章槽。
+	var visible_indices: Array[int] = []
+	if card_data == null or not contains(card_data):
+		return visible_indices
+	var x_positions := get_card_x_positions()
+	var horizontal_index := horizontal_cards.find(card_data)
+	var layer_index := layer_cards.find(card_data)
+	if horizontal_index < 0 or layer_index < 0:
+		return visible_indices
+	for definition: Dictionary in CardSlotLayout.get_slot_definitions(card_data, get_owned_card(card_data)):
+		if int(definition.get("kind", -1)) != CardSlotLayout.Kind.EMBLEM:
+			continue
+		var slot_index := int(definition.get("storage_index", -1))
+		var position := definition.get("position", Vector2.ZERO) as Vector2
+		var marker_center_x := x_positions[horizontal_index] + position.x + 7.0
+		if not _is_card_center_covered_by_upper_layer(marker_center_x, layer_index, x_positions):
+			visible_indices.append(slot_index)
+	return visible_indices
+
+
 func get_visible_runes() -> Array[CardData.ElementType]:
-	var visible_runes: Array[CardData.ElementType] = []
-	for slot: Dictionary in get_visible_rune_slots():
-		visible_runes.append(slot["element"] as CardData.ElementType)
-	return visible_runes
+	return get_rune_pattern_result().visible_runes
 
 
 func get_rune_pattern_result() -> RunePatternResult:
 	# SquadData 负责提供真实序列，独立规则类只负责纯识别。
-	return RunePatternRules.identify(get_visible_runes())
+	return RunePatternRules.identify_slots(get_visible_rune_slots())
 
 
-func _is_rune_center_covered(
+func _is_card_center_covered_by_upper_layer(
 	world_center_x: float,
 	card_layer_index: int,
 	x_positions: Array[float]
 ) -> bool:
 	# layer_cards 从最上层到最下层保存，所以当前卡之前的每一张卡
-	# 都可能遮住它。符文中心落入上层完整卡面的水平范围时，该槽位
-	# 在画面中不可见，也就不能进入牌型。
+	# 都可能遮住它。槽位中心落入上层卡面的水平范围时，视为被遮挡。
 	for upper_layer_index: int in card_layer_index:
 		var upper_card := layer_cards[upper_layer_index]
 		var upper_horizontal_index := horizontal_cards.find(upper_card)

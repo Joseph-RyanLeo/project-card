@@ -129,8 +129,9 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export_range(-99, 99, 1) var equipment_zeal_delta: int = 0 # 装备提供的带正负号热诚层数；每层按现有战斗规则改变5%冷却速度
 @export_range(0, 99, 1) var equipment_health_delta: int = 0 # 装备对生命值的临时占位加成
 @export_range(0, 99, 1) var equipment_armor_delta: int = 0 # 装备对护甲值的临时占位加成
-@export_range(0, 99, 1) var wound_slot_count: int = 0 # 共享定义只保存槽位数量；实际伤势属于OwnedCard实例
-@export_range(0, 99, 1) var emblem_slot_count: int = 0 # 共享定义只保存槽位数量；实际纹章属于OwnedCard实例
+@export_range(-1, 8, 1) var wound_slot_count: int = -1 # -1按稀有度取默认伤势槽数；非负值用于明确覆盖
+@export_range(-1, 8, 1) var emblem_slot_count: int = -1 # -1按稀有度取默认纹章槽数；非负值用于明确覆盖
+@export var slot_layout: Array[int] = [] # 特殊卡可固定8项槽位类别；留空时OwnedCard获得时随机抽合法布局
 
 ## 卡面美术字段：人物偏移只改变取景，不改变 99×136 卡牌逻辑尺寸。
 @export var background_texture: Texture2D # 立绘透明区域下方的临时背景

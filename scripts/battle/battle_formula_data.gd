@@ -16,6 +16,13 @@ var final_flat_bonus: float = 0.0
 var source: BattleSquadState
 var target: BattleSquadState
 var fractional_remainder: float = 0.0
+var base_value_sources: Array[Dictionary] = []
+var pattern_multiplier_sources: Array[Dictionary] = []
+var element_multiplier_sources: Array[Dictionary] = []
+var action_value_modifier_sources: Array[Dictionary] = []
+var reinforcement_modifier_sources: Array[Dictionary] = []
+var immediate_action_source: Dictionary = {}
+var final_flat_bonus_sources: Array[Dictionary] = []
 
 
 static func create(
@@ -45,6 +52,25 @@ static func create(
 	return formula
 
 
+static func source_snapshots_from(value: Variant, context: String) -> Array[Dictionary]:
+	# Dictionary 会把嵌套值暴露为 Variant；逐项校验后再构造内部强类型数组。
+	var snapshots: Array[Dictionary] = []
+	if not value is Array:
+		push_error("公式来源 %s 必须是 Array，实际为 %s" % [context, type_string(typeof(value))])
+		return snapshots
+	for index: int in (value as Array).size():
+		var source_value: Variant = (value as Array)[index]
+		if not source_value is Dictionary:
+			push_error("公式来源 %s[%d] 必须是 Dictionary，实际为 %s" % [
+				context,
+				index,
+				type_string(typeof(source_value)),
+			])
+			continue
+		snapshots.append((source_value as Dictionary).duplicate(true))
+	return snapshots
+
+
 func calculate_result() -> float:
 	var additive_total := base_value
 	for term: Dictionary in additive_terms:
@@ -70,4 +96,11 @@ func duplicate_for_target(target_state: BattleSquadState) -> BattleFormulaData:
 	)
 	copy.exact_result = exact_result
 	copy.fractional_remainder = fractional_remainder
+	copy.base_value_sources.assign(base_value_sources.duplicate(true))
+	copy.pattern_multiplier_sources.assign(pattern_multiplier_sources.duplicate(true))
+	copy.element_multiplier_sources.assign(element_multiplier_sources.duplicate(true))
+	copy.action_value_modifier_sources.assign(action_value_modifier_sources.duplicate(true))
+	copy.reinforcement_modifier_sources.assign(reinforcement_modifier_sources.duplicate(true))
+	copy.immediate_action_source = immediate_action_source.duplicate(true)
+	copy.final_flat_bonus_sources.assign(final_flat_bonus_sources.duplicate(true))
 	return copy

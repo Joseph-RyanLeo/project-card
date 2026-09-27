@@ -45,12 +45,14 @@ func settle(
 			"battle_instance_id": battle_id,
 			"growth_applied": 0,
 			"owned_changes_applied": 0,
+			"wounds_healed": 0,
 			"emblem_progress_added": 0,
 			"temporary_progress_skipped": 0,
 			"spell_durability_spent": 0,
 			"spent_spells_removed": 0,
 			"gold_added": 0,
 			"random_card_requests_queued": 0,
+			"emblem_instances_queued": 0,
 		}
 	var validation := _validate_entries(
 		battle_id,
@@ -75,6 +77,7 @@ func settle(
 	var spent_spells_removed := 0
 	var gold_added := 0
 	var random_requests_queued := 0
+	var emblem_instances_queued := 0
 	for entry: Dictionary in growth_entries:
 		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
 			continue
@@ -83,17 +86,26 @@ func settle(
 			# 战斗召唤物没有收藏实例，设计上战后消失；其“永久”成长不能凭空进入收藏。
 			continue
 		var owned_card := owned_collection.get_by_instance_id(instance_id)
-		if owned_card == null or not owned_card.apply_permanent_growth(
-			_map_growth_stat(entry.get("stat", &"") as StringName),
-			float(entry.get("amount", 0.0))
-		):
+		var growth_stat := entry.get("stat", &"") as StringName
+		var growth_applied_success := false
+		if owned_card != null and growth_stat == BattlePermanentGrowthLedger.STAT_CRYSTALLIZATION_HEALTH_LOSS:
+			growth_applied_success = owned_card.apply_crystallization_health_loss(roundi(float(entry.get("amount", 0.0))))
+		elif owned_card != null:
+			growth_applied_success = owned_card.apply_permanent_growth(
+				_map_growth_stat(growth_stat),
+				float(entry.get("amount", 0.0))
+			)
+		if not growth_applied_success:
 			_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 			return _failure("growth_apply_failed", battle_id)
 		growth_applied += 1
 	for entry: Dictionary in owned_change_entries:
 		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
 			continue
-		if entry.get("kind") == BattleOwnedCardChangeLedger.KIND_CONSUME_EQUIPMENT:
+		if entry.get("kind") in [
+			BattleOwnedCardChangeLedger.KIND_CONSUME_EQUIPMENT,
+			BattleOwnedCardChangeLedger.KIND_HEAL_RANDOM_SQUAD_WOUND,
+		]:
 			continue
 		var change_result := _apply_owned_change(entry, owned_collection)
 		if not bool(change_result.get("success", false)):
@@ -102,6 +114,18 @@ func settle(
 		owned_changes_applied += int(change_result.get("applied", 0))
 		emblem_progress_added += int(change_result.get("progress_added", 0))
 		temporary_progress_skipped += int(change_result.get("temporary_progress_skipped", 0))
+	var wounds_healed := 0
+	for entry: Dictionary in owned_change_entries:
+		if (
+			int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER
+			or entry.get("kind") != BattleOwnedCardChangeLedger.KIND_HEAL_RANDOM_SQUAD_WOUND
+		):
+			continue
+		var heal_result := _apply_random_squad_wound_heal(entry, owned_collection)
+		if not bool(heal_result.get("success", false)):
+			_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
+			return _failure("wound_heal_apply_failed", battle_id)
+		wounds_healed += int(heal_result.get("healed", 0))
 	for spell_instance_id: StringName in snapshot.get_prepared_spell_instance_ids():
 		var owned_spell := owned_collection.get_by_instance_id(spell_instance_id)
 		if (
@@ -132,6 +156,11 @@ func settle(
 					_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 					return _failure("random_request_apply_failed", battle_id)
 				random_requests_queued += amount
+			BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE:
+				if not reward_state.enqueue_emblem_instance(entry):
+					_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
+					return _failure("random_emblem_apply_failed", battle_id)
+				emblem_instances_queued += amount
 	# 征兵册先生成随机随从请求，再移除源装备；即使合法奖励池为空也照常消耗。
 	for entry: Dictionary in owned_change_entries:
 		if (
@@ -154,6 +183,7 @@ func settle(
 		"battle_instance_id": battle_id,
 		"growth_applied": growth_applied,
 		"owned_changes_applied": owned_changes_applied,
+		"wounds_healed": wounds_healed,
 		"equipment_consumed": equipment_consumed,
 		"emblem_progress_added": emblem_progress_added,
 		"temporary_progress_skipped": temporary_progress_skipped,
@@ -161,6 +191,7 @@ func settle(
 		"spent_spells_removed": spent_spells_removed,
 		"gold_added": gold_added,
 		"random_card_requests_queued": random_requests_queued,
+		"emblem_instances_queued": emblem_instances_queued,
 	}
 
 
@@ -224,6 +255,20 @@ func _validate_entries(
 					or int(parameters.get("amount", 0)) <= 0
 				):
 					return _failure("invalid_emblem_progress", battle_id)
+			BattleOwnedCardChangeLedger.KIND_SET_WOUND_BATTLE_COUNTER:
+				if (
+					(parameters.get("counter_key", &"") as StringName).is_empty()
+					or int(parameters.get("counter_value", -1)) < 0
+				):
+					return _failure("invalid_wound_battle_counter", battle_id)
+			BattleOwnedCardChangeLedger.KIND_HEAL_RANDOM_SQUAD_WOUND:
+				var instance_ids := parameters.get("squad_card_instance_ids", []) as Array
+				if instance_ids.is_empty():
+					return _failure("invalid_wound_heal_squad", battle_id)
+				for id_value: Variant in instance_ids:
+					var member := owned_collection.get_by_instance_id(StringName(String(id_value)))
+					if member == null or member.card_data.card_type != CardData.CardType.MINION:
+						return _failure("invalid_wound_heal_member", battle_id)
 			_:
 				return _failure("invalid_owned_change_kind", battle_id)
 	for entry: Dictionary in reward_entries:
@@ -235,10 +280,15 @@ func _validate_entries(
 			entry.get("kind", &"") not in [
 				BattleRunRewardLedger.KIND_GOLD,
 				BattleRunRewardLedger.KIND_RANDOM_CARD_REQUEST,
+				BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE,
 			]
 			or int(entry.get("amount", 0)) <= 0
 		):
 			return _failure("invalid_reward_entry_value", battle_id)
+		if entry.get("kind") == BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE:
+			var parameters := entry.get("parameters", {}) as Dictionary
+			if (parameters.get("emblem_id", &"") as StringName).is_empty() or (parameters.get("emblem_instance_id", &"") as StringName).is_empty():
+				return _failure("invalid_random_emblem_parameters", battle_id)
 	return {"success": true}
 
 
@@ -295,7 +345,38 @@ func _apply_owned_change(
 				"progress_added": int(parameters.get("amount", 0)) if progress_result > 0 else 0,
 				"temporary_progress_skipped": 1 if progress_result == 0 else 0,
 			}
+		BattleOwnedCardChangeLedger.KIND_SET_WOUND_BATTLE_COUNTER:
+			var counter_key := parameters.get("counter_key", &"") as StringName
+			owned_card.wound_battle_counters[counter_key] = int(parameters.get("counter_value", 0))
+			return {"success": true, "applied": 1}
+		BattleOwnedCardChangeLedger.KIND_HEAL_RANDOM_SQUAD_WOUND:
+			return _apply_random_squad_wound_heal(entry, owned_collection)
 	return {"success": false}
+
+
+func _apply_random_squad_wound_heal(
+	entry: Dictionary,
+	owned_collection: OwnedCardCollection
+) -> Dictionary:
+	var parameters := entry.get("parameters", {}) as Dictionary
+	var candidates: Array[Dictionary] = []
+	for id_value: Variant in parameters.get("squad_card_instance_ids", []) as Array:
+		var owned := owned_collection.get_by_instance_id(StringName(String(id_value)))
+		if owned == null:
+			continue
+		for slot_index: int in owned.wound_slots.size():
+			if owned.wound_slots[slot_index].is_empty():
+				continue
+			var slot_key := StringName("%s:wound:%d" % [owned.instance_id, slot_index])
+			if slot_key in (parameters.get("masked_wound_slot_keys", []) as Array):
+				continue
+			candidates.append({"owned": owned, "slot_index": slot_index})
+	if candidates.is_empty():
+		return {"success": true, "healed": 0}
+	var selected := candidates[randi_range(0, candidates.size() - 1)] as Dictionary
+	var selected_card := selected.owned as OwnedCard
+	var success := selected_card.set_wound_slot(int(selected.slot_index), {})
+	return {"success": success, "healed": 1 if success else 0}
 
 
 func _validate_common_entry(
@@ -320,6 +401,8 @@ func _map_growth_stat(stat: StringName) -> StringName:
 			return OwnedCard.STAT_BASE_VALUE
 		BattlePermanentGrowthLedger.STAT_BASE_ARMOR:
 			return OwnedCard.STAT_BASE_ARMOR
+		BattlePermanentGrowthLedger.STAT_MAX_HEALTH:
+			return OwnedCard.STAT_MAX_HEALTH
 		_:
 			return &""
 

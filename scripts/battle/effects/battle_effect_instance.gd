@@ -25,6 +25,7 @@ var active: bool = true
 var suppressed: bool = false
 var applied_value: float = 0.0
 var execution_count: int = 0
+var contribution_sources: Array[Dictionary] = []
 var end_reason: EndReason = EndReason.NONE
 var end_satisfied: Dictionary = {}
 var payload: Dictionary = {}

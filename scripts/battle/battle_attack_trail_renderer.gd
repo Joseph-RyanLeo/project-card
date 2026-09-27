@@ -91,7 +91,7 @@ static func play(
 			# 实际曲线会因卡位距离和首尾延伸改变目标点比例；
 			# 调整播放终点，使可见弹头仍在控制器确定的逻辑时刻抵达。
 			terminal_progress = impact_progress / remapped_at_impact
-	effect_root.set_meta("travel_speed_variant", resolved_speed_variant)
+		effect_root.set_meta("travel_speed_variant", resolved_speed_variant)
 	effect_root.set_meta("impact_emitted", false)
 	var tween := effect_root.create_tween()
 	tween.set_speed_scale(clampf(speed_scale, 0.01, 3.0))
@@ -157,7 +157,7 @@ static func _emit_impact_once(effect_root: Node2D, impact_callback: Callable) ->
 
 
 static func set_flight_speed(effect_root: Node, speed_scale: float) -> void:
-	if not is_instance_valid(effect_root):
+	if not is_flight_root(effect_root):
 		return
 	var tween := effect_root.get_meta("flight_tween", null) as Tween
 	if tween != null and tween.is_valid():
@@ -165,7 +165,7 @@ static func set_flight_speed(effect_root: Node, speed_scale: float) -> void:
 
 
 static func set_flight_paused(effect_root: Node, paused: bool) -> void:
-	if not is_instance_valid(effect_root):
+	if not is_flight_root(effect_root):
 		return
 	var tween := effect_root.get_meta("flight_tween", null) as Tween
 	if tween == null or not tween.is_valid():
@@ -174,6 +174,10 @@ static func set_flight_paused(effect_root: Node, paused: bool) -> void:
 		tween.pause()
 	else:
 		tween.play()
+
+
+static func is_flight_root(effect_root: Node) -> bool:
+	return is_instance_valid(effect_root) and effect_root.has_meta("flight_tween")
 
 
 static func sample_curve(

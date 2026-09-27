@@ -962,7 +962,7 @@
         "伤势槽位": "3",
         "卡牌名": "外交官",
         "卡牌类型": "随从",
-        "卡面短文本": "友方随从每有一个不同种族的相邻友军，获得+1/+1。",
+        "卡面短文本": "所有非精灵友军生命值+2。",
         "原基础护甲": "0",
         "原基础数值": "5",
         "原基础生命值": "10",
@@ -970,7 +970,7 @@
         "原行动冷却": "5s",
         "品级": "Ⅱ",
         "子类型/种族": "精灵",
-        "完整规则说明": "按每个友方随从自身的异族相邻友军数量获得数值与生命加成；取消嵌套乡邻。",
+        "完整规则说明": "外交官在场且效果有效时，所有非精灵友军生命值+2；来源失效时撤销，多个来源叠加。",
         "审阅状态": "待确认",
         "建议基础护甲": "0",
         "建议基础数值": "3",
@@ -1024,7 +1024,7 @@
           "operation": "add_attribute",
           "value": {
             "kind": "fixed",
-            "amount": 1
+            "amount": 2
           },
           "duration": {
             "kind": "while_active"
@@ -1049,10 +1049,11 @@
           "related_effects": [],
           "modifier": null,
           "parameters": {
-            "stat": "base_value",
+            "stat": "max_health",
+            "increase_current_health": true,
             "confirmation_date": "2026-09-15"
           },
-          "reading": "外交官在场且效果有效时，所有非精灵友军数值+1；来源被消灭后失效。多个外交官叠加，无突击、邻接或生命加成。",
+          "reading": "外交官在场且效果有效时，所有非精灵友军生命值+2；来源被消灭后失效。多个外交官叠加。",
           "questions": []
         }
       ],
@@ -1516,7 +1517,7 @@
         "伤势槽位": "2",
         "卡牌名": "战鼓乐师",
         "卡牌类型": "随从",
-        "卡面短文本": "回响：同排友军获得强化1。",
+        "卡面短文本": "回响：相邻友军获得强化1。",
         "原基础护甲": "0",
         "原基础数值": "2",
         "原基础生命值": "8",
@@ -1524,7 +1525,7 @@
         "原行动冷却": "3s",
         "品级": "Ⅱ",
         "子类型/种族": "人类",
-        "完整规则说明": "主弹道发射后结算回响，使同排友军（包含自身）获得强化1；不影响另一排。强化按通则消耗。",
+        "完整规则说明": "主弹道发射后结算回响，使同排左右相邻友军各获得强化1，不包含自身；强化按通则消耗。",
         "审阅状态": "已确认",
         "建议基础护甲": "0",
         "建议基础数值": "2",
@@ -1571,7 +1572,7 @@
           "conditions": [
             "always"
           ],
-          "target": "same_row_friendly_units",
+          "target": "adjacent_friendly_units",
           "operation": "add_reinforcement",
           "value": {
             "kind": "fixed",
@@ -1602,10 +1603,9 @@
           "related_effects": [],
           "modifier": null,
           "parameters": {
-            "include_self": true,
             "extra_and_immediate_actions_trigger_echo": true
           },
-          "reading": "主行动弹道发射后回响，使同排友军（包括自身）获得强化1；按通则供之后的行动消耗。",
+          "reading": "主行动弹道发射后回响，使同排左右相邻友军各获得强化1；按通则供之后的行动消耗。",
           "questions": []
         }
       ],
@@ -2103,7 +2103,7 @@
         "伤势槽位": "3",
         "卡牌名": "标枪散兵",
         "卡牌类型": "随从",
-        "卡面短文本": "突击：以数值+2进行1次远程行动，随后变为近战。",
+        "卡面短文本": "突击：进行一次远程攻击，随后变为近战并且数值减半。",
         "原基础护甲": "2",
         "原基础数值": "2",
         "原基础生命值": "3",
@@ -2111,7 +2111,7 @@
         "原行动冷却": "5s",
         "品级": "Ⅰ",
         "子类型/种族": "人类",
-        "完整规则说明": "突击立即进行1次数值+2的远程行动，正常触发对应行动效果，随后锁定近战；不是2倍倍率。",
+        "完整规则说明": "突击：进行一次远程攻击，发射后变为近战，基础数值减半至本场战斗结束。",
         "审阅状态": "已确认",
         "建议基础护甲": "2",
         "建议基础数值": "2",
@@ -2190,14 +2190,13 @@
           "modifier": null,
           "parameters": {
             "forced_action": "ranged",
-            "action_value_delta": 2,
             "switch_to_melee_after": "projectile_launched",
             "human_confirmation": {
               "question": "随后切为近战，是远程弹道发射后还是命中完成后切换？",
               "reply": "发射后切换"
             }
           },
-          "reading": "突击立即执行1次数值+2的远程行动，按正常行动触发对应效果。 人工确认：发射后切换",
+          "reading": "突击：进行一次远程攻击；弹道发射后变为近战，本场基础数值减半。",
           "questions": []
         },
         {
@@ -2245,6 +2244,7 @@
           "modifier": null,
           "parameters": {
             "action_type": "melee",
+            "base_value_multiplier": 0.5,
             "timing": "pending",
             "switch_to_melee_after": "projectile_launched",
             "human_confirmation": {
@@ -2252,7 +2252,7 @@
               "reply": "发射后切换"
             }
           },
-          "reading": "接同一次突击的远程行动之后，把当前行动方式锁定为近战；具体切换时点待确认。 人工确认：发射后切换",
+          "reading": "接同一次突击的远程行动之后，把当前行动方式锁定为近战，并将基础数值减半至本场结束。",
           "questions": []
         }
       ],
@@ -2690,7 +2690,7 @@
           "reading": "当一名友军即将因生命值归零被消灭时释放。此后5秒内，所有友军的生命值最低降至1；期间仍可损失护甲，护甲型单位仍会在护甲归零时正常被消灭。效果结束后不追溯结算被阻止的生命伤害。"
         }
       ],
-      "resource_path": null
+      "resource_path": "res://resources/cards/battle_fury.tres"
     },
     {
       "card_id": "side_by_side",
@@ -2867,7 +2867,7 @@
           "questions": []
         }
       ],
-      "resource_path": null
+      "resource_path": "res://resources/cards/side_by_side.tres"
     },
     {
       "card_id": "return_to_battlefield",
@@ -2984,7 +2984,7 @@
           "questions": []
         }
       ],
-      "resource_path": null
+      "resource_path": "res://resources/cards/return_to_battlefield.tres"
     },
     {
       "card_id": "volley_order",
@@ -3095,7 +3095,7 @@
           "questions": []
         }
       ],
-      "resource_path": null
+      "resource_path": "res://resources/cards/volley_order.tres"
     },
     {
       "card_id": "ash_war_banner",

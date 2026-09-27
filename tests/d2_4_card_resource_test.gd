@@ -7,6 +7,7 @@ const EFFECT_DATA_PATH := "res://data/demo2/ash_ledger_effect_samples.json"
 const TIDE_ARCHER_PATH := "res://resources/cards/tide_archer.tres"
 const BattleControllerScript = preload("res://scripts/battle/battle_controller.gd")
 const BattleLabEffectLibrary = preload("res://scripts/tools/battle_lab_effect_library.gd")
+const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 
 var failures: int = 0
 
@@ -84,8 +85,12 @@ func _test_confirmed_stats(card: CardData, source_fields: Dictionary) -> void:
 	_expect(is_equal_approx(card.cooldown_seconds, cooldown_text.trim_suffix("s").to_float()), "%s 使用建议行动冷却" % card.id)
 	_expect(card.rarity == _rarity_from_text(String(source_fields.get("品级", "Ⅰ"))), "%s 使用确认品级" % card.id)
 	_expect(card.race_type == _race_from_text(String(source_fields.get("子类型/种族", "人类"))), "%s 使用确认种族" % card.id)
-	_expect(card.wound_slot_count == int(source_fields.get("伤势槽位", 0)), "%s 保存伤势槽位数据" % card.id)
-	_expect(card.emblem_slot_count == int(source_fields.get("徽章槽位", 0)), "%s 保存纹章槽位数据" % card.id)
+	_expect(
+		CardSlotLayout.resolve_counts(card) == CardSlotLayout.get_default_counts(card.rarity)
+		and card.wound_slot_count == -1
+		and card.emblem_slot_count == -1,
+		"%s 通过品级使用默认伤势与纹章槽数" % card.id
+	)
 	var actions: Array = source_fields.get("行动方式", [])
 	if actions.size() == 1:
 		_expect(card.action_type == _action_from_text(String(actions[0])), "%s 使用确认行动方式" % card.id)
@@ -103,10 +108,10 @@ func _test_real_battle_bindings() -> void:
 		false
 	)
 	_expect(controller.effect_runtime.bindings.size() == 3, "正式战斗按真实卡牌ID自动登记三条效果")
-	_expect(controller.player_states[0].get_zeal_layers() == -4, "正式战斗开场执行玛格丽特的真实持续热诚效果")
+	_expect(controller.player_states[0].get_zeal_layers() == -3, "玛格丽特热诚-4与显现暗符文+1同时生效")
 	_expect(
-		controller.enemy_states[0].modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT) == 8.0,
-		"正式战斗开场执行重装骑士的真实突击"
+		controller.enemy_states[0].modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT) == 9.0,
+		"重装骑士把显现光符文+1护甲计入突击强化"
 	)
 	controller.queue_free()
 

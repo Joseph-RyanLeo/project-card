@@ -654,7 +654,25 @@ func _test_formula_popup_ui() -> void:
 		else Vector2.ZERO
 	)
 	var straight_middle := Vector2(400, 150)
-	var has_impact := main.battle_effect_layer.get_node_or_null("ElementImpact") != null
+	var impact_node := main.battle_effect_layer.get_node_or_null("ElementImpact")
+	var has_impact := impact_node != null
+	var speed_changes_safe := true
+	for speed_index: int in range(main.BATTLE_SPEED_MULTIPLIERS.size()):
+		main.set_battle_speed(speed_index)
+		var flight_tween := beam_segment.get_meta("flight_tween", null) as Tween
+		speed_changes_safe = (
+			speed_changes_safe
+			and BattleAttackTrailRenderer.is_flight_root(beam_segment)
+			and not BattleAttackTrailRenderer.is_flight_root(impact_node)
+			and is_instance_valid(impact_node)
+			and flight_tween != null
+			and flight_tween.is_valid()
+			and is_equal_approx(
+				flight_tween.get_speed_scale(),
+				main.BATTLE_SPEED_MULTIPLIERS[speed_index]
+			)
+		)
+	main.set_battle_speed(1)
 	_expect(
 		main.battle_effect_layer.z_index == main.EFFECT_LAYER_Z_INDEX
 		and main.EFFECT_LAYER_Z_INDEX > CardView.CARD_LAYER_Z_STEP * 3
@@ -683,8 +701,9 @@ func _test_formula_popup_ui() -> void:
 		and speed_variant >= 0
 		and speed_variant < BattleAttackTrailRenderer.TRAVEL_SPEED_VARIANT_COUNT
 		and ribbon_middle.distance_to(straight_middle) > 10.0
-		and has_impact,
-		"原图能量遮罩、纯元素色、内部流动、移动短尾巴和贝塞尔弧线建立在三卡堆之上的可见层级"
+		and has_impact
+		and speed_changes_safe,
+		"元素弹道、冲击分离显示；切换全部速度时只调节真实飞行 Tween"
 	)
 	var speed_strength := float(water_profile["speed_variation_strength"])
 	var all_speed_curves_keep_endpoints := true

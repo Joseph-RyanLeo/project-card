@@ -46,6 +46,8 @@ var _attack_effect_lab: AttackEffectLab
 
 
 func _enter_tree() -> void:
+	# 外层仅转发暂停中的卡面检视输入；战斗 Main 仍由场景显式设置为 PAUSABLE。
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	# Main 通过这个分组找到固定虚拟画布的显示壳。
 	add_to_group(&"game_display_shell")
 
@@ -68,6 +70,20 @@ func _ready() -> void:
 		_select_option_without_signal(current_display_mode)
 	else:
 		apply_display_mode(DisplayMode.WINDOW_1080P)
+
+
+func _input(event: InputEvent) -> void:
+	if not get_tree().paused or not event is InputEventMouseButton:
+		return
+	var mouse_event := event as InputEventMouseButton
+	if mouse_event.button_index != MOUSE_BUTTON_RIGHT or not mouse_event.pressed:
+		return
+	var internal_position := (
+		render_container.get_global_transform_with_canvas().affine_inverse()
+		* mouse_event.position
+	)
+	if main_screen.open_paused_card_inspection_at(internal_position):
+		get_viewport().set_input_as_handled()
 
 
 func apply_display_mode(mode: DisplayMode) -> void:

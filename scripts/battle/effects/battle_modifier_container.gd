@@ -26,6 +26,26 @@ func remove_source_instance(source_instance_id: int) -> int:
 	return removed
 
 
+func get_active_modifier_ids(stat: BattleModifier.Stat) -> Array[int]:
+	var result: Array[int] = []
+	for modifier: BattleModifier in modifiers:
+		if modifier.active and modifier.stat == stat:
+			result.append(modifier.modifier_id)
+	return result
+
+
+func remove_modifier_ids(modifier_ids: Array[int]) -> int:
+	var wanted: Dictionary = {}
+	for modifier_id: int in modifier_ids:
+		wanted[modifier_id] = true
+	var removed := 0
+	for index: int in range(modifiers.size() - 1, -1, -1):
+		if wanted.has(modifiers[index].modifier_id):
+			modifiers.remove_at(index)
+			removed += 1
+	return removed
+
+
 func set_source_instance_active(source_instance_id: int, active: bool) -> void:
 	for modifier: BattleModifier in modifiers:
 		if modifier.source_instance_id == source_instance_id:
@@ -36,6 +56,15 @@ func update_source_instance_value(source_instance_id: int, value: float) -> void
 	for modifier: BattleModifier in modifiers:
 		if modifier.source_instance_id == source_instance_id:
 			modifier.value = value
+
+
+func set_source_instance_contribution_sources(
+	source_instance_id: int,
+	contribution_sources: Array[Dictionary]
+) -> void:
+	for modifier: BattleModifier in modifiers:
+		if modifier.source_instance_id == source_instance_id:
+			modifier.contribution_sources.assign(contribution_sources.duplicate(true))
 
 
 func get_additive(stat: BattleModifier.Stat) -> float:

@@ -7,6 +7,7 @@ var group_id: int = 0
 var timestamp: float = 0.0
 var source: BattleSquadState
 var events: Array[BattleEffectEvent] = []
+var direct_effect_lines: Array[String] = []
 
 
 func add_event(event: BattleEffectEvent) -> void:
@@ -16,6 +17,11 @@ func add_event(event: BattleEffectEvent) -> void:
 			source = event.source
 
 
+func add_direct_effect_line(value: String) -> void:
+	if not value.is_empty():
+		direct_effect_lines.append(value)
+
+
 func get_formula(index: int) -> BattleFormulaData:
 	if index < 0 or index >= events.size():
 		return null
@@ -23,9 +29,10 @@ func get_formula(index: int) -> BattleFormulaData:
 
 
 func to_bbcode() -> String:
-	if events.is_empty():
+	if events.is_empty() and direct_effect_lines.is_empty():
 		return ""
 	var clauses: Array[String] = []
+	clauses.append_array(direct_effect_lines)
 	for index: int in events.size():
 		var event := events[index]
 		if event.missed:
@@ -44,8 +51,10 @@ func to_bbcode() -> String:
 			_format_state_name(event.target), verb, group_id, index, value,
 			qualifier, event.formula.display_name if event.formula != null else "效果",
 		])
+	if events.is_empty():
+		return "\n".join(clauses)
 	var prefix := _format_state_name(source) if source != null else (events[0].log_qualifier if not events[0].log_qualifier.is_empty() else "系统")
-	return "%s%s" % [prefix, "，同时".join(clauses)]
+	return "%s%s%s" % [prefix, "，同时" if not direct_effect_lines.is_empty() else "", "；".join(clauses)]
 
 
 static func format_number(value: float) -> String:

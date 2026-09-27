@@ -7,6 +7,8 @@ extends RefCounted
 
 const STAT_BASE_VALUE: StringName = &"base_value"
 const STAT_BASE_ARMOR: StringName = &"base_armor"
+const STAT_MAX_HEALTH: StringName = &"max_health"
+const STAT_CRYSTALLIZATION_HEALTH_LOSS: StringName = &"crystallization_health_loss"
 
 var _entries: Array[Dictionary] = []
 
@@ -27,7 +29,7 @@ func record(
 	if (
 		owner == null
 		or owner.card_data == null
-		or stat not in [STAT_BASE_VALUE, STAT_BASE_ARMOR]
+			or stat not in [STAT_BASE_VALUE, STAT_BASE_ARMOR, STAT_MAX_HEALTH, STAT_CRYSTALLIZATION_HEALTH_LOSS]
 		or is_zero_approx(amount)
 	):
 		return false

@@ -12,6 +12,7 @@ const BattlePreparationSnapshot = preload("res://scripts/data/battle_preparation
 const RunSettlementJournal = preload("res://scripts/data/run_settlement_journal.gd")
 const RunRewardState = preload("res://scripts/data/run_reward_state.gd")
 const BattleSettlementService = preload("res://scripts/data/battle_settlement_service.gd")
+const BattleControllerScript = preload("res://scripts/battle/battle_controller.gd")
 const MAIN_SCENE: PackedScene = preload("res://scenes/Main.tscn")
 
 var failures: int = 0
@@ -27,6 +28,9 @@ func _run() -> void:
 	_test_ledgers_record_instance_and_battle_identity()
 	_test_settlement_journal_rejects_duplicate_commit()
 	_test_atomic_settlement_restores_then_applies_once()
+	_test_visible_wound_slots_follow_stack_occlusion()
+	_test_random_wound_healing_covers_the_entire_squad()
+	_test_chaos_permanent_growth_targets_the_whole_squad()
 	_test_slot_progress_and_spell_durability_settle_once()
 	await _test_main_battle_entry_uses_owned_snapshot()
 	if failures == 0:
@@ -250,7 +254,7 @@ func _test_atomic_settlement_restores_then_applies_once() -> void:
 		and action_card.get_permanent_growth(OwnedCard.STAT_BASE_VALUE) == 1.0
 		and armor_card.get_permanent_growth(OwnedCard.STAT_BASE_ARMOR) == 1.0
 		and next_battle_state.get_display_action_value() == action_definition.base_value + 1
-		and next_battle_state.current_armor == armor_definition.armor + 1
+		and next_battle_state.current_armor == armor_definition.armor + 1 + restored_squad.get_visible_rune_stat_bonus(&"base_armor")
 		and reward_state.gold == 9
 		and reward_state.get_pending_random_card_count() == 1
 		and second_result.get("status") == BattleSettlementService.STATUS_ALREADY_COMMITTED
@@ -295,6 +299,8 @@ func _test_slot_progress_and_spell_durability_settle_once() -> void:
 		and rejected_snapshot.is_empty(),
 		"非法或重复的法术实例不能留下半份可结算快照"
 	)
+
+
 	var snapshot := BattlePreparationSnapshot.new()
 	_expect(
 		snapshot.initialize(
@@ -330,6 +336,15 @@ func _test_slot_progress_and_spell_durability_settle_once() -> void:
 	)
 	ledger.record_emblem_progress(owner, &"seed_instance", 1, &"test_seed_survival", state.runtime_id, 20, &"run_battle_000030")
 	ledger.record_emblem_progress(owner, &"temporary_seed_instance", 1, &"test_temporary_seed_survival", state.runtime_id, 21, &"run_battle_000030")
+	ledger.record_wound_battle_counter(
+		owner,
+		&"misfortune:carrier:wound:0",
+		2,
+		&"wound_misfortune_roll",
+		state.runtime_id,
+		22,
+		&"run_battle_000030"
+	)
 	ledger.record_slot_change(
 		owner,
 		BattleOwnedCardChangeLedgerScript.KIND_SET_EMBLEM_SLOT,
@@ -352,6 +367,7 @@ func _test_slot_progress_and_spell_durability_settle_once() -> void:
 	)
 	# 模拟战斗内预览污染；正常结算必须先恢复战前值，再消费账本与准备法术列表。
 	carrier.wound_slots[0] = {"wound_id": &"wrong_preview", "level": 9}
+	carrier.wound_battle_counters[&"misfortune:carrier:wound:0"] = 99
 	carrier.progress_by_source[&"seed_instance"] = 99
 	last_use_spell.spell_durability = 99
 	var service := BattleSettlementService.new()
@@ -365,6 +381,7 @@ func _test_slot_progress_and_spell_durability_settle_once() -> void:
 		and carrier.emblem_slots[0].get("emblem_id") == &"tree"
 		and carrier.emblem_slots[1].get("instance_id") == &"earned_emblem"
 		and int(carrier.progress_by_source.get(&"seed_instance", 0)) == 1
+		and int(carrier.wound_battle_counters.get(&"misfortune:carrier:wound:0", -1)) == 2
 		and not carrier.progress_by_source.has(&"temporary_seed_instance")
 		and collection.get_by_instance_id(last_use_spell.instance_id) == null
 		and collection.get_by_instance_id(reusable_spell.instance_id) == reusable_spell
@@ -374,7 +391,198 @@ func _test_slot_progress_and_spell_durability_settle_once() -> void:
 		and int(first_result.get("spent_spells_removed", 0)) == 1
 		and second_result.get("status") == BattleSettlementService.STATUS_ALREADY_COMMITTED
 		and reusable_spell.spell_durability == 1,
-		"伤势、永久纹章、种子进度与法术耐久按实例原子写回，临时进度跳过且重复结算不再消费"
+		"伤势、跨战骰子计数、永久纹章、种子进度与法术耐久按实例原子写回，重复结算不再消费"
+	)
+
+
+func _test_visible_wound_slots_follow_stack_occlusion() -> void:
+	var top_definition := _card_definition(&"wound_visibility_top")
+	var lower_definition := _card_definition(&"wound_visibility_lower")
+	top_definition.wound_slot_count = 1
+	lower_definition.wound_slot_count = 1
+	var squad := SquadData.from_cards([top_definition, lower_definition])
+	var visible_slots := squad.get_visible_wound_slots()
+	var valid_visible_slots := not visible_slots.is_empty()
+	for slot: Dictionary in visible_slots:
+		valid_visible_slots = (
+			valid_visible_slots
+			and slot.get("card") in [top_definition, lower_definition]
+			and int(slot.get("slot_index", -1)) == 0
+		)
+	_expect(
+		valid_visible_slots,
+		"伤势槽可见性按小队左右位置与卡牌遮挡层级判断"
+	)
+
+
+func _test_random_wound_healing_covers_the_entire_squad() -> void:
+	var definitions: Array[CardData] = [
+		_card_definition(&"wound_heal_front"),
+		_card_definition(&"wound_heal_middle"),
+		_card_definition(&"wound_heal_back"),
+	]
+	var collection := OwnedCardCollection.new()
+	var owned_cards: Array[OwnedCard] = []
+	var squad := SquadData.from_cards(definitions)
+	var squad_instance_ids: Array[StringName] = []
+	for index: int in definitions.size():
+		var owned := collection.create_card(definitions[index])
+		owned_cards.append(owned)
+		squad.bind_owned_card(definitions[index], owned)
+		squad_instance_ids.append(owned.instance_id)
+	owned_cards[0].wound_slots[0] = {"wound_id": &"wound_a", "level": 1}
+	owned_cards[2].wound_slots[1] = {"wound_id": &"wound_b", "level": 2}
+	var snapshot := BattlePreparationSnapshot.new()
+	snapshot.initialize(
+		&"run_battle_wound_heal_squad",
+		25031,
+		collection,
+		{&"player_front": [squad]}
+	)
+	var state := BattleSquadState.new()
+	state.initialize(squad, BattleSquadState.Side.PLAYER, &"player_front", 0)
+	var owner := BattleEffectOwnerRef.for_state(
+		state,
+		BattleEffectDefinition.OwnerKind.ACTION_PROVIDER_CARD
+	)
+	var ledger := BattleOwnedCardChangeLedgerScript.new()
+	var masked_slot_key := StringName("%s:wound:0" % owned_cards[0].instance_id)
+	_expect(
+		ledger.record_random_squad_wound_heal(
+			owner,
+			squad_instance_ids,
+			[masked_slot_key],
+			&"chaos_dark_heal",
+			state.runtime_id,
+			0,
+			&"run_battle_wound_heal_squad"
+		),
+		"暗元素可以记录小队范围的随机伤势治疗并排除被遮挡槽位"
+	)
+	var service := BattleSettlementService.new()
+	var result: Dictionary = service.settle(
+		snapshot,
+		[],
+		[],
+		collection,
+		RunRewardState.new(),
+		RunSettlementJournal.new(),
+		ledger.get_entries()
+	)
+	_expect(
+		result.get("status") == BattleSettlementService.STATUS_COMMITTED
+		and int(result.get("wounds_healed", 0)) == 1
+		and owned_cards[0].wound_slots[0].get("wound_id") == &"wound_a"
+		and owned_cards[2].wound_slots[1].is_empty(),
+		"治疗只从小队所有未被遮挡的非空伤势槽中随机移除一处"
+	)
+
+	var unwounded_collection := OwnedCardCollection.new()
+	var unwounded := unwounded_collection.create_card(_card_definition(&"wound_heal_none"))
+	var unwounded_squad := SquadData.from_owned_card(unwounded)
+	var unwounded_snapshot := BattlePreparationSnapshot.new()
+	unwounded_snapshot.initialize(
+		&"run_battle_wound_heal_none",
+		25032,
+		unwounded_collection,
+		{&"player_front": [unwounded_squad]}
+	)
+	var unwounded_state := BattleSquadState.new()
+	unwounded_state.initialize(unwounded_squad, BattleSquadState.Side.PLAYER, &"player_front", 0)
+	var unwounded_owner := BattleEffectOwnerRef.for_state(
+		unwounded_state,
+		BattleEffectDefinition.OwnerKind.ACTION_PROVIDER_CARD
+	)
+	var unwounded_ledger := BattleOwnedCardChangeLedgerScript.new()
+	unwounded_ledger.record_random_squad_wound_heal(
+		unwounded_owner,
+		[unwounded.instance_id],
+		[],
+		&"chaos_dark_heal",
+		unwounded_state.runtime_id,
+		0,
+		&"run_battle_wound_heal_none"
+	)
+	var empty_result: Dictionary = service.settle(
+		unwounded_snapshot,
+		[],
+		[],
+		unwounded_collection,
+		RunRewardState.new(),
+		RunSettlementJournal.new(),
+		unwounded_ledger.get_entries()
+	)
+	_expect(
+		empty_result.get("status") == BattleSettlementService.STATUS_COMMITTED
+		and int(empty_result.get("wounds_healed", -1)) == 0
+		and unwounded.wound_slots[0].is_empty(),
+		"全队没有伤势时不治疗，也不产生补偿"
+	)
+
+
+func _test_chaos_permanent_growth_targets_the_whole_squad() -> void:
+	var definitions: Array[CardData] = [
+		_card_definition(&"chaos_growth_left"),
+		_card_definition(&"chaos_growth_middle"),
+		_card_definition(&"chaos_growth_right"),
+	]
+	var collection := OwnedCardCollection.new()
+	var squad := SquadData.from_cards(definitions)
+	var owned_cards: Array[OwnedCard] = []
+	for definition: CardData in definitions:
+		var owned := collection.create_card(definition)
+		owned_cards.append(owned)
+		squad.bind_owned_card(definition, owned)
+	owned_cards[0].rune_stickers[0] = {
+		"emblem_id": &"混沌贴纸",
+		"instance_id": &"chaos_growth_sticker",
+		"element": CardData.ElementType.FIRE,
+	}
+	var state := BattleSquadState.new()
+	state.initialize(squad, BattleSquadState.Side.PLAYER, &"player_front", 0)
+	state.runtime_id = 29
+	var pattern := RunePatternResult.new()
+	pattern.participating_indices = [0]
+	var controller := BattleControllerScript.new()
+	controller.battle_instance_id = &"chaos_growth_whole_team"
+	_expect(
+		controller._record_chaos_pattern_participation(state, pattern) == 1,
+		"混沌纹章参与牌型时登记一次全队奖励"
+	)
+	var growth_entries := controller.permanent_growth_ledger.get_entries()
+	var grew_team := growth_entries.size() == owned_cards.size()
+	for owned: OwnedCard in owned_cards:
+		grew_team = grew_team and is_equal_approx(
+			controller.permanent_growth_ledger.get_amount_for_owned_card(
+				owned.instance_id,
+				BattlePermanentGrowthLedgerScript.STAT_BASE_VALUE
+			),
+			1.0
+		)
+	_expect(grew_team, "火混沌的永久基础数值成长逐一归属小队每张随从实例")
+
+	owned_cards[0].rune_stickers[0]["element"] = CardData.ElementType.WATER
+	state.initialize(squad, BattleSquadState.Side.PLAYER, &"player_front", 0)
+	state.runtime_id = 29
+	var water_health_before := state.get_max_health()
+	controller = BattleControllerScript.new()
+	pattern.participating_indices = [0]
+	_expect(
+		controller._record_chaos_pattern_participation(state, pattern) == 1
+		and state.current_health == state.get_max_health()
+		and state.get_max_health() == water_health_before + 2,
+		"水混沌为全队随从永久增加基础生命，并立即补足该小队当前生命"
+	)
+	owned_cards[0].rune_stickers[0]["element"] = CardData.ElementType.WOOD
+	state.initialize(squad, BattleSquadState.Side.PLAYER, &"player_front", 0)
+	state.runtime_id = 29
+	var wood_armor_before := state.current_armor
+	controller = BattleControllerScript.new()
+	_expect(
+		controller._record_chaos_pattern_participation(state, pattern) == 1
+		and is_equal_approx(state.current_armor, wood_armor_before + 2.0)
+		and state.current_armor == state.squad_data.get_effective_base_armor(),
+		"木混沌为全队随从永久增加基础护甲，并同步提升当前护甲"
 	)
 
 

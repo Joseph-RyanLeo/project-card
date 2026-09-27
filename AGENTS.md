@@ -36,7 +36,7 @@ Project Card 是一个像素风格的卡牌自走棋游戏，计划使用 Godot 
 - 默认使用中文沟通。
 - 默认只在 `/Users/Zhuanz/Documents/Codex/Project Card` 主项目目录和 `main` 分支中工作，确保项目文件只有一个明确的当前版本。
 - 除非用户明确要求，不得创建新的 Git worktree、`agent/*` 临时分支或其他字母数字命名的并行开发区；多个开发任务按顺序完成。
-- 开始修改前检查当前目录与分支，玩法设计以主项目目录中的 `GAMEPLAY_DESIGN.md` 为唯一权威本地版本。
+- 开始修改前检查当前目录与分支。每轮默认只读主项目目录中的 `GAMEPLAY_DESIGN.md`；它是跨卡牌底层规则的权威入口。涉及具体卡牌、英雄、纹章、伤势或指示物时再读 `docs/CARD_CHARACTER_DESIGN.md` 与对应资源／效果数据；涉及精确时序、倍率或界面规格时再读 `docs/GAMEPLAY_RULE_DETAILS.md` 的相关章节。`docs/GAMEPLAY_DECISIONS.md` 只供核对确认与取代关系，迁移前快照不作为当前规则依据。
 - 修改前先阅读相关文件和已有项目约定。
 - 通过 Codex 或终端执行 Godot 自动测试、导入或无窗口场景加载时，每个进程必须显式使用 `--log-file /private/tmp/project-card-<用途>.log`，并串行执行，不得并行启动多个 Godot 实例；这可避免受限环境无法写入默认 `user://logs` 或争用日志轮转时触发 Godot 4.7.1 原生崩溃。
 - 对初学者不友好的 Godot / GDScript 写法，需要附带简短解释。
@@ -69,9 +69,12 @@ Codex 需要检查回答和练习结果；若仍有关键理解缺口，应先�
 
 ## 设计资料
 
-详细玩法、卡牌类型、堆叠规则、牌型、行动方式、准备与战斗流程记录在：
+设计资料按任务范围按需读取，不要每轮整份加载：
 
-- `GAMEPLAY_DESIGN.md`
+- `GAMEPLAY_DESIGN.md`：底层规则，默认入口。
+- `docs/GAMEPLAY_RULE_DETAILS.md`：通用规则详则与界面规格。
+- `docs/CARD_CHARACTER_DESIGN.md`：具体角色、卡牌、纹章、伤势与指示物。
+- `docs/GAMEPLAY_DECISIONS.md`：逐轮确认与取代记录。
 - `docs/VISUAL_REFERENCES.md`
 - `notes/chat-summary-2026-07-05.md`
 - `notes/open-questions.md`

@@ -73,6 +73,7 @@ var report_text: RichTextLabel
 var state_rows: Dictionary = {}
 var formula_popup: PanelContainer
 var formula_popup_text: RichTextLabel
+var _formula_popup_hide_generation: int = 0
 var player_drawer: Control
 var enemy_drawer: Control
 var output_drawer: Control
@@ -506,7 +507,7 @@ func _build_formula_popup() -> void:
 	formula_popup = PanelContainer.new()
 	formula_popup.name = "BattleLabFormulaPopup"
 	formula_popup.visible = false
-	formula_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	formula_popup.mouse_filter = Control.MOUSE_FILTER_STOP
 	formula_popup.z_index = 4000
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.025, 0.035, 0.043, 0.98)
@@ -518,10 +519,14 @@ func _build_formula_popup() -> void:
 	add_child(formula_popup)
 	formula_popup_text = RichTextLabel.new()
 	formula_popup_text.fit_content = false
+	formula_popup_text.scroll_active = true
+	formula_popup_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	formula_popup_text.add_theme_font_override("normal_font", BATTLE_LOG_FONT)
 	formula_popup_text.add_theme_font_size_override("normal_font_size", 12)
 	formula_popup_text.add_theme_color_override("default_color", Color("e8eee5"))
 	formula_popup.add_child(formula_popup_text)
+	formula_popup.mouse_entered.connect(_on_formula_popup_mouse_entered)
+	formula_popup.mouse_exited.connect(_schedule_formula_popup_hide)
 
 
 func _load_scenario_into_controls() -> void:
@@ -707,7 +712,8 @@ func _cycle_speed() -> void:
 		battle_controller.set_battle_speed_multiplier(SPEED_VALUES[_speed_index])
 	if is_instance_valid(battle_effect_layer):
 		for child: Node in battle_effect_layer.get_children():
-			BattleAttackTrailRenderer.set_flight_speed(child, SPEED_VALUES[_speed_index])
+			if BattleAttackTrailRenderer.is_flight_root(child):
+				BattleAttackTrailRenderer.set_flight_speed(child, SPEED_VALUES[_speed_index])
 
 
 func _use_new_seed() -> void:
@@ -1280,24 +1286,46 @@ func _on_log_meta_hover_started(meta: Variant) -> void:
 	if parts.size() != 3 or parts[0] != "formula":
 		return
 	var entry := _log_by_group.get(int(parts[1])) as BattleLogEntry
-	var formula := entry.get_formula(int(parts[2])) if entry != null else null
+	var event := entry.events[int(parts[2])] if entry != null and int(parts[2]) >= 0 and int(parts[2]) < entry.events.size() else null
+	var formula := event.formula if event != null else null
 	if formula == null:
 		return
-	var content := BattleFormulaPresenter.format_popup(formula)
+	var content := BattleFormulaPresenter.format_popup(formula, event)
 	formula_popup_text.text = content
-	var desired_size := BattleFormulaPresenter.measure_popup_size(content, formula_popup_text.get_theme_font("normal_font"), formula_popup_text.get_theme_font_size("normal_font_size"), FORMULA_POPUP_MIN_WIDTH, FORMULA_POPUP_MAX_WIDTH, FORMULA_POPUP_MAX_HEIGHT, FORMULA_POPUP_CONTENT_PADDING)
 	var viewport_size := get_viewport_rect().size
+	var desired_size := BattleFormulaPresenter.measure_popup_size(content, formula_popup_text.get_theme_font("normal_font"), formula_popup_text.get_theme_font_size("normal_font_size"), FORMULA_POPUP_MIN_WIDTH, FORMULA_POPUP_MAX_WIDTH, FORMULA_POPUP_MAX_HEIGHT, FORMULA_POPUP_CONTENT_PADDING, viewport_size)
 	var safe_size := Vector2(minf(desired_size.x, viewport_size.x), minf(desired_size.y, viewport_size.y))
 	formula_popup.size = safe_size
-	formula_popup_text.scroll_active = desired_size.y > safe_size.y
+	formula_popup_text.scroll_active = true
 	var mouse := get_viewport().get_mouse_position()
-	var desired_position := mouse + Vector2(-safe_size.x * 0.5, -safe_size.y - FORMULA_POPUP_MOUSE_GAP)
-	formula_popup.position = Vector2(clampf(desired_position.x, 0.0, maxf(viewport_size.x - safe_size.x, 0.0)), clampf(desired_position.y, 0.0, maxf(viewport_size.y - safe_size.y, 0.0)))
+	formula_popup.position = BattleFormulaPresenter.place_popup(
+		mouse, viewport_size, safe_size, FORMULA_POPUP_MOUSE_GAP
+	)
 	formula_popup.visible = true
+	_formula_popup_hide_generation += 1
 
 
 func _on_log_meta_hover_ended(_meta: Variant) -> void:
-	formula_popup.visible = false
+	_schedule_formula_popup_hide()
+
+
+func _schedule_formula_popup_hide() -> void:
+	if not is_instance_valid(formula_popup) or not formula_popup.visible:
+		return
+	_formula_popup_hide_generation += 1
+	_hide_formula_popup_after_pointer_transition(_formula_popup_hide_generation)
+
+
+func _on_formula_popup_mouse_entered() -> void:
+	_formula_popup_hide_generation += 1
+
+
+func _hide_formula_popup_after_pointer_transition(generation: int) -> void:
+	await get_tree().create_timer(0.2).timeout
+	if generation != _formula_popup_hide_generation or not is_instance_valid(formula_popup):
+		return
+	if not formula_popup.get_global_rect().has_point(get_viewport().get_mouse_position()):
+		formula_popup.visible = false
 
 
 func _clear_outputs() -> void:

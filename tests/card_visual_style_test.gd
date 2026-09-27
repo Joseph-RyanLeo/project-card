@@ -84,6 +84,10 @@ func _run() -> void:
 			),
 			"准备阶段直接显示 CardData 基础冷却秒数"
 		)
+		# Main 的战前预览已经向战场卡写入运行态数值；该用例从清空状态开始独立验证战斗补间。
+		card.clear_battle_vitals()
+		card.clear_battle_remaining_cooldown()
+		card.clear_battle_action_value()
 		card.set_battle_vitals(20, 5)
 		card.set_battle_remaining_cooldown(20.0)
 		card.set_battle_action_value(10)
@@ -98,7 +102,8 @@ func _run() -> void:
 			and card.value_label.text == "10",
 			"战斗数值不会同帧跳变，且两位整数冷却使用紧贴的中号数字正常显示"
 		)
-		await create_timer(0.09).timeout
+		for _frame: int in 8:
+			await process_frame
 		var middle_health := int(card.health_label.text)
 		var middle_action := int(card.value_label.text)
 		_expect(

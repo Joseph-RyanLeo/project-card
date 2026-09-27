@@ -1,5 +1,6 @@
 """集中同步已确认规则；源表只读，既有字段及人工确认内容不改。"""
 import runpy, json
+import re
 from pathlib import Path
 m=runpy.run_path(str(Path(__file__).with_name('sync_rules_review_20260911.py')))
 m['api'].__globals__['bridge']=runpy.run_path(m['BRIDGE'])
@@ -9,9 +10,13 @@ def save(n,d): (root/n).write_text(json.dumps(d,ensure_ascii=False,indent=2))
 def rows(t): return items(f'bitable/v1/apps/{base}/tables/{t}/records')
 sup,term,em='tblIwlBuC5p46saI','tblx7PuFx6SCvjqX','tblTf0rd7VJC95li'
 before={t:rows(t) for t in [sup,term,em]};save('before.json',before)
-doc=Path(__file__).resolve().parents[1].joinpath('GAMEPLAY_DESIGN.md').read_text()
-def section(title): return doc.split('### '+title+'\n',1)[1].split('\n### ',1)[0].strip()
-ind=section('指示物的持续、目标与转移')
+design_root=Path(__file__).resolve().parents[1]
+card_doc=design_root.joinpath('docs/CARD_CHARACTER_DESIGN.md').read_text()
+rule_doc=design_root.joinpath('docs/GAMEPLAY_RULE_DETAILS.md').read_text()
+def section(doc,title):
+ start=doc.split('### '+title+'\n',1)[1]
+ return re.split(r'\n#{1,3} ',start,maxsplit=1)[0].strip()
+ind=section(card_doc,'指示物的持续、目标与转移')
 notes={
  '太阳':'影响敌我双方，所有太阳携带者保留耀眼，其他单位失去耀眼。仅附着随从；战后保留。',
  '月亮':'基础护甲+8，移除时失去加成，战后保留。发射弹道开始固定3秒计时，期间行动不刷新，到期重新获得影蔽。',
@@ -27,7 +32,7 @@ for r in before[sup]:
  f=r['fields'];n=f.get('名称')
  if f.get('内容类型')=='指示物' and n in notes:
   updates.append((sup,r,{'原始描述':sources[n],'规范描述':sources[n]+'\n规则：'+notes[n],'待确认事项':None,'审阅状态':'已整理'}))
-mapping={'指示物':ind,'永久':section('战前快照与永久变化结算'),'装备':'堆叠只有一件则保留为小队装备，多件全部退回收藏；拆队统一退回收藏。直接修正小队属性，无需装备单卡提供对应属性。准备阶段免费卸下，战斗中不可手动卸下。准备属性变化重算并补满生命护甲。','纹章':'附加到战斗卡牌时随机选未遮挡合法空槽，无槽失败；工作包奖励另算。临时纹章占槽，被动立即生效，不补突击；自动合成暂不设计。','伤势':'只考虑未遮挡槽，先填空槽再升级；满且均不可升级则不生效不替换。伤势改变生存条件导致死亡正常进入死亡流程，无伤害来源死亡不触发施加者荣耀。','基础生命值':'成长同时增加当前生命；空白生命只加上限。上限降低只降上限，不扣当前生命，因此当前生命可暂时高于新上限；不算伤害受击、不消耗保护。晶体化把两种新增生命都转护甲，治疗仍恢复生命。','护甲':'永久基础护甲成长立即增加当前护甲，晶体化同样处理。','万能元素':'持有时排除，移除后恢复获得资格；不限制整局获得次数。无法发放唯一奖励时用预设替代奖励或不生成事件。'}
+mapping={'指示物':ind,'永久':section(rule_doc,'战前快照与永久变化结算'),'装备':'堆叠只有一件则保留为小队装备，多件全部退回收藏；拆队统一退回收藏。直接修正小队属性，无需装备单卡提供对应属性。准备阶段免费卸下，战斗中不可手动卸下。准备属性变化重算并补满生命护甲。','纹章':'附加到战斗卡牌时随机选未遮挡合法空槽，无槽失败；工作包奖励另算。临时纹章占槽，被动立即生效，不补突击；自动合成暂不设计。','伤势':'只考虑未遮挡槽，先填空槽再升级；满且均不可升级则不生效不替换。伤势改变生存条件导致死亡正常进入死亡流程，无伤害来源死亡不触发施加者荣耀。','基础生命值':'成长同时增加当前生命；空白生命只加上限。上限降低只降上限，不扣当前生命，因此当前生命可暂时高于新上限；不算伤害受击、不消耗保护。晶体化把两种新增生命都转护甲，治疗仍恢复生命。','护甲':'永久基础护甲成长立即增加当前护甲，晶体化同样处理。','万能元素':'持有时排除，移除后恢复获得资格；不限制整局获得次数。无法发放唯一奖励时用预设替代奖励或不生成事件。'}
 marker='\n本轮已确认补充：\n'
 for r in before[term]:
  n=r['fields']['词条']
