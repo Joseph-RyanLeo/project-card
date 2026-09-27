@@ -16,5 +16,5 @@ max_health = 9
 runes = Array[int]([3, 4, 1])
 rarity = 1
 art_texture = ExtResource("2_art")
-art_offset = Vector2i(2, 18)
+art_offset = Vector2i(7, 23)
 effect_text = "每累计损失8生命，永久数值+1（每场最多1次）。"
