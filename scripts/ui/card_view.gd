@@ -24,6 +24,7 @@ const StatusIndicatorStyle = preload("res://scripts/ui/status_indicator_style.gd
 const EquipmentIndicatorStyleScript = preload(
 	"res://scripts/ui/equipment_indicator_style.gd"
 )
+const SpellPreparationIconStyle = preload("res://scripts/ui/spell_preparation_icon_style.gd")
 const RUNE_FIRE_TEXTURE: Texture2D = preload("res://assets/runes/rune_fire.png")
 const RUNE_WATER_TEXTURE: Texture2D = preload("res://assets/runes/rune_water.png")
 const RUNE_WOOD_TEXTURE: Texture2D = preload("res://assets/runes/rune_wood.png")
@@ -44,7 +45,6 @@ const COOLDOWN_HOURGLASS_TEXTURE: Texture2D = preload(
 	"res://assets/stats/cooldown_hourglass.png"
 )
 const ZEAL_TEXTURE: Texture2D = preload("res://assets/stats/zeal.png")
-const SpellPreparationIconStyle = preload("res://scripts/ui/spell_preparation_icon_style.gd")
 const ResourceIndicatorStyle = preload("res://scripts/ui/resource_indicator_style.gd")
 const ZEAL_ICON_OFFSET := Vector2(-1.0, -1.0) # 装备热诚图标左上角相对旧沙漏向左、向上各移动1px
 const SPELL_RARITY_BADGE_TEXTURE: Texture2D = preload(
@@ -129,6 +129,8 @@ const ARMOR_VALUE_POSITIONS := {
 	3: [Vector2(82, 74), Vector2(82, 74), Vector2(84, 74), Vector2(84, 74)],
 } # 护甲数值按“位数 -> 数字1数量”使用的绝对卡面坐标
 const COOLDOWN_VALUE_POSITION := Vector2(-3, 24) # 冷却整数、小数点和小数位组合节点的绝对卡面坐标
+const PRIORITY_HOVER_LABEL_POSITION := Vector2(66.0, 19.0) # 悬停数字放在插画右上方，不遮卡名或行动图标
+const PRIORITY_HOVER_LABEL_SIZE := Vector2(28.0, 18.0) # 悬停优先级徽标的固定尺寸
 const MAX_STATS_RIGHT_EDGE: float = 109.0 # 999生命在当前绝对坐标下到达的最右边界
 const ATTACHMENT_PLACEMENT_POSITION := Vector2(8, -4) # 用户白色精确区域相对卡框的左上角
 const ATTACHMENT_PLACEMENT_SIZE := Vector2(81, 105) # 用户白色精确区域的原生逻辑尺寸
@@ -240,6 +242,7 @@ var _squad_action_preview_target: int = -1
 var _squad_health_preview_target: int = -1
 var _squad_armor_preview_target: int = -1
 var _target_priority_preview: int = -1 # 战斗中使用控制器的实际抽选权重；负数退回卡牌基础权重
+var _battle_target_weight_display_enabled: bool = false
 var _squad_cooldown_preview: float = -1.0 # 负值使用自身基础冷却，非负值显示装备热诚修正后的战前行动间隔
 
 # 所有真实卡共享一条静态时间轴；新加入的符文等到下一轮再同步开始。
@@ -409,6 +412,11 @@ func _build_drag_data(at_position: Vector2) -> Dictionary:
 		"preview_scale": drag_source_scale,
 		"showing_effect": showing_effect,
 	}
+	if card_data.card_type == CardData.CardType.SPELL and card_data.get_spell_preparation_column() >= 0:
+		drag_data["spell_icon_texture"] = SpellPreparationIconStyle.get_texture(
+			SpellPreparationIconStyle.source_column_for_trigger(card_data.spell_trigger_kind),
+			card_data.rarity
+		)
 	if (
 		is_instance_valid(_drag_source_slot)
 		and _drag_source_slot.has_method("enrich_drag_data")
@@ -477,6 +485,13 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 		visual_scale,
 		preview_card.card_size
 	)
+	if drag_data.has("spell_icon_texture"):
+		preview_root.configure_spell_preparation_icon(
+			drag_data.get("spell_icon_texture") as Texture2D,
+			grab_local_position,
+			preview_card.card_size,
+			drag_data.get("source_type") == &"spell_preparation"
+		)
 	var owned_item := drag_data.get("owned_card") as OwnedCard
 	if owned_item != null:
 		preview_root.set_equipment_card_data(owned_item.card_data)
@@ -1421,6 +1436,12 @@ func clear_battle_target_weight() -> void:
 		_refresh_priority_label()
 
 
+func set_battle_target_weight_display_enabled(enabled: bool) -> void:
+	_battle_target_weight_display_enabled = enabled
+	if is_node_ready():
+		_refresh_priority_label()
+
+
 func _refresh_priority_label() -> void:
 	if card_data == null:
 		priority_label.visible = false
@@ -1432,9 +1453,10 @@ func _refresh_priority_label() -> void:
 		else CardData.get_base_target_priority_for_action(action_type)
 	)
 	priority_label.visible = (
-		_mouse_hovered
-		and not _snapshot_mode
+		not _snapshot_mode
 		and card_data.card_type == CardData.CardType.MINION
+		and _mouse_hovered
+		and not _battle_target_weight_display_enabled
 	)
 
 
@@ -1739,7 +1761,8 @@ func _refresh_vitals_text() -> void:
 		armor_label.text = ""
 		return
 	if card_data.card_type == CardData.CardType.SPELL:
-		health_label.text = ""
+		health_label.text = str(_get_display_spell_durability())
+		_layout_vitals_numbers()
 		armor_label.text = ""
 		return
 	if card_data.card_type == CardData.CardType.RESOURCE:
@@ -2096,8 +2119,8 @@ func _refresh_card_type_visuals() -> void:
 			_set_control_rect(action_icon, SPELL_RARITY_BADGE_POSITION, SPELL_RARITY_BADGE_SIZE)
 		value_label.text = ""
 		value_label.visible = false
-		health_icon.visible = false
-		health_label.visible = false
+		health_icon.visible = true
+		health_label.visible = true
 		armor_icon.visible = false
 		armor_label.visible = false
 		cooldown_icon.visible = false
@@ -2519,6 +2542,11 @@ func _apply_pixel_layout() -> void:
 	_set_control_rect(cooldown_icon, cooldown_icon_position, cooldown_icon_size)
 	_set_control_rect(cooldown_label, COOLDOWN_VALUE_POSITION, cooldown_label.get_rendered_size())
 	_layout_vitals_numbers()
+	_set_control_rect(
+		priority_label,
+		PRIORITY_HOVER_LABEL_POSITION,
+		PRIORITY_HOVER_LABEL_SIZE
+	)
 	priority_label.visible = false
 	_set_control_rect(bottom_panel, bottom_area_position, bottom_area_size)
 	bottom_panel.clip_contents = false
@@ -2536,6 +2564,7 @@ func _apply_pixel_layout() -> void:
 	top_row.z_index = 10
 	bottom_panel.z_index = 10
 	stats_row.z_index = 20
+	priority_label.z_index = 2
 	action_icon.z_index = 10
 	value_label.z_index = 11
 	action_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -2749,6 +2778,8 @@ func _layout_vitals_numbers() -> void:
 		if card_data.card_type == CardData.CardType.EQUIPMENT:
 			health_value = card_data.equipment_health_delta
 			armor_value = card_data.equipment_armor_delta
+		elif card_data.card_type == CardData.CardType.SPELL:
+			health_value = _get_display_spell_durability()
 		else:
 			health_value = (
 				_owned_card.get_effective_max_health()
@@ -2777,6 +2808,12 @@ func _layout_vitals_numbers() -> void:
 		get_armor_value_position(armor_value),
 		armor_label.get_rendered_size()
 	)
+
+
+func _get_display_spell_durability() -> int:
+	if _owned_card != null and _owned_card.card_data == card_data and _owned_card.spell_durability >= 0:
+		return _owned_card.spell_durability
+	return int(card_data.rarity) + 1
 
 
 func _set_control_rect(control: Control, position_value: Vector2, size_value: Vector2) -> void:

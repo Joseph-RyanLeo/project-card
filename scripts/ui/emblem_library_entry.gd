@@ -7,6 +7,10 @@ signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 
 const StatusIndicatorStyle = preload("res://scripts/ui/status_indicator_style.gd")
 const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
+const InspectionItemDrag = preload("res://scripts/ui/inspection_item_drag.gd")
+const EMBLEM_ICON_SIZE := Vector2(14.0, 14.0) # 普通纹章按一个可见格显示
+const ELEMENT_STICKER_ICON_SIZE := Vector2(27.0, 27.0) # 元素贴纸原图居中显示，四边各留2像素
+const WOUND_ICON_SIZE := Vector2(14.0, 14.0) # 伤势目录保持卡面原始状态图标尺寸
 
 var definition: Dictionary = {}
 var drag_enabled: bool = false
@@ -63,7 +67,7 @@ func _gui_input(event: InputEvent) -> void:
 		_left_pressed = false
 		if drag_enabled and not definition.is_empty() and not _native_drag_started:
 			click_carry_requested.emit(
-				_build_drag_data(mouse.position, false),
+				_build_drag_data(_press_position, false),
 				get_global_transform_with_canvas() * mouse.position
 			)
 	accept_event()
@@ -73,9 +77,9 @@ func _refresh_visual() -> void:
 	if _icon == null:
 		_icon = TextureRect.new()
 		_icon.name = "Icon"
-		_icon.size = Vector2(14, 14)
+		_icon.size = WOUND_ICON_SIZE
 		_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		_icon.stretch_mode = TextureRect.STRETCH_KEEP
+		_icon.stretch_mode = TextureRect.STRETCH_SCALE
 		_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(_icon)
@@ -83,7 +87,7 @@ func _refresh_visual() -> void:
 		_missing_label = Label.new()
 		_missing_label.name = "MissingVisual"
 		_missing_label.position = Vector2(1, 0)
-		_missing_label.size = Vector2(14, 16)
+		_missing_label.size = WOUND_ICON_SIZE
 		_missing_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_missing_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		_missing_label.add_theme_font_size_override("font_size", 9)
@@ -95,11 +99,13 @@ func _refresh_visual() -> void:
 		CardSlotLayout.Kind.WOUND if is_wound else CardSlotLayout.Kind.EMBLEM,
 		status_id
 	)
-	if is_element_sticker():
+	if is_wound:
+		_icon.size = WOUND_ICON_SIZE
+	elif is_element_sticker():
 		_icon.texture = RuneStickerStyle.get_texture_by_id(status_id)
-		_icon.size = Vector2(27, 27)
+		_icon.size = ELEMENT_STICKER_ICON_SIZE
 	else:
-		_icon.size = Vector2(14, 14)
+		_icon.size = EMBLEM_ICON_SIZE
 	update_layout_visuals()
 	_icon.visible = _icon.texture != null
 	_missing_label.visible = not _icon.visible
@@ -117,30 +123,18 @@ func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictiona
 	var preview := TextureRect.new()
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.texture = _icon.texture
-	preview.stretch_mode = TextureRect.STRETCH_KEEP
+	preview.stretch_mode = TextureRect.STRETCH_SCALE
 	preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	preview.size = _icon.size
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if preview.texture == null:
 		var preview_label := Label.new()
 		preview_label.text = "?"
-		preview_label.size = Vector2(14, 14)
+		preview_label.size = _icon.size
 		preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		preview_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		preview.add_child(preview_label)
-	var source_transform := get_global_transform_with_canvas()
-	var preview_scale := source_transform.get_scale()
-	preview.scale = preview_scale
-	var preview_offset := source_transform.basis_xform(_icon.position - grab_position)
-	preview.position = preview_offset
-	if install_preview:
-		preview.z_index = 4096
-		preview.z_as_relative = false
-		var preview_root := Control.new()
-		preview_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		preview_root.add_child(preview)
-		set_drag_preview(preview_root)
-	return {
+	var data := {
 		"kind": &"emblem_library",
 		"source_type": &"emblem_library",
 		"emblem_id": definition.get("id", &"") if definition.get("status_kind", "emblem") != "wound" else &"",
@@ -149,7 +143,14 @@ func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictiona
 		"definition": definition.duplicate(true),
 		"source_entry": self,
 		"preview_texture": _icon.texture,
-		"preview_size": source_transform.basis_xform(_icon.size),
-		"preview_offset": preview_offset,
-		"drag_visual": preview,
 	}
+	var placement_inset := Vector2(2.0, 2.0) if is_element_sticker() else Vector2.ZERO
+	return InspectionItemDrag.build(
+		self,
+		preview,
+		grab_position,
+		_icon.position,
+		data,
+		install_preview,
+		placement_inset
+	)

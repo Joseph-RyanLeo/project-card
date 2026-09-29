@@ -85,6 +85,14 @@ func _is_card_drag(data: Variant) -> bool:
 		return false
 
 	var drag_data := data as Dictionary
+	if (
+		drag_data.get("source_type") == &"spell_preparation"
+		and drag_data.get("kind") == &"card"
+		and drag_data.get("owned_card") is OwnedCard
+		and drag_data.get("card_data") is CardData
+		and (drag_data.get("card_data") as CardData).card_type == CardData.CardType.SPELL
+	):
+		return true
 	if drag_data.get("source_type") != &"board":
 		return false
 	if drag_data.get("kind") == &"card":

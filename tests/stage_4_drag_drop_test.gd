@@ -1402,8 +1402,11 @@ func _test_phase_click_and_button_regressions() -> void:
 	)
 
 	var phase_button := main.get_node("%StartBattleButton") as Button
-	var tuner_button := main.get_node("%CardArtTunerButton") as Button
-	_expect(tuner_button.text == "卡面调整器", "主界面提供卡面调整器入口")
+	_expect(
+		main.get_node_or_null("%CardArtTunerButton") == null
+		and main._escape_pause_menu != null,
+		"调试工具入口已移入独立暂停菜单"
+	)
 	phase_button.emit_signal("pressed")
 	_expect(main.current_phase == 1, "阶段按钮可进入战斗阶段")
 	var battle_collection_card_view := _collection_card_view(main, 0)

@@ -11,7 +11,7 @@ const RunRewardState = preload("res://scripts/data/run_reward_state.gd")
 const RunSettlementJournal = preload("res://scripts/data/run_settlement_journal.gd")
 const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 
-const SCHEMA_VERSION: int = 2
+const SCHEMA_VERSION: int = 3
 const STATUS_SLOT_MIGRATION_VERSION: int = 1
 const ROW_KEYS: Array[StringName] = [
 	&"player_front",
@@ -30,7 +30,8 @@ func create_checkpoint(
 	reward_state: RunRewardState,
 	settlement_journal: RunSettlementJournal,
 	phase_on_save: int,
-	indicator_inventory: Dictionary = {}
+	indicator_inventory: Dictionary = {},
+	prepared_spell_instance_ids: Array[StringName] = []
 ) -> Dictionary:
 	var encoded_collection := _encode_collection_state(collection_state)
 	var encoded_rows := _encode_rows(rows)
@@ -48,6 +49,7 @@ func create_checkpoint(
 		"committed_battle_ids": _encode_committed_battles(settlement_journal.capture_state()),
 		"phase_on_save": phase_on_save,
 		"indicator_inventory": indicator_inventory.duplicate(true),
+		"prepared_spell_instance_ids": _encode_instance_ids(prepared_spell_instance_ids),
 	}
 
 
@@ -129,6 +131,12 @@ func restore_checkpoint(
 				var item := attachment["indicator"] as CelestialIndicator
 				if known_indicators.get(item.instance_id, -1) != item.kind:
 					return _failure("save_indicator_reference_invalid")
+	var prepared_spell_ids: Variant = _decode_prepared_spell_ids(
+		checkpoint.get("prepared_spell_instance_ids", []),
+		validation_collection
+	)
+	if prepared_spell_ids == null:
+		return _failure("save_prepared_spell_ids_invalid")
 	if not owned_collection.restore_state(decoded_collection):
 		return _failure("save_collection_restore_failed")
 	var restored_rows := _decode_rows(
@@ -156,6 +164,7 @@ func restore_checkpoint(
 		),
 		"phase_on_save": int(checkpoint.get("phase_on_save", 0)),
 		"indicator_inventory": inventory.duplicate(true),
+		"prepared_spell_instance_ids": prepared_spell_ids,
 		"slot_migration_returns": decoded_collection_result.get("migration_returns", []).duplicate(true),
 	}
 
@@ -191,6 +200,35 @@ func _encode_collection_state(collection_state: Dictionary) -> Dictionary:
 		"next_instance_sequence": maxi(int(collection_state.get("next_instance_sequence", 1)), 1),
 		"cards": encoded_cards,
 	}
+
+
+func _encode_instance_ids(instance_ids: Array[StringName]) -> Array[String]:
+	var encoded: Array[String] = []
+	for instance_id: StringName in instance_ids:
+		encoded.append(String(instance_id))
+	return encoded
+
+
+func _decode_prepared_spell_ids(value: Variant, collection: OwnedCardCollection) -> Variant:
+	if not value is Array:
+		return null
+	var result: Array[StringName] = []
+	var seen: Dictionary = {}
+	for item: Variant in value as Array:
+		var instance_id := StringName(String(item))
+		var owned := collection.get_by_instance_id(instance_id)
+		if (
+			instance_id.is_empty()
+			or seen.has(instance_id)
+			or owned == null
+			or owned.card_data == null
+			or owned.card_data.card_type != CardData.CardType.SPELL
+			or owned.spell_durability <= 0
+		):
+			return null
+		seen[instance_id] = true
+		result.append(instance_id)
+	return result
 
 
 func _decode_collection_state(

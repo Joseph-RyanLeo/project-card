@@ -14,4 +14,4 @@ card_type = 2
 spell_trigger_kind = 3
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(16, -4)
-effect_text = "后排远程友军立即行动1次。"
+effect_text = "战斗第8秒，后排远程友军立即行动1次。"

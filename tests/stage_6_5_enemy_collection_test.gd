@@ -117,7 +117,7 @@ func _test_world_rows_views_and_lock() -> void:
 		"阶段 7 新增正式开始战斗按钮，不恢复旧阶段循环调试按钮"
 	)
 	_expect(main.get_node_or_null("%SelectedCardView") == null and main.get_node_or_null("%HandCardRow") == null, "旧大卡预览与手牌 UI 已删除")
-	_expect(main.card_art_tuner_button != null and main.get_node("%BadgePanel") != null, "卡面调整器与强化徽章预留节点保留")
+	_expect(main._escape_pause_menu != null and main.get_node("%BadgePanel") != null, "暂停菜单与强化徽章预留节点保留")
 	main.queue_free()
 	await process_frame
 

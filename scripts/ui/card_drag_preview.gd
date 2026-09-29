@@ -25,6 +25,8 @@ const EQUIPMENT_INDICATOR_SIZE := EquipmentIndicatorStyleScript.DISPLAY_SIZE
 const EQUIPMENT_TRANSITION_DURATION := 0.10 # 装备牌与指示物交叉渐变的时长
 const EQUIPMENT_INDICATOR_START_SCALE := 2.0 # 装备牌变为指示物时的起始放大倍数
 const EQUIPMENT_INDICATOR_DROP_LIFT := Vector2(0.0, 4.0) # 变成指示物时从上方短促落下的距离
+const SPELL_PREPARATION_ICON_SIZE := Vector2(42.0, 42.0) # 法术准备栏原生图标尺寸
+const SPELL_PREPARATION_TRANSITION_DURATION := 0.10 # 整卡与准备图标平滑切换的时长
 
 var _card_visual: Control
 var _shadow: Panel
@@ -39,6 +41,9 @@ var _equipment_indicator_visual: TextureRect
 var _equipment_indicator_shadow: TextureRect
 var _equipment_indicator_mode: bool = false
 var _equipment_transition: Tween
+var _spell_preparation_icon: TextureRect
+var _spell_preparation_transition: Tween
+var _spell_preparation_icon_mode: bool = false
 var _preview_scale := Vector2.ONE
 var _equipment_indicator_grab_local_position: Vector2 = EQUIPMENT_INDICATOR_SIZE * 0.5
 
@@ -180,6 +185,69 @@ func get_card_global_corners() -> PackedVector2Array:
 
 func get_card_visual() -> Control:
 	return _card_visual
+
+
+func configure_spell_preparation_icon(
+	icon_texture: Texture2D,
+	grab_local_position: Vector2,
+	source_card_size: Vector2,
+	starts_as_icon: bool
+) -> void:
+	_spell_preparation_icon = TextureRect.new()
+	_spell_preparation_icon.name = "SpellPreparationDragIcon"
+	_spell_preparation_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_spell_preparation_icon.stretch_mode = TextureRect.STRETCH_SCALE
+	_spell_preparation_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_spell_preparation_icon.texture = icon_texture
+	_spell_preparation_icon.size = SPELL_PREPARATION_ICON_SIZE
+	_spell_preparation_icon.scale = _preview_scale
+	_spell_preparation_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spell_preparation_icon.z_index = 10
+	var icon_grab_position := grab_local_position
+	if not starts_as_icon:
+		icon_grab_position *= SPELL_PREPARATION_ICON_SIZE / source_card_size
+	_spell_preparation_icon.position = -icon_grab_position
+	_spell_preparation_icon.modulate.a = 1.0 if starts_as_icon else 0.0
+	_card_visual.modulate.a = 0.0 if starts_as_icon else 0.9
+	_shadow.visible = not starts_as_icon
+	_spell_preparation_icon_mode = starts_as_icon
+	add_child(_spell_preparation_icon)
+
+
+func set_spell_preparation_icon_mode(enabled: bool) -> void:
+	if (
+		not is_instance_valid(_spell_preparation_icon)
+		or enabled == _spell_preparation_icon_mode
+	):
+		return
+	_spell_preparation_icon_mode = enabled
+	if is_instance_valid(_spell_preparation_transition) and _spell_preparation_transition.is_running():
+		_spell_preparation_transition.kill()
+	_shadow.visible = not enabled
+	_spell_preparation_transition = create_tween().set_parallel(true)
+	_spell_preparation_transition.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_spell_preparation_transition.tween_property(
+		_card_visual, "modulate:a", 0.0 if enabled else 0.9, SPELL_PREPARATION_TRANSITION_DURATION
+	)
+	_spell_preparation_transition.tween_property(
+		_spell_preparation_icon,
+		"modulate:a",
+		1.0 if enabled else 0.0,
+		SPELL_PREPARATION_TRANSITION_DURATION
+	)
+
+
+func prepare_spell_preparation_transition() -> void:
+	# 一次性卡面快照在淡出期间冻结，避免为过渡动画持续重绘 SubViewport。
+	if is_instance_valid(_snapshot_visual):
+		var snapshot_viewport := _snapshot_visual.get_node_or_null("CardSnapshotViewport") as SubViewport
+		if snapshot_viewport != null:
+			snapshot_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	if is_instance_valid(_shadow):
+		_shadow.visible = false
+	if is_instance_valid(_equipment_indicator_visual):
+		_equipment_indicator_visual.visible = false
+	set_process(false)
 
 
 func get_source_card_view() -> Variant:

@@ -54,10 +54,83 @@ func _run() -> void:
 	check(not main.get_tree().paused and main.battle_pause_button.text == "⏸️", "暂停期间根窗口仍可点击按钮继续战斗")
 	await create_timer(0.1).timeout
 	check(main.battle_controller.elapsed_seconds > running_time, "手动继续后战斗逻辑时间恢复推进")
+	await _send_key(KEY_ESCAPE)
+	check(
+		main.get_tree().paused and main._escape_pause_menu.is_menu_open(),
+		"键盘 Esc 打开独立暂停菜单并暂停游戏"
+	)
+	await _check_frozen(main, "Esc 暂停菜单")
+	var return_button := _find_button_with_text(main._escape_pause_menu, "返回")
+	if return_button != null:
+		return_button.pressed.emit()
+	check(
+		not main.get_tree().paused and not main._escape_pause_menu.is_menu_open(),
+		"返回关闭菜单并恢复此前运行的游戏"
+	)
+	await _send_key(KEY_ESCAPE)
+	var tuner_menu_button := _find_button_with_text(main._escape_pause_menu, "卡面调整器")
+	if tuner_menu_button != null:
+		tuner_menu_button.pressed.emit()
+	check(display.is_card_art_tuner_open(), "暂停菜单入口打开卡面调整器")
+	if display.is_card_art_tuner_open():
+		await _send_key(KEY_ESCAPE)
+	check(main.get_tree().paused and main._escape_pause_menu.is_menu_open(), "关闭卡面调整器后仍回到暂停菜单")
+	var battle_lab_menu_button := _find_button_with_text(main._escape_pause_menu, "战斗实验室")
+	if battle_lab_menu_button != null:
+		battle_lab_menu_button.pressed.emit()
+	check(display.is_battle_lab_open(), "暂停菜单入口打开战斗实验室")
+	if display.is_battle_lab_open():
+		await _send_key(KEY_ESCAPE)
+	var attack_lab_menu_button := _find_button_with_text(main._escape_pause_menu, "攻击特效调试器")
+	if attack_lab_menu_button != null:
+		attack_lab_menu_button.pressed.emit()
+	check(display.is_attack_effect_lab_open(), "暂停菜单入口打开攻击特效调试器")
+	if display.is_attack_effect_lab_open():
+		await _send_key(KEY_ESCAPE)
+	check(
+		main._escape_pause_menu.is_menu_open() and main.get_tree().paused,
+		"工具内 Esc 关闭当前工具并返回暂停菜单"
+	)
+	await _send_key(KEY_ESCAPE)
+	check(not main.get_tree().paused, "再次按 Esc 关闭菜单并恢复战斗")
+	var escape_button := main._escape_pause_menu.get_node("EscapeMenuButton") as Button
+	var escape_button_position := (
+		escape_button.get_global_transform_with_canvas() * (escape_button.size * 0.5)
+	)
+	await _send_mouse(display, MOUSE_BUTTON_LEFT, escape_button_position)
+	check(main.get_tree().paused and main._escape_pause_menu.is_menu_open(), "点击画面 Esc 按钮打开暂停菜单")
+	await _send_key(KEY_ESCAPE)
+	check(not main.get_tree().paused, "Esc 按键可关闭由画面按钮打开的菜单")
+	await _send_key(KEY_F2)
+	check(main._developer_console.visible, "F2 可先打开开发控制台")
+	await _send_key(KEY_ESCAPE)
+	check(
+		not main._developer_console.visible
+		and not main._escape_pause_menu.is_menu_open()
+		and not main.get_tree().paused,
+		"控制台打开时 Esc 只关闭控制台，不穿透开启暂停菜单"
+	)
+	await _click_pause_button(display, main)
+	await _send_key(KEY_ESCAPE)
+	check(main.get_tree().paused and main._escape_pause_menu.is_menu_open(), "已有手动暂停时仍可打开 Esc 菜单")
+	await _send_key(KEY_ESCAPE)
+	check(
+		main.get_tree().paused
+		and not main._escape_pause_menu.is_menu_open()
+		and main._manual_pause_requested,
+		"关闭 Esc 菜单只释放菜单暂停，不解除既有手动暂停"
+	)
+	await _click_pause_button(display, main)
 	var source_card: CardView
 	for row: BattlefieldRow in [main.front_row, main.back_row, main.enemy_back_row, main.enemy_front_row]:
 		for slot: BoardSlot in row.get_squads():
-			if slot.card_view != null and slot.card_view.is_visible_in_tree() and slot.card_view.get_global_rect().intersects(Rect2(0, 0, 1280, 720)):
+			if (
+				slot.card_view != null
+				and slot.card_view.card_data != null
+				and slot.card_view.card_data.card_type == CardData.CardType.MINION
+				and slot.card_view.is_visible_in_tree()
+				and slot.card_view.get_global_rect().intersects(Rect2(0, 0, 1280, 720))
+			):
 				source_card = slot.card_view
 				break
 		if source_card != null:
@@ -67,7 +140,13 @@ func _run() -> void:
 			if slot.get_child_count() == 0:
 				continue
 			var candidate := slot.get_child(0) as CardView
-			if candidate != null and candidate.is_visible_in_tree() and candidate.get_global_rect().intersects(Rect2(0, 0, 1280, 720)):
+			if (
+				candidate != null
+				and candidate.card_data != null
+				and candidate.card_data.card_type == CardData.CardType.MINION
+				and candidate.is_visible_in_tree()
+				and candidate.get_global_rect().intersects(Rect2(0, 0, 1280, 720))
+			):
 				source_card = candidate
 				break
 	check(source_card != null, "真实战斗卡面可用于根窗口命中")
@@ -88,14 +167,25 @@ func _run() -> void:
 
 		await _open_from_root(display, source_card)
 		await process_frame
-		var close_button := main._inspection_overlay.get_node("CloseInspectionButton") as Control if is_instance_valid(main._inspection_overlay) else null
-		if close_button != null:
-			var button_position := close_button.get_global_transform_with_canvas() * (close_button.size * 0.5)
-			await _send_mouse(display, MOUSE_BUTTON_LEFT, button_position)
-			await create_timer(0.25, true).timeout
-			check(main._inspection_overlay == null and not main.get_tree().paused, "根窗口真实点击关闭按钮关闭并恢复战斗")
-		else:
-			check(false, "检视层创建关闭按钮")
+		check(
+			main._inspection_overlay.get_node_or_null("CloseInspectionButton") == null,
+			"检视层不创建冗余关闭按钮"
+		)
+		main._toggle_inspection_library()
+		await create_timer(0.3, true).timeout
+		var display_button := main._inspection_display_mode_button as Control
+		var previous_mode: bool = main._inspection_card_view.showing_effect
+		var display_button_position := (
+			display_button.get_global_transform_with_canvas() * (display_button.size * 0.5)
+		)
+		await _send_mouse(display, MOUSE_BUTTON_LEFT, display_button_position)
+		check(
+			main._inspection_card_view.showing_effect != previous_mode
+			and is_instance_valid(main._inspection_overlay),
+			"工具箱展开、卡面让位后仍可真实点击显示描述按钮"
+		)
+		await _send_key(KEY_ESCAPE)
+		await create_timer(0.25, true).timeout
 
 		await _open_from_root(display, source_card)
 		await _send_key(KEY_ESCAPE)
@@ -162,6 +252,16 @@ func _click_pause_button(display: GameDisplay, main: Control) -> void:
 	var button := main.battle_pause_button as Control
 	var internal_position := button.get_global_transform_with_canvas() * (button.size * 0.5)
 	await _send_mouse(display, MOUSE_BUTTON_LEFT, internal_position)
+
+
+func _find_button_with_text(node: Node, text_value: String) -> Button:
+	if node is Button and (node as Button).text == text_value:
+		return node as Button
+	for child: Node in node.get_children():
+		var found := _find_button_with_text(child, text_value)
+		if found != null:
+			return found
+	return null
 
 
 func _open_from_root(display: GameDisplay, card: CardView) -> void:

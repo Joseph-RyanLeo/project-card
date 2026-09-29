@@ -63,14 +63,20 @@ func enqueue_emblem_instance(entry: Dictionary) -> bool:
 
 
 func drain_emblem_instances_for_battle(battle_instance_id: StringName) -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
+	var result := get_emblem_instances_for_battle(battle_instance_id)
 	var remaining: Array[Dictionary] = []
+	for entry: Dictionary in pending_emblem_instances:
+		if entry.get("battle_instance_id", &"") != battle_instance_id:
+			remaining.append(entry)
+	pending_emblem_instances = remaining
+	return result
+
+
+func get_emblem_instances_for_battle(battle_instance_id: StringName) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
 	for entry: Dictionary in pending_emblem_instances:
 		if entry.get("battle_instance_id", &"") == battle_instance_id:
 			result.append(entry.duplicate(true))
-		else:
-			remaining.append(entry)
-	pending_emblem_instances = remaining
 	return result
 
 

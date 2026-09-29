@@ -80,7 +80,7 @@ const DEFAULT_EFFECT_STRATEGY: Dictionary = {
 	"water_cross_side_fill": false,
 	"dark_transfer_on_death": false,
 	"continuous_stack_mode": &"independent",
-	"wood_projection": &"closest_horizontal_center",
+	"wood_projection": &"anchor_centerline_entity_overlap",
 	"cover_mode": &"front_entity_union_over_half",
 } # 特殊卡牌以后只覆盖这些策略，不改底层分层流程
 

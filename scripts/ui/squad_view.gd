@@ -56,6 +56,9 @@ const BATTLE_STATUS_LABEL_SIZE := Vector2(124.0, 28.0) # 疲劳等小队级 Buff
 const BATTLE_STATUS_LABEL_TOP: float = 18.0 # 战斗状态条相对卡牌顶边的位置，避开相邻行牌型标签
 const BATTLE_ACTION_LABEL_SIZE := Vector2(124.0, 16.0) # 单次行动者或目标反馈的固定显示尺寸
 const BATTLE_ACTION_LABEL_TOP: float = 48.0 # 行动反馈覆盖在小队中部的垂直位置
+const TARGET_PRIORITY_BADGE_SIZE := Vector2(32.0, 20.0) # 小队有效受击优先级标签的尺寸
+const TARGET_PRIORITY_BADGE_TOP: float = 19.0 # 标签放在最后一张卡的右上插画区，避开标题、行动图标与状态数值
+const TARGET_PRIORITY_BADGE_INSET: float = 3.0 # 标签距小队可见右边缘的留白
 const BATTLE_ACTION_FEEDBACK_SECONDS: float = 0.7 # 单次行动文字保持可读的时长（秒）
 const BATTLE_ACTION_LIFT_PIXELS: float = 6.0 # 小队行动时全部卡牌向上抬起的距离
 const BATTLE_ACTION_LIFT_SECONDS: float = 0.18 # 小队完成抬起并回到原位的总时长（秒）
@@ -73,6 +76,8 @@ var squad_data: SquadData
 # 真实模式和预览模式互斥；ghost_cards 标识预览中需要半透明的待加入卡。
 var _preview_squad_data: SquadData
 var _preview_ghost_cards: Array[CardData] = [] # 预览中半透明的卡；为空时整队都是虚影
+var _show_target_priority: bool = false
+var _target_priority_weight: int = -1
 var _card_views: Dictionary = {}
 var _drag_enabled: bool = false
 var _source_row: Node
@@ -122,6 +127,7 @@ var _equipment_indicator_base_position := Vector2.ZERO
 @onready var pattern_label: Label = %PatternLabel
 @onready var battle_status_label: Label = %BattleStatusLabel
 @onready var battle_action_label: Label = %BattleActionLabel
+@onready var target_priority_badge: Label = %TargetPriorityBadge
 
 
 # --- 生命周期与真实/预览显示源 ---
@@ -137,6 +143,7 @@ func set_squad_data(value: SquadData) -> void:
 	_preview_ghost_cards.clear()
 	_battle_pattern_result = null
 	_battle_active_rune_slots.clear()
+	_target_priority_weight = -1
 	if is_node_ready():
 		_refresh()
 
@@ -225,7 +232,9 @@ func set_battle_status(
 	)
 	var action_source := display_data.get_action_source()
 	var vitals_source := display_data.get_vitals_source()
+	_target_priority_weight = target_weight
 	for card_view: CardView in get_card_views():
+		card_view.set_battle_target_weight_display_enabled(_show_target_priority)
 		var masked_indices: Array[int] = []
 		masked_indices.assign(masked_runes_by_card.get(card_view.card_data, []))
 		card_view.set_battle_masked_runes(masked_indices)
@@ -265,6 +274,29 @@ func set_battle_status(
 	if fatigue_stacks > 0:
 		battle_status_label.text = "疲劳 %d" % fatigue_stacks
 	battle_status_label.visible = fatigue_stacks > 0
+	_refresh_target_priority_badge()
+
+
+func set_target_priority_display_enabled(enabled: bool) -> void:
+	_show_target_priority = enabled
+	for card_view: CardView in get_card_views():
+		card_view.set_battle_target_weight_display_enabled(enabled)
+	_refresh_target_priority_badge()
+
+
+func _refresh_target_priority_badge() -> void:
+	if not is_instance_valid(target_priority_badge):
+		return
+	var display_data := get_display_data()
+	target_priority_badge.text = str(_target_priority_weight)
+	target_priority_badge.visible = (
+		_show_target_priority
+		and _target_priority_weight >= 0
+		and display_data != null
+		and display_data.get_action_source() != null
+		and not is_preview()
+		and not _battle_result_active
+	)
 
 
 func clear_battle_status() -> void:
@@ -274,11 +306,15 @@ func clear_battle_status() -> void:
 	battle_action_label.visible = false
 	_battle_pattern_result = null
 	_battle_active_rune_slots.clear()
+	_target_priority_weight = -1
+	target_priority_badge.visible = false
 	for card_view: CardView in get_card_views():
 		card_view.clear_battle_masked_runes()
 		card_view.clear_battle_rune_element_overrides()
 		card_view.set_battle_status_slot_states([], [])
 		card_view.clear_battle_vitals()
+		card_view.clear_battle_target_weight()
+		card_view.set_battle_target_weight_display_enabled(false)
 		card_view.clear_battle_remaining_cooldown()
 		card_view.clear_battle_action_value()
 		card_view.clear_battle_action_type()
@@ -809,6 +845,12 @@ func _refresh() -> void:
 	stack_feedback_layer.custom_minimum_size = custom_minimum_size
 	stack_feedback_layer.size = custom_minimum_size
 	stack_feedback_layer.pivot_offset = custom_minimum_size * 0.5
+	target_priority_badge.custom_minimum_size = TARGET_PRIORITY_BADGE_SIZE
+	target_priority_badge.size = TARGET_PRIORITY_BADGE_SIZE
+	target_priority_badge.position = Vector2(
+		floorf(display_width - TARGET_PRIORITY_BADGE_SIZE.x - TARGET_PRIORITY_BADGE_INSET),
+		TARGET_PRIORITY_BADGE_TOP
+	)
 	squad_lift_layer.custom_minimum_size = custom_minimum_size
 	_apply_squad_lift_position()
 	if is_instance_valid(_squad_shadow):
@@ -866,6 +908,7 @@ func _refresh() -> void:
 	if _stack_target_feedback_strength > 0.0:
 		_ensure_stack_target_snapshots()
 	_apply_battle_result_visual_state(display_width)
+	_refresh_target_priority_badge()
 
 
 func get_equipment_indicator() -> Control:

@@ -131,7 +131,8 @@ func _test_card_views(cards: Array[CardData]) -> void:
 		and spell_view.rune_row.visible == false
 		and spell_view.effect_text_label.visible
 		and not spell_view.cooldown_icon.visible
-		and not spell_view.health_icon.visible
+		and spell_view.health_icon.visible
+		and spell_view.health_label.text == str(int(spell_view.card_data.rarity) + 1)
 		and not spell_view.armor_icon.visible,
 		"法术使用中央类型图标，隐藏符文/状态并显示效果文字"
 	)

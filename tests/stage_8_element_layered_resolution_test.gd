@@ -35,6 +35,7 @@ func _run() -> void:
 	await _test_straight_and_same_element_two_pair()
 	await _test_fire_independent_statuses()
 	await _test_water_dark_light_wood_targets()
+	await _test_wood_centerline_projection()
 	await _test_combinations_and_layering()
 	_test_water_target_boundaries()
 	_test_cover_union_and_boundary()
@@ -512,6 +513,117 @@ func _test_water_dark_light_wood_targets() -> void:
 		await _dispose(conversion)
 
 
+func _test_wood_centerline_projection() -> void:
+	var aligned := _wood_projection_fixture(7, [_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9)])
+	var front: Array[BattleSquadState] = aligned["front"]
+	var back: Array[BattleSquadState] = aligned["back"]
+	var aligned_events := _resolve_wood_projection(aligned, front[3], 2)
+	_expect(aligned_events.size() == 1 and aligned_events[0].target == back[0], "前排七小队中央轴命中对齐的后排单卡并真实结算木副事件")
+	_expect(is_equal_approx(aligned_events[0].formula.element_multiplier, 0.40), "中心线命中仍使用原木二枚倍率")
+	var left_edge_events := _resolve_wood_projection(aligned, front[0], 2)
+	var right_edge_events := _resolve_wood_projection(aligned, front[6], 2)
+	_expect(left_edge_events.is_empty() and right_edge_events.is_empty(), "前排七小队左右边缘不再斜跨到居中后排")
+	await _dispose(aligned["controller"] as BattleController)
+
+	var gap_fixture := _wood_projection_fixture(1, [
+		_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9),
+		_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9),
+	])
+	var gap_front: Array[BattleSquadState] = gap_fixture["front"]
+	var gap_back: Array[BattleSquadState] = gap_fixture["back"]
+	gap_front[0].logical_center = (gap_back[0].logical_right + gap_back[1].logical_left) * 0.5
+	_expect(_resolve_wood_projection(gap_fixture, gap_front[0], 2).is_empty(), "投影落在后排小队间隙时不生成穿刺事件")
+	await _dispose(gap_fixture["controller"] as BattleController)
+
+	var stacked_squad := SquadData.from_cards([
+		_card(CardData.ActionType.HEAL, 1, 100, 0, 9.9),
+		_card(CardData.ActionType.HEAL, 1, 100, 0, 9.9),
+	], SquadData.TwoCardLayout.COMPACT)
+	var stack_fixture := _wood_projection_fixture(1, [stacked_squad])
+	var stack_front: Array[BattleSquadState] = stack_fixture["front"]
+	var stack_back: Array[BattleSquadState] = stack_fixture["back"]
+	stack_front[0].logical_center = stack_back[0].logical_left + 2.0
+	_expect(
+		stack_back[0].squad_data.get_display_width() > 99
+		and _resolve_wood_projection(stack_fixture, stack_front[0], 3).size() == 1,
+		"堆叠小队以完整实体宽度命中，投影不必接近小队中心"
+	)
+	await _dispose(stack_fixture["controller"] as BattleController)
+
+	var reverse := _wood_projection_fixture(7, [_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9)], BattleSquadState.Side.ENEMY)
+	var reverse_front: Array[BattleSquadState] = reverse["front"]
+	var reverse_back: Array[BattleSquadState] = reverse["back"]
+	_expect(_resolve_wood_projection(reverse, reverse_front[3], 3).size() == 1 and reverse_back.size() == 1, "木投影对敌方阵营使用同一中心线范围判定")
+	await _dispose(reverse["controller"] as BattleController)
+
+	var empty_row := _wood_projection_fixture(1, [])
+	var empty_front: Array[BattleSquadState] = empty_row["front"]
+	_expect(_resolve_wood_projection(empty_row, empty_front[0], 2).is_empty(), "另一排为空时无木副事件")
+	await _dispose(empty_row["controller"] as BattleController)
+
+	var defeated_row := _wood_projection_fixture(1, [_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9)])
+	var defeated_front: Array[BattleSquadState] = defeated_row["front"]
+	var defeated_back: Array[BattleSquadState] = defeated_row["back"]
+	defeated_back[0].alive = false
+	_expect(_resolve_wood_projection(defeated_row, defeated_front[0], 2).is_empty(), "另一排只剩死亡单位时不向其它位置兜底")
+	await _dispose(defeated_row["controller"] as BattleController)
+
+	var edge_fixture := _wood_projection_fixture(1, [_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9)])
+	var edge_front: Array[BattleSquadState] = edge_fixture["front"]
+	var edge_back: Array[BattleSquadState] = edge_fixture["back"]
+	edge_front[0].logical_center = edge_back[0].logical_left
+	var left_boundary := _resolve_wood_projection(edge_fixture, edge_front[0], 2)
+	edge_front[0].logical_center = edge_back[0].logical_right
+	var right_boundary := _resolve_wood_projection(edge_fixture, edge_front[0], 2)
+	_expect(left_boundary.size() == 1 and right_boundary.is_empty(), "实体范围按左闭右开判定，不用epsilon扩展命中")
+	await _dispose(edge_fixture["controller"] as BattleController)
+
+
+func _wood_projection_fixture(front_count: int, back_squads: Array, front_side: int = BattleSquadState.Side.PLAYER) -> Dictionary:
+	var controller := BattleController.new()
+	test_root.add_child(controller)
+	var front_row: StringName = &"player_front" if front_side == BattleSquadState.Side.PLAYER else &"enemy_front"
+	var back_row: StringName = &"player_back" if front_side == BattleSquadState.Side.PLAYER else &"enemy_back"
+	var front_states: Array[BattleSquadState] = []
+	var back_states: Array[BattleSquadState] = []
+	for index: int in front_count:
+		front_states.append(_state(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9), front_side, front_row, index))
+	for index: int in back_squads.size():
+		back_states.append(_state(back_squads[index] as SquadData, front_side, back_row, index))
+	var source_side := BattleSquadState.Side.ENEMY if front_side == BattleSquadState.Side.PLAYER else BattleSquadState.Side.PLAYER
+	var source := _state(_single_squad(CardData.ActionType.MELEE, 10, 100, 0, 9.0), source_side, &"enemy_front" if source_side == BattleSquadState.Side.ENEMY else &"player_front", 0)
+	if front_side == BattleSquadState.Side.PLAYER:
+		controller.player_states.assign(front_states + back_states)
+		controller.enemy_states.assign([source])
+	else:
+		controller.enemy_states.assign(front_states + back_states)
+		controller.player_states.assign([source])
+	controller.recalculate_logical_layout()
+	return {"controller": controller, "front": front_states, "back": back_states, "source": source}
+
+
+func _resolve_wood_projection(fixture: Dictionary, anchor: BattleSquadState, count: int) -> Array[BattleEffectEvent]:
+	var controller := fixture["controller"] as BattleController
+	var source := fixture["source"] as BattleSquadState
+	var carrier := _raw_event(source, anchor, 10.0)
+	var action := {
+		"actor": source,
+		"action_type": CardData.ActionType.MELEE,
+		"pattern": anchor.squad_data.get_rune_pattern_result(),
+		"group_id": 901,
+	}
+	var config := {"multiplier": 0.40 if count == 2 else 0.65, "pierces_armor": count >= 3}
+	var generated: Array[BattleEffectEvent] = controller._build_wood_events(action, carrier, count, config, 1)
+	var resolved: Array[BattleEffectEvent] = []
+	var listener := func(event: BattleEffectEvent) -> void:
+		if event.element_type == CardData.ElementType.WOOD:
+			resolved.append(event)
+	controller.effect_resolved.connect(listener)
+	controller._resolve_effect_layer(generated)
+	controller.effect_resolved.disconnect(listener)
+	return resolved
+
+
 func _test_combinations_and_layering() -> void:
 	var controller := await _full_house_controller(5101)
 	var layers: Array[int] = []
@@ -654,7 +766,7 @@ func _test_formula_popup_ui() -> void:
 		else Vector2.ZERO
 	)
 	var straight_middle := Vector2(400, 150)
-	var impact_node := main.battle_effect_layer.get_node_or_null("ElementImpact")
+	var impact_node: Node = main.battle_effect_layer.get_node_or_null("ElementImpact")
 	var has_impact := impact_node != null
 	var speed_changes_safe := true
 	for speed_index: int in range(main.BATTLE_SPEED_MULTIPLIERS.size()):
@@ -782,15 +894,21 @@ func _controller_for_element(element: int, count: int, action_type: int, seed: i
 	for _index: int in count: runes.append(element)
 	var actor := _squad_with_runes(runes, action_type, base_value, 100, 0, 9.0)
 	var enemies: Array[Dictionary] = []
-	for index: int in 4:
-		var row := &"enemy_back" if element == CardData.ElementType.WOOD and index == 3 else &"enemy_front"
-		enemies.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, target_health, 0, 9.9), row, index if row == &"enemy_front" else 0))
+	if element == CardData.ElementType.WOOD:
+		enemies.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, target_health, 0, 9.9), &"enemy_front", 0))
+		enemies.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, target_health, 0, 9.9), &"enemy_back", 0))
+	else:
+		for index: int in 4:
+			enemies.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, target_health, 0, 9.9), &"enemy_front", index))
 	var players: Array[Dictionary] = [_entry(actor, &"player_front", 0)]
 	if action_type in [CardData.ActionType.HEAL, CardData.ActionType.DEFENSE]:
-		players.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9), &"player_front", 1))
-		players.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9), &"player_front", 2))
-		players.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9), &"player_back", 0))
-		players.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9), &"player_back", 1))
+		if element == CardData.ElementType.WOOD:
+			players.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9), &"player_back", 0))
+		else:
+			players.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9), &"player_front", 1))
+			players.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9), &"player_front", 2))
+			players.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9), &"player_back", 0))
+			players.append(_entry(_single_squad(CardData.ActionType.HEAL, 1, 100, 0, 9.9), &"player_back", 1))
 	controller.start_battle(players, enemies, seed, false)
 	return controller
 

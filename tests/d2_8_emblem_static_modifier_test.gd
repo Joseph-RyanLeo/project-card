@@ -578,6 +578,7 @@ func _test_paste_and_scrape_updates_card_view() -> void:
 		_expect(false, "測試場景提供具有纹章槽的真实OwnedCard")
 		main.free()
 		return
+	main.emblem_library.return_sticker({"instance_id": &"static_modifier_sword", "emblem_id": &"长剑"})
 	var source_card := source_slot.get_child(0) as CardView
 	var base_value := owned.get_effective_base_value()
 	owned.apply_permanent_growth(OwnedCard.STAT_BASE_VALUE, 2)
@@ -587,6 +588,7 @@ func _test_paste_and_scrape_updates_card_view() -> void:
 	for definition: Dictionary in main.emblem_library.get_definitions():
 		if definition.get("id", &"") == &"长剑":
 			long_sword = definition
+			long_sword["returned_state"] = main.emblem_library.get_inventory_item(&"static_modifier_sword")
 			break
 	var drag_data := {
 		"kind": &"emblem_library",

@@ -1,5 +1,7 @@
 extends TextureRect
 
+const InspectionItemDrag = preload("res://scripts/ui/inspection_item_drag.gd")
+
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 
 ## 固定工具位；工具本身不被消耗，只有松手命中时才调用卡牌的移除操作。
@@ -15,7 +17,7 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tooltip_text = "状态刮刀\n松手时以刀头命中后贴纹章、伤势或符文贴纸即可移除；移除物销毁，不返还工作包。"
+	tooltip_text = "贴纸刮刀\n准备阶段松手时以刀头命中已贴纹章或符文贴纸即可移除；符文恢复底层符文，贴纸销毁且不返还工作包。"
 
 func _gui_input(event: InputEvent) -> void:
 	if not event is InputEventMouseButton:
@@ -46,7 +48,6 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 
 func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictionary:
 	var source_transform := get_global_transform_with_canvas()
-	var preview_scale := source_transform.get_scale()
 	var preview := TextureRect.new()
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.texture = texture
@@ -54,24 +55,12 @@ func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictiona
 	preview.stretch_mode = stretch_mode
 	preview.texture_filter = texture_filter
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	preview.z_index = 4096
-	preview.z_as_relative = false
-	preview.scale = preview_scale
-	var preview_offset := -source_transform.basis_xform(grab_position)
-	preview.position = preview_offset
-	if install_preview:
-		var preview_root := Control.new()
-		preview_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		preview_root.add_child(preview)
-		set_drag_preview(preview_root)
-	return {
+	var data := {
 		"kind": &"sticker_scraper",
 		"source_type": &"inspection_library",
 		"tip_offset": source_transform.basis_xform(blade_point - grab_position),
 		"hit_rect_offset": source_transform.basis_xform(blade_rect.position - grab_position),
 		"hit_rect_size": source_transform.basis_xform(blade_rect.size),
 		"preview_texture": texture,
-		"preview_size": source_transform.basis_xform(size),
-		"preview_offset": preview_offset,
-		"drag_visual": preview,
 	}
+	return InspectionItemDrag.build(self, preview, grab_position, Vector2.ZERO, data, install_preview)

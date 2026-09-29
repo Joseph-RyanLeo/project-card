@@ -38,10 +38,15 @@ signal pending_owned_card_change_recorded(entry: Dictionary)
 signal battle_initialized
 signal battle_finished(result: Result)
 signal indicator_transferred(indicator: CelestialIndicator, source: BattleSquadState, target: BattleSquadState)
+signal spell_cast_started(spell: OwnedCard, battle_generation: int, presentation_seconds: float)
+signal spell_cast_finished(spell_instance_id: StringName, battle_generation: int)
+signal opening_spell_phase_finished(battle_generation: int)
 
 enum Result { NONE, PLAYER_VICTORY, PLAYER_DEFEAT, DRAW }
 
 const COOLDOWN_EPSILON: float = 0.0001 # 同一时间点冷却完成的浮点判断容差（秒）
+const OPENING_SPELL_PRESENTATION_SECONDS: float = 0.55 # 开场法术卡面放大与收回的视觉默认时长
+const SPELL_MINIMUM_HEALTH_SECONDS: float = 5.0 # 战斗怒火保护持续时间，按确认规则计入战斗时钟
 
 var player_states: Array[BattleSquadState] = []
 var enemy_states: Array[BattleSquadState] = []
@@ -84,9 +89,26 @@ var _next_reward_instance_sequence: int = 1
 var _processed_gold_reward_entry_ids: Dictionary = {}
 var _processed_spell_event_ids: Dictionary = {}
 var _next_probability_roll_sequence: int = 1
+var _prepared_spell_instances: Array[OwnedCard] = []
+var _enemy_prepared_spell_instances: Array[OwnedCard] = []
+var _spell_side_by_instance: Dictionary = {}
+var _opening_spell_queue: Array[Dictionary] = []
+var _opening_spell_index: int = 0
+var _opening_spell_elapsed: float = 0.0
+var _opening_spell_presentation_done: bool = true
+var _opening_spell_effect_done: bool = true
+var _opening_spell_active: bool = false
+var _battle_generation: int = 0
+var _elapsed_spell_attempted: Dictionary = {} # 按法术实例记录已消耗的准备时刻机会
+var _minimum_health_until: Dictionary = {}
+var _side_by_side_grants: Array[Dictionary] = []
+var _next_spell_modifier_source_id: int = -10000000
+var _death_sequence: int = 0
+var _death_history: Array[Dictionary] = []
 
 
 func _ready() -> void:
+	effect_catalog = BattleEffectCatalog.load_from_file(EFFECT_DATA_PATH)
 	set_process(false)
 
 
@@ -99,11 +121,30 @@ func start_battle(
 	enemy_formation: Array[Dictionary],
 	random_seed: int = -1,
 	auto_run: bool = true,
-	requested_battle_instance_id: StringName = &""
+	requested_battle_instance_id: StringName = &"",
+	prepared_spell_instances: Array[OwnedCard] = [],
+	enemy_prepared_spell_instances: Array[OwnedCard] = []
 ) -> void:
 	battle_instance_id = _resolve_battle_instance_id(requested_battle_instance_id)
+	_battle_generation += 1
 	_initialize_battle_state(player_formation, enemy_formation, random_seed)
+	_prepared_spell_instances.assign(prepared_spell_instances)
+	_enemy_prepared_spell_instances.assign(enemy_prepared_spell_instances)
+	_spell_side_by_instance.clear()
+	for spell: OwnedCard in _prepared_spell_instances:
+		if spell != null:
+			_spell_side_by_instance[spell.instance_id] = BattleSquadState.Side.PLAYER
+	for spell: OwnedCard in _enemy_prepared_spell_instances:
+		if spell != null:
+			_spell_side_by_instance[spell.instance_id] = BattleSquadState.Side.ENEMY
 	battle_initialized.emit()
+	_begin_opening_spell_phase(auto_run)
+	if _opening_spell_active:
+		return
+	_finish_opening_spell_phase(auto_run)
+
+
+func _finish_opening_spell_phase(auto_run: bool) -> void:
 	# 先放入战前已获强化，再结算突击窗口；突击内的即时行动会正常读取并消费这批强化。
 	_apply_visible_fire_rune_reinforcement()
 	_apply_emblem_rush_effects()
@@ -119,6 +160,99 @@ func start_battle(
 	set_process(auto_run)
 	states_changed.emit()
 	_check_battle_result()
+	opening_spell_phase_finished.emit(_battle_generation)
+
+
+func _begin_opening_spell_phase(auto_run: bool) -> void:
+	_opening_spell_queue.clear()
+	var player_spells := _get_opening_spells(_prepared_spell_instances)
+	var enemy_spells := _get_opening_spells(_enemy_prepared_spell_instances)
+	for index: int in maxi(player_spells.size(), enemy_spells.size()):
+		if index < player_spells.size():
+			_opening_spell_queue.append({"spell": player_spells[index], "side": BattleSquadState.Side.PLAYER})
+		if index < enemy_spells.size():
+			_opening_spell_queue.append({"spell": enemy_spells[index], "side": BattleSquadState.Side.ENEMY})
+	_opening_spell_index = 0
+	_opening_spell_active = not _opening_spell_queue.is_empty()
+	if not _opening_spell_active:
+		return
+	_running = false
+	set_process(auto_run)
+	_start_next_opening_spell()
+
+
+func _get_opening_spells(spells: Array[OwnedCard]) -> Array[OwnedCard]:
+	var result: Array[OwnedCard] = []
+	for spell: OwnedCard in spells:
+		if (
+			spell != null
+			and spell.card_data != null
+			and spell.card_data.spell_trigger_kind == CardData.SpellTriggerKind.INSTANT
+		):
+			result.append(spell)
+	return result
+
+
+func _start_next_opening_spell() -> void:
+	if _opening_spell_index >= _opening_spell_queue.size():
+		_opening_spell_active = false
+		return
+	var entry := _opening_spell_queue[_opening_spell_index]
+	var spell := entry.get("spell") as OwnedCard
+	_opening_spell_elapsed = 0.0
+	_opening_spell_effect_done = false
+	_opening_spell_presentation_done = (
+		spell_cast_started.get_connections().is_empty()
+		or DisplayServer.get_name() == "headless"
+	)
+	spell_cast_started.emit(
+		spell,
+		_battle_generation,
+		OPENING_SPELL_PRESENTATION_SECONDS
+	)
+	_opening_spell_effect_done = _resolve_opening_spell(spell, int(entry.get("side", BattleSquadState.Side.PLAYER)))
+	if not _opening_spell_effect_done:
+		# 无合法友军时该次不触发，保持严格规则：不会在开场阶段重试。
+		_opening_spell_effect_done = true
+
+
+func notify_spell_presentation_finished(
+	spell_instance_id: StringName,
+	battle_generation: int
+) -> bool:
+	if (
+		not _opening_spell_active
+		or battle_generation != _battle_generation
+		or _opening_spell_index >= _opening_spell_queue.size()
+		or (_opening_spell_queue[_opening_spell_index].get("spell") as OwnedCard).instance_id != spell_instance_id
+	):
+		return false
+	_opening_spell_presentation_done = true
+	return true
+
+
+func _advance_opening_spell_phase(delta: float) -> float:
+	var time_left := maxf(delta, 0.0)
+	while _opening_spell_active and time_left > COOLDOWN_EPSILON:
+		var remaining := maxf(OPENING_SPELL_PRESENTATION_SECONDS - _opening_spell_elapsed, 0.0)
+		var used := minf(remaining, time_left)
+		_opening_spell_elapsed += used
+		time_left -= used
+		if (
+			_opening_spell_elapsed + COOLDOWN_EPSILON < OPENING_SPELL_PRESENTATION_SECONDS
+			or not _opening_spell_presentation_done
+			or not _opening_spell_effect_done
+		):
+			return 0.0
+		var finished_spell := _opening_spell_queue[_opening_spell_index].get("spell") as OwnedCard
+		spell_cast_finished.emit(finished_spell.instance_id, _battle_generation)
+		_opening_spell_index += 1
+		_start_next_opening_spell()
+	if not _opening_spell_active:
+		var was_processing := is_processing()
+		_finish_opening_spell_phase(was_processing)
+		return 0.0
+	return 0.0
 
 
 func prepare_battle_preview(player_formation: Array[Dictionary], enemy_formation: Array[Dictionary], random_seed: int = -1) -> void:
@@ -135,6 +269,7 @@ func prepare_battle_preview(player_formation: Array[Dictionary], enemy_formation
 
 func _initialize_battle_state(player_formation: Array[Dictionary], enemy_formation: Array[Dictionary], random_seed: int) -> void:
 	stop_battle()
+	_battle_generation += 1
 	_release_current_states()
 	_next_state_runtime_id = 1
 	player_states = _create_states(player_formation, BattleSquadState.Side.PLAYER)
@@ -160,6 +295,15 @@ func _initialize_battle_state(player_formation: Array[Dictionary], enemy_formati
 	_next_reward_instance_sequence = 1
 	_processed_gold_reward_entry_ids.clear()
 	_processed_spell_event_ids.clear()
+	_elapsed_spell_attempted.clear()
+	_minimum_health_until.clear()
+	_side_by_side_grants.clear()
+	_death_sequence = 0
+	_death_history.clear()
+	_opening_spell_queue.clear()
+	_opening_spell_active = false
+	_opening_spell_presentation_done = true
+	_opening_spell_effect_done = true
 	_next_probability_roll_sequence = 1
 	_next_fatigue_stack_seconds = BattleRules.FATIGUE_START_SECONDS
 	_next_fatigue_damage_seconds = BattleRules.FATIGUE_START_SECONDS
@@ -566,12 +710,22 @@ func _register_card_effects(
 
 func stop_battle() -> void:
 	_running = false
+	if _opening_spell_active:
+		_battle_generation += 1
+	_opening_spell_active = false
+	_opening_spell_queue.clear()
 	set_process(false)
 	_pending_projectile_contexts.clear()
 	_pending_projectile_batch_counts.clear()
 
 
 func clear_battle() -> void:
+	_battle_generation += 1
+	_opening_spell_active = false
+	_opening_spell_queue.clear()
+	_prepared_spell_instances.clear()
+	_enemy_prepared_spell_instances.clear()
+	_spell_side_by_instance.clear()
 	stop_battle()
 	_restore_temporary_wound_slots()
 	_release_current_states()
@@ -642,7 +796,8 @@ func get_living_states(side: int) -> Array[BattleSquadState]:
 
 func revive_state_at_original_position(
 	state: BattleSquadState,
-	health_amount: float
+	health_amount: float,
+	retrigger_rush: bool = true
 ) -> bool:
 	if state == null or state.alive or state.current_health > 0.0:
 		return false
@@ -659,12 +814,14 @@ func revive_state_at_original_position(
 		return false
 	recalculate_logical_layout()
 	var continuous_event := effect_runtime.recheck_continuous_conditions()
-	_apply_emblem_rush_effects(state)
-	_apply_wound_rush_effects(state)
-	# 复活重新入场也先排空本次持续效果复检，再触发该单位可再次触发的突击效果。
+	if retrigger_rush:
+		_apply_emblem_rush_effects(state)
+		_apply_wound_rush_effects(state)
+	# 普通复活先排空持续效果复检，再触发突击；法术指定不重触突击时略过该步。
 	effect_runtime.process_due_for_root(elapsed_seconds, continuous_event.root_event_id)
-	effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH, {"actor": state})
-	effect_runtime.process_due(elapsed_seconds)
+	if retrigger_rush:
+		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH, {"actor": state})
+		effect_runtime.process_due(elapsed_seconds)
 	squad_revived.emit(state)
 	states_changed.emit()
 	return true
@@ -1065,6 +1222,10 @@ func advance_time(delta: float) -> void:
 
 func _advance_time_unprofiled(delta: float) -> void:
 	var time_left := maxf(delta, 0.0)
+	if _opening_spell_active:
+		time_left = _advance_opening_spell_phase(time_left)
+		if time_left <= COOLDOWN_EPSILON or _opening_spell_active:
+			return
 	while _running and time_left > COOLDOWN_EPSILON:
 		var next_time := _get_next_event_delay()
 		if not is_finite(next_time):
@@ -1081,6 +1242,9 @@ func _advance_time_unprofiled(delta: float) -> void:
 
 
 func resolve_next_batch() -> bool:
+	if _opening_spell_active:
+		advance_time(OPENING_SPELL_PRESENTATION_SECONDS)
+		return true
 	if not _running:
 		return false
 	var next_time := _get_next_event_delay()
@@ -1489,6 +1653,12 @@ func _get_next_event_delay() -> float:
 	for state: BattleSquadState in get_all_states():
 		state.sync_fire_rune_reinforcement_activity()
 	var next_time := _get_next_cooldown()
+	for spell: OwnedCard in _get_all_prepared_spell_instances():
+		if spell == null or spell.card_data == null or _elapsed_spell_attempted.has(spell.instance_id):
+			continue
+		var attempt_time := get_elapsed_spell_trigger_seconds(spell.card_data)
+		if is_finite(attempt_time):
+			next_time = minf(next_time, maxf(attempt_time - elapsed_seconds, 0.0))
 	for state: BattleSquadState in get_all_states():
 		if state.alive and is_finite(state.moon_restore_time):
 			next_time = minf(next_time, maxf(state.moon_restore_time - elapsed_seconds, 0.0))
@@ -1539,6 +1709,7 @@ func _resolve_ready_batch() -> void:
 			state.moon_shadowed = state.squad_data.has_indicator(CelestialIndicator.Kind.MOON)
 			state.moon_restore_time = INF
 	effect_runtime.process_due(elapsed_seconds)
+	_resolve_due_prepared_spells()
 	if use_projectile_timing:
 		_resolve_ready_projectile_batch()
 		return
@@ -1607,6 +1778,7 @@ func _resolve_ready_projectile_batch() -> void:
 	_resolve_due_projectile_impacts()
 	if not _running:
 		return
+	_resolve_due_prepared_spells()
 	var living_snapshot := get_all_states().filter(
 		func(state: BattleSquadState) -> bool:
 			return state.alive and state.current_health > 0.0
@@ -1869,6 +2041,171 @@ func notify_spell_triggered(spell_instance_id: StringName, activation_index: int
 			state.apply_sleep(StringName("magic_mark_stun:%s" % instance_id), elapsed_seconds + float(stun.get("duration", 3.0)))
 		state.buff_stacks[&"magic_mark_spell_count"] = count
 	return true
+
+
+func _resolve_opening_spell(spell: OwnedCard, side: int) -> bool:
+	if spell == null or spell.card_data == null:
+		return false
+	match spell.card_data.id:
+		&"side_by_side":
+			var recipients := get_living_states(side)
+			if recipients.is_empty():
+				return false
+			if not notify_spell_triggered(spell.instance_id, 0):
+				return false
+			for state: BattleSquadState in recipients:
+				_side_by_side_grants.append({
+					"spell_instance_id": spell.instance_id,
+					"state": state,
+				})
+			return true
+		_:
+			return false
+
+
+func _resolve_due_prepared_spells() -> void:
+	for spell: OwnedCard in _get_all_prepared_spell_instances():
+		if (
+			spell == null
+			or spell.card_data == null
+			or _elapsed_spell_attempted.has(spell.instance_id)
+		):
+			continue
+		var attempt_time := get_elapsed_spell_trigger_seconds(spell.card_data)
+		if not is_finite(attempt_time) or elapsed_seconds + COOLDOWN_EPSILON < attempt_time:
+			continue
+		_elapsed_spell_attempted[spell.instance_id] = true
+		_resolve_elapsed_spell(spell)
+
+
+func get_elapsed_spell_trigger_seconds(card: CardData) -> float:
+	if card == null or effect_catalog == null:
+		return INF
+	var earliest_time := INF
+	for effect_id: StringName in card.effect_ids:
+		var definition := effect_catalog.get_definition(effect_id)
+		if definition == null or definition.trigger != BattleEffectDefinition.Trigger.ELAPSED_BATTLE_TIME:
+			continue
+		var trigger_time := float(definition.parameters.get("at_seconds", INF))
+		if trigger_time >= 0.0:
+			earliest_time = minf(earliest_time, trigger_time)
+	return earliest_time
+
+
+func _resolve_elapsed_spell(spell: OwnedCard) -> void:
+	var side := int(_spell_side_by_instance.get(spell.instance_id, BattleSquadState.Side.PLAYER))
+	for effect_index: int in spell.card_data.effect_ids.size():
+		var definition := effect_catalog.get_definition(spell.card_data.effect_ids[effect_index])
+		if (
+			definition == null
+			or definition.trigger != BattleEffectDefinition.Trigger.ELAPSED_BATTLE_TIME
+			or elapsed_seconds + COOLDOWN_EPSILON < float(definition.parameters.get("at_seconds", INF))
+		):
+			continue
+		var did_resolve := false
+		if (
+			definition.operation == BattleEffectDefinition.Operation.IMMEDIATE_ACTION
+			and definition.target == BattleEffectDefinition.Target.BACK_ROW_RANGED_ALLIES
+		):
+			var allies := _get_ranged_back_row_allies(side)
+			if not allies.is_empty():
+				did_resolve = notify_spell_triggered(spell.instance_id, effect_index)
+				if did_resolve:
+					for ally: BattleSquadState in allies:
+						execute_immediate_action(ally, CardData.ActionType.RANGED)
+		elif (
+			definition.operation == BattleEffectDefinition.Operation.REVIVE
+			and definition.target == BattleEffectDefinition.Target.LATEST_DEAD_NONDERIVED_ALLY
+		):
+			var target := _get_latest_dead_nonderived_ally(side)
+			if target != null and _revive_prepared_spell_target(target):
+				did_resolve = notify_spell_triggered(spell.instance_id, effect_index)
+		if did_resolve:
+			_present_nonpausing_spell(spell)
+			return
+
+
+func _present_nonpausing_spell(spell: OwnedCard) -> void:
+	if spell == null or spell.card_data == null:
+		return
+	spell_cast_started.emit(
+		spell,
+		_battle_generation,
+		OPENING_SPELL_PRESENTATION_SECONDS
+	)
+
+
+func _get_all_prepared_spell_instances() -> Array[OwnedCard]:
+	var result: Array[OwnedCard] = []
+	result.append_array(_prepared_spell_instances)
+	result.append_array(_enemy_prepared_spell_instances)
+	return result
+
+
+func _has_living_ranged_back_row_ally(side: int) -> bool:
+	return not _get_ranged_back_row_allies(side).is_empty()
+
+
+func _get_ranged_back_row_allies(side: int) -> Array[BattleSquadState]:
+	var result: Array[BattleSquadState] = []
+	for state: BattleSquadState in get_living_states(side):
+		if is_back_row(state.row_key) and state.get_effective_action_type() == CardData.ActionType.RANGED:
+			result.append(state)
+	result.sort_custom(_is_actor_before)
+	return result
+
+
+func _get_latest_dead_nonderived_ally(side: int) -> BattleSquadState:
+	for index: int in range(_death_history.size() - 1, -1, -1):
+		var entry: Dictionary = _death_history[index]
+		var state := entry.get("state") as BattleSquadState
+		if (
+			state != null
+			and state.side == side
+			and not state.alive
+			and state.current_health <= 0.0
+			and not _is_derived_state(state)
+		):
+			return state
+	return null
+
+
+func _is_derived_state(state: BattleSquadState) -> bool:
+	if state == null or state.squad_data == null:
+		return false
+	for card: CardData in state.squad_data.horizontal_cards:
+		if card != null and card.is_derived:
+			return true
+	return false
+
+
+func _revive_prepared_spell_target(target: BattleSquadState) -> bool:
+	if target == null or target.alive or target.current_health > 0.0:
+		return false
+	var original_index := target.formation_index
+	var row_units := target.squad_data.get_unit_count() if target.squad_data != null else 0
+	var position_is_open := true
+	for state: BattleSquadState in get_living_states(target.side):
+		if state.row_key == target.row_key and state.squad_data != null:
+			row_units += state.squad_data.get_unit_count()
+		if state.row_key == target.row_key and state.formation_index == original_index:
+			position_is_open = false
+	if row_units > 21:
+		return false
+	if not position_is_open:
+		var rightmost_index := original_index
+		for state: BattleSquadState in get_living_states(target.side):
+			if state.row_key == target.row_key:
+				rightmost_index = maxi(rightmost_index, state.formation_index)
+		target.formation_index = rightmost_index + 1
+	var revived := revive_state_at_original_position(
+		target,
+		float(target.get_max_health()) * 0.5,
+		false
+	)
+	if not revived:
+		target.formation_index = original_index
+	return revived
 
 
 func _roll_probability(state: BattleSquadState, sides: int, dice_count: int = 1) -> Dictionary:
@@ -2830,16 +3167,12 @@ func _wood_projection_target(anchor: BattleSquadState) -> BattleSquadState:
 	if anchor == null:
 		return null
 	var other_row := _back_row_for_side(anchor.side) if not is_back_row(anchor.row_key) else _front_row_for_side(anchor.side)
-	var best: BattleSquadState
-	var best_distance := INF
 	for state: BattleSquadState in get_all_states():
 		if state.side != anchor.side or state.row_key != other_row or not state.alive or state.current_health <= 0.0:
 			continue
-		var distance := absf(state.logical_center - anchor.logical_center)
-		if distance < best_distance:
-			best = state
-			best_distance = distance
-	return best
+		if anchor.logical_center >= state.logical_left and anchor.logical_center < state.logical_right:
+			return state
+	return null
 
 
 func _resolve_effect_layer(events: Array[BattleEffectEvent]) -> void:
@@ -2893,6 +3226,7 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 			if event.formula != null:
 				event.formula.exact_result = maxf(event.formula.calculate_result(), 0.0)
 				event.exact_amount = event.formula.exact_result
+			_apply_side_by_side_reduction(event)
 			var pre_hit_armor: float = event.target.current_armor
 			if event.is_base_action and event.source != null and event.action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]:
 				_apply_emblem_armor_break(event)
@@ -2902,6 +3236,7 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 				event.effective_amount = 0.0
 				event.exact_amount = 0.0
 			else:
+				_apply_battle_fury_minimum_health(event)
 				var split := event.target.apply_damage_exact(event.exact_amount, event.source, event, event.pierces_armor)
 				event.armor_amount = float(split["armor_damage"])
 				event.health_amount = float(split["health_damage"])
@@ -3054,6 +3389,63 @@ func _try_consume_damage_prevention(event: BattleEffectEvent) -> bool:
 			if _random.randi_range(0, 1) == 1:
 				return true
 	return false
+
+
+func _apply_side_by_side_reduction(event: BattleEffectEvent) -> void:
+	if event == null or not event.is_base_action or event.target == null:
+		return
+	var has_grant := false
+	for grant: Dictionary in _side_by_side_grants:
+		if grant.get("state") == event.target:
+			has_grant = true
+			break
+	if not has_grant or _get_adjacent_allies(event.target).is_empty():
+		return
+	var reduced_amount := maxf(event.exact_amount - 1.0, 0.0)
+	if event.formula != null:
+		event.formula.final_flat_bonus -= minf(event.exact_amount, 1.0)
+		event.formula.final_flat_bonus_sources.append({
+			"source_name": "并肩作战：乡邻",
+			"amount": -minf(event.exact_amount, 1.0),
+			"source_status": "resolved",
+		})
+		event.formula.exact_result = reduced_amount
+	event.exact_amount = reduced_amount
+
+
+func _apply_battle_fury_minimum_health(event: BattleEffectEvent) -> void:
+	if event == null or event.target == null or event.exact_amount <= 0.0:
+		return
+	var target := event.target
+	var health_damage := event.exact_amount if event.pierces_armor else maxf(event.exact_amount - target.current_armor, 0.0)
+	if target.current_health - health_damage > 0.0:
+		return
+	var active_until := float(_minimum_health_until.get(target, 0.0))
+	if active_until <= elapsed_seconds + COOLDOWN_EPSILON:
+		for spell: OwnedCard in _get_all_prepared_spell_instances():
+			if (
+				spell == null
+				or spell.card_data == null
+				or spell.card_data.id != &"battle_fury"
+				or int(_spell_side_by_instance.get(spell.instance_id, BattleSquadState.Side.PLAYER)) != target.side
+				or _processed_spell_event_ids.has(StringName("%s:spell:%s:0" % [battle_instance_id, spell.instance_id]))
+			):
+				continue
+			if notify_spell_triggered(spell.instance_id, 0):
+				_present_nonpausing_spell(spell)
+				active_until = maxf(active_until, elapsed_seconds + SPELL_MINIMUM_HEALTH_SECONDS)
+				for ally: BattleSquadState in get_living_states(target.side):
+					_minimum_health_until[ally] = maxf(
+						float(_minimum_health_until.get(ally, 0.0)),
+						active_until
+					)
+	if active_until <= elapsed_seconds + COOLDOWN_EPSILON:
+		return
+	var maximum_damage := maxf(target.current_health + (0.0 if event.pierces_armor else target.current_armor) - 1.0, 0.0)
+	if event.exact_amount > maximum_damage:
+		event.exact_amount = maximum_damage
+		if event.formula != null:
+			event.formula.exact_result = maximum_damage
 
 
 func _apply_thorns_retaliation(event: BattleEffectEvent, armor_before_hit: float) -> void:
@@ -3356,6 +3748,8 @@ func _finalize_batch() -> void:
 				kill_resolved.emit(state.pending_kill_source, state, state.pending_kill_event)
 	recalculate_logical_layout()
 	for state: BattleSquadState in defeated:
+		_death_sequence += 1
+		_death_history.append({"state": state, "sequence": _death_sequence, "time": elapsed_seconds})
 		_transfer_defeated_star(state)
 		squad_defeated.emit(state)
 		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.LAST_WISH, {"actor": state})

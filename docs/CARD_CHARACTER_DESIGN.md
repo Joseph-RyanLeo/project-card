@@ -35,14 +35,14 @@
 - [集结号](../resources/cards/rally_horn.tres)：突击：相邻友军本场热诚+4。
 - [征召官](../resources/cards/recruiter.tres)：突击：随机获得1张随从卡。
 - [征兵册](../resources/cards/recruitment_ledger.tres)：携带参战并获胜后，获得2张随机随从并消耗此卡。
-- [重返战场](../resources/cards/return_to_battlefield.tres)：15秒后：最近被消灭的非衍生友军以50%生命重新入场。
+- [重返战场](../resources/cards/return_to_battlefield.tres)：战斗第15秒，最近死亡的非衍生友军以50%最大生命、基础护甲重新入场；原位占用时放在同排右侧，不重触突击。没有合法目标或空间时消耗机会，不重试。
 - [符文刻匠](../resources/cards/rune_engraver.tres)：有护甲的友军行动倍率+0.1。
 - [盾墙列兵](../resources/cards/shieldwall_private.tres)：乡邻：每次获得护甲时，额外获得1点。
 - [并肩作战](../resources/cards/side_by_side.tres)：所有友军获得乡邻：受到的所有攻击伤害-1。
 - [贪欲之石](../resources/cards/stone_of_greed.tres)：收获：1d10<6失去2金币，>5获得3金币，=10获得10金币。
 - [潮汐射手](../resources/cards/tide_archer.tres)：开采：+1强化
 - [胆怯的步兵](../resources/cards/timid_infantry.tres)：其他友军行动后：获得强化1（本效果最多累计5）。
-- [齐射令](../resources/cards/volley_order.tres)：后排远程友军立即行动1次。
+- [齐射令](../resources/cards/volley_order.tres)：战斗第8秒，后排远程友军立即行动1次。
 - [战鼓乐师](../resources/cards/war_drum_musician.tres)：回响：相邻友军获得强化1。
 - [水元素碎晶](../resources/cards/water_element_shard.tres)：收获：生命永久+2。
 - [木元素碎晶](../resources/cards/wood_element_shard.tres)：收获：护甲永久+1。

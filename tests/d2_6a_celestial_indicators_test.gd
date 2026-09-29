@@ -104,6 +104,13 @@ func _test_main_drag_and_save() -> void:
 	await process_frame
 	await process_frame
 	var controller: CelestialIndicatorController = main.celestial_indicators
+	_expect(
+		controller._tray_board.size == Vector2(195.0, 195.0)
+		and controller._tray_board.texture.get_size() == controller._tray_board.size
+		and controller._tray.size == controller._tray_board.size
+		and controller._tray.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"日月星库存使用原比例195×195卡板，视觉底板不拦截库存图标输入"
+	)
 	_expect(controller.items.size() == 3 and controller._tray_views.size() == 3, "开发主场景提供各一枚日月星独立库存")
 	var owned = main.owned_card_collection.get_cards()[0]
 	var slot: BoardSlot = main.front_row.add_squad(SquadData.from_owned_card(owned), 0)

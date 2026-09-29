@@ -2,16 +2,18 @@ class_name CelestialIndicatorController
 extends Control
 
 ## 日月星的库存与准备操作入口；场上归属保存在 SquadData，战斗只使用阵容副本。
-const TRAY_POSITION := Vector2(878, 374) # 临时卡板位于我方人物图标下方，并向下留出操作间距
-const TRAY_SIZE := Vector2(180, 92) # 临时卡板的占位范围，正式素材和边界待确认
-const TRAY_PADDING := Vector2(12, 25) # 指示物在临时卡板内的默认内边距
-const TRAY_ITEM_GAP: float = 51.0 # 仅用于首次摆放各枚库存指示物的水平间距
+const BOARD_TEXTURE: Texture2D = preload("res://assets/card_ui/celestial/source/indicator_tray_board.png")
+const TRAY_POSITION := Vector2(872, 500) # 指示物板继续位于人物图标下方，独立于法术板移动
+const TRAY_SIZE := Vector2(195, 195) # 指示物板按用户原图195×195像素显示
+const TRAY_PADDING := Vector2(20, 42) # 指示物在新卡板内的首格左上角
+const TRAY_ITEM_GAP: float = 52.0 # 指示物库存格横向中心间距
+const TRAY_ROW_GAP: float = 48.0 # 指示物库存格纵向中心间距
 const DROP_TRAVEL := Vector2(0, 6) # 放置时从手持图像中心向下落到卡面的距离
 var main: Node
 var items: Array[CelestialIndicator] = []
 var next_attachment_order: int = 1
 var _tray: Control
-var _tray_board: Panel
+var _tray_board: TextureRect
 var _tray_views: Dictionary = {}
 var _tray_positions: Dictionary = {} # 实例ID→临时卡板内的左上角位置，进入存档
 var _last_positions: Dictionary = {}
@@ -25,21 +27,16 @@ func initialize(owner_main: Node) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	z_index = CardDragPreview.DRAG_PREVIEW_Z_INDEX - 1
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_tray_board = Panel.new()
+	_tray_board = TextureRect.new()
 	_tray_board.name = "CelestialIndicatorTrayBoard"
+	_tray_board.texture = BOARD_TEXTURE
 	_tray_board.position = TRAY_POSITION
 	_tray_board.size = TRAY_SIZE
+	_tray_board.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_tray_board.stretch_mode = TextureRect.STRETCH_KEEP
+	_tray_board.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_tray_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tray_board.z_index = -1
-	var board_style := StyleBoxFlat.new()
-	board_style.bg_color = Color(0.12, 0.16, 0.18, 0.82)
-	board_style.border_color = Color(0.75, 0.63, 0.35, 0.9)
-	board_style.set_border_width_all(2)
-	board_style.corner_radius_top_left = 4
-	board_style.corner_radius_top_right = 4
-	board_style.corner_radius_bottom_left = 4
-	board_style.corner_radius_bottom_right = 4
-	_tray_board.add_theme_stylebox_override("panel", board_style)
 	main.player_avatar_button.get_parent().add_child(_tray_board)
 	_tray = Control.new()
 	_tray.position = TRAY_POSITION
@@ -238,7 +235,10 @@ func _find_target(
 
 
 func _default_tray_position(index: int) -> Vector2:
-	return Vector2(TRAY_PADDING.x + index * TRAY_ITEM_GAP, TRAY_PADDING.y)
+	return Vector2(
+		TRAY_PADDING.x + (index % 3) * TRAY_ITEM_GAP,
+		TRAY_PADDING.y + floori(float(index) / 3.0) * TRAY_ROW_GAP
+	)
 
 
 func _clamp_tray_position(item: CelestialIndicator, point: Vector2) -> Vector2:
