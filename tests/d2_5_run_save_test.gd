@@ -126,12 +126,19 @@ func _run() -> void:
 		"恢复后的同一战斗可以正常提交一次"
 	)
 	_expect(resumed_main.restart_battle(), "已提交战斗返回准备阶段时保留结算结果")
+	# 构造玩家尚未按“继续”时保存的边界状态，验证读档仍可推进。
+	resumed_main.run_reward_state.pending_next_level_from_id = resumed_main.resource_board_state.level_id
 	_expect(resumed_main.save_run_to_path(SAVE_PATH) == OK, "正常结算后的本局状态可以覆盖保存")
 	resumed_main.queue_free()
 	await process_frame
 
 	var settled_main = await _new_main()
 	_expect(settled_main.load_run_from_path(SAVE_PATH), "结算后的存档可以在新进程状态中恢复")
+	_expect(
+		settled_main.run_reward_state.pending_next_level_from_id == settled_main.resource_board_state.level_id
+		and settled_main.continue_next_level_button.visible,
+		"已提交战斗的下一关标记经存档恢复后仍显示继续入口"
+	)
 	var settled_first: OwnedCard = settled_main.owned_card_collection.get_by_instance_id(first_id)
 	var settled_second: OwnedCard = settled_main.owned_card_collection.get_by_instance_id(second_id)
 	var settled_spell: OwnedCard = settled_main.owned_card_collection.get_by_instance_id(spell_id)

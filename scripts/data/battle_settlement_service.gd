@@ -14,6 +14,7 @@ const BattlePermanentGrowthLedger = preload("res://scripts/battle/battle_permane
 const BattleRunRewardLedger = preload("res://scripts/battle/battle_run_reward_ledger.gd")
 const BattleOwnedCardChangeLedger = preload("res://scripts/battle/battle_owned_card_change_ledger.gd")
 const BattleSquadState = preload("res://scripts/battle/battle_squad_state.gd")
+const ResourceBoardState = preload("res://scripts/data/resource_board_state.gd")
 
 const STATUS_COMMITTED: StringName = &"committed"
 const STATUS_ALREADY_COMMITTED: StringName = &"already_committed"
@@ -27,7 +28,9 @@ func settle(
 	owned_collection: OwnedCardCollection,
 	reward_state: RunRewardState,
 	journal: RunSettlementJournal,
-	owned_change_entries: Array[Dictionary] = []
+	owned_change_entries: Array[Dictionary] = [],
+	card_registry: Dictionary = {},
+	resource_board_state: ResourceBoardState = null
 ) -> Dictionary:
 	if (
 		snapshot == null
@@ -53,7 +56,16 @@ func settle(
 			"gold_added": 0,
 			"random_card_requests_queued": 0,
 			"emblem_instances_queued": 0,
+			"resource_cards_awarded": 0,
 		}
+	if resource_board_state != null:
+		var snap_deployments := snapshot.get_resource_board_state().get("deployments", {}) as Dictionary
+		for instance_id_value: Variant in (snap_deployments.get("player", {}) as Dictionary).keys():
+			if resource_board_state.is_level_resource("player", String(instance_id_value)):
+				continue
+			var deployed := owned_collection.get_by_instance_id(StringName(String(instance_id_value)))
+			if deployed == null or deployed.card_data == null or deployed.card_data.card_type != CardData.CardType.RESOURCE:
+				return _failure("missing_deployed_resource", battle_id)
 	var validation := _validate_entries(
 		battle_id,
 		growth_entries,
@@ -68,6 +80,7 @@ func settle(
 
 	var rollback_collection := owned_collection.capture_state()
 	var rollback_rewards := reward_state.capture_state()
+	var rollback_resource_board := resource_board_state.capture_state() if resource_board_state != null else {}
 	var growth_applied := 0
 	var owned_changes_applied := 0
 	var equipment_consumed := 0
@@ -78,6 +91,7 @@ func settle(
 	var gold_added := 0
 	var random_requests_queued := 0
 	var emblem_instances_queued := 0
+	var resource_cards_awarded := 0
 	for entry: Dictionary in growth_entries:
 		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
 			continue
@@ -161,6 +175,16 @@ func settle(
 					_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 					return _failure("random_emblem_apply_failed", battle_id)
 				emblem_instances_queued += amount
+			BattleRunRewardLedger.KIND_GOLD_DELTA:
+				var actual_delta := reward_state.apply_gold_delta(int((entry.get("parameters", {}) as Dictionary).get("gold_delta", 0)))
+				gold_added += actual_delta
+			BattleRunRewardLedger.KIND_OWNED_CARD_AWARD:
+				var card_id := StringName(String((entry.get("parameters", {}) as Dictionary).get("card_id", "")))
+				var card_data := card_registry.get(card_id) as CardData
+				if card_data == null or owned_collection.create_card(card_data) == null:
+					_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
+					return _failure("resource_card_award_apply_failed", battle_id)
+				resource_cards_awarded += amount
 	# 征兵册先生成随机随从请求，再移除源装备；即使合法奖励池为空也照常消耗。
 	for entry: Dictionary in owned_change_entries:
 		if (
@@ -174,8 +198,19 @@ func settle(
 			_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 			return _failure("equipment_consumption_failed", battle_id)
 		equipment_consumed += 1
+	if resource_board_state != null:
+		for instance_id_value: Variant in (snapshot.get_resource_board_state().get("deployments", {}).get("player", {}) as Dictionary).keys():
+			if resource_board_state.is_level_resource("player", String(instance_id_value)):
+				continue
+			if owned_collection.remove_by_instance_id(StringName(String(instance_id_value))) == null:
+				_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
+				resource_board_state.restore_state(rollback_resource_board, card_registry)
+				return _failure("deployed_resource_consumption_failed", battle_id)
+		resource_board_state.clear_level_resources()
 	if not journal.mark_committed(battle_id):
 		_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
+		if resource_board_state != null:
+			resource_board_state.restore_state(rollback_resource_board, card_registry)
 		return _failure("commit_guard_failed", battle_id)
 	return {
 		"success": true,
@@ -191,6 +226,7 @@ func settle(
 		"spent_spells_removed": spent_spells_removed,
 		"gold_added": gold_added,
 		"random_card_requests_queued": random_requests_queued,
+		"resource_cards_awarded": resource_cards_awarded,
 		"emblem_instances_queued": emblem_instances_queued,
 	}
 
@@ -281,14 +317,20 @@ func _validate_entries(
 				BattleRunRewardLedger.KIND_GOLD,
 				BattleRunRewardLedger.KIND_RANDOM_CARD_REQUEST,
 				BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE,
+				BattleRunRewardLedger.KIND_OWNED_CARD_AWARD,
+				BattleRunRewardLedger.KIND_GOLD_DELTA,
 			]
 			or int(entry.get("amount", 0)) <= 0
 		):
 			return _failure("invalid_reward_entry_value", battle_id)
+		var parameters := entry.get("parameters", {}) as Dictionary
 		if entry.get("kind") == BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE:
-			var parameters := entry.get("parameters", {}) as Dictionary
 			if (parameters.get("emblem_id", &"") as StringName).is_empty() or (parameters.get("emblem_instance_id", &"") as StringName).is_empty():
 				return _failure("invalid_random_emblem_parameters", battle_id)
+		if entry.get("kind") == BattleRunRewardLedger.KIND_OWNED_CARD_AWARD and (parameters.get("card_id", &"") as StringName).is_empty():
+			return _failure("invalid_owned_card_award", battle_id)
+		if entry.get("kind") == BattleRunRewardLedger.KIND_GOLD_DELTA and int(parameters.get("gold_delta", 0)) == 0:
+			return _failure("invalid_gold_delta", battle_id)
 	return {"success": true}
 
 

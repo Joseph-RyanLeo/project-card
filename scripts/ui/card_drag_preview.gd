@@ -10,6 +10,8 @@ extends Control
 const CARD_SNAPSHOT_VISUAL_SCRIPT: Script = preload(
 	"res://scripts/ui/card_snapshot_visual.gd"
 )
+const RESOURCE_HEX_ATLAS: Texture2D = preload("res://assets/card_ui/resources/resource_hex_tile.png")
+const RESOURCE_INDICATOR_STYLE = preload("res://scripts/ui/resource_indicator_style.gd")
 const EquipmentIndicatorStyleScript = preload(
 	"res://scripts/ui/equipment_indicator_style.gd"
 )
@@ -27,6 +29,7 @@ const EQUIPMENT_INDICATOR_START_SCALE := 2.0 # 装备牌变为指示物时的起
 const EQUIPMENT_INDICATOR_DROP_LIFT := Vector2(0.0, 4.0) # 变成指示物时从上方短促落下的距离
 const SPELL_PREPARATION_ICON_SIZE := Vector2(42.0, 42.0) # 法术准备栏原生图标尺寸
 const SPELL_PREPARATION_TRANSITION_DURATION := 0.10 # 整卡与准备图标平滑切换的时长
+const RESOURCE_PUZZLE_TRANSITION_DURATION := 0.10 # 整卡与六边形拼图交叉渐变的时长
 
 var _card_visual: Control
 var _shadow: Panel
@@ -44,6 +47,13 @@ var _equipment_transition: Tween
 var _spell_preparation_icon: TextureRect
 var _spell_preparation_transition: Tween
 var _spell_preparation_icon_mode: bool = false
+var _resource_puzzle_mode := false
+var _resource_puzzle_tiles: Array[TextureRect] = []
+var _resource_puzzle_shape: Array[Vector2i] = []
+var _resource_puzzle_rarity := -1
+var _resource_puzzle_resource_type := -1
+var _resource_puzzle_transition: Tween
+var _resource_puzzle_icons: Array[TextureRect] = []
 var _preview_scale := Vector2.ONE
 var _equipment_indicator_grab_local_position: Vector2 = EQUIPMENT_INDICATOR_SIZE * 0.5
 
@@ -121,6 +131,122 @@ func configure(
 	_equipment_indicator_shadow.z_index = -1
 	_equipment_indicator_visual.add_child(_equipment_indicator_shadow)
 	_update_visual_transform(0.0)
+
+
+func set_resource_puzzle_mode(
+	enabled: bool,
+	shape: Array[Vector2i] = [],
+	rarity: int = 0,
+	grab_cell: Vector2i = Vector2i.ZERO,
+	grab_pixel_offset: Vector2 = Vector2.ZERO,
+	resource_type: int = -1
+) -> void:
+	if not enabled:
+		if not _resource_puzzle_mode: return
+		_resource_puzzle_mode = false
+		_transition_resource_puzzle_visuals(false)
+		return
+	if shape.is_empty() or rarity < 0 or rarity >= RESOURCE_INDICATOR_STYLE.SOURCE_COLUMN_BY_RARITY.size(): return
+	var shape_changed := _resource_puzzle_shape != shape or _resource_puzzle_rarity != rarity or _resource_puzzle_resource_type != resource_type
+	if shape_changed: _rebuild_resource_puzzle_tiles(shape, rarity, resource_type)
+	var entering := not _resource_puzzle_mode
+	_resource_puzzle_mode = true
+	_position_resource_puzzle_tiles(grab_cell, grab_pixel_offset)
+	if entering: _transition_resource_puzzle_visuals(true)
+
+
+func _rebuild_resource_puzzle_tiles(shape: Array[Vector2i], rarity: int, resource_type: int) -> void:
+	for tile: TextureRect in _resource_puzzle_tiles: tile.queue_free()
+	for icon: TextureRect in _resource_puzzle_icons: icon.queue_free()
+	_resource_puzzle_tiles.clear()
+	_resource_puzzle_icons.clear()
+	_resource_puzzle_shape = shape.duplicate()
+	_resource_puzzle_rarity = rarity
+	_resource_puzzle_resource_type = resource_type
+	var icon_texture := RESOURCE_INDICATOR_STYLE.get_icon_atlas_texture(rarity, resource_type)
+	var icon_visible_rect: Rect2i = RESOURCE_INDICATOR_STYLE.get_icon_visible_rect(rarity, resource_type)
+	for _cell in shape:
+		var tile := TextureRect.new()
+		var atlas := AtlasTexture.new()
+		atlas.atlas = RESOURCE_HEX_ATLAS
+		atlas.region = Rect2(RESOURCE_INDICATOR_STYLE.get_source_x(rarity), 0, 35, 32)
+		tile.texture = atlas
+		tile.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tile.stretch_mode = TextureRect.STRETCH_KEEP
+		tile.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		tile.size = Vector2(35, 32)
+		tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		tile.modulate.a = 0.0
+		tile.visible = false
+		add_child(tile)
+		_resource_puzzle_tiles.append(tile)
+		var icon := TextureRect.new()
+		icon.name = "ResourcePuzzleKindIcon"
+		var visible_texture := AtlasTexture.new()
+		visible_texture.atlas = RESOURCE_INDICATOR_STYLE.ICON_ATLAS
+		visible_texture.region = Rect2(
+			icon_texture.region.position + Vector2(icon_visible_rect.position),
+			Vector2(icon_visible_rect.size)
+		)
+		icon.texture = visible_texture
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP
+		icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		icon.size = Vector2(icon_visible_rect.size)
+		icon.position = -icon.size * 0.5
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon.z_index = 2
+		icon.modulate.a = 0.0
+		add_child(icon)
+		_resource_puzzle_icons.append(icon)
+
+
+func _position_resource_puzzle_tiles(grab_cell: Vector2i, grab_pixel_offset: Vector2) -> void:
+	for index in _resource_puzzle_tiles.size():
+		var relative := _resource_puzzle_shape[index] - grab_cell
+		var center := Vector2(27.0 * relative.x, 32.0 * relative.y - 16.0 * relative.x) - grab_pixel_offset
+		_resource_puzzle_tiles[index].position = center - Vector2(17, 16)
+		_resource_puzzle_icons[index].position = center - Vector2(_resource_puzzle_icons[index].size * 0.5)
+
+
+func _transition_resource_puzzle_visuals(show_puzzle: bool) -> void:
+	if is_instance_valid(_resource_puzzle_transition): _resource_puzzle_transition.kill()
+	_resource_puzzle_transition = create_tween()
+	if show_puzzle:
+		if is_instance_valid(_card_visual): _card_visual.visible = true
+		if is_instance_valid(_shadow): _shadow.visible = true
+		for tile: TextureRect in _resource_puzzle_tiles: tile.visible = true
+		_resource_puzzle_transition.tween_property(_card_visual, "modulate:a", 0.0, RESOURCE_PUZZLE_TRANSITION_DURATION)
+		_resource_puzzle_transition.parallel().tween_property(_shadow, "modulate:a", 0.0, RESOURCE_PUZZLE_TRANSITION_DURATION)
+		for icon: TextureRect in _resource_puzzle_icons:
+			icon.visible = true
+			_resource_puzzle_transition.parallel().tween_property(icon, "modulate:a", 1.0, RESOURCE_PUZZLE_TRANSITION_DURATION)
+		for tile: TextureRect in _resource_puzzle_tiles:
+			_resource_puzzle_transition.parallel().tween_property(tile, "modulate:a", 1.0, RESOURCE_PUZZLE_TRANSITION_DURATION)
+		_resource_puzzle_transition.tween_callback(_finish_resource_puzzle_enter)
+	else:
+		if is_instance_valid(_card_visual): _card_visual.visible = true
+		if is_instance_valid(_shadow): _shadow.visible = true
+		_resource_puzzle_transition.tween_property(_card_visual, "modulate:a", 1.0, RESOURCE_PUZZLE_TRANSITION_DURATION)
+		_resource_puzzle_transition.parallel().tween_property(_shadow, "modulate:a", 1.0, RESOURCE_PUZZLE_TRANSITION_DURATION)
+		for icon: TextureRect in _resource_puzzle_icons:
+			_resource_puzzle_transition.parallel().tween_property(icon, "modulate:a", 0.0, RESOURCE_PUZZLE_TRANSITION_DURATION)
+		for tile: TextureRect in _resource_puzzle_tiles:
+			_resource_puzzle_transition.parallel().tween_property(tile, "modulate:a", 0.0, RESOURCE_PUZZLE_TRANSITION_DURATION)
+		_resource_puzzle_transition.tween_callback(_finish_resource_puzzle_exit)
+
+
+func _finish_resource_puzzle_enter() -> void:
+	if not _resource_puzzle_mode: return
+	if is_instance_valid(_card_visual): _card_visual.visible = false
+	if is_instance_valid(_shadow): _shadow.visible = false
+
+
+func _finish_resource_puzzle_exit() -> void:
+	if _resource_puzzle_mode: return
+	for tile: TextureRect in _resource_puzzle_tiles:
+		tile.visible = false
+	for icon: TextureRect in _resource_puzzle_icons: icon.visible = false
 
 
 func _process(delta: float) -> void:

@@ -10,7 +10,7 @@ signal target_priority_display_changed(enabled: bool)
 const MENU_PANEL_SIZE := Vector2(360.0, 390.0) # 暂停菜单面板宽高
 const MENU_BUTTON_SIZE := Vector2(260.0, 38.0) # 暂停菜单按钮宽高
 const MENU_BUTTON_SEPARATION: int = 8 # 菜单各按钮之间的垂直间距
-const ESCAPE_BUTTON_POSITION := Vector2(1228.0, 50.0) # 避开显示模式栏的画面入口位置
+const ESCAPE_BUTTON_POSITION := Vector2(0.0, 0.0) # 位于左上角
 
 var _menu: Control
 var _restore_button: Button

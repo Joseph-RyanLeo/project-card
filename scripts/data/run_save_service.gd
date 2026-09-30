@@ -10,8 +10,10 @@ const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const RunRewardState = preload("res://scripts/data/run_reward_state.gd")
 const RunSettlementJournal = preload("res://scripts/data/run_settlement_journal.gd")
 const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
+const ResourceHexLayout = preload("res://scripts/data/resource_hex_layout.gd")
+const ResourceBoardState = preload("res://scripts/data/resource_board_state.gd")
 
-const SCHEMA_VERSION: int = 3
+const SCHEMA_VERSION: int = 5
 const STATUS_SLOT_MIGRATION_VERSION: int = 1
 const ROW_KEYS: Array[StringName] = [
 	&"player_front",
@@ -31,11 +33,12 @@ func create_checkpoint(
 	settlement_journal: RunSettlementJournal,
 	phase_on_save: int,
 	indicator_inventory: Dictionary = {},
-	prepared_spell_instance_ids: Array[StringName] = []
+	prepared_spell_instance_ids: Array[StringName] = [],
+	resource_board_state: ResourceBoardState = null
 ) -> Dictionary:
 	var encoded_collection := _encode_collection_state(collection_state)
 	var encoded_rows := _encode_rows(rows)
-	if encoded_collection.is_empty() or encoded_rows.is_empty():
+	if encoded_collection.is_empty() or encoded_rows.is_empty() or not _player_resource_deployments_match_collection(collection_state, resource_board_state):
 		return {}
 	return {
 		"schema_version": SCHEMA_VERSION,
@@ -50,6 +53,7 @@ func create_checkpoint(
 		"phase_on_save": phase_on_save,
 		"indicator_inventory": indicator_inventory.duplicate(true),
 		"prepared_spell_instance_ids": _encode_instance_ids(prepared_spell_instance_ids),
+		"resource_board_state": resource_board_state.capture_state() if resource_board_state != null else {},
 	}
 
 
@@ -99,7 +103,8 @@ func restore_checkpoint(
 		card_registry,
 		test_mode,
 		int(checkpoint.get("schema_version", 0)) < SCHEMA_VERSION
-		or int(checkpoint.get("status_slot_migration_version", 0)) < STATUS_SLOT_MIGRATION_VERSION
+		or int(checkpoint.get("status_slot_migration_version", 0)) < STATUS_SLOT_MIGRATION_VERSION,
+		int(checkpoint.get("schema_version", 0))
 	)
 	if not bool(decoded_collection_result.get("success", false)):
 		return decoded_collection_result
@@ -131,6 +136,12 @@ func restore_checkpoint(
 				var item := attachment["indicator"] as CelestialIndicator
 				if known_indicators.get(item.instance_id, -1) != item.kind:
 					return _failure("save_indicator_reference_invalid")
+	var resource_board := ResourceBoardState.new()
+	var resource_board_payload: Dictionary = checkpoint.get("resource_board_state", {})
+	if not resource_board_payload.is_empty() and not resource_board.restore_state(resource_board_payload, card_registry):
+		return _failure("save_resource_board_invalid")
+	if not resource_board_payload.is_empty() and not _player_resource_deployments_match_collection(decoded_collection, resource_board):
+		return _failure("save_resource_board_reference_invalid")
 	var prepared_spell_ids: Variant = _decode_prepared_spell_ids(
 		checkpoint.get("prepared_spell_instance_ids", []),
 		validation_collection
@@ -165,8 +176,32 @@ func restore_checkpoint(
 		"phase_on_save": int(checkpoint.get("phase_on_save", 0)),
 		"indicator_inventory": inventory.duplicate(true),
 		"prepared_spell_instance_ids": prepared_spell_ids,
+		"resource_board_state": resource_board if not resource_board_payload.is_empty() else null,
 		"slot_migration_returns": decoded_collection_result.get("migration_returns", []).duplicate(true),
 	}
+
+
+func _player_resource_deployments_match_collection(collection_state: Dictionary, board: ResourceBoardState) -> bool:
+	if board == null: return true
+	var owned_by_id: Dictionary = {}
+	for value in collection_state.get("cards", []):
+		if not value is Dictionary: return false
+		var state: Dictionary = value
+		owned_by_id[String(state.get("instance_id", ""))] = state
+	for instance_id in board.deployments.get("player", {}):
+		if board.is_level_resource("player", String(instance_id)):
+			if owned_by_id.has(String(instance_id)):
+				return false
+			continue
+		var owned_state: Dictionary = owned_by_id.get(String(instance_id), {})
+		var definition := owned_state.get("card_data") as CardData
+		if definition == null or definition.card_type != CardData.CardType.RESOURCE:
+			return false
+		var owned_shape: Array = owned_state.get("resource_shape", [])
+		var placed_shape: Array = board.deployments.player[String(instance_id)].get("shape", [])
+		if JSON.stringify(owned_shape) != JSON.stringify(placed_shape):
+			return false
+	return true
 
 
 func _encode_collection_state(collection_state: Dictionary) -> Dictionary:
@@ -195,6 +230,7 @@ func _encode_collection_state(collection_state: Dictionary) -> Dictionary:
 			"rune_stickers": _json_safe(state.get("rune_stickers", [])),
 			"progress_by_source": _json_safe(state.get("progress_by_source", {})),
 			"wound_battle_counters": _json_safe(state.get("wound_battle_counters", {})),
+			"resource_shape": _json_safe(state.get("resource_shape", [])),
 		})
 	return {
 		"next_instance_sequence": maxi(int(collection_state.get("next_instance_sequence", 1)), 1),
@@ -235,7 +271,8 @@ func _decode_collection_state(
 	data: Dictionary,
 	card_registry: Dictionary,
 	test_mode: bool = true,
-	migrate_status_slots: bool = true
+	migrate_status_slots: bool = true,
+	checkpoint_schema_version: int = SCHEMA_VERSION
 ) -> Dictionary:
 	if not data.get("cards", []) is Array:
 		return _failure("save_collection_cards_invalid")
@@ -285,6 +322,27 @@ func _decode_collection_state(
 			return _failure("save_status_slot_migration_marker_invalid")
 		if not saved_layout_is_valid:
 			saved_layout = CardSlotLayout.get_stable_layout(card_data)
+		var encoded_shape: Variant = encoded.get("resource_shape", null)
+		var resource_shape: Array = []
+		if card_data.card_type == CardData.CardType.RESOURCE:
+			if encoded_shape == null and int(checkpoint_schema_version) < 4:
+				# 旧版存档迁移一次：用固定相连形状，不调用随机数，避免读档重抽。
+				for cell in ResourceHexLayout.create_migration_shape(int(card_data.rarity) + 1):
+					resource_shape.append([cell.x, cell.y])
+			elif not encoded_shape is Array:
+				return _failure("save_resource_shape_invalid")
+			else:
+				for pair in encoded_shape:
+					if not pair is Array or pair.size() != 2:
+						return _failure("save_resource_shape_invalid")
+					resource_shape.append([int(pair[0]), int(pair[1])])
+			var validated_shape: Array[Vector2i] = []
+			for pair in resource_shape:
+				validated_shape.append(Vector2i(int(pair[0]), int(pair[1])))
+			if validated_shape.size() != int(card_data.rarity) + 1 or not ResourceHexLayout.is_connected_shape(validated_shape):
+				return _failure("save_resource_shape_invalid")
+		elif encoded_shape is Array and not encoded_shape.is_empty():
+			return _failure("save_resource_shape_invalid")
 		var progress_by_source := _decode_number_dictionary(
 			encoded.get("progress_by_source", {}) as Dictionary
 		)
@@ -341,6 +399,7 @@ func _decode_collection_state(
 			"wound_battle_counters": _decode_number_dictionary(
 				encoded.get("wound_battle_counters", {}) as Dictionary
 			),
+			"resource_shape": resource_shape,
 		})
 		seen_instance_ids[instance_id] = true
 	return {
@@ -602,7 +661,10 @@ func _decode_reward_state(data: Dictionary) -> Dictionary:
 		for key: String in ["entry_id", "battle_instance_id", "emblem_instance_id", "emblem_id"]:
 			entry[key] = StringName(String(entry.get(key, "")))
 		emblem_instances.append(entry)
-	return {"gold": int(data.get("gold", 0)), "pending_random_card_requests": requests, "pending_emblem_instances": emblem_instances}
+	var ground_items: Array[Dictionary] = []
+	for value: Variant in data.get("pending_ground_items", []) as Array:
+		if value is Dictionary: ground_items.append((value as Dictionary).duplicate(true))
+	return {"gold": int(data.get("gold", 0)), "pending_random_card_requests": requests, "pending_emblem_instances": emblem_instances, "pending_ground_items": ground_items, "pending_next_level_from_id": StringName(String(data.get("pending_next_level_from_id", "")))}
 
 
 func _encode_committed_battles(state: Dictionary) -> Array[String]:

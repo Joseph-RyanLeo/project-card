@@ -12,6 +12,7 @@ var battle_seed: int = 0
 var _collection_state: Dictionary = {}
 var _row_squads: Dictionary = {}
 var _prepared_spell_instance_ids: Array[StringName] = []
+var _resource_board_state: Dictionary = {}
 
 
 func initialize(
@@ -19,7 +20,8 @@ func initialize(
 	seed: int,
 	owned_collection: OwnedCardCollection,
 	rows: Dictionary,
-	prepared_spell_instance_ids: Array[StringName] = []
+	prepared_spell_instance_ids: Array[StringName] = [],
+	resource_board_state: Dictionary = {}
 ) -> bool:
 	if instance_id.is_empty() or owned_collection == null:
 		return false
@@ -41,6 +43,7 @@ func initialize(
 	battle_seed = seed
 	_collection_state = owned_collection.capture_state()
 	_prepared_spell_instance_ids.assign(validated_spell_ids)
+	_resource_board_state = resource_board_state.duplicate(true)
 	_row_squads.clear()
 	for row_key: Variant in rows:
 		var copied_squads: Array[SquadData] = []
@@ -77,3 +80,6 @@ func get_prepared_spell_instance_ids() -> Array[StringName]:
 	var result: Array[StringName] = []
 	result.assign(_prepared_spell_instance_ids)
 	return result
+
+func get_resource_board_state() -> Dictionary:
+	return _resource_board_state.duplicate(true)

@@ -79,12 +79,23 @@ const CARD_RESOURCE_PATHS := [
 	"res://resources/cards/side_by_side.tres",
 	"res://resources/cards/return_to_battlefield.tres",
 	"res://resources/cards/volley_order.tres",
+	"res://resources/cards/fire_element_shard.tres",
+	"res://resources/cards/light_element_shard.tres",
+	"res://resources/cards/dark_element_shard.tres",
+	"res://resources/cards/water_element_shard.tres",
+	"res://resources/cards/wood_element_shard.tres",
+	"res://resources/cards/rainbow_gold_ore.tres",
+	"res://resources/cards/crystallized_remains.tres",
+	"res://resources/cards/stone_of_greed.tres",
+	"res://resources/cards/abandoned_toolbox.tres",
+	"res://resources/cards/mining_pick.tres",
 ]
 const SELECTABLE_CARD_TYPES := [
 	CardData.CardType.MINION,
-	CardData.CardType.SPELL,
 	CardData.CardType.EQUIPMENT,
-] # 调整器按随从、法术、装备分组，避免整批卡挤进同一个超长菜单
+	CardData.CardType.SPELL,
+	CardData.CardType.RESOURCE,
+] # 调整器按随从、装备、法术、资源分组；资源复用既有筛选和预览
 
 # 资源列表是工具可选择的卡牌白名单，避免误写其他 Resource。
 

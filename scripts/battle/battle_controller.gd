@@ -5,6 +5,7 @@ extends Node
 ## 目标先按逻辑层统一选完，再执行该层全部效果，场景节点不参与规则判断。
 
 const BattleSquadState = preload("res://scripts/battle/battle_squad_state.gd")
+const BattleResourceStateScript = preload("res://scripts/battle/battle_resource_state.gd")
 const BattleEffectEvent = preload("res://scripts/battle/battle_effect_event.gd")
 const BattleFormulaData = preload("res://scripts/battle/battle_formula_data.gd")
 const BattleElementResolver = preload("res://scripts/battle/battle_element_resolver.gd")
@@ -17,6 +18,7 @@ const BattleRunRewardLedger = preload("res://scripts/battle/battle_run_reward_le
 const BattleOwnedCardChangeLedger = preload("res://scripts/battle/battle_owned_card_change_ledger.gd")
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const EmblemLibraryData = preload("res://scripts/data/emblem_library_data.gd")
+const CardPackRegistryScript = preload("res://scripts/data/card_pack_registry.gd")
 
 const EFFECT_DATA_PATH: String = "res://data/demo2/ash_ledger_effect_samples.json"
 
@@ -50,6 +52,11 @@ const SPELL_MINIMUM_HEALTH_SECONDS: float = 5.0 # 战斗怒火保护持续时间
 
 var player_states: Array[BattleSquadState] = []
 var enemy_states: Array[BattleSquadState] = []
+var player_resource_states: Array[RefCounted] = []
+var enemy_resource_states: Array[RefCounted] = []
+var _reward_card_catalog: Array[CardData] = []
+var _player_owned_card_ids: Dictionary = {}
+var mining_actions_remaining_by_runtime_id: Dictionary = {} # 每个小队由自己的有效效果来源和装备提供本场开采次数
 var current_result: Result = Result.NONE
 var elapsed_seconds: float = 0.0
 var batch_count: int = 0
@@ -123,11 +130,22 @@ func start_battle(
 	auto_run: bool = true,
 	requested_battle_instance_id: StringName = &"",
 	prepared_spell_instances: Array[OwnedCard] = [],
-	enemy_prepared_spell_instances: Array[OwnedCard] = []
+	enemy_prepared_spell_instances: Array[OwnedCard] = [],
+	player_resources: Array[OwnedCard] = [],
+	enemy_resources: Array[OwnedCard] = [],
+	reward_card_catalog: Array[CardData] = [],
+	player_owned_cards: Array[OwnedCard] = []
 ) -> void:
 	battle_instance_id = _resolve_battle_instance_id(requested_battle_instance_id)
 	_battle_generation += 1
 	_initialize_battle_state(player_formation, enemy_formation, random_seed)
+	_initialize_resource_states(player_resources, enemy_resources)
+	_reward_card_catalog.assign(reward_card_catalog)
+	_player_owned_card_ids.clear()
+	for owned: OwnedCard in player_owned_cards:
+		if owned != null and owned.card_data != null:
+			_player_owned_card_ids[owned.card_data.id] = true
+	mining_actions_remaining_by_runtime_id = _count_mining_actions()
 	_prepared_spell_instances.assign(prepared_spell_instances)
 	_enemy_prepared_spell_instances.assign(enemy_prepared_spell_instances)
 	_spell_side_by_instance.clear()
@@ -321,7 +339,42 @@ func _initialize_battle_state(player_formation: Array[Dictionary], enemy_formati
 	_register_formation_card_effects()
 	_register_formation_emblems()
 	_register_formation_wounds()
+	player_resource_states.clear()
+	enemy_resource_states.clear()
+	mining_actions_remaining_by_runtime_id.clear()
+	_player_owned_card_ids.clear()
 	recalculate_logical_layout()
+
+
+func _initialize_resource_states(player_cards: Array[OwnedCard], enemy_cards: Array[OwnedCard]) -> void:
+	player_resource_states.clear()
+	enemy_resource_states.clear()
+	for pair: Array in [[player_cards, BattleSquadState.Side.PLAYER], [enemy_cards, BattleSquadState.Side.ENEMY]]:
+		var destination: Array[RefCounted] = player_resource_states if int(pair[1]) == BattleSquadState.Side.PLAYER else enemy_resource_states
+		for card: OwnedCard in pair[0]:
+			if card == null or card.card_data == null or card.card_data.card_type != CardData.CardType.RESOURCE:
+				continue
+			var state := BattleResourceStateScript.new()
+			state.initialize(card, int(pair[1]))
+			destination.append(state)
+
+
+func _count_mining_actions() -> Dictionary:
+	var counts: Dictionary = {}
+	for state: BattleSquadState in get_all_states():
+		var uses := 0
+		if state.squad_data != null:
+			uses += _mining_uses_from_card(state.squad_data.get_effect_source())
+			var equipment := state.squad_data.get_equipped_item()
+			uses += _mining_uses_from_card(equipment.card_data if equipment != null else null)
+		counts[state.runtime_id] = uses
+	return counts
+
+
+func _mining_uses_from_card(card: CardData) -> int:
+	if card == null or not card.keywords.has(&"mining"):
+		return 0
+	return maxi(1, int(card.deferred_effect_hooks.get("mining", {}).get("uses_per_battle", 1)))
 
 
 func _register_formation_emblems() -> void:
@@ -729,6 +782,10 @@ func clear_battle() -> void:
 	stop_battle()
 	_restore_temporary_wound_slots()
 	_release_current_states()
+	player_resource_states.clear()
+	enemy_resource_states.clear()
+	mining_actions_remaining_by_runtime_id.clear()
+	_player_owned_card_ids.clear()
 	active_continuous_effects.clear()
 	_wound_periodic_effects.clear()
 	_continuous_followups.clear()
@@ -1303,6 +1360,41 @@ func choose_base_target(
 		if total_weight > 0:
 			return choose_weighted_target(tier_candidates, forced_roll)
 	return null
+
+
+func _choose_attack_target_with_resources(
+	actor: BattleSquadState,
+	candidates: Array[BattleSquadState],
+	resources: Array[RefCounted]
+) -> Dictionary:
+	var preference := actor.get_target_action_type_preference()
+	var beast_attack := actor.has_effective_race(CardData.RaceType.BEAST)
+	var squad_tiers: Array[Array] = [[], [], [], [], []]
+	for candidate: BattleSquadState in candidates:
+		if candidate == null or not candidate.alive or candidate.current_health <= 0.0 or candidate.moon_shadowed or candidate.has_runtime_keyword(&"emblem_shadow"):
+			continue
+		(squad_tiers[_attack_target_tier(candidate, preference, beast_attack)] as Array).append(candidate)
+	var resource_tier := 3 if preference >= 0 else 1
+	for tier in 5:
+		var available_resources: Array[RefCounted] = []
+		if tier == resource_tier:
+			for resource: RefCounted in resources:
+				if not resource.get("destroyed") and int(resource.get("current_health")) > 0:
+					available_resources.append(resource)
+		var tier_weight := available_resources.size()
+		for candidate: BattleSquadState in squad_tiers[tier]:
+			tier_weight += get_effective_target_weight(candidate)
+		if tier_weight <= 0:
+			continue
+		var roll := _random.randi_range(0, tier_weight - 1)
+		var boundary := 0
+		for candidate: BattleSquadState in squad_tiers[tier]:
+			boundary += get_effective_target_weight(candidate)
+			if roll < boundary:
+				return {"target": candidate, "resource_target": null}
+		roll -= boundary
+		return {"target": null, "resource_target": available_resources[roll]}
+	return {"target": null, "resource_target": null}
 
 
 func _attack_target_tier(candidate: BattleSquadState, preference: int, beast_attack: bool) -> int:
@@ -1900,6 +1992,17 @@ func _launch_registered_projectiles(events: Array[BattleEffectEvent]) -> void:
 
 
 func _resolve_arrived_event(event: BattleEffectEvent) -> void:
+	if event.resource_target != null:
+		if event.resource_target.destroyed or event.resource_target.current_health <= 0:
+			event.missed = true
+			event.effective_amount = 0.0
+			_ensure_formula_source_snapshots(event)
+			effect_resolved.emit(event)
+			if event.is_base_action:
+				action_resolved.emit(event.source, null, event.action_type, 0)
+			return
+		_apply_effect_event(event)
+		return
 	# 生命归零、正式退场或放逐都会让已锁定的主效果命中空位；元素链仍以原锚点继续判断。
 	if event.target == null or not event.target.alive or event.target.current_health <= 0.0:
 		event.missed = true
@@ -1913,6 +2016,8 @@ func _resolve_arrived_event(event: BattleEffectEvent) -> void:
 
 
 func _build_projectile_followups(event: BattleEffectEvent, context: Dictionary) -> Array[BattleEffectEvent]:
+	if event.resource_target != null:
+		return []
 	var action := context["action"] as Dictionary
 	var group_index := int(context["next_group_index"])
 	var groups := action["element_groups"] as Array
@@ -2489,11 +2594,32 @@ func _build_action(
 					continue
 				candidates.append(living_target)
 	var target: BattleSquadState
-	if confused_random_target:
+	var resource_target: RefCounted
+	var mining_forced := false
+	var mining_candidates: Array[RefCounted] = []
+	var mining_uses_left := int(mining_actions_remaining_by_runtime_id.get(actor.runtime_id, 0))
+	if mining_uses_left > 0:
+		for resource_side: Array in [player_resource_states, enemy_resource_states]:
+			for resource: RefCounted in resource_side:
+				if not resource.destroyed and resource.current_health > 0: mining_candidates.append(resource)
+	if not mining_candidates.is_empty():
+		resource_target = mining_candidates[_random.randi_range(0, mining_candidates.size() - 1)]
+		mining_forced = true
+	if mining_forced:
+		target = null
+	elif confused_random_target:
 		target = candidates[_random.randi_range(0, candidates.size() - 1)] if not candidates.is_empty() else null
+	elif action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]:
+		# 普通攻击能把敌我两侧资源都作为独立中立目标参与权重选择。
+		var resources: Array[RefCounted] = []
+		resources.append_array(player_resource_states)
+		resources.append_array(enemy_resource_states)
+		var target_choice := _choose_attack_target_with_resources(actor, candidates, resources)
+		target = target_choice.get("target") as BattleSquadState
+		resource_target = target_choice.get("resource_target") as RefCounted
 	else:
 		target = choose_base_target(actor, candidates, action_type)
-	if target == null:
+	if target == null and resource_target == null:
 		return {}
 	var concussion_bonus := 0.0
 	var concussion_rolls: Array[int] = []
@@ -2513,17 +2639,35 @@ func _build_action(
 	var action := {
 		"actor": actor,
 		"target": target,
+		"resource_target": resource_target,
+		"is_mining": mining_forced,
 		"action_type": action_type,
 		"pattern": pattern,
 		"group_id": _take_group_id(),
 		"action_value_delta": action_value_delta + concussion_bonus,
 		"action_value_source": wound_action_source,
 	}
-	var groups := BattleElementResolver.get_element_groups(pattern)
+	var groups: Array[Dictionary] = []
+	if resource_target == null:
+		groups = BattleElementResolver.get_element_groups(pattern)
 	action["element_groups"] = groups
 	var pierces := not groups.is_empty() and int(groups[0]["element"]) == CardData.ElementType.WOOD and int(groups[0]["count"]) == 5 and action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]
 	action["base_event"] = _make_value_event(action, target, 1.0, 0, true, pierces)
-	_apply_primary_healing_wound_bonus(action["base_event"] as BattleEffectEvent, actor, action_type)
+	if resource_target != null:
+		if mining_forced:
+			mining_actions_remaining_by_runtime_id[actor.runtime_id] = mining_uses_left - 1
+		var resource_event := action["base_event"] as BattleEffectEvent
+		resource_event.resource_target = resource_target
+		resource_event.is_mining = mining_forced
+		resource_event.effect_kind = BattleEffectEvent.EffectKind.DAMAGE
+		resource_event.uses_attack_type_multiplier = false
+		resource_event.exact_amount = float(resource_target.current_health) if mining_forced else 1.0
+		resource_event.visual_kind = &"resource_mining" if mining_forced else &"resource_attack"
+		resource_event.formula = BattleFormulaData.new()
+		resource_event.formula.display_name = "开采" if mining_forced else "资源固定伤害"
+		resource_event.formula.exact_result = resource_event.exact_amount
+	if resource_target == null:
+		_apply_primary_healing_wound_bonus(action["base_event"] as BattleEffectEvent, actor, action_type)
 	return action
 
 
@@ -2922,6 +3066,8 @@ func _trigger_display_name(trigger: BattleEffectDefinition.Trigger) -> String:
 
 
 func _consume_reinforcement_for_action(actor: BattleSquadState, action: Dictionary) -> void:
+	if bool(action.get("is_mining", false)):
+		return
 	# _build_action 已把旧强化写进公式；这里只移除这次行动前的实例。
 	# 回响等后置事件新增的强化不在快照中，留给下一次普通行动。
 	if actor == null or action.is_empty():
@@ -3040,6 +3186,8 @@ func _build_fire_events(action: Dictionary, carrier: BattleEffectEvent, count: i
 
 
 func _build_straight_bonus_events(action: Dictionary, carrier: BattleEffectEvent, layer: int) -> Array[BattleEffectEvent]:
+	if carrier.resource_target != null or bool(action.get("is_mining", false)):
+		return []
 	# 顺子一次性选择五类追加效果；返回事件不会作为下一元素层载体。
 	var config := BattleRules.STRAIGHT_BONUS_CONFIG
 	var result: Array[BattleEffectEvent] = []
@@ -3192,7 +3340,221 @@ func _resolve_effect_layer(events: Array[BattleEffectEvent]) -> void:
 			cancelled_dark_groups[event.group_id] = true
 
 
+func _apply_resource_break_reinforcement(actor: BattleSquadState) -> void:
+	if actor == null or actor.squad_data == null:
+		return
+	var card := actor.squad_data.get_effect_source()
+	if card == null:
+		return
+	var hook: Dictionary = card.deferred_effect_hooks.get("mining_succeeded", {})
+	if hook.is_empty():
+		return
+	var owned := actor.squad_data.get_effect_source_instance()
+	var modifier := BattleModifier.new()
+	modifier.stat = BattleModifier.Stat.REINFORCEMENT
+	modifier.mode = BattleModifier.Mode.ADD
+	modifier.value = float(hook.get("amount", 1))
+	modifier.effect_id = &"resource_break_reinforcement"
+	modifier.source_runtime_id = actor.runtime_id
+	modifier.contribution_sources.append({
+		"role": "强化",
+		"amount": modifier.value,
+		"source_name": card.display_name,
+		"source_card_id": String(card.id),
+		"source_owned_card_instance_id": String(owned.instance_id) if owned != null else "",
+		"source_status": "resolved",
+	})
+	actor.modifiers.add_modifier(modifier)
+
+
+func _resolve_resource_harvest(event: BattleEffectEvent) -> void:
+	var resource := event.resource_target
+	if resource == null or bool(resource.get("harvested")):
+		return
+	resource.set("harvested", true)
+	var actor := event.source
+	# NPC 的整个奖励入口在此早退；潮汐射手的战斗内强化由独立触发处理。
+	if actor == null or actor.side != BattleSquadState.Side.PLAYER:
+		return
+	var resource_owned := resource.get("owned_card") as OwnedCard
+	if resource_owned == null or resource_owned.card_data == null:
+		return
+	var owner := BattleEffectOwnerRef.for_state(actor, BattleEffectDefinition.OwnerKind.OWNING_PLAYER)
+	var timestamp := roundi(elapsed_seconds * 1000000.0)
+	var reward_id := StringName("resource_harvest_%s" % resource_owned.instance_id)
+	match resource_owned.card_data.id:
+		&"fire_element_shard":
+			_record_resource_permanent_growth(actor, BattlePermanentGrowthLedger.STAT_BASE_VALUE, 1.0, reward_id, timestamp)
+		&"water_element_shard":
+			_record_resource_permanent_growth(actor, BattlePermanentGrowthLedger.STAT_MAX_HEALTH, 2.0, reward_id, timestamp)
+		&"wood_element_shard":
+			_record_resource_permanent_growth(actor, BattlePermanentGrowthLedger.STAT_BASE_ARMOR, 1.0, reward_id, timestamp)
+		&"dark_element_shard":
+			_record_resource_wound_heal(actor, owner, reward_id, timestamp)
+		&"light_element_shard":
+			record_pending_run_reward(owner, BattleRunRewardLedger.KIND_GOLD, 2, reward_id, actor.runtime_id, timestamp)
+		&"rainbow_gold_ore":
+			var roll := _roll_probability(actor, 10, 2)
+			var total := int(roll.get("total", 0))
+			var extra_gold := 20 if total == 20 else (10 if total > 18 else (5 if total > 15 else 0))
+			var base_recorded := record_pending_run_reward(owner, BattleRunRewardLedger.KIND_GOLD, 1, reward_id, actor.runtime_id, timestamp, {"reward_part": "base", "roll_total": total, "roll_details": roll})
+			var extra_recorded := extra_gold == 0 or record_pending_run_reward(owner, BattleRunRewardLedger.KIND_GOLD, extra_gold, reward_id, actor.runtime_id, timestamp, {"reward_part": "highest_bonus", "roll_total": total, "roll_details": roll})
+			if base_recorded and extra_recorded:
+				event.log_qualifier += "，掷出%d并获得基础1金币%s" % [total, "与额外%d金币" % extra_gold if extra_gold > 0 else ""]
+		&"stone_of_greed":
+			var roll := _roll_probability(actor, 10)
+			var roll_total := int(roll.get("total", 0))
+			var delta := 10 if roll_total == 10 else (3 if roll_total >= 6 else -2)
+			var kind := BattleRunRewardLedger.KIND_GOLD if delta > 0 else BattleRunRewardLedger.KIND_GOLD_DELTA
+			var reward_amount := delta if delta > 0 else -delta
+			if record_pending_run_reward(owner, kind, reward_amount, reward_id, actor.runtime_id, timestamp, {"gold_delta": delta, "roll": roll_total, "roll_details": roll}):
+				event.log_qualifier += "，掷出%d，金币变化%+d" % [roll_total, delta]
+		&"crystallized_remains":
+			var roll := _roll_probability(actor, 10)
+			var roll_total := int(roll.get("total", 0))
+			if roll_total <= 8:
+				var shard := _random_shard_definition()
+				if shard != null: _record_resource_card_award(owner, shard, reward_id, actor, timestamp)
+			else:
+				var emblem := _random_emblem_definition()
+				if not emblem.is_empty():
+					var instance_id := StringName("%s:resource_emblem:%d" % [battle_instance_id, _next_reward_instance_sequence])
+					_next_reward_instance_sequence += 1
+					record_pending_run_reward(owner, BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE, 1, reward_id, actor.runtime_id, timestamp, {"emblem_id": emblem.get("id", &""), "emblem_instance_id": instance_id, "source": "resource:%s" % resource_owned.instance_id, "roll": roll})
+		&"abandoned_toolbox":
+			var equipment := _random_equipment_definition(CardData.Rarity.I)
+			if equipment != null: _record_resource_card_award(owner, equipment, reward_id, actor, timestamp)
+	if event.log_qualifier.contains("击碎了"):
+		event.log_qualifier += "；获得收获"
+
+
+func _record_resource_permanent_growth(actor: BattleSquadState, stat: StringName, amount: float, effect_id: StringName, timestamp: int) -> bool:
+	if actor.squad_data == null or actor.squad_data.horizontal_cards.is_empty(): return false
+	var recipient := actor.squad_data.get_action_source_instance() if stat == BattlePermanentGrowthLedger.STAT_BASE_VALUE else actor.squad_data.get_vitals_source_instance()
+	if recipient == null: return false
+	if not record_pending_permanent_growth(BattleEffectOwnerRef.for_owned_card_in_state(actor, recipient), stat, amount, effect_id, actor.runtime_id, timestamp): return false
+	if not recipient.apply_permanent_growth(_map_chaos_growth_stat(stat), amount): return false
+	match stat:
+		BattlePermanentGrowthLedger.STAT_MAX_HEALTH: actor.current_health += amount
+		BattlePermanentGrowthLedger.STAT_BASE_ARMOR:
+			actor.current_armor += amount
+	return true
+
+
+func _record_resource_wound_heal(actor: BattleSquadState, owner: BattleEffectOwnerRef, effect_id: StringName, timestamp: int) -> bool:
+	var candidates: Array[Dictionary] = []
+	if actor.squad_data == null: return false
+	for slot: Dictionary in actor.squad_data.get_visible_wound_slots():
+		var card := slot.get("card") as CardData
+		var owned := actor.squad_data.get_owned_card(card)
+		var index := int(slot.get("slot_index", -1))
+		if owned == null or index < 0 or index >= owned.wound_slots.size() or owned.wound_slots[index].is_empty(): continue
+		var key := StringName("%s:wound:%d" % [owned.instance_id, index])
+		if not actor.is_injury_masked(key): candidates.append({"state": actor, "owned": owned, "index": index})
+	if candidates.is_empty(): return false
+	var selected: Dictionary = candidates[_random.randi_range(0, candidates.size() - 1)]
+	var target_state := selected.get("state") as BattleSquadState
+	var target_owned := selected.get("owned") as OwnedCard
+	var slot_index := int(selected.get("index", -1))
+	if not record_pending_owned_card_slot_change(BattleEffectOwnerRef.for_owned_card_in_state(target_state, target_owned), BattleOwnedCardChangeLedger.KIND_SET_WOUND_SLOT, slot_index, {}, effect_id, actor.runtime_id, timestamp): return false
+	if not target_owned.set_wound_slot(slot_index, {}): return false
+	_sync_wound_registration_visibility()
+	return true
+
+
+func _record_resource_card_award(owner: BattleEffectOwnerRef, card: CardData, effect_id: StringName, actor: BattleSquadState, timestamp: int) -> void:
+	if card == null: return
+	record_pending_run_reward(owner, BattleRunRewardLedger.KIND_OWNED_CARD_AWARD, 1, effect_id, actor.runtime_id, timestamp, {"card_id": card.id, "card_name": card.display_name})
+
+
+func _random_shard_definition() -> CardData:
+	var shards: Array[CardData] = []
+	for card: CardData in _reward_card_catalog:
+		if card.card_type == CardData.CardType.RESOURCE and card.id in [&"fire_element_shard", &"light_element_shard", &"dark_element_shard", &"water_element_shard", &"wood_element_shard"]: shards.append(card)
+	return shards[_random.randi_range(0, shards.size() - 1)] if not shards.is_empty() else null
+
+
+func _random_equipment_definition(requested_rarity: int = -1) -> CardData:
+	var by_rarity: Dictionary = {}
+	for rarity in 4: by_rarity[rarity] = []
+	for card: CardData in _reward_card_catalog:
+		if card.card_type != CardData.CardType.EQUIPMENT or not card.is_available or card.is_derived or card.rarity > CardData.Rarity.IV or card.pack_id == &"development_test" or not CardPackRegistryScript.PACKS.has(card.pack_id): continue
+		if requested_rarity >= 0 and int(card.rarity) != requested_rarity: continue
+		if int(card.rarity) == CardData.Rarity.IV and _player_owned_card_ids.has(card.id): continue
+		if int(card.rarity) == CardData.Rarity.IV and _has_same_battle_equipment_award(card.id): continue
+		(by_rarity[int(card.rarity)] as Array).append(card)
+	if requested_rarity >= 0:
+		var requested: Array = by_rarity.get(requested_rarity, [])
+		return requested[_random.randi_range(0, requested.size() - 1)] as CardData if not requested.is_empty() else null
+	var weights := [75, 20, 4, 1]
+	var available_weight := 0
+	for rarity in 4:
+		if not (by_rarity[rarity] as Array).is_empty(): available_weight += weights[rarity]
+	if available_weight == 0: return null
+	var roll := _random.randi_range(1, available_weight)
+	for rarity in 4:
+		if (by_rarity[rarity] as Array).is_empty(): continue
+		roll -= weights[rarity]
+		if roll <= 0:
+			var candidates: Array = by_rarity[rarity]
+			return candidates[_random.randi_range(0, candidates.size() - 1)] as CardData
+	return null
+
+
+func _has_same_battle_equipment_award(card_id: StringName) -> bool:
+	for entry: Dictionary in run_reward_ledger.get_entries():
+		if entry.get("kind") != BattleRunRewardLedger.KIND_OWNED_CARD_AWARD:
+			continue
+		if StringName(String((entry.get("parameters", {}) as Dictionary).get("card_id", ""))) == card_id:
+			return true
+	return false
+
+
+func _random_emblem_definition(requested_rarity: int = -1) -> Dictionary:
+	var by_rarity: Dictionary = {0: [], 1: [], 2: []}
+	for definition: Dictionary in EmblemLibraryData.DEFINITIONS:
+		if definition.get("target", "") == "rune" or int(definition.get("rarity", -1)) not in [0, 1, 2]: continue
+		(by_rarity[int(definition.rarity)] as Array).append(definition)
+	if requested_rarity >= 0:
+		if requested_rarity not in [0, 1, 2]: return {}
+		var requested_pool: Array = by_rarity[requested_rarity]
+		return requested_pool[_random.randi_range(0, requested_pool.size() - 1)] as Dictionary if not requested_pool.is_empty() else {}
+	var weights := [85, 13, 2]
+	var total := 0
+	for rarity in 3:
+		if not (by_rarity[rarity] as Array).is_empty(): total += weights[rarity]
+	if total <= 0: return {}
+	var roll := _random.randi_range(1, total)
+	for rarity in 3:
+		if (by_rarity[rarity] as Array).is_empty(): continue
+		roll -= weights[rarity]
+		if roll <= 0:
+			var candidates: Array = by_rarity[rarity]
+			return candidates[_random.randi_range(0, candidates.size() - 1)] as Dictionary
+	return {}
+
+
 func _apply_effect_event(event: BattleEffectEvent) -> void:
+	if event.resource_target != null:
+		if event.resource_target.destroyed or event.resource_target.current_health <= 0:
+			event.missed = true
+		else:
+			var damage: int = int(event.resource_target.current_health) if event.is_mining else 1
+			event.exact_amount = float(damage)
+			event.effective_amount = float(event.resource_target.apply_damage(damage))
+			event.health_amount = event.effective_amount
+			if event.resource_target.destroyed:
+				event.log_qualifier = ("开采击碎了%s" if event.is_mining else "击碎了%s") % event.resource_target.get_display_name()
+				_apply_resource_break_reinforcement(event.source)
+				_resolve_resource_harvest(event)
+		_record_battle_statistics(event)
+		_ensure_formula_source_snapshots(event)
+		effect_resolved.emit(event)
+		if event.is_base_action:
+			action_resolved.emit(event.source, null, event.action_type, roundi(event.effective_amount))
+			effect_runtime.notify_action_after(event.source)
+			effect_runtime.process_due(elapsed_seconds)
+		return
 	if event.target == null:
 		return
 	if event.is_continuous and (not event.target.alive or event.target.current_health <= 0.0):

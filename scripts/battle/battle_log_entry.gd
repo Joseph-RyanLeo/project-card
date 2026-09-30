@@ -37,7 +37,7 @@ func to_bbcode() -> String:
 		var event := events[index]
 		if event.missed:
 			clauses.append("对%s的%s落空" % [
-				_format_state_name(event.target),
+				_format_event_target_name(event),
 				event.log_qualifier if not event.log_qualifier.is_empty() else "行动",
 			])
 			continue
@@ -48,7 +48,7 @@ func to_bbcode() -> String:
 		var qualifier := "%s" % event.log_qualifier if not event.log_qualifier.is_empty() else ""
 		var value := format_number(event.exact_amount)
 		clauses.append("对%s%s[url=formula:%d:%d]%s点%s%s[/url]" % [
-			_format_state_name(event.target), verb, group_id, index, value,
+			_format_event_target_name(event), verb, group_id, index, value,
 			qualifier, event.formula.display_name if event.formula != null else "效果",
 		])
 	if events.is_empty():
@@ -74,6 +74,12 @@ static func _format_state_name(state: BattleSquadState) -> String:
 	if state.squad_data != null and state.squad_data.get_card_count() > 1:
 		result += "的小队"
 	return result
+
+static func _format_event_target_name(event: BattleEffectEvent) -> String:
+	if event != null and event.resource_target != null:
+		var prefix := "我方" if int(event.resource_target.get("side")) == BattleSquadState.Side.PLAYER else "敌方"
+		return "%s%s" % [prefix, String(event.resource_target.call("get_display_name"))]
+	return _format_state_name(event.target if event != null else null)
 
 
 static func _placeholder_clause(event: BattleEffectEvent) -> String:

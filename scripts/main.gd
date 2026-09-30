@@ -37,6 +37,8 @@ const BattleDiagnosticRecorderScript = preload("res://scripts/battle/battle_diag
 const BattleDiagnosticSerializerScript = preload("res://scripts/battle/battle_diagnostic_serializer.gd")
 const BattleAudioServiceScript = preload("res://scripts/battle/battle_audio_service.gd")
 const RunSaveService = preload("res://scripts/data/run_save_service.gd")
+const ResourceBoardState = preload("res://scripts/data/resource_board_state.gd")
+const RESOURCE_PREPARATION_TRAY_SCRIPT = preload("res://scripts/ui/resource_preparation_tray.gd")
 const PAGE_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_large.fnt")
 const BATTLE_LOG_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const WOOD_WORLD_TEXTURE: Texture2D = preload("res://assets/stage_6_5/wood_world.png")
@@ -128,10 +130,13 @@ const SEARCH_CLEAR_HOTSPOT_REGION := Rect2(96, 10, 16, 14) # 相对搜索栏图�
 # 右侧 5px 的越界图标，避免 ScrollContainer 把它们裁掉。
 const COLLECTION_CARD_SAFE_PADDING := Vector2(14, 11) # 收藏槽四周预留空间，避免放大和越界图标被裁切
 const WORLD_SECTION_HEIGHT: float = 360.0 # 敌方、我方和收藏三段纵向世界各自的高度
+const ENEMY_RESOURCE_TRAY_POSITION := Vector2(6.0, 171.0) # 敌方资源区在敌方世界段内的位置；x向右、y向下
+const PLAYER_RESOURCE_TRAY_POSITION := Vector2(1094.0, WORLD_SECTION_HEIGHT+4) # 玩家资源区在玩家世界段内的位置；整体视角会随我方世界段平移
 const SPELL_PREPARATION_TRAY_POSITION := Vector2(13.0, 380.0) # 法术板位于我方战场左侧、战斗种子下方
 const TOOLBOX_POSITION := Vector2(6.0, 167.0) # 普通工具箱在收藏区域内的1×位置；x向右、y向下，检视收展位置独立计算
 const DEVELOPER_CONSOLE_CANVAS_LAYER: int = 1 # 控制台绘制在主界面普通 CanvasLayer 上方
-const BATTLE_VOLUME_POSITION := Vector2(864.0, 128.0) # 音量控制位于准备栏下方、头像上方的面板局部坐标
+const ESCAPE_PAUSE_MENU_Z_INDEX: int = 4000 # 暂停菜单高于结算统计与常规卡牌层
+const BATTLE_VOLUME_POSITION := Vector2(864.0, 320.0) # 音量控制位于准备栏下方、头像上方的面板局部坐标
 const VIEW_TWEEN_DURATION: float = 0.32 # 人物按钮与阶段默认视角的平滑切换时长
 const PLAYER_AVATAR_TURN_DURATION: float = 0.32 # 完整转身动作的时长，与战场视角切换同步
 const COLLECTION_MAX_PHYSICAL_PAGES: int = 100 # 收藏最多显示 100 个物理单页
@@ -296,6 +301,9 @@ var settlement_journal := RunSettlementJournal.new()
 var run_reward_state := RunRewardState.new()
 var battle_settlement_service := BattleSettlementService.new()
 var run_save_service := RunSaveService.new()
+var resource_board_state := ResourceBoardState.new()
+var player_resource_tray: Control
+var enemy_resource_tray: Control
 var _last_battle_settlement_result: Dictionary = {}
 var _last_run_persistence_result: Dictionary = {}
 var _startup_runtime_snapshot: Dictionary = {}
@@ -342,6 +350,9 @@ var battle_result_summary_label: RichTextLabel
 var export_battle_data_button: Button
 var battle_export_status_label: Label
 var restart_battle_button: Button
+var continue_next_level_button: Button
+var ground_reward_panel: Panel
+var ground_reward_list: VBoxContainer
 var battle_diagnostic_file_dialog: FileDialog
 var battle_diagnostic_message_dialog: AcceptDialog
 var battle_controller: BattleController
@@ -434,6 +445,7 @@ func _build_scene_structure() -> void:
 	_add_texture_layer(world, "BattlefieldBrocade", BATTLEFIELD_BROCADE_TEXTURE, Vector2.ZERO, Vector2(1280, 720), -60)
 	_build_board_section(world, "EnemyBoardSection", 0.0, true)
 	_build_board_section(world, "PlayerBoardSection", WORLD_SECTION_HEIGHT, false)
+	_build_resource_preparation_trays(world)
 	_build_spell_preparation_tray(world)
 	_build_collection_section(world)
 	_build_enemy_avatar(world)
@@ -461,7 +473,7 @@ func _build_escape_pause_menu() -> void:
 	_escape_pause_menu = ESCAPE_PAUSE_MENU_SCRIPT.new() as EscapePauseMenu
 	_escape_pause_menu.name = "EscapePauseMenu"
 	_escape_pause_menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_escape_pause_menu.z_index = 4090
+	_escape_pause_menu.z_index = ESCAPE_PAUSE_MENU_Z_INDEX
 	_escape_pause_menu.escape_pressed.connect(_on_escape_pause_menu_requested)
 	_escape_pause_menu.tool_requested.connect(_on_escape_menu_tool_requested)
 	_escape_pause_menu.return_requested.connect(_close_escape_pause_menu)
@@ -479,6 +491,117 @@ func _build_click_carry_layer() -> void:
 	_click_carry_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_click_carry_layer.z_index = 4096
 	add_child(_click_carry_layer)
+
+
+func _build_resource_preparation_trays(parent: Control) -> void:
+	player_resource_tray = RESOURCE_PREPARATION_TRAY_SCRIPT.new()
+	player_resource_tray.configure(resource_board_state, "player")
+	player_resource_tray.position = PLAYER_RESOURCE_TRAY_POSITION
+	player_resource_tray.z_index = 150
+	player_resource_tray.drop_requested.connect(_on_resource_tray_drop_requested.bind("player"))
+	player_resource_tray.click_carry_requested.connect(_on_click_carry_requested)
+	parent.add_child(player_resource_tray)
+	enemy_resource_tray = RESOURCE_PREPARATION_TRAY_SCRIPT.new()
+	enemy_resource_tray.configure(resource_board_state, "enemy")
+	enemy_resource_tray.position = ENEMY_RESOURCE_TRAY_POSITION
+	enemy_resource_tray.z_index = 150
+	enemy_resource_tray.set_drop_enabled(false)
+	parent.add_child(enemy_resource_tray)
+
+
+func _initialize_resource_level_if_needed() -> void:
+	if resource_board_state.level_id.is_empty():
+		var level_rng := RandomNumberGenerator.new()
+		level_rng.randomize()
+		var initial_board := ResourceBoardState.new()
+		if not initial_board.initialize_level(&"level_000001", level_rng):
+			push_error("无法初始化首关资源区")
+			return
+		var generation := initial_board.generate_level_resources(_get_resource_definitions(), level_rng)
+		if not bool(generation.get("success", false)):
+			push_error("首关资源生成失败：%s" % generation.get("reason", "unknown"))
+			return
+		resource_board_state = initial_board
+
+
+func _refresh_resource_preparation_trays() -> void:
+	var cards := owned_card_collection.get_cards()
+	if current_phase == GamePhase.PREPARE:
+		if is_instance_valid(player_resource_tray): player_resource_tray.clear_battle_health()
+		if is_instance_valid(enemy_resource_tray): enemy_resource_tray.clear_battle_health()
+	if is_instance_valid(player_resource_tray):
+		player_resource_tray.configure(resource_board_state, "player")
+		var player_resource_cards := cards.duplicate()
+		player_resource_cards.append_array(resource_board_state.get_level_resource_cards("player"))
+		player_resource_tray.set_owned_cards(player_resource_cards)
+		player_resource_tray.set_drop_enabled(current_phase == GamePhase.PREPARE)
+	if is_instance_valid(enemy_resource_tray):
+		enemy_resource_tray.configure(resource_board_state, "enemy")
+		enemy_resource_tray.set_owned_cards(resource_board_state.get_level_resource_cards("enemy"))
+
+
+func _set_resource_trays_carry_active(active: bool) -> void:
+	for tray_value in [player_resource_tray, enemy_resource_tray]:
+		var tray := tray_value as ResourcePreparationTray
+		if is_instance_valid(tray): tray.set_carry_active(active)
+
+
+func start_new_resource_level(level_id: StringName, rng: RandomNumberGenerator) -> bool:
+	var advancing_settled_run := (
+		current_phase == GamePhase.RESULT and bool(_last_battle_settlement_result.get("success", false))
+	) or (current_phase == GamePhase.PREPARE and not run_reward_state.pending_next_level_from_id.is_empty())
+	if (current_phase != GamePhase.PREPARE and not advancing_settled_run) or level_id.is_empty() or rng == null:
+		return false
+	# 先在候选状态中生成完整新关；失败时保留当前关卡，不留下半生成数据。
+	var candidate := ResourceBoardState.new()
+	if not candidate.initialize_level(level_id, rng):
+		return false
+	var generation := candidate.generate_level_resources(_get_resource_definitions(), rng)
+	if not bool(generation.get("success", false)):
+		push_error("新关资源生成失败：%s" % generation.get("reason", "unknown"))
+		return false
+	resource_board_state = candidate
+	if is_instance_valid(player_resource_tray): player_resource_tray.clear_battle_health()
+	if is_instance_valid(enemy_resource_tray): enemy_resource_tray.clear_battle_health()
+	_build_collection_cards()
+	_refresh_resource_preparation_trays()
+	return true
+
+
+func _get_resource_definitions() -> Array[CardData]:
+	var result: Array[CardData] = []
+	for definition: CardData in _build_card_definition_registry().values():
+		if definition.card_type == CardData.CardType.RESOURCE:
+			result.append(definition)
+	return result
+
+
+func _on_resource_tray_drop_requested(data: Dictionary, resolution: Dictionary, owner_side: String) -> void:
+	_commit_resource_preparation_drop(data, resolution, owner_side)
+
+
+func _commit_resource_preparation_drop(data: Dictionary, resolution: Dictionary, owner_side: String = "player") -> bool:
+	if current_phase != GamePhase.PREPARE or owner_side != "player":
+		return false
+	var owned := data.get("owned_card") as OwnedCard
+	if owned == null or owned.card_data == null or owned.card_data.card_type != CardData.CardType.RESOURCE or owned_card_collection.get_by_instance_id(owned.instance_id) != owned:
+		return false
+	if data.get("source_type") == &"collection" and _is_owned_card_deployed(owned):
+		return false
+	var tray := player_resource_tray as ResourcePreparationTray
+	if not tray.commit_drop(data, resolution):
+		return false
+	_build_collection_cards()
+	_refresh_resource_preparation_trays()
+	return true
+
+
+func _find_resource_tray_at(pointer_global_position: Vector2) -> ResourcePreparationTray:
+	for tray_value in [player_resource_tray, enemy_resource_tray]:
+		var tray := tray_value as ResourcePreparationTray
+		if is_instance_valid(tray) and tray.is_drop_position_global(pointer_global_position):
+			return tray
+	return null
 
 
 func _build_spell_preparation_tray(parent: Control) -> void:
@@ -880,7 +1003,49 @@ func _build_battle_result_panel() -> void:
 		true
 	)
 	panel.add_child(restart)
+	var continue_button := _make_button("ContinueNextLevelButton", "继续下一关", Vector2(25, 245), Vector2(120, 27), true)
+	continue_button.visible = false
+	panel.add_child(continue_button)
 	_assign_runtime_owner(panel)
+	_build_ground_reward_panel()
+
+
+func _build_ground_reward_panel() -> void:
+	ground_reward_panel = Panel.new()
+	ground_reward_panel.name = "GroundRewardPanel"
+	ground_reward_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	ground_reward_panel.position = Vector2(-230, -180)
+	ground_reward_panel.size = Vector2(460, 360)
+	ground_reward_panel.z_index = 4000
+	ground_reward_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	ground_reward_panel.visible = false
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.047, 0.055, 0.98)
+	style.border_color = Color(0.82, 0.68, 0.31, 1.0)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(8)
+	ground_reward_panel.add_theme_stylebox_override("panel", style)
+	add_child(ground_reward_panel)
+	var title := _make_label("地面临时背包", Vector2(18, 8), Vector2(424, 30))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 20)
+	ground_reward_panel.add_child(title)
+	var description := _make_label("工作包满出的纹章保存在这里。领取、装备或丢弃后才能继续。", Vector2(18, 40), Vector2(424, 32))
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	description.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	description.add_theme_font_size_override("font_size", 11)
+	ground_reward_panel.add_child(description)
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(18, 78)
+	scroll.size = Vector2(424, 264)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.mouse_filter = Control.MOUSE_FILTER_PASS
+	ground_reward_panel.add_child(scroll)
+	ground_reward_list = VBoxContainer.new()
+	ground_reward_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	ground_reward_list.add_theme_constant_override("separation", 6)
+	scroll.add_child(ground_reward_list)
+	_assign_runtime_owner(ground_reward_panel)
 
 
 func _build_battle_diagnostic_file_dialog() -> void:
@@ -1235,6 +1400,8 @@ func _ready() -> void:
 	add_child(battle_audio_service)
 	_bind_scene_nodes()
 	_initialize_owned_card_collection()
+	_initialize_resource_level_if_needed()
+	_refresh_resource_preparation_trays()
 	_build_formula_popup()
 	if not _battlefield_has_active_rune_effects():
 		CardView.reset_active_rune_flow()
@@ -1250,6 +1417,7 @@ func _ready() -> void:
 	start_battle_button.pressed.connect(_on_start_battle_button_pressed)
 	export_battle_data_button.pressed.connect(_on_export_battle_data_button_pressed)
 	restart_battle_button.pressed.connect(_on_restart_battle_button_pressed)
+	continue_next_level_button.pressed.connect(_on_continue_next_level_pressed)
 	battle_seed_random_button.pressed.connect(_use_new_battle_seed)
 	_use_new_battle_seed()
 	battle_controller = BattleController.new() as BattleController
@@ -1296,6 +1464,7 @@ func _capture_startup_runtime_snapshot() -> void:
 	var display_mode: Variant = display_shell.get("current_display_mode") if is_instance_valid(display_shell) else null
 	_startup_runtime_snapshot = {
 		"collection": owned_card_collection.capture_state(),
+		"resource_board_state": resource_board_state.capture_state(),
 		"rows": {
 			&"player_front": _duplicate_row_squads(front_row),
 			&"player_back": _duplicate_row_squads(back_row),
@@ -1402,6 +1571,9 @@ func _restore_startup_runtime_snapshot() -> bool:
 	_restore_row_from_snapshot(enemy_front_row, (snapshot["rows"] as Dictionary)[&"enemy_front"])
 	_restore_row_from_snapshot(enemy_back_row, (snapshot["rows"] as Dictionary)[&"enemy_back"])
 	celestial_indicators.restore_state(snapshot["indicator_inventory"] as Dictionary)
+	if not resource_board_state.restore_state(snapshot.get("resource_board_state", {}) as Dictionary, _build_card_definition_registry()):
+		push_error("本次启动快照中的资源板无法恢复")
+		return false
 	prepared_spell_instance_ids.assign(snapshot["prepared_spell_instance_ids"] as Array)
 	spell_preparation_capacity = int(snapshot["spell_preparation_capacity"])
 	run_reward_state.restore_state(snapshot["reward_state"] as Dictionary)
@@ -1484,6 +1656,16 @@ func _sync_legacy_collection_cards() -> void:
 	collection_cards.clear()
 	for owned_card: OwnedCard in owned_card_collection.get_cards():
 		collection_cards.append(owned_card.card_data)
+	var retained_recent_cards: Array[CardData] = []
+	var retained_recent_owned_cards: Array[OwnedCard] = []
+	for index: int in mini(recently_returned_cards.size(), recently_returned_owned_cards.size()):
+		var recent_owned := recently_returned_owned_cards[index]
+		if recent_owned == null or owned_card_collection.get_by_instance_id(recent_owned.instance_id) != recent_owned:
+			continue
+		retained_recent_cards.append(recent_owned.card_data)
+		retained_recent_owned_cards.append(recent_owned)
+	recently_returned_cards = retained_recent_cards
+	recently_returned_owned_cards = retained_recent_owned_cards
 
 
 func _bind_owned_cards_to_player_squads() -> void:
@@ -1586,6 +1768,7 @@ func _build_formula_popup() -> void:
 	battle_result_label = get_node("%BattleResultLabel") as Label
 	battle_result_summary_label = get_node("%BattleResultPlaceholder") as RichTextLabel
 	restart_battle_button = get_node("%RestartBattleButton") as Button
+	continue_next_level_button = get_node("%ContinueNextLevelButton") as Button
 	export_battle_data_button = get_node("%ExportBattleDataButton") as Button
 	battle_export_status_label = get_node("%BattleExportStatusLabel") as Label
 	search_edit = get_node("%SearchEdit") as LineEdit
@@ -2724,6 +2907,7 @@ func _notification(what: int) -> void:
 			and _is_card_carry_drag(drag_data as Dictionary)
 		):
 			_native_carry_data = (drag_data as Dictionary).duplicate()
+			_set_resource_trays_carry_active(true)
 			_native_carry_update_frame = -1
 			_native_carry_update_pointer = Vector2.INF
 			_native_carry_pointer = get_viewport().get_mouse_position()
@@ -2734,6 +2918,7 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_DRAG_END:
 		var failed_indicator_drag := _native_carry_data
 		_native_carry_data = {}
+		_set_resource_trays_carry_active(false)
 		_native_carry_update_frame = -1
 		_native_carry_update_pointer = Vector2.INF
 		_native_carry_last_target = {}
@@ -2849,7 +3034,7 @@ func _set_spell_preparation_drag_visual_mode(
 
 func _is_card_carry_drag(drag_data: Dictionary) -> bool:
 	return (
-		drag_data.get("source_type") in [&"board", &"collection", &"spell_preparation"]
+		drag_data.get("source_type") in [&"board", &"collection", &"spell_preparation", &"resource_preparation"]
 		and drag_data.get("kind") in [
 		&"card",
 		&"squad",
@@ -2881,7 +3066,26 @@ func _update_card_carry_target(
 	for row: BattlefieldRow in [front_row, back_row]:
 		row.update_stack_target_feedback_global(pointer_global_position, drag_data)
 
-	var target := {"row": null, "collection": false, "spell_preparation": false, "accepted": false}
+	var target := {"row": null, "collection": false, "spell_preparation": false, "resource_tray": null, "resource_resolution": {}, "accepted": false}
+	var resource_tray := _find_resource_tray_at(pointer_global_position)
+	if resource_tray != null:
+		for row: BattlefieldRow in [front_row, back_row]: row.clear_drop_preview(false)
+		collection_drop_zone.clear_drop_preview()
+		if is_instance_valid(spell_preparation_tray): spell_preparation_tray.call("_clear_insertion_preview")
+		target["resource_tray"] = resource_tray
+		var resolution: Dictionary = resource_tray.update_preview(pointer_global_position, drag_data)
+		var puzzle_preview := drag_data.get("drag_visual") as CardDragPreview
+		var puzzle_card := drag_data.get("owned_card") as OwnedCard
+		if puzzle_preview != null and puzzle_card != null and resolution.has("grab_cell"):
+			puzzle_preview.set_resource_puzzle_mode(true, puzzle_card.resource_shape, int(puzzle_card.card_data.rarity), resolution.grab_cell, resolution.grab_pixel_offset, int(puzzle_card.card_data.resource_type))
+		target["resource_resolution"] = resolution
+		target["accepted"] = bool(resolution.get("valid", false))
+		if is_native_drag: _native_carry_last_target = target
+		return target
+	if is_instance_valid(player_resource_tray): player_resource_tray.clear_preview()
+	var departing_preview := drag_data.get("drag_visual") as CardDragPreview
+	if departing_preview != null and departing_preview.has_method("set_resource_puzzle_mode"):
+		departing_preview.set_resource_puzzle_mode(false)
 	if (
 		is_instance_valid(spell_preparation_tray)
 		and spell_preparation_tray.is_drop_position_global(pointer_global_position)
@@ -2938,9 +3142,17 @@ func _on_start_battle_button_pressed() -> void:
 
 
 func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
+	if not run_reward_state.pending_next_level_from_id.is_empty():
+		play_area_label.text = "本关已经结算；请先处理奖励并进入下一关。"
+		return false
+	if not run_reward_state.pending_ground_items.is_empty():
+		play_area_label.text = "先处理地面临时背包中的奖励，再开始下一场战斗。"
+		_refresh_ground_reward_panel()
+		return false
 	if current_phase != GamePhase.PREPARE or battle_controller == null:
 		return false
 	_cancel_click_carry()
+	_clear_battle_presentation_for_preparation()
 	_bind_owned_cards_to_player_squads()
 	var resolved_seed := (
 		random_seed
@@ -2982,7 +3194,12 @@ func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
 		resolved_seed,
 		auto_run,
 		battle_instance_id,
-		_get_prepared_spell_instances()
+		_get_prepared_spell_instances(),
+		[],
+		_get_deployed_resource_cards("player"),
+		_get_deployed_resource_cards("enemy"),
+		_build_reward_card_catalog(),
+		owned_card_collection.get_cards()
 	)
 	_map_battle_states_to_slots(battle_controller.player_states, player_formation)
 	_map_battle_states_to_slots(battle_controller.enemy_states, enemy_formation)
@@ -2993,6 +3210,34 @@ func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
 	return true
 
 
+func _get_deployed_resource_cards(side: String) -> Array[OwnedCard]:
+	var result: Array[OwnedCard] = []
+	var deployments: Dictionary = resource_board_state.deployments.get(side, {})
+	for instance_id_value: Variant in deployments.keys():
+		var instance_id := String(instance_id_value)
+		var card := resource_board_state.get_level_resource(side, instance_id)
+		if card == null and side == "player":
+			card = owned_card_collection.get_by_instance_id(StringName(instance_id))
+		if card != null and card.card_data != null and card.card_data.card_type == CardData.CardType.RESOURCE:
+			result.append(card)
+	return result
+
+
+func _clear_battle_presentation_for_preparation() -> void:
+	# 结算统计保留到离开结算页；跨入准备或新战斗时，四排一起清除战斗临时卡面状态。
+	for row: BattlefieldRow in [enemy_back_row, enemy_front_row, front_row, back_row]:
+		for slot: BoardSlot in row.get_squads():
+			slot.clear_battle_status()
+			slot.clear_battle_result_statistics()
+
+
+func _build_reward_card_catalog() -> Array[CardData]:
+	var result: Array[CardData] = []
+	for card: CardData in _build_card_definition_registry().values(): result.append(card)
+	result.sort_custom(func(left: CardData, right: CardData) -> bool: return String(left.id) < String(right.id))
+	return result
+
+
 func _on_restart_battle_button_pressed() -> void:
 	restart_battle()
 
@@ -3000,6 +3245,12 @@ func _on_restart_battle_button_pressed() -> void:
 func restart_battle() -> bool:
 	if _battle_snapshot == null or _battle_snapshot.is_empty() or battle_controller == null:
 		return false
+	if settlement_journal.is_committed(_battle_snapshot.battle_instance_id):
+		# 已提交场次统一走下一关入口，避免留在旧关卡重新开战。
+		var previous_level := resource_board_state.level_id
+		current_phase = GamePhase.PREPARE
+		_on_continue_next_level_pressed()
+		return resource_board_state.level_id != previous_level
 	_close_card_inspection(true)
 	_clear_spell_cast_presentation()
 	_manual_pause_requested = false
@@ -3025,6 +3276,7 @@ func restart_battle() -> bool:
 	_update_battle_timer()
 	_update_phase_label()
 	_build_collection_cards()
+	_refresh_ground_reward_panel()
 	_refresh_preparation_effect_preview.call_deferred()
 	play_area_label.text = "已精确恢复本次战斗开始前的阵容与准备状态"
 	return true
@@ -3076,7 +3328,15 @@ func _update_phase_label() -> void:
 	battle_seed_random_button.disabled = current_phase != GamePhase.PREPARE
 	# 结算页继续复用本场同一份结构化日志，直到玩家点击重新开始。
 	battle_log_panel.visible = current_phase in [GamePhase.BATTLE, GamePhase.RESULT]
-	battle_result_panel.visible = current_phase == GamePhase.RESULT
+	var preparing_for_next_level := current_phase == GamePhase.PREPARE and not run_reward_state.pending_next_level_from_id.is_empty()
+	battle_result_panel.visible = current_phase == GamePhase.RESULT or preparing_for_next_level
+	if is_instance_valid(continue_next_level_button):
+		continue_next_level_button.visible = (
+			(current_phase == GamePhase.RESULT and bool(_last_battle_settlement_result.get("success", false)))
+			or preparing_for_next_level
+		)
+	if is_instance_valid(restart_battle_button):
+		restart_battle_button.visible = current_phase == GamePhase.RESULT and not bool(_last_battle_settlement_result.get("success", false))
 	_refresh_battle_diagnostic_export_button()
 	_refresh_drag_availability()
 	_refresh_spell_preparation_tray()
@@ -3097,7 +3357,8 @@ func _capture_battle_snapshot(
 			&"enemy_front": _duplicate_row_squads(enemy_front_row),
 			&"enemy_back": _duplicate_row_squads(enemy_back_row),
 		},
-		prepared_spell_instance_ids
+		prepared_spell_instance_ids,
+		resource_board_state.capture_state()
 	):
 		return null
 	return snapshot
@@ -3283,6 +3544,12 @@ func _restore_battle_snapshot(restore_collection_state: bool = true) -> void:
 	if restore_collection_state:
 		prepared_spell_instance_ids = _battle_snapshot.get_prepared_spell_instance_ids()
 		_refresh_spell_preparation_tray()
+	if not resource_board_state.restore_state(_battle_snapshot.get_resource_board_state(), _build_card_definition_registry()):
+		push_error("战斗快照中的资源板无法恢复")
+		return
+	if is_instance_valid(player_resource_tray): player_resource_tray.clear_battle_health()
+	if is_instance_valid(enemy_resource_tray): enemy_resource_tray.clear_battle_health()
+	_refresh_resource_preparation_trays()
 	_sync_legacy_collection_cards()
 	_restore_row_from_snapshot(front_row, _battle_snapshot.get_row_squads(&"player_front"))
 	_restore_row_from_snapshot(back_row, _battle_snapshot.get_row_squads(&"player_back"))
@@ -3345,7 +3612,8 @@ func save_run_to_path(path: String) -> Error:
 			_battle_snapshot.get_prepared_spell_instance_ids()
 			if use_battle_snapshot
 			else prepared_spell_instance_ids
-		)
+		),
+		_resource_board_for_save(use_battle_snapshot)
 	)
 	checkpoint["developer_sticker_bag"] = {
 		"inventory_version": 2,
@@ -3361,6 +3629,15 @@ func save_run_to_path(path: String) -> Error:
 		"pending_battle_instance_id": pending_battle_id,
 	}
 	return error
+
+
+func _resource_board_for_save(use_battle_snapshot: bool) -> ResourceBoardState:
+	if not use_battle_snapshot or _battle_snapshot == null:
+		return resource_board_state
+	var snapshot_board := ResourceBoardState.new()
+	if snapshot_board.restore_state(_battle_snapshot.get_resource_board_state(), _build_card_definition_registry()):
+		return snapshot_board
+	return resource_board_state
 
 
 func reroll_chaos_stickers_for_new_day(day_token: StringName) -> int:
@@ -3428,6 +3705,7 @@ func load_run_from_path(path: String) -> bool:
 	var previous_collection_state := owned_card_collection.capture_state()
 	var previous_reward_state := run_reward_state.capture_state()
 	var previous_journal_state := settlement_journal.capture_state()
+	var previous_resource_board_state := resource_board_state.capture_state()
 	var restore_result := run_save_service.restore_checkpoint(
 		loaded_checkpoint,
 		owned_card_collection,
@@ -3466,14 +3744,23 @@ func load_run_from_path(path: String) -> bool:
 		owned_card_collection.restore_state(previous_collection_state)
 		run_reward_state.restore_state(previous_reward_state)
 		settlement_journal.restore_state(previous_journal_state)
+		resource_board_state.restore_state(previous_resource_board_state, _build_card_definition_registry())
 		play_area_label.text = "存档贴纸与伤势超过28格容量或含无效实例；原存档数据未载入"
 		return false
 	if not emblem_library.restore_inventory_state(candidate_stickers):
 		owned_card_collection.restore_state(previous_collection_state)
 		run_reward_state.restore_state(previous_reward_state)
 		settlement_journal.restore_state(previous_journal_state)
+		resource_board_state.restore_state(previous_resource_board_state, _build_card_definition_registry())
 		return false
 
+	var loaded_resource_board: Variant = restore_result.get("resource_board_state", null)
+	resource_board_state = (
+		loaded_resource_board as ResourceBoardState
+		if loaded_resource_board != null
+		else ResourceBoardState.new()
+	)
+	_initialize_resource_level_if_needed()
 	_cancel_click_carry()
 	_clear_spell_cast_presentation()
 	_close_card_inspection(true)
@@ -3514,6 +3801,8 @@ func load_run_from_path(path: String) -> bool:
 	_update_battle_timer()
 	_update_phase_label()
 	_build_collection_cards()
+	_refresh_resource_preparation_trays()
+	_refresh_ground_reward_panel()
 	_refresh_preparation_effect_preview.call_deferred()
 	var migration_save_error: Error = OK
 	if migration_save_pending:
@@ -3555,6 +3844,12 @@ func _snapshot_rows_for_save() -> Dictionary:
 
 func _build_card_definition_registry() -> Dictionary:
 	var registry: Dictionary = {}
+	var directory := DirAccess.open("res://resources/cards")
+	if directory != null:
+		for filename: String in directory.get_files():
+			if filename.get_extension() != "tres": continue
+			var card := load("res://resources/cards/%s" % filename) as CardData
+			if card != null and not card.id.is_empty(): registry[card.id] = card
 	for owned_card: OwnedCard in owned_card_collection.get_cards():
 		if owned_card.card_data != null:
 			registry[owned_card.card_data.id] = owned_card.card_data
@@ -3619,6 +3914,10 @@ func _on_battle_states_changed() -> void:
 				battle_controller.get_effective_target_weight(state),
 				state.get_masked_wound_indices_by_card()
 			)
+	if is_instance_valid(player_resource_tray):
+		player_resource_tray.set_battle_health(battle_controller.player_resource_states)
+	if is_instance_valid(enemy_resource_tray):
+		enemy_resource_tray.set_battle_health(battle_controller.enemy_resource_states)
 	if profile_started_usec > 0:
 		_battle_trace_state_sync_usec += Time.get_ticks_usec() - profile_started_usec
 
@@ -3737,7 +4036,7 @@ func _on_battle_action_resolved(
 	var actor_slot := _battle_state_slots.get(actor) as BoardSlot
 	var target_slot := _battle_state_slots.get(target) as BoardSlot
 	var action_name := CardData.get_action_type_name_for(action_type)
-	var target_name := target.get_effect_source().display_name
+	var target_name := target.get_effect_source().display_name if target != null else "资源"
 	if is_instance_valid(actor_slot):
 		actor_slot.show_battle_action("%s → %s  %d" % [action_name, target_name, amount])
 	if is_instance_valid(target_slot):
@@ -3781,6 +4080,21 @@ func _handle_battle_projectile_launched(event: BattleEffectEvent) -> void:
 	if event.is_base_action and is_instance_valid(battle_audio_service):
 		battle_audio_service.play_action_launch(event.action_type)
 	var source_slot := _battle_state_slots.get(event.source) as BoardSlot
+	if event.resource_target != null:
+		var target_tray := player_resource_tray if int(event.resource_target.get("side")) == BattleSquadState.Side.PLAYER else enemy_resource_tray
+		if not is_instance_valid(source_slot) or not is_instance_valid(target_tray) or not is_instance_valid(battle_effect_layer):
+			return
+		var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
+		var from_local := inverse * source_slot.get_global_rect().get_center()
+		var to_local: Vector2 = inverse * target_tray.get_instance_center_global((event.resource_target.get("owned_card") as OwnedCard).instance_id)
+		var visual_kind := _action_visual_kind(event.action_type)
+		var color := _element_attack_color(-1)
+		_play_element_line(
+			PackedVector2Array([from_local, to_local]), visual_kind, color, color,
+			func() -> void: _play_element_impact(to_local, visual_kind, color),
+			event.projectile_speed_variant, event.projectile_impact_delay
+		)
+		return
 	var target_slot := _battle_state_slots.get(event.target) as BoardSlot
 	if not is_instance_valid(target_slot) or not is_instance_valid(battle_effect_layer):
 		return
@@ -4289,11 +4603,12 @@ func _show_battle_result(result: BattleController.Result) -> void:
 	_restore_battle_result_layout()
 	_last_battle_settlement_result = settle_current_battle()
 	if bool(_last_battle_settlement_result.get("success", false)):
+		run_reward_state.pending_next_level_from_id = resource_board_state.level_id
 		_add_settled_emblem_rewards_to_library()
 	if int(_last_battle_settlement_result.get("equipment_consumed", 0)) > 0:
 		_remove_missing_equipment_from_board()
-		_sync_legacy_collection_cards()
-		_build_collection_cards()
+	_sync_legacy_collection_cards()
+	_build_collection_cards()
 	match result:
 		BattleController.Result.PLAYER_VICTORY:
 			battle_result_label.text = "胜利"
@@ -4383,6 +4698,7 @@ func _format_battle_result_summary(
 
 	var gold_total := 0
 	var random_card_total := 0
+	var awarded_card_names: Array[String] = []
 	var random_emblem_names: Array[String] = []
 	for entry: Dictionary in reward_entries:
 		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
@@ -4392,20 +4708,26 @@ func _format_battle_result_summary(
 				gold_total += int(entry.get("amount", 0))
 			BattleRunRewardLedger.KIND_RANDOM_CARD_REQUEST:
 				random_card_total += int(entry.get("amount", 0))
+			BattleRunRewardLedger.KIND_GOLD_DELTA:
+				gold_total += int((entry.get("parameters", {}) as Dictionary).get("gold_delta", 0))
+			BattleRunRewardLedger.KIND_OWNED_CARD_AWARD:
+				awarded_card_names.append(String((entry.get("parameters", {}) as Dictionary).get("card_name", "资源卡")))
 			BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE:
 				random_emblem_names.append(String((entry.get("parameters", {}) as Dictionary).get("emblem_id", "基础纹章")))
-	if gold_total <= 0 and random_card_total <= 0 and random_emblem_names.is_empty():
+	if gold_total == 0 and random_card_total <= 0 and awarded_card_names.is_empty() and random_emblem_names.is_empty():
 		lines.append("本场奖励：无")
 	else:
 		lines.append("本场奖励" if settled else "本场奖励（待写回）")
-		if gold_total > 0:
-			lines.append("• 金币 +%d" % gold_total)
+		if gold_total != 0:
+			lines.append("• 金币 %s%d" % ["+" if gold_total > 0 else "", gold_total])
 		if random_card_total > 0:
 			lines.append(
 				"• 随机随从请求已进入待解析队列 +%d" % random_card_total
 				if settled
 				else "• 待抽取随从 +%d" % random_card_total
 			)
+		for card_name: String in awarded_card_names:
+			lines.append("• 获得资源卡：%s" % card_name)
 		for emblem_name: String in random_emblem_names:
 			lines.append("• 基础纹章：%s" % emblem_name)
 	return "\n".join(lines)
@@ -4425,46 +4747,173 @@ func settle_current_battle() -> Dictionary:
 		owned_card_collection,
 		run_reward_state,
 		settlement_journal,
-		battle_controller.get_owned_card_change_entries_for_settlement()
+		battle_controller.get_owned_card_change_entries_for_settlement(),
+		_build_card_definition_registry(),
+		resource_board_state
 	)
 	if result.get("status") == BattleSettlementService.STATUS_COMMITTED:
+		run_reward_state.pending_next_level_from_id = resource_board_state.level_id
 		prepared_spell_instance_ids.clear()
 		_refresh_spell_preparation_tray()
+		_sync_legacy_collection_cards()
 		_build_collection_cards()
+		_refresh_resource_preparation_trays()
 	return result
 
 
 func _add_settled_emblem_rewards_to_library() -> void:
 	if _battle_snapshot == null:
 		return
-	var entries := run_reward_state.get_emblem_instances_for_battle(_battle_snapshot.battle_instance_id)
-	if entries.is_empty():
-		return
-	var candidate_items: Array[Dictionary] = emblem_library.get_inventory_state()
-	var unique_emblem_seen := _has_universal_sticker_in_collection_or_bag()
+	var entries := run_reward_state.drain_emblem_instances_for_battle(_battle_snapshot.battle_instance_id)
 	for entry: Dictionary in entries:
-		if StringName(String(entry.get("emblem_id", ""))) == &"万能贴纸":
-			if unique_emblem_seen:
-				play_area_label.text = "已持有万能贴纸，无法领取重复奖励"
-				return
-			unique_emblem_seen = true
-		candidate_items.append({
-			"instance_id": entry.get("emblem_instance_id", &""),
-			"emblem_id": entry.get("emblem_id", &""),
+		var sticker_state := {
+			"instance_id": entry.get("emblem_instance_id", ""),
+			"emblem_id": entry.get("emblem_id", ""),
 			"temporary": false,
 			"source": entry.get("source", "battle_reward"),
-		})
-	if not emblem_library.can_restore_inventory_state(candidate_items):
-		play_area_label.text = "贴纸工作包已满，战斗奖励未领取；腾出空格后可再次结算"
+		}
+		if emblem_library.can_add_sticker(sticker_state):
+			var accepted: bool = emblem_library.return_sticker(sticker_state)
+			assert(accepted, "奖励纹章入包前已验证合法性")
+		else:
+			run_reward_state.add_ground_item({
+				"ground_id": String(entry.get("emblem_instance_id", "")),
+				"item_kind": "emblem",
+				"item_id": String(entry.get("emblem_id", "")),
+				"instance_id": String(entry.get("emblem_instance_id", "")),
+				"battle_instance_id": String(entry.get("battle_instance_id", "")),
+				"source": entry.get("source", "battle_reward"),
+			})
+	_refresh_ground_reward_panel()
+
+
+func _refresh_ground_reward_panel() -> void:
+	if not is_instance_valid(ground_reward_panel) or not is_instance_valid(ground_reward_list): return
+	for child: Node in ground_reward_list.get_children(): child.queue_free()
+	var items := run_reward_state.pending_ground_items
+	ground_reward_panel.visible = not items.is_empty()
+	for item: Dictionary in items:
+		var row := HBoxContainer.new()
+		row.custom_minimum_size.y = 40
+		row.add_theme_constant_override("separation", 5)
+		var label := Label.new()
+		label.text = String(item.get("item_id", "未知奖励"))
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(label)
+		var item_id := StringName(String(item.get("ground_id", "")))
+		var keep := Button.new()
+		keep.text = "入包"
+		keep.custom_minimum_size.x = 58
+		keep.tooltip_text = "放入工具箱；需要有可用空格"
+		keep.disabled = not _ground_item_can_enter_toolbox(item)
+		keep.pressed.connect(_keep_ground_item.bind(item_id))
+		row.add_child(keep)
+		var equip := Button.new()
+		equip.text = "装备"
+		equip.custom_minimum_size.x = 58
+		equip.tooltip_text = "装备到第一处可用友军纹章槽"
+		equip.disabled = not _find_ground_emblem_slot().get("success", false)
+		equip.pressed.connect(_equip_ground_item.bind(item_id))
+		row.add_child(equip)
+		var discard := Button.new()
+		discard.text = "丢弃"
+		discard.custom_minimum_size.x = 58
+		discard.pressed.connect(_discard_ground_item.bind(item_id))
+		row.add_child(discard)
+		ground_reward_list.add_child(row)
+	if is_instance_valid(continue_next_level_button):
+		continue_next_level_button.disabled = not items.is_empty()
+	if is_instance_valid(start_battle_button):
+		start_battle_button.disabled = not items.is_empty() or current_phase != GamePhase.PREPARE or not run_reward_state.pending_next_level_from_id.is_empty()
+
+
+func _ground_item_can_enter_toolbox(item: Dictionary) -> bool:
+	if String(item.get("item_kind", "")) != "emblem": return false
+	return emblem_library.can_add_sticker({
+		"instance_id": item.get("instance_id", ""),
+		"emblem_id": item.get("item_id", ""),
+		"temporary": false,
+		"source": item.get("source", "ground_reward"),
+	})
+
+
+func _keep_ground_item(item_id: StringName) -> void:
+	for item: Dictionary in run_reward_state.pending_ground_items:
+		if StringName(String(item.get("ground_id", ""))) != item_id: continue
+		if not _ground_item_can_enter_toolbox(item): return
+		if emblem_library.return_sticker({
+			"instance_id": item.get("instance_id", ""),
+			"emblem_id": item.get("item_id", ""),
+			"temporary": false,
+			"source": item.get("source", "ground_reward"),
+		}):
+			run_reward_state.remove_ground_item(item_id)
+			_refresh_ground_reward_panel()
+			return
+
+
+func _find_ground_emblem_slot() -> Dictionary:
+	for row: BattlefieldRow in [front_row, back_row]:
+		for slot: BoardSlot in row.get_squads():
+			var squad := slot.get_squad_data()
+			if squad == null: continue
+			for card: CardData in squad.horizontal_cards:
+				var owned := squad.get_owned_card(card)
+				if owned == null: continue
+				for slot_index: int in squad.get_visible_emblem_slot_indices(card):
+					if slot_index >= 0 and slot_index < owned.emblem_slots.size() and owned.emblem_slots[slot_index].is_empty():
+						return {"success": true, "owned": owned, "slot_index": slot_index, "squad_slot": slot}
+	return {"success": false}
+
+
+func _equip_ground_item(item_id: StringName) -> void:
+	var item: Dictionary
+	for candidate: Dictionary in run_reward_state.pending_ground_items:
+		if StringName(String(candidate.get("ground_id", ""))) == item_id:
+			item = candidate
+			break
+	if item.is_empty() or String(item.get("item_kind", "")) != "emblem": return
+	var target := _find_ground_emblem_slot()
+	if not bool(target.get("success", false)): return
+	var owned := target.get("owned") as OwnedCard
+	var instance_id := StringName(String(item.get("instance_id", "")))
+	if not owned.set_emblem_slot(int(target.get("slot_index", -1)), {"emblem_id": StringName(String(item.get("item_id", ""))), "instance_id": instance_id, "temporary": false}): return
+	(target.get("squad_slot") as BoardSlot).set_squad_data((target.get("squad_slot") as BoardSlot).get_squad_data())
+	run_reward_state.remove_ground_item(item_id)
+	_refresh_ground_reward_panel()
+	_build_collection_cards()
+
+
+func _discard_ground_item(item_id: StringName) -> void:
+	run_reward_state.remove_ground_item(item_id)
+	_refresh_ground_reward_panel()
+
+
+func _on_continue_next_level_pressed() -> void:
+	var completed_level := run_reward_state.pending_next_level_from_id
+	var from_result := current_phase == GamePhase.RESULT and bool(_last_battle_settlement_result.get("success", false))
+	if (not from_result and (current_phase != GamePhase.PREPARE or completed_level.is_empty())) or not run_reward_state.pending_ground_items.is_empty():
 		return
-	for entry: Dictionary in run_reward_state.drain_emblem_instances_for_battle(_battle_snapshot.battle_instance_id):
-		var accepted: bool = emblem_library.return_sticker({
-			"instance_id": entry.get("emblem_instance_id", &""),
-			"emblem_id": entry.get("emblem_id", &""),
-			"temporary": false,
-			"source": entry.get("source", "battle_reward"),
-		})
-		assert(accepted, "奖励贴纸入包前已验证容量")
+	if completed_level.is_empty():
+		completed_level = resource_board_state.level_id
+	var level_number := int(String(completed_level).get_slice("_", 1)) + 1
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	if not start_new_resource_level(StringName("level_%06d" % level_number), rng):
+		return
+	_clear_battle_presentation_for_preparation()
+	run_reward_state.pending_next_level_from_id = &""
+	if battle_controller != null: battle_controller.clear_battle()
+	_battle_snapshot = null
+	_last_battle_settlement_result.clear()
+	current_phase = GamePhase.PREPARE
+	battle_result_panel.visible = false
+	_clear_battle_log()
+	_update_phase_label()
+	_build_collection_cards()
+	_refresh_ground_reward_panel()
+	play_area_label.text = "已进入%s；资源板已按新关卡规则重新生成" % resource_board_state.level_id
 
 
 func _on_developer_console_command_submitted(command: String) -> void:
@@ -4474,7 +4923,10 @@ func _on_developer_console_command_submitted(command: String) -> void:
 	if tokens.is_empty():
 		return
 	if tokens[0].to_lower() == "help":
-		_developer_console.append_output("命令：sticker list/add <贴纸ID>；wound list；wound add <伤势ID或名称>")
+		_developer_console.append_output("命令：sticker list/add <贴纸ID>；wound list/add <伤势ID或名称>；resource list/add <资源ID或名称>；resource enemy add <资源ID或名称>")
+		return
+	if tokens[0].to_lower() == "resource":
+		_handle_developer_resource_command(tokens)
 		return
 	if tokens.size() == 2 and tokens[0].to_lower() == "wound" and tokens[1].to_lower() == "list":
 		var wound_ids := PackedStringArray()
@@ -4510,6 +4962,57 @@ func _on_developer_console_command_submitted(command: String) -> void:
 			_developer_console.append_output(_add_developer_sticker(definition))
 			return
 	_developer_console.append_output("找不到贴纸 ID：" + String(requested_id) + "；可输入 sticker list 查看。")
+
+
+func _handle_developer_resource_command(tokens: PackedStringArray) -> void:
+	if tokens.size() == 2 and tokens[1].to_lower() == "list":
+		var names: PackedStringArray = []
+		for card: CardData in _build_card_definition_registry().values():
+			if card.card_type == CardData.CardType.RESOURCE: names.append("%s (%s)" % [card.display_name, card.id])
+		_developer_console.append_output("可用资源：" + "、".join(names))
+		return
+	var is_enemy := tokens.size() == 4 and tokens[1].to_lower() == "enemy" and tokens[2].to_lower() == "add"
+	var is_player := tokens.size() == 3 and tokens[1].to_lower() == "add"
+	if not is_enemy and not is_player:
+		_developer_console.append_output("命令格式：resource list；resource add <资源ID或名称>；resource enemy add <资源ID或名称>")
+		return
+	var requested := tokens[3] if is_enemy else tokens[2]
+	for card: CardData in _build_card_definition_registry().values():
+		if card.card_type != CardData.CardType.RESOURCE or (String(card.id) != requested and card.display_name != requested): continue
+		if is_enemy:
+			_developer_console.append_output(_add_enemy_test_resource(card))
+		else:
+			if current_phase != GamePhase.PREPARE:
+				_developer_console.append_output("只能在准备阶段加入测试资源。")
+				return
+			var owned := owned_card_collection.create_card(card)
+			collection_cards.append(card)
+			_build_collection_cards()
+			_refresh_resource_preparation_trays()
+			_developer_console.append_output("已加入收藏：%s。可切换收藏的资源类型筛选后拖入资源板。" % card.display_name)
+		return
+	_developer_console.append_output("找不到资源：%s；输入 resource list 查看。" % requested)
+
+
+func _add_enemy_test_resource(definition: CardData) -> String:
+	if current_phase != GamePhase.PREPARE:
+		return "只能在准备阶段部署敌方测试资源。"
+	var sequence: int = resource_board_state.level_resource_cards.enemy.size() + 1
+	var owned := OwnedCard.new()
+	owned.initialize(definition, StringName("enemy_resource_%04d" % sequence), sequence)
+	var occupied: Dictionary = {}
+	var disabled: Dictionary = {}
+	for cell in resource_board_state.disabled_by_side["enemy"]: disabled[cell] = true
+	for placement: Dictionary in resource_board_state.deployments["enemy"].values():
+		var origin := Vector2i(placement.anchor[0], placement.anchor[1])
+		for pair in placement.shape: occupied[origin + Vector2i(pair[0], pair[1])] = true
+	var layout := preload("res://scripts/data/resource_hex_layout.gd")
+	for anchor in layout.valid_cells():
+		if not layout.can_place(owned.resource_shape, anchor, occupied, disabled): continue
+		if resource_board_state.deploy_level_resource("enemy", owned, anchor):
+			_refresh_resource_preparation_trays()
+			return "已部署敌方测试资源：%s（%d格），不加入玩家收藏。" % [definition.display_name, owned.resource_shape.size()]
+	return "敌方资源板没有可用位置，未改变状态。"
 
 
 func _add_developer_sticker(definition: Dictionary) -> String:
@@ -4727,6 +5230,7 @@ func _build_collection_cards(
 			&"collection_rebuild_total",
 			Time.get_ticks_usec() - profile_started_usec
 		)
+	_refresh_resource_preparation_trays()
 
 
 func _find_collection_slot_for_owned_card(owned_card: OwnedCard) -> Control:
@@ -4905,6 +5409,9 @@ func _is_card_deployed(card_data: CardData) -> bool:
 func _is_owned_card_deployed(owned_card: OwnedCard) -> bool:
 	if owned_card == null:
 		return false
+	for side in ["player", "enemy"]:
+		if resource_board_state.deployments.get(side, {}).has(String(owned_card.instance_id)):
+			return true
 	for row: BattlefieldRow in [front_row, back_row]:
 		for slot: BoardSlot in row.get_squads():
 			var squad := slot.get_squad_data()
@@ -5944,11 +6451,16 @@ func _on_click_carry_requested(
 	for row: BattlefieldRow in [front_row, back_row]:
 		row.reset_all_hover_feedback()
 	_click_carry_data = drag_data.duplicate()
+	_set_resource_trays_carry_active(true)
 	_click_carry_preview = _create_click_carry_preview(
 		_click_carry_data,
 		pointer_global_position
 	)
 	_click_carry_data["drag_visual"] = _click_carry_preview
+	if _click_carry_data.get("source_type") == &"resource_preparation":
+		var resource_owned := _click_carry_data.get("owned_card") as OwnedCard
+		if resource_owned != null:
+			_click_carry_preview.set_resource_puzzle_mode(true, resource_owned.resource_shape, int(resource_owned.card_data.rarity), _click_carry_data.get("resource_grab_cell", Vector2i.ZERO), _click_carry_data.get("resource_grab_pixel_offset", Vector2.ZERO), int(resource_owned.card_data.resource_type))
 	_ghost_click_carry_source()
 	_update_click_carry(pointer_global_position)
 
@@ -5998,6 +6510,9 @@ func _ghost_click_carry_source() -> void:
 		var source_slot := _click_carry_data.get("source_slot") as Control
 		if is_instance_valid(source_slot):
 			source_slot.modulate.a = 0.0
+	elif source_type == &"resource_preparation":
+		var tray := _click_carry_data.get("source_tray") as ResourcePreparationTray
+		if is_instance_valid(tray): tray.begin_carry(StringName(String(_click_carry_data.get("owned_card").instance_id)))
 	elif source_type == &"board":
 		var source_row := (
 			_click_carry_data.get("source_row") as BattlefieldRow
@@ -6150,7 +6665,10 @@ func _commit_click_carry(pointer_global_position: Vector2) -> void:
 	)
 	var committed := false
 	var target_row := target.get("row") as BattlefieldRow
-	if bool(target.get("spell_preparation", false)):
+	var resource_tray := target.get("resource_tray") as ResourcePreparationTray
+	if resource_tray != null and bool(target.get("accepted", false)):
+		committed = _commit_resource_preparation_drop(_click_carry_data, target.get("resource_resolution", {}) as Dictionary)
+	elif bool(target.get("spell_preparation", false)):
 		if bool(target.get("accepted", false)):
 			committed = _on_spell_preparation_drop_requested(
 				_click_carry_data,
@@ -6187,6 +6705,7 @@ func _cancel_click_carry() -> void:
 func _finish_click_carry(committed: bool) -> void:
 	var drag_data := _click_carry_data
 	_click_carry_data = {}
+	_set_resource_trays_carry_active(false)
 	if drag_data.get("source_type") == &"spell_preparation" and is_instance_valid(spell_preparation_tray):
 		spell_preparation_tray.end_card_carry()
 	var is_inspection_item := _is_inspection_item_drag(drag_data)
@@ -6239,6 +6758,9 @@ func _finish_click_carry(committed: bool) -> void:
 					source_slot.get_child(0) as CardView,
 					return_global_position as Vector2
 				)
+	elif source_type == &"resource_preparation":
+		var source_tray := drag_data.get("source_tray") as ResourcePreparationTray
+		if is_instance_valid(source_tray): source_tray.refresh()
 	elif source_type == &"board":
 		var source_row := drag_data.get("source_row") as BattlefieldRow
 		if is_instance_valid(source_row):
@@ -6329,6 +6851,14 @@ func _on_collection_card_dropped(
 	drag_data: Dictionary,
 	card_global_position: Vector2
 ) -> void:
+	if drag_data.get("source_type") == &"resource_preparation":
+		var owned_resource := drag_data.get("owned_card") as OwnedCard
+		if owned_resource != null and not resource_board_state.is_level_resource("player", String(owned_resource.instance_id)):
+			resource_board_state.deployments["player"].erase(String(owned_resource.instance_id))
+			_build_collection_cards()
+			_refresh_resource_preparation_trays()
+			play_area_label.text = "资源已从资源板收回收藏"
+		return
 	if drag_data.get("source_type") == &"spell_preparation":
 		var prepared_spell := drag_data.get("owned_card") as OwnedCard
 		if prepared_spell != null:
@@ -7116,7 +7646,7 @@ func _is_card_drag_data(data: Variant) -> bool:
 		return false
 
 	var drag_data := data as Dictionary
-	if drag_data.get("source_type") not in [&"collection", &"board", &"spell_preparation"]:
+	if drag_data.get("source_type") not in [&"collection", &"board", &"spell_preparation", &"resource_preparation"]:
 		return false
 	if drag_data.get("kind") == &"card":
 		return drag_data.get("card_data") is CardData
@@ -7141,6 +7671,8 @@ func _refresh_drag_availability() -> void:
 	var drag_enabled := current_phase == GamePhase.PREPARE
 	if is_instance_valid(spell_preparation_tray):
 		spell_preparation_tray.set_drop_enabled(drag_enabled)
+	if is_instance_valid(player_resource_tray):
+		player_resource_tray.set_drop_enabled(drag_enabled)
 	if emblem_library != null:
 		emblem_library.set_drag_enabled(
 			drag_enabled and is_instance_valid(_inspection_overlay)

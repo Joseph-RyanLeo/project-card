@@ -8,6 +8,8 @@ extends RefCounted
 var gold: int = 0
 var pending_random_card_requests: Array[Dictionary] = []
 var pending_emblem_instances: Array[Dictionary] = []
+var pending_ground_items: Array[Dictionary] = []
+var pending_next_level_from_id: StringName = &"" # 战斗已提交但关卡尚未推进；读档后仍先处理本场奖励
 
 
 func add_gold(amount: int) -> bool:
@@ -15,6 +17,30 @@ func add_gold(amount: int) -> bool:
 		return false
 	gold += amount
 	return true
+
+
+func apply_gold_delta(amount: int) -> int:
+	var previous := gold
+	gold = maxi(gold + amount, 0)
+	return gold - previous
+
+
+func add_ground_item(item: Dictionary) -> bool:
+	var item_id := StringName(String(item.get("ground_id", "")))
+	if item_id.is_empty() or String(item.get("item_id", "")).is_empty():
+		return false
+	for existing: Dictionary in pending_ground_items:
+		if StringName(String(existing.get("ground_id", ""))) == item_id:
+			return false
+	pending_ground_items.append(item.duplicate(true))
+	return true
+
+
+func remove_ground_item(item_id: StringName) -> Dictionary:
+	for index: int in pending_ground_items.size():
+		if StringName(String(pending_ground_items[index].get("ground_id", ""))) == item_id:
+			return pending_ground_items.pop_at(index)
+	return {}
 
 
 func enqueue_random_card_request(entry: Dictionary) -> bool:
@@ -85,6 +111,8 @@ func capture_state() -> Dictionary:
 		"gold": gold,
 		"pending_random_card_requests": pending_random_card_requests.duplicate(true),
 		"pending_emblem_instances": pending_emblem_instances.duplicate(true),
+		"pending_ground_items": pending_ground_items.duplicate(true),
+		"pending_next_level_from_id": pending_next_level_from_id,
 	}
 
 
@@ -96,3 +124,5 @@ func restore_state(snapshot: Dictionary) -> void:
 	pending_emblem_instances.assign(
 		(snapshot.get("pending_emblem_instances", []) as Array).duplicate(true)
 	)
+	pending_ground_items.assign((snapshot.get("pending_ground_items", []) as Array).duplicate(true))
+	pending_next_level_from_id = StringName(String(snapshot.get("pending_next_level_from_id", "")))

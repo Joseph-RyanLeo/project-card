@@ -73,6 +73,37 @@ func _run() -> void:
 		tuner_menu_button.pressed.emit()
 	check(display.is_card_art_tuner_open(), "暂停菜单入口打开卡面调整器")
 	if display.is_card_art_tuner_open():
+		var tuner = display._card_art_tuner
+		var resource_type_index := -1
+		for index: int in tuner.card_type_selector.item_count:
+			if tuner.card_type_selector.get_item_id(index) == CardData.CardType.RESOURCE:
+				resource_type_index = index
+		check(resource_type_index >= 0, "卡面调整器类型筛选提供资源类别")
+		if resource_type_index >= 0:
+			tuner._on_card_type_selected(resource_type_index)
+			var all_nine_resources: bool = tuner.card_selector.item_count == 9
+			for index: int in tuner.card_selector.item_count:
+				var path := String(tuner.card_selector.get_item_metadata(index))
+				var definition := load(path) as CardData
+				all_nine_resources = all_nine_resources and definition != null and definition.card_type == CardData.CardType.RESOURCE
+			check(all_nine_resources, "资源类别列出九张真实资源定义供选择")
+			tuner.card_selector.select(0)
+			tuner._on_card_selected(0)
+			await process_frame
+			var selected_resource: CardData = tuner.card_data
+			var original_art_offset := selected_resource.art_offset
+			tuner._nudge_preview(Vector2i.RIGHT)
+			await process_frame
+			check(
+				tuner.preview_card.card_data.id == selected_resource.id
+				and tuner.preview_card.card_data.art_offset == original_art_offset + Vector2i.RIGHT
+				and tuner.preview_card.art_texture.texture != null
+				and tuner.preview_art_offset == original_art_offset + Vector2i.RIGHT
+				and selected_resource.art_offset == original_art_offset,
+				"资源选择显示真实立绘；微调只改变预览副本而未改写美术资源"
+			)
+			tuner._reload_offset_from_resource()
+			check(tuner.preview_art_offset == original_art_offset, "资源预览偏移可从真实定义恢复，未触发保存")
 		await _send_key(KEY_ESCAPE)
 	check(main.get_tree().paused and main._escape_pause_menu.is_menu_open(), "关闭卡面调整器后仍回到暂停菜单")
 	var battle_lab_menu_button := _find_button_with_text(main._escape_pause_menu, "战斗实验室")
@@ -208,6 +239,24 @@ func _run() -> void:
 			check(main._inspection_overlay == null and main.get_tree().paused, "Esc 关闭后保留原手动暂停状态")
 		await _click_pause_button(display, main)
 		check(not main.get_tree().paused, "关闭检视后仍可通过暂停按钮继续战斗")
+		var result_slot := main.front_row.get_squads()[0] as BoardSlot if not main.front_row.get_squads().is_empty() else null
+		if result_slot != null:
+			result_slot.show_battle_result_statistics({"actions": 3, "damage": 4}, true, CardData.ActionType.MELEE)
+			await process_frame
+			await _send_key(KEY_ESCAPE)
+			await process_frame
+			var stats_overlay := result_slot._battle_result_overlay as Control
+			var menu_panel := main._escape_pause_menu.get_node("EscapeMenuOverlay/PauseMenuPanel") as Control
+			check(
+				stats_overlay.z_index < main._escape_pause_menu.z_index
+				and menu_panel.is_visible_in_tree(),
+				"结算统计层级低于Esc模态菜单，数字与死亡标记不会压住菜单内容"
+			)
+			await RenderingServer.frame_post_draw
+			root.get_texture().get_image().save_png("/private/tmp/project-card-escape-result-overlay.png")
+			await _send_key(KEY_ESCAPE)
+			result_slot.clear_battle_status()
+			result_slot.clear_battle_result_statistics()
 
 	display.queue_free()
 	await process_frame

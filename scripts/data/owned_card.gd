@@ -10,6 +10,7 @@ const STAT_MAX_HEALTH: StringName = &"max_health"
 const STAT_BASE_ARMOR: StringName = &"base_armor"
 const EmblemLibraryDataScript = preload("res://scripts/data/emblem_library_data.gd")
 const CardSlotLayoutScript = preload("res://scripts/data/card_slot_layout.gd")
+const ResourceHexLayoutScript = preload("res://scripts/data/resource_hex_layout.gd")
 
 @export var instance_id: StringName = &"" # 本局内稳定且唯一的卡牌实例身份
 @export var card_data: CardData # 共享卡牌定义；不得把永久变化直接写回此资源
@@ -25,6 +26,7 @@ const CardSlotLayoutScript = preload("res://scripts/data/card_slot_layout.gd")
 @export var rune_stickers: Array[Dictionary] = [] # 后贴符文独立保存，刮下不会修改底层符文或揭晓状态
 @export var progress_by_source: Dictionary = {} # 种子等成长对象的实例进度；来源ID→数值
 @export var wound_battle_counters: Dictionary = {} # 持久伤势实例跨战计数，如骨折每场参战次数
+@export var resource_shape: Array[Vector2i] = [] # 资源卡实例获得时抽定的六边格形状；非资源卡为空
 
 
 func initialize(
@@ -44,6 +46,11 @@ func initialize(
 	crystallization_health_loss = 0
 	progress_by_source.clear()
 	wound_battle_counters.clear()
+	resource_shape.clear()
+	if definition != null and definition.card_type == CardData.CardType.RESOURCE:
+		var shape_rng := RandomNumberGenerator.new()
+		shape_rng.randomize()
+		resource_shape = ResourceHexLayoutScript.create_random_shape(int(definition.rarity) + 1, shape_rng)
 	# 布局只在获得实例时抽一次，使用独立生成器，不消耗战斗控制器的随机序列。
 	var layout_rng := RandomNumberGenerator.new()
 	layout_rng.randomize()
@@ -290,6 +297,7 @@ func capture_state() -> Dictionary:
 		"rune_stickers": rune_stickers.duplicate(true),
 		"progress_by_source": progress_by_source.duplicate(true),
 		"wound_battle_counters": wound_battle_counters.duplicate(true),
+		"resource_shape": _encode_resource_shape(),
 		"owned_card_ref": self,
 	}
 
@@ -297,6 +305,17 @@ func capture_state() -> Dictionary:
 func restore_state(snapshot: Dictionary) -> bool:
 	var snapshot_instance_id := snapshot.get("instance_id", &"") as StringName
 	var snapshot_card_data := snapshot.get("card_data") as CardData
+	var prevalidated_shape: Array[Vector2i] = []
+	if snapshot_card_data != null and snapshot_card_data.card_type == CardData.CardType.RESOURCE:
+		var shape_value: Variant = snapshot.get("resource_shape", null)
+		if not shape_value is Array:
+			return false
+		for pair in shape_value:
+			if not pair is Array or pair.size() != 2:
+				return false
+			prevalidated_shape.append(Vector2i(int(pair[0]), int(pair[1])))
+		if prevalidated_shape.size() != int(snapshot_card_data.rarity) + 1 or not ResourceHexLayoutScript.is_connected_shape(prevalidated_shape):
+			return false
 	if snapshot_instance_id.is_empty() or snapshot_card_data == null:
 		return false
 	if not instance_id.is_empty() and instance_id != snapshot_instance_id:
@@ -318,6 +337,10 @@ func restore_state(snapshot: Dictionary) -> bool:
 	rune_stickers.assign((snapshot.get("rune_stickers", _empty_slot_array(card_data.runes.size())) as Array).duplicate(true))
 	progress_by_source = (snapshot.get("progress_by_source", {}) as Dictionary).duplicate(true)
 	wound_battle_counters = (snapshot.get("wound_battle_counters", {}) as Dictionary).duplicate(true)
+	if card_data.card_type == CardData.CardType.RESOURCE:
+		resource_shape = prevalidated_shape
+	else:
+		resource_shape.clear()
 	return true
 
 
@@ -340,4 +363,11 @@ static func _empty_slot_array(slot_count: int) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for _slot_index: int in maxi(slot_count, 0):
 		result.append({})
+	return result
+
+
+func _encode_resource_shape() -> Array:
+	var result: Array = []
+	for cell in resource_shape:
+		result.append([cell.x, cell.y])
 	return result

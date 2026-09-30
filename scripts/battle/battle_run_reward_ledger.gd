@@ -9,6 +9,8 @@ extends RefCounted
 const KIND_GOLD: StringName = &"gold"
 const KIND_RANDOM_CARD_REQUEST: StringName = &"random_card_request"
 const KIND_RANDOM_EMBLEM_INSTANCE: StringName = &"random_emblem_instance"
+const KIND_OWNED_CARD_AWARD: StringName = &"owned_card_award"
+const KIND_GOLD_DELTA: StringName = &"gold_delta"
 const STATUS_PENDING_RUN_RESOLUTION: StringName = &"pending_run_resolution"
 
 var _entries: Array[Dictionary] = []
@@ -32,7 +34,7 @@ func record(
 		owner == null
 		or owner.state == null
 		or owner.owner_kind != BattleEffectDefinition.OwnerKind.OWNING_PLAYER
-		or kind not in [KIND_GOLD, KIND_RANDOM_CARD_REQUEST, KIND_RANDOM_EMBLEM_INSTANCE]
+		or kind not in [KIND_GOLD, KIND_RANDOM_CARD_REQUEST, KIND_RANDOM_EMBLEM_INSTANCE, KIND_OWNED_CARD_AWARD, KIND_GOLD_DELTA]
 		or amount <= 0
 	):
 		return false

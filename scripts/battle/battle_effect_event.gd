@@ -1,6 +1,8 @@
 class_name BattleEffectEvent
 extends RefCounted
 
+const BattleResourceStateScript = preload("res://scripts/battle/battle_resource_state.gd")
+
 ## 一次原始战斗效果。数值再小也会生成事件并立即写入结构化日志。
 
 enum EffectKind { DAMAGE, HEALING, ARMOR, PLACEHOLDER }
@@ -11,6 +13,8 @@ var sequence_index: int = 0
 var timestamp: float = 0.0
 var source: BattleSquadState
 var target: BattleSquadState
+var resource_target: RefCounted
+var is_mining: bool = false # 开采行动的主事件；命中资源时击碎而非造成普通1点伤害
 var anchor: BattleSquadState
 var source_emblem_instance_id: StringName = &"" # 纹章生成事件保留纹章实例身份
 var source_owned_card_instance_id: StringName = &"" # 纹章所在OwnedCard，不等同于效果目标小队

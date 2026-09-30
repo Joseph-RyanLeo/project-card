@@ -93,6 +93,8 @@ func _is_card_drag(data: Variant) -> bool:
 		and (drag_data.get("card_data") as CardData).card_type == CardData.CardType.SPELL
 	):
 		return true
+	if drag_data.get("source_type") == &"resource_preparation":
+		return drag_data.get("kind") == &"card" and drag_data.get("card_data") is CardData and (drag_data.get("card_data") as CardData).card_type == CardData.CardType.RESOURCE
 	if drag_data.get("source_type") != &"board":
 		return false
 	if drag_data.get("kind") == &"card":

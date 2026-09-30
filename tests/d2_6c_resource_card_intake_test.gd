@@ -13,6 +13,7 @@ const EXPECTED_RESOURCES := {
 	&"stone_of_greed": {"name": "贪欲之石", "rarity": CardData.Rarity.I, "health": 3, "type": CardData.ResourceType.MINERAL, "text": "收获：1d10<6失去2金币，>5获得3金币，=10获得10金币。"},
 	&"abandoned_toolbox": {"name": "废弃工具箱", "rarity": CardData.Rarity.I, "health": 2, "type": CardData.ResourceType.RELIC, "text": "收获：随机一件I级装备。"},
 }
+const CardArtTuner = preload("res://scripts/tools/card_art_tuner.gd")
 
 var failures := 0
 
@@ -29,9 +30,17 @@ func _run() -> void:
 		_expect(card != null and card.pack_id == &"labyrinth" and card.card_type == CardData.CardType.RESOURCE and card.rarity == expected["rarity"] and card.max_health == expected["health"] and card.resource_type == expected["type"], "资源卡品级、生命和种类：%s" % card_id)
 		_expect(card != null and card.effect_text == expected["text"] and card.effect_ids.is_empty(), "资源卡保留原文且不提前绑定未实现效果：%s" % card_id)
 	var pick := load("res://resources/cards/mining_pick.tres") as CardData
-	_expect(pick != null and pick.display_name == "矿稿" and pick.pack_id == &"labyrinth", "矿稿属于迷宫卡包")
-	_expect(pick != null and pick.card_type == CardData.CardType.EQUIPMENT and pick.rarity == CardData.Rarity.I and pick.equipment_type == CardData.EquipmentType.MELEE_WEAPON and pick.equipment_action_delta == 1 and pick.equipment_health_delta == 0 and pick.equipment_armor_delta == 0 and pick.equipment_zeal_delta == 0, "矿稿遵守I级近战武器基础属性")
-	_expect(pick != null and pick.keywords == [&"mining"] and pick.effect_text == "开采1。" and int(pick.deferred_effect_hooks["mining"]["uses_per_battle"]) == 1, "矿稿只记录每场一次开采边界，不伪造结算")
+	_expect(pick != null and pick.display_name == "矿镐" and pick.pack_id == &"labyrinth", "矿镐属于迷宫卡包")
+	_expect(pick != null and pick.card_type == CardData.CardType.EQUIPMENT and pick.rarity == CardData.Rarity.I and pick.equipment_type == CardData.EquipmentType.MELEE_WEAPON and pick.base_value == 1 and pick.equipment_action_delta == 1 and pick.equipment_health_delta == 0 and pick.equipment_armor_delta == 0 and pick.equipment_zeal_delta == 0, "矿镐遵守I级近战武器基础属性与数值1")
+	_expect(pick != null and pick.keywords == [&"mining"] and pick.effect_text == "开采1。" and int(pick.deferred_effect_hooks["mining"]["uses_per_battle"]) == 1, "矿镐只记录每场一次开采边界，不伪造结算")
+	var main_scene := load("res://scenes/Main.tscn") as PackedScene
+	var main_instance := main_scene.instantiate()
+	var initial_pick_count := 0
+	for initial_card: CardData in main_instance.get("collection_cards"):
+		if initial_card.id == &"mining_pick": initial_pick_count += 1
+	_expect(initial_pick_count == 1, "新运行初始收藏含一张现有矿镐定义")
+	_expect(CardArtTuner.CARD_RESOURCE_PATHS.count("res://resources/cards/mining_pick.tres") == 1, "卡面调试器列表指向同一个矿镐定义")
+	main_instance.free()
 	if failures == 0:
 		print("D2-6C resource card intake checks passed.")
 	else:

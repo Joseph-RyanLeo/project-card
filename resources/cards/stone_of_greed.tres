@@ -1,15 +1,33 @@
 [gd_resource type="Resource" script_class="CardData" format=3]
 
 [ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/resources/贪欲之石.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
 id = &"stone_of_greed"
 display_name = "贪欲之石"
 pack_id = &"labyrinth"
+deferred_effect_hooks = {
+"harvest_roll": {
+"equal_10": {
+"amount": 10,
+"operation": "gain_gold"
+},
+"greater_than_5": {
+"amount": 3,
+"operation": "gain_gold"
+},
+"less_than_6": {
+"amount": 2,
+"operation": "lose_gold"
+},
+"precedence": "equal_10_only",
+"roll": "1d10"
+}
+}
 card_type = 3
-rarity = 0
 max_health = 3
-resource_type = 0
-deferred_effect_hooks = {"harvest_roll": {"roll": "1d10", "less_than_6": {"operation": "lose_gold", "amount": 2}, "greater_than_5": {"operation": "gain_gold", "amount": 3}, "equal_10": {"operation": "gain_gold", "amount": 10}, "precedence": "equal_10_only"}}
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(0, 12)
 effect_text = "收获：1d10<6失去2金币，>5获得3金币，=10获得10金币。"

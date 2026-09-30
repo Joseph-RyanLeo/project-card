@@ -154,7 +154,7 @@ func _test_straight_and_same_element_two_pair() -> void:
 	same_pair.resolve_next_batch()
 	_expect(
 		same_pair_base.size() == 1
-		and is_equal_approx(same_pair_base[0].exact_amount, 30.0)
+		and is_equal_approx(same_pair_base[0].exact_amount, 54.0)
 		and same_pair.active_continuous_effects.size() == 1
 		and int(same_pair.active_continuous_effects[0]["ticks_remaining"]) == 3
 		and is_equal_approx(float(same_pair.active_continuous_effects[0]["element_multiplier"]), 0.20),
@@ -180,7 +180,7 @@ func _test_straight_and_same_element_two_pair() -> void:
 		found_kinds.append(event.visual_kind)
 		all_unlinked = all_unlinked and not event.can_trigger_element_chain
 		if event.effect_kind != BattleEffectEvent.EffectKind.PLACEHOLDER:
-			all_secondary_values_correct = all_secondary_values_correct and is_equal_approx(event.exact_amount, 30.0)
+			all_secondary_values_correct = all_secondary_values_correct and is_equal_approx(event.exact_amount, 36.0)
 	_expect(
 		straight_events.size() == 5
 		and expected_kinds.all(func(kind: StringName) -> bool: return found_kinds.has(kind))
@@ -651,7 +651,7 @@ func _test_combinations_and_layering() -> void:
 	)
 	fire_water.resolve_next_batch()
 	fire_water.advance_time(1.0)
-	var fire_water_expected := 10.0 * BattleRules.get_pattern_multiplier(RunePatternResult.PatternType.FULL_HOUSE) * 0.20 * 0.40 * 1.5
+	var fire_water_expected := (10.0 + 6.0) * BattleRules.get_pattern_multiplier(RunePatternResult.PatternType.FULL_HOUSE) * 1.5 * 0.20 * 0.40
 	_expect(not chained_water.is_empty() and is_equal_approx(chained_water[0].exact_amount, fire_water_expected), "3火+2水让副元素跟随每次真实DOT并继续乘火、水倍率")
 	await _dispose(fire_water)
 

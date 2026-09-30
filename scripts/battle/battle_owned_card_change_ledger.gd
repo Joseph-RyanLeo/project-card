@@ -36,6 +36,14 @@ func record_slot_change(
 		or slot_index < 0
 	):
 		return false
+	for entry: Dictionary in _entries:
+		if (
+			entry.get("kind") == kind
+			and entry.get("owned_card_instance_id") == owner.owned_card_instance_id
+			and int((entry.get("parameters", {}) as Dictionary).get("slot_index", -1)) == slot_index
+		):
+			(entry.get("parameters", {}) as Dictionary)["slot_state"] = slot_state.duplicate(true)
+			return true
 	_append_entry(owner, kind, effect_id, source_runtime_id, logical_time_us, battle_instance_id, {
 		"slot_index": slot_index,
 		"slot_state": slot_state.duplicate(true),

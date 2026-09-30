@@ -13,6 +13,8 @@ enum DisplayMode {
 
 const DESIGN_SIZE := Vector2i(1280, 720)
 const INTERNAL_RENDER_SIZE := Vector2i(1280, 720) # 1×内部渲染画幅
+const DISPLAY_MODE_POSITION := Vector2(766, 8) # 显示模式入口的逻辑坐标，避开资源悬停卡
+const DISPLAY_FEEDBACK_POSITION := Vector2(650, 46) # 窗口切换提示的逻辑坐标，避开右侧资源板
 const INTEGER_SCALE_EPSILON: float = 0.0001 # 判断客户区是否为等比整数倍率时允许的浮点误差
 const CARD_ART_TUNER_SCENE: PackedScene = preload("res://scenes/tools/CardArtTuner.tscn")
 const BATTLE_LAB_SCENE: PackedScene = preload("res://scenes/tools/BattleLab.tscn")
@@ -206,6 +208,11 @@ func _layout_render_container() -> void:
 		size.y / float(INTERNAL_RENDER_SIZE.y)
 	)
 	render_container.scale = render_scale
+	# 外层窗口控件与逻辑画布保持相同位置和倍率，2K 时也不会压住资源板。
+	display_mode_option.get_parent().position = DISPLAY_MODE_POSITION * render_scale
+	display_mode_option.get_parent().scale = render_scale
+	display_mode_feedback.position = DISPLAY_FEEDBACK_POSITION * render_scale
+	display_mode_feedback.scale = render_scale
 	render_container.texture_filter = (
 		CanvasItem.TEXTURE_FILTER_NEAREST
 		if _is_uniform_integer_scale(render_scale)

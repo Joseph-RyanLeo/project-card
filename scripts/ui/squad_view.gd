@@ -70,6 +70,7 @@ const DEATH_DISSOLVE_OUTLINE_PIXELS: float = 1.0 # 死亡侵蚀实色描边固�
 const BATTLE_RESULT_CARD_MODULATE := Color(0.30, 0.30, 0.30, 1.0) # 战后卡面进一步压暗，统计图标本身不受影响
 const BATTLE_RESULT_CONTENT_WIDTH: float = 82.0 # 原生图标与卢恩数字在卡面中央占用的宽度
 const BATTLE_RESULT_ROW_HEIGHT: float = 30.0 # 兼容治疗图标原生 28px 高度的统计行高
+const BATTLE_RESULT_OVERLAY_Z_INDEX: int = 3500 # 结算信息高于卡牌内容、低于暂停菜单
 const BATTLE_RESULT_DEATH_SIZE := Vector2(10.0, 10.0) # 用户提供骷髅图标保持原生像素尺寸
 
 var squad_data: SquadData
@@ -1018,7 +1019,7 @@ func _ensure_battle_result_overlay() -> void:
 	_battle_result_overlay = Control.new()
 	_battle_result_overlay.name = "BattleResultStatistics"
 	_battle_result_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_battle_result_overlay.z_index = 4093
+	_battle_result_overlay.z_index = BATTLE_RESULT_OVERLAY_Z_INDEX
 	stack_feedback_layer.add_child(_battle_result_overlay)
 
 	_battle_result_rows = VBoxContainer.new()

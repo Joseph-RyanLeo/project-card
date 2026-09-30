@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="CardData" format=3]
 
 [ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/resources/光元素碎晶.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -8,7 +9,8 @@ id = &"light_element_shard"
 display_name = "光元素碎晶"
 pack_id = &"labyrinth"
 card_type = 3
-rarity = 1
 max_health = 2
-resource_type = 0
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-1, 9)
 effect_text = "收获：2金币。"
