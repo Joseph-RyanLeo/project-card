@@ -2,6 +2,7 @@ class_name EmblemLibraryView
 extends Panel
 
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
+signal scraper_action_mode_requested
 
 ## 纹章库的唯一 UI 实例。
 ## 普通收藏界面和大卡牌检视只改变同一节点的位置、缩放与视口布局。
@@ -25,7 +26,10 @@ var _drag_enabled := false
 var _board: TextureRect
 var _empty_panel_style: StyleBoxEmpty
 var _scraper: TextureRect
+var _scraper_groove: TextureRect
+var _scraper_count_label: Label
 var _sticker_inventory: Variant = StickerInventoryScript.new()
+var _scraper_count: int = 0
 
 
 func return_sticker(state: Dictionary) -> bool:
@@ -76,9 +80,35 @@ func set_inspect_mode(value: bool) -> void:
 func set_drag_enabled(value: bool) -> void:
 	_drag_enabled = value
 	if is_instance_valid(_scraper):
-		_scraper.enabled = value
+		_scraper.enabled = value and _scraper_count > 0
 	for entry: Variant in _entries:
 		entry.set_drag_enabled(value)
+
+
+func set_scraper_count(value: int) -> void:
+	_scraper_count = maxi(value, 0)
+	if is_instance_valid(_scraper):
+		_scraper.enabled = _drag_enabled and _scraper_count > 0
+		_scraper.tooltip_text = "符文刮刀 ×%d\n点击进入刮擦模式；左键点击或按住移动以刮开符文。右键或 Esc 退出。" % _scraper_count
+	if is_instance_valid(_scraper_count_label):
+		_scraper_count_label.text = "×%d" % _scraper_count
+		_scraper_count_label.visible = _scraper_count > 0
+
+
+func can_add_stickers(states: Array[Dictionary]) -> bool:
+	var candidate: Variant = StickerInventoryScript.new()
+	if not candidate.restore(get_inventory_state()):
+		return false
+	for state: Dictionary in states:
+		var normalized := state.duplicate(true)
+		if String(normalized.get("kind", "emblem")) == "wound":
+			normalized["element_sticker"] = false
+		else:
+			normalized["kind"] = "emblem"
+			normalized["element_sticker"] = _is_element_sticker_id(StringName(String(normalized.get("emblem_id", ""))))
+		if not candidate.add(normalized):
+			return false
+	return true
 
 
 func get_definitions() -> Array[Dictionary]:
@@ -246,18 +276,42 @@ func _build_controls() -> void:
 	_scraper.name = "Scraper"
 	_scraper.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_scraper.texture = RuneStickerStyle.get_scraper_texture()
-	_scraper.size = Vector2(28, 28) # 刮刀图标在工作包中的显示尺寸
-	var scraper_scale := 28.0 / 59.0 # 刮刀素材换算到图标尺寸的命中比例
-	_scraper.blade_point = RuneStickerStyle.get_scraper_hit_point() * scraper_scale
-	var source_blade_rect: Rect2 = RuneStickerStyle.get_scraper_hit_rect()
-	_scraper.blade_rect = Rect2(
-		source_blade_rect.position * scraper_scale,
-		source_blade_rect.size * scraper_scale
-	)
-	_scraper.enabled = _drag_enabled
-	_scraper.position = Vector2(34.0, 62.0)
-	_scraper.click_carry_requested.connect(_on_item_click_carry_requested)
+	_scraper.size = _scraper.texture.get_size() # 刮刀以59×59原生像素摆放，检视与手持共用4倍缩放
+	_scraper.blade_point = RuneStickerStyle.get_scraper_hit_point()
+	_scraper.blade_rect = RuneStickerStyle.get_scraper_hit_rect()
+	_scraper.enabled = _drag_enabled and _scraper_count > 0
+	_scraper.position = Vector2(14, 48) # 原生刮刀在工具箱左侧工具区的位置
+	_scraper.action_mode_requested.connect(_on_scraper_action_mode_requested)
+	_scraper_groove = TextureRect.new()
+	_scraper_groove.name = "ScraperGroove"
+	_scraper_groove.texture = _scraper.texture
+	_scraper_groove.size = _scraper.size
+	_scraper_groove.position = _scraper.position
+	_scraper_groove.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_scraper_groove.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var groove_material := ShaderMaterial.new()
+	groove_material.shader = preload("res://shaders/scraper_groove.gdshader")
+	_scraper_groove.material = groove_material
+	add_child(_scraper_groove)
 	add_child(_scraper)
+	_scraper_count_label = Label.new()
+	_scraper_count_label.name = "ScraperCount"
+	_scraper_count_label.position = Vector2(50, 111) # 数量标记避开原生刮刀和凹槽
+	_scraper_count_label.size = Vector2(30, 14) # 数量标记紧凑贴合工具区
+	_scraper_count_label.add_theme_font_size_override("font_size", 9)
+	_scraper_count_label.add_theme_color_override("font_color", Color("fff0a0"))
+	_scraper_count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_scraper_count_label)
+	set_scraper_count(_scraper_count)
+
+
+func _on_scraper_action_mode_requested() -> void:
+	scraper_action_mode_requested.emit()
+
+
+func set_scraper_carried(carried: bool) -> void:
+	if is_instance_valid(_scraper):
+		_scraper.visible = not carried
 
 
 func _set_display_layout() -> void:

@@ -1,0 +1,3085 @@
+{
+  "os": "macOS",
+  "adapter": "Apple M4",
+  "window": [
+    1920,
+    1080
+  ],
+  "comparison": [
+    {
+      "stage": "page72",
+      "tag": "turn_collection_page",
+      "count": 8,
+      "before_ms": 28.14925,
+      "after_ms": 24.561,
+      "max_ms": 29.398
+    },
+    {
+      "stage": "shop_default",
+      "tag": "_refresh_ordinary_shop_panel",
+      "count": 2,
+      "before_ms": 10.574,
+      "after_ms": 3.318,
+      "max_ms": 4.19
+    },
+    {
+      "stage": "shop32",
+      "tag": "_refresh_ordinary_shop_panel",
+      "count": 2,
+      "before_ms": 93.98949999999999,
+      "after_ms": 9.399,
+      "max_ms": 10.083
+    },
+    {
+      "stage": "shop32_close",
+      "tag": "_toggle_ordinary_shop",
+      "count": 1,
+      "before_ms": 103.243,
+      "after_ms": 5.036,
+      "max_ms": 5.036
+    },
+    {
+      "stage": "drag_minion",
+      "tag": "row._show_intent_preview",
+      "count": 16,
+      "before_ms": 4.159125,
+      "after_ms": 2.451,
+      "max_ms": 4.679
+    },
+    {
+      "stage": "battle_start",
+      "tag": "_clear_battle_presentation_for_preparation",
+      "count": 1,
+      "before_ms": 33.146,
+      "after_ms": 8.57,
+      "max_ms": 8.57
+    },
+    {
+      "stage": "battle_start",
+      "tag": "start_battle",
+      "count": 1,
+      "before_ms": 56.06,
+      "after_ms": 28.911,
+      "max_ms": 28.911
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_restore_battle_result_layout",
+      "count": 1,
+      "before_ms": 66.482,
+      "after_ms": 39.91,
+      "max_ms": 39.91
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_show_battle_result",
+      "count": 1,
+      "before_ms": 90.45,
+      "after_ms": 55.115,
+      "max_ms": 55.115
+    }
+  ],
+  "operations": [
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 40.754
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 34.478
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 32.463
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 33.724
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 32.451
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 34.567
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 33.485
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 33.227
+    },
+    {
+      "stage": "shop_default",
+      "tag": "shop_open",
+      "to_draw_ms": 10.384
+    },
+    {
+      "cpu_ms": 0.166,
+      "stage": "shop_default_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.118,
+      "stage": "shop_default_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.081,
+      "stage": "shop_default_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.107,
+      "stage": "shop_default_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.085,
+      "stage": "shop_default_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.083,
+      "stage": "shop_default_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.168,
+      "stage": "shop_default_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.056,
+      "stage": "shop_default_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.058,
+      "stage": "shop_default_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.318,
+      "stage": "shop_default_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "stage": "shop32",
+      "tag": "shop_open",
+      "to_draw_ms": 15.166
+    },
+    {
+      "cpu_ms": 0.221,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.189,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.141,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.142,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.155,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.147,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.14,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.179,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.18,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.14,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.114,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.201,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.18,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.158,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.143,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.164,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.185,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.124,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.146,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.142,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.151,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.135,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.163,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.151,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.141,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.142,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.12,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.13,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.106,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.112,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.126,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.135,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.133,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.154,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.16,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.166,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.134,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.166,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.179,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.172,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.131,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.138,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.123,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.18,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.127,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.116,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.163,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.177,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.688,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.273,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.279,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.269,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.284,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.25,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.292,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.425,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.286,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 6.728,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.315,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.293,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.442,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.577,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.434,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.332,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 9.331,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.291,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.38,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.28,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.438,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.323,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.44,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.414,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.38,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 5.191,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.328,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.289,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.423,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.525,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.415,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.364,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 6.668,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.295,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.267,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.266,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.357,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.309,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.326,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.352,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.353,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 5.052,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.294,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.314,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.464,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.523,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.387,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.32,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 9.014,
+      "stage": "shop32_hover",
+      "tag": "mouse_motion"
+    },
+    {
+      "stage": "drag_minion_pickup",
+      "tag": "pickup",
+      "to_draw_ms": 16.449
+    },
+    {
+      "cpu_ms": 0.87,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.659,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.699,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.59,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.628,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.601,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.464,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.498,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.424,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.372,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.425,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.377,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.376,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.339,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.395,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.346,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.342,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.322,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.423,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 2.647,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.476,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.455,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.487,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.451,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.456,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.478,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 9.553,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.495,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.456,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.427,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 4.865,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.487,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.413,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.395,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.333,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.283,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 7.117,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.337,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.296,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.415,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.374,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.332,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.3,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.297,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 7.238,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.229,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.362,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.365,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 4.375,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.461,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.382,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.319,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.338,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.412,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.992,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.376,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.355,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.392,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.381,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.384,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.314,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.383,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.338,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.393,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.127,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.488,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.41,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.349,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.391,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.379,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.299,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 1.913,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.359,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.314,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.35,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.302,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.414,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.35,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.466,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.35,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.394,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.308,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.328,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.279,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.356,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.288,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.299,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.271,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.348,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.264,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.265,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 2.003,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.435,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.369,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.395,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.352,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.129,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.442,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.456,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 4.808,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.793,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.41,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.391,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 10.338,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.315,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.409,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.027,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.384,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.36,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.331,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.305,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.316,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.365,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.345,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.076,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.487,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.002,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.581,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.411,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.341,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.382,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.314,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.384,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.409,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.033,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.413,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.459,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.471,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.44,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.47,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.457,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.441,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.407,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.446,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.476,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.04,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.496,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.437,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.452,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.487,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.345,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 2.018,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.38,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.33,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.414,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.338,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.396,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.347,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.403,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.325,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.405,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.341,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.41,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.351,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.407,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.325,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.433,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.36,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.402,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.348,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 2.47,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.558,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.557,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.531,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.479,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.537,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.52,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.528,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.529,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.488,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 6.499,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.446,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.184,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.335,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.313,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.334,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.865,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.359,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.306,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.31,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.295,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.306,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.301,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.3,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.001,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 7.716,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.449,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.408,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 4.263,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.475,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.403,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.364,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.342,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.502,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 3.321,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.442,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.431,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.458,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.426,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.471,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.402,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.403,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.352,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.434,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.377,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 2.978,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.507,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.398,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.393,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.402,
+      "stage": "drag_minion",
+      "tag": "mouse_motion"
+    },
+    {
+      "stage": "drag_equipment_pickup",
+      "tag": "pickup",
+      "to_draw_ms": 8.651
+    },
+    {
+      "cpu_ms": 0.424,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.197,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.44,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.442,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.298,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.242,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.243,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.29,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.228,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.199,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.177,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.173,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.173,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.183,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.304,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.219,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.209,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.19,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.166,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.169,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.222,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 6.095,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.357,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.285,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.364,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.3,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.348,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.271,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.334,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 7.406,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.381,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.609,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.33,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.369,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.283,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.25,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.236,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.183,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.181,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 7.344,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.341,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 6.44,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.357,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.274,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.309,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.268,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.315,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.233,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.187,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 7.476,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.343,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.269,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.321,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.238,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.275,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.221,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.203,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.243,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.31,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.232,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.254,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.203,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.209,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.203,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.203,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.183,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.197,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.198,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.237,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.176,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.161,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.217,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.192,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.209,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.286,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.278,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.244,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.2,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.235,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.194,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.268,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.244,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.348,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.261,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.277,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.206,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.291,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.351,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.324,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.316,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.409,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 6.656,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.352,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.28,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.327,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.293,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.318,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.245,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.222,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.332,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.319,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.44,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.344,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.249,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.294,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.23,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.231,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.189,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.184,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 7.265,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.351,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.473,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.368,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.29,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.312,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.264,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.218,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.414,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.301,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 7.755,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.319,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.249,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.346,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.286,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.205,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.192,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.284,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.214,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.2,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.204,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.29,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.248,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.26,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.223,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.277,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.252,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.211,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.186,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.199,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.21,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.166,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.219,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.183,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.192,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.254,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.219,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.219,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.265,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.392,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.331,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.345,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.269,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.291,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.293,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.4,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.299,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.284,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.231,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.315,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.312,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.355,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.631,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.36,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.366,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.287,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.239,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.252,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.21,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.25,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 5.746,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.355,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 8.393,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.361,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.293,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.365,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.48,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.421,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.431,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.31,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 6.272,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.335,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 6.533,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.328,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.277,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.346,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.246,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.28,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.214,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.183,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 6.987,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.331,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.246,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.252,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.205,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.25,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.191,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.217,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.191,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.265,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.227,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.203,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.195,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.184,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.191,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.196,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.188,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.2,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.182,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.328,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.272,
+      "stage": "drag_equipment",
+      "tag": "mouse_motion"
+    },
+    {
+      "cpu_ms": 0.012,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.004,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.004,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.003,
+      "stage": "card_refresh",
+      "tag": "mask_image"
+    },
+    {
+      "cpu_ms": 0.176,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.177,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.173,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.153,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.172,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.168,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.257,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.155,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.143,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.188,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.155,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.161,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.147,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.16,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.138,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.15,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.123,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.139,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.225,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.212,
+      "stage": "card_refresh",
+      "tag": "runes_hidden"
+    },
+    {
+      "cpu_ms": 0.133,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.104,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.118,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.123,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.115,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.113,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.101,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.093,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.08,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.088,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.082,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.087,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.082,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.098,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.09,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.095,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.163,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.163,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.18,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "cpu_ms": 0.156,
+      "stage": "card_refresh",
+      "tag": "runes_revealed"
+    },
+    {
+      "stage": "battle_start",
+      "tag": "battle_start",
+      "to_draw_ms": 42.43
+    }
+  ],
+  "measurement": "同一M4真实1080p窗口，与第三轮修复前测试比较；不是Windows实机结果。"
+}

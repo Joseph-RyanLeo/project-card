@@ -119,6 +119,8 @@ func set_target_priority_display_enabled(enabled: bool) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if get_viewport().is_input_handled():
+		return
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
 		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_ESCAPE:

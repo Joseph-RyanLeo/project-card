@@ -2928,6 +2928,8 @@ func _capture_pattern_sources(
 	var rune_sources: Array[Dictionary] = []
 	if state != null:
 		for slot: Dictionary in state.get_active_rune_slots():
+			if bool(slot.get("hidden", false)):
+				continue
 			var card := slot.get("card") as CardData
 			rune_sources.append({
 				"source_card_id": String(card.id) if card != null else "",
@@ -2949,6 +2951,8 @@ func _capture_element_sources(state: BattleSquadState) -> Array[Dictionary]:
 	if state == null:
 		return result
 	for slot: Dictionary in state.get_active_rune_slots():
+		if bool(slot.get("hidden", false)):
+			continue
 		var card := slot.get("card") as CardData
 		result.append({
 			"source_card_id": String(card.id) if card != null else "",

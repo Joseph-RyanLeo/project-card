@@ -13,8 +13,9 @@ const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 const ResourceHexLayout = preload("res://scripts/data/resource_hex_layout.gd")
 const ResourceBoardState = preload("res://scripts/data/resource_board_state.gd")
 
-const SCHEMA_VERSION: int = 5
+const SCHEMA_VERSION: int = 8
 const STATUS_SLOT_MIGRATION_VERSION: int = 1
+const RUNE_SCRAPE_MIGRATION_VERSION: int = 2
 const ROW_KEYS: Array[StringName] = [
 	&"player_front",
 	&"player_back",
@@ -43,6 +44,7 @@ func create_checkpoint(
 	return {
 		"schema_version": SCHEMA_VERSION,
 		"status_slot_migration_version": STATUS_SLOT_MIGRATION_VERSION,
+		"rune_scrape_migration_version": RUNE_SCRAPE_MIGRATION_VERSION,
 		"collection": encoded_collection,
 		"rows": encoded_rows,
 		"battle_seed": battle_seed,
@@ -60,10 +62,36 @@ func create_checkpoint(
 func save_checkpoint(path: String, checkpoint: Dictionary) -> Error:
 	if path.is_empty() or checkpoint.is_empty():
 		return ERR_INVALID_PARAMETER
-	var file := FileAccess.open(path, FileAccess.WRITE)
+	var temporary_path := path + ".tmp"
+	var backup_path := path + ".bak"
+	var file := FileAccess.open(temporary_path, FileAccess.WRITE)
 	if file == null:
 		return FileAccess.get_open_error()
 	file.store_string(JSON.stringify(checkpoint, "\t"))
+	file.flush()
+	var write_error := file.get_error()
+	file.close()
+	if write_error != OK:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(temporary_path))
+		return write_error
+	var absolute_path := ProjectSettings.globalize_path(path)
+	var absolute_temporary := ProjectSettings.globalize_path(temporary_path)
+	var absolute_backup := ProjectSettings.globalize_path(backup_path)
+	var had_previous := FileAccess.file_exists(path)
+	if had_previous:
+		DirAccess.remove_absolute(absolute_backup)
+		var backup_error := DirAccess.rename_absolute(absolute_path, absolute_backup)
+		if backup_error != OK:
+			DirAccess.remove_absolute(absolute_temporary)
+			return backup_error
+	var replace_error := DirAccess.rename_absolute(absolute_temporary, absolute_path)
+	if replace_error != OK:
+		if had_previous:
+			DirAccess.rename_absolute(absolute_backup, absolute_path)
+		DirAccess.remove_absolute(absolute_temporary)
+		return replace_error
+	if had_previous:
+		DirAccess.remove_absolute(absolute_backup)
 	return OK
 
 
@@ -98,13 +126,17 @@ func restore_checkpoint(
 		or settlement_journal == null
 	):
 		return _failure("save_context_invalid")
+	var rune_scrape_migration_version := int(checkpoint.get("rune_scrape_migration_version", 0))
+	if rune_scrape_migration_version < 0 or rune_scrape_migration_version > RUNE_SCRAPE_MIGRATION_VERSION:
+		return _failure("save_rune_scrape_migration_marker_invalid")
 	var decoded_collection_result := _decode_collection_state(
 		checkpoint.get("collection", {}) as Dictionary,
 		card_registry,
 		test_mode,
 		int(checkpoint.get("schema_version", 0)) < SCHEMA_VERSION
 		or int(checkpoint.get("status_slot_migration_version", 0)) < STATUS_SLOT_MIGRATION_VERSION,
-		int(checkpoint.get("schema_version", 0))
+		int(checkpoint.get("schema_version", 0)),
+		rune_scrape_migration_version < RUNE_SCRAPE_MIGRATION_VERSION
 	)
 	if not bool(decoded_collection_result.get("success", false)):
 		return decoded_collection_result
@@ -220,6 +252,7 @@ func _encode_collection_state(collection_state: Dictionary) -> Dictionary:
 			"card_resource_path": card_data.resource_path,
 			"acquisition_order": int(state.get("acquisition_order", -1)),
 			"resolved_action_type": int(state.get("resolved_action_type", -1)),
+			"resolved_runes": _json_safe(state.get("resolved_runes", [])),
 			"spell_durability": int(state.get("spell_durability", -1)),
 			"permanent_growth": _json_safe(state.get("permanent_growth", {})),
 			"crystallization_health_loss": maxi(int(state.get("crystallization_health_loss", 0)), 0),
@@ -227,6 +260,7 @@ func _encode_collection_state(collection_state: Dictionary) -> Dictionary:
 			"emblem_slots": _json_safe(state.get("emblem_slots", [])),
 			"slot_layout": _json_safe(state.get("slot_layout", [])),
 			"rune_revealed": _json_safe(state.get("rune_revealed", [])),
+			"rune_scrape_masks": _json_safe(state.get("rune_scrape_masks", [])),
 			"rune_stickers": _json_safe(state.get("rune_stickers", [])),
 			"progress_by_source": _json_safe(state.get("progress_by_source", {})),
 			"wound_battle_counters": _json_safe(state.get("wound_battle_counters", {})),
@@ -272,7 +306,8 @@ func _decode_collection_state(
 	card_registry: Dictionary,
 	test_mode: bool = true,
 	migrate_status_slots: bool = true,
-	checkpoint_schema_version: int = SCHEMA_VERSION
+	checkpoint_schema_version: int = SCHEMA_VERSION,
+	migrate_rune_reveals: bool = false
 ) -> Dictionary:
 	if not data.get("cards", []) is Array:
 		return _failure("save_collection_cards_invalid")
@@ -294,6 +329,8 @@ func _decode_collection_state(
 		var encoded_wound_slots := encoded.get("wound_slots", []) as Array
 		var encoded_emblem_slots := encoded.get("emblem_slots", []) as Array
 		var encoded_rune_revealed := encoded.get("rune_revealed", []) as Array
+		var encoded_rune_scrape_masks: Array = encoded.get("rune_scrape_masks", []) as Array
+		var encoded_resolved_runes: Array = encoded.get("resolved_runes", card_data.runes)
 		var stickers: Array = encoded.get("rune_stickers", OwnedCard._empty_slot_array(card_data.runes.size()))
 		if stickers.size() != card_data.runes.size():
 			return _failure("save_rune_sticker_count_invalid")
@@ -311,6 +348,17 @@ func _decode_collection_state(
 			return _failure("save_card_slot_state_invalid")
 		if encoded_rune_revealed.size() != card_data.runes.size():
 			return _failure("save_rune_revealed_count_invalid")
+		if not migrate_rune_reveals:
+			if encoded_rune_scrape_masks.size() != card_data.runes.size():
+				return _failure("save_rune_scrape_mask_count_invalid")
+			for mask_value: Variant in encoded_rune_scrape_masks:
+				if not mask_value is String or not OwnedCard.is_rune_scrape_mask_valid(mask_value as String):
+					return _failure("save_rune_scrape_mask_invalid")
+		if encoded_resolved_runes.size() != card_data.runes.size():
+			return _failure("save_resolved_rune_count_invalid")
+		for rune_value: Variant in encoded_resolved_runes:
+			if not (rune_value is int or rune_value is float) or not is_finite(float(rune_value)) or float(rune_value) != floor(float(rune_value)) or int(rune_value) < 0 or int(rune_value) >= CardData.ElementType.size():
+				return _failure("save_resolved_rune_invalid")
 		var resolved_counts := CardSlotLayout.resolve_counts(card_data)
 		var saved_layout: Array = encoded.get("slot_layout", [])
 		var saved_layout_is_valid := CardSlotLayout.is_valid_layout(card_data, saved_layout)
@@ -380,11 +428,23 @@ func _decode_collection_state(
 			wound_slots = _fit_status_slot_array(wound_slots, resolved_counts.x)
 		if _occupied_count(emblem_slots) <= resolved_counts.y:
 			emblem_slots = _fit_status_slot_array(emblem_slots, resolved_counts.y)
+		var rune_revealed_state: Array[bool] = []
+		rune_revealed_state.assign(_decode_bool_array(encoded_rune_revealed))
+		var rune_scrape_masks_state: Array[String] = []
+		if migrate_rune_reveals:
+			# 旧规则允许免费局部擦除。保留已揭晓结果，清空旧覆盖位图，
+			# 避免旧存档获得免费窥视或把旧痕迹误判为已付费。
+			for _rune_index: int in card_data.runes.size():
+				rune_scrape_masks_state.append("")
+		else:
+			for mask_value: Variant in encoded_rune_scrape_masks:
+				rune_scrape_masks_state.append(mask_value as String)
 		card_states.append({
 			"instance_id": instance_id,
 			"card_data": card_data,
 			"acquisition_order": int(encoded.get("acquisition_order", -1)),
 			"resolved_action_type": int(encoded.get("resolved_action_type", -1)),
+			"resolved_runes": _decode_int_array(encoded_resolved_runes),
 			"spell_durability": int(encoded.get("spell_durability", -1)),
 			"permanent_growth": _decode_number_dictionary(
 				encoded.get("permanent_growth", {}) as Dictionary
@@ -393,7 +453,8 @@ func _decode_collection_state(
 			"wound_slots": wound_slots,
 			"emblem_slots": emblem_slots,
 			"slot_layout": saved_layout.duplicate(),
-			"rune_revealed": _decode_bool_array(encoded_rune_revealed),
+			"rune_revealed": rune_revealed_state,
+			"rune_scrape_masks": rune_scrape_masks_state,
 			"rune_stickers": stickers.duplicate(true),
 			"progress_by_source": progress_by_source,
 			"wound_battle_counters": _decode_number_dictionary(
@@ -641,6 +702,13 @@ func _decode_bool_array(data: Array) -> Array[bool]:
 	var result: Array[bool] = []
 	for value: Variant in data:
 		result.append(bool(value))
+	return result
+
+
+func _decode_int_array(data: Array) -> Array[int]:
+	var result: Array[int] = []
+	for value: Variant in data:
+		result.append(int(value))
 	return result
 
 

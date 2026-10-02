@@ -21,6 +21,7 @@ const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 const StatusSlotLayerScript = preload("res://scripts/ui/status_slot_layer.gd")
 const StatusIndicatorStyle = preload("res://scripts/ui/status_indicator_style.gd")
+const RuneRevealCoverStyleScript = preload("res://scripts/ui/rune_reveal_cover_style.gd")
 const EquipmentIndicatorStyleScript = preload(
 	"res://scripts/ui/equipment_indicator_style.gd"
 )
@@ -90,6 +91,7 @@ const CARD_NAME_FRAME_TEXTURE: Texture2D = preload(
 	"res://assets/card_ui/card_name_frame.png"
 )
 const CARD_TEXT_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
+static var _gold_amount_pattern: RegEx
 const LAYOUT_TWEEN_DURATION: float = 0.15 # 卡牌让位、归位和飞入目标位置的动画时长（秒）
 const INTERACTION_TWEEN_DURATION: float = 0.10 # 悬停、按压时阴影移动的动画时长（秒）
 const BATTLE_NUMBER_TWEEN_DURATION: float = 0.24 # 战斗数值从旧值快速起跳、减速抵达新值的时长（秒）
@@ -223,6 +225,8 @@ var _has_status_slot_signature: bool = false
 var _rune_highlight_is_preview: bool = false
 var _dim_preview_active_runes: bool = true
 var _active_rune_icons: Dictionary = {}
+var _rune_scrape_cover_icons: Dictionary = {}
+var _rune_scrape_mask_textures: Dictionary = {}
 var _active_rune_join_cycles: Dictionary = {}
 var _active_rune_frame: int = -1
 var _battle_vitals_active: bool = false
@@ -392,7 +396,7 @@ func _apply_native_drag_visual_metrics(drag_data: Dictionary) -> void:
 
 func _build_drag_data(at_position: Vector2) -> Dictionary:
 	var drag_source_scale := scale
-	var owned_card: OwnedCard = null
+	var owned_card: OwnedCard = _owned_card
 	if is_instance_valid(_drag_source_slot) and _drag_source_slot.has_meta("owned_card"):
 		owned_card = _drag_source_slot.get_meta("owned_card") as OwnedCard
 	var drag_data := {
@@ -469,6 +473,7 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 	preview_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview_card.showing_effect = bool(drag_data.get("showing_effect", false))
 	preview_card.set_card_data(drag_data["card_data"] as CardData)
+	preview_card.set_owned_card(drag_data.get("owned_card") as OwnedCard)
 	var carried_single := drag_data.get("squad_data") as SquadData
 	if carried_single != null and carried_single.get_card_count() == 1:
 		preview_card.set_owned_card(carried_single.get_owned_card(preview_card.card_data))
@@ -1835,11 +1840,21 @@ static func format_cooldown_seconds(seconds: float) -> String:
 	return "%d.%d" % [tenths / 10, tenths % 10]
 
 
+static func format_gold_symbols(value: String) -> String:
+	if not value.contains("金币"):
+		return value
+	if _gold_amount_pattern == null:
+		_gold_amount_pattern = RegEx.new()
+		_gold_amount_pattern.compile("([+-]?[0-9]+(?:\\.[0-9]+)?)\\s*金币")
+	# 只替换实际金额，保留“金币／金币袋”等纹章名称。
+	return _gold_amount_pattern.sub(value, "$1¤", true)
+
+
 func _refresh_bottom_text() -> void:
 	if card_data == null:
 		return
 	_stop_effect_transition()
-	effect_text_label.text = card_data.effect_text
+	effect_text_label.text = format_gold_symbols(card_data.effect_text)
 	if card_data.card_type != CardData.CardType.MINION:
 		showing_effect = false
 		rune_row.visible = false
@@ -1859,7 +1874,7 @@ func _animate_effect_transition() -> void:
 	_stop_effect_transition()
 	rune_row.visible = true
 	effect_text_label.visible = true
-	effect_text_label.text = card_data.effect_text
+	effect_text_label.text = format_gold_symbols(card_data.effect_text)
 	var target_rune_alpha := effect_rune_dim_alpha if showing_effect else 1.0
 	var target_text_alpha := 1.0 if showing_effect else 0.0
 	_effect_transition_tween = create_tween()
@@ -1904,6 +1919,8 @@ func _show_empty_card() -> void:
 	_stop_effect_transition()
 	_active_rune_icons.clear()
 	_active_rune_join_cycles.clear()
+	_rune_scrape_cover_icons.clear()
+	_rune_scrape_mask_textures.clear()
 	set_process(false)
 	_set_card_name("空卡牌")
 	action_icon.texture = null
@@ -2229,9 +2246,11 @@ func _refresh_runes() -> void:
 	_active_rune_icons.clear()
 	_active_rune_join_cycles.clear()
 	_active_rune_frame = -1
+	_rune_scrape_cover_icons.clear()
+	_rune_scrape_mask_textures.clear()
 	for child: Node in rune_row.get_children():
 		rune_row.remove_child(child)
-		child.queue_free()
+		child.free()
 	var current_cycle := _get_global_flow_cycle()
 	var joins_initial_cycle := (
 		has_active_rune_flow_started()
@@ -2241,13 +2260,11 @@ func _refresh_runes() -> void:
 		var rune_slot := _create_rune_slot()
 		rune_row.add_child(rune_slot)
 		if slot_index < card_data.runes.size():
-			var rune := card_data.runes[slot_index]
-			if _owned_card != null:
-				rune = _owned_card.get_effective_rune(slot_index)
-			if _battle_rune_element_overrides.has(slot_index):
-				rune = int(_battle_rune_element_overrides[slot_index]) as CardData.ElementType
+			var has_visible_element := _is_display_rune_known(slot_index)
+			var sticker_id := _rune_sticker_id(slot_index)
+			var rune := _get_display_rune_element(slot_index)
 			var is_masked := _battle_masked_rune_indices.has(slot_index)
-			var is_active := _highlighted_rune_indices.has(slot_index) and not is_masked
+			var is_active := _highlighted_rune_indices.has(slot_index) and not is_masked and has_visible_element
 			var join_cycle: int = -1
 			if is_active:
 				join_cycle = (
@@ -2261,18 +2278,68 @@ func _refresh_runes() -> void:
 				_active_rune_join_cycles[slot_index] = join_cycle
 			var show_active_frame := is_active and current_cycle >= join_cycle
 			var rune_icon := _create_rune_icon(rune, show_active_frame)
-			var sticker_id := _rune_sticker_id(slot_index)
+			var show_under_cover := (
+				_owned_card != null
+				and not has_visible_element
+				and sticker_id.is_empty()
+				and not is_masked
+			)
+			rune_icon.visible = (has_visible_element or show_under_cover) and not is_masked
+			if not has_visible_element:
+				rune_icon.tooltip_text = ""
 			if not sticker_id.is_empty():
 				rune_icon.texture = RuneStickerStyle.get_texture_by_id(_get_rune_sticker_display_id(slot_index))
 				rune_icon.size = Vector2(27, 27)
 				rune_icon.custom_minimum_size = Vector2(27, 27)
 				rune_icon.position = (rune_slot_size - Vector2(27, 27)) * 0.5
-			rune_icon.visible = not is_masked
 			rune_slot.add_child(rune_icon)
+			if show_under_cover:
+				_create_rune_reveal_cover(rune_slot, slot_index, rune_icon)
 			if is_active:
 				_active_rune_icons[slot_index] = rune_icon
 	_update_active_rune_frames()
 	set_process(not _active_rune_icons.is_empty())
+
+
+func refresh_rune_scrape_cover(index: int) -> void:
+	var cover_value: Variant = _rune_scrape_cover_icons.get(index)
+	if not is_instance_valid(cover_value) or _owned_card == null:
+		return
+	var image := RuneRevealCoverStyleScript.create_mask_image(
+		_owned_card.get_rune_scrape_mask_bytes(index)
+	)
+	var stored_texture := _rune_scrape_mask_textures.get(index) as ImageTexture
+	if stored_texture == null:
+		return
+	if stored_texture == RuneRevealCoverStyleScript.get_empty_mask_texture():
+		# 首次刮除后才分配独立遮罩，不能更新其他槽共用的空纹理或材质。
+		stored_texture = ImageTexture.create_from_image(image)
+		_rune_scrape_mask_textures[index] = stored_texture
+		var cover := cover_value as TextureRect
+		cover.material = RuneRevealCoverStyleScript.create_material(stored_texture)
+		var rune_icon := cover.get_parent().get_child(0) as TextureRect
+		rune_icon.material = RuneRevealCoverStyleScript.create_material(stored_texture, true)
+	else:
+		stored_texture.update(image)
+
+
+func _create_rune_reveal_cover(slot: Control, index: int, rune_icon: TextureRect) -> void:
+	var cover := TextureRect.new()
+	cover.name = "RuneRevealCover"
+	cover.position = (rune_slot_size - Vector2(RuneRevealCoverStyleScript.SIZE, RuneRevealCoverStyleScript.SIZE)) * 0.5
+	cover.size = Vector2(RuneRevealCoverStyleScript.SIZE, RuneRevealCoverStyleScript.SIZE)
+	cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	cover.stretch_mode = TextureRect.STRETCH_KEEP
+	cover.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	cover.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cover.texture = RuneRevealCoverStyleScript.get_cover_texture(int(card_data.rarity))
+	var mask_texture := RuneRevealCoverStyleScript.create_mask_texture(_owned_card.get_rune_scrape_mask_bytes(index))
+	cover.material = RuneRevealCoverStyleScript.create_material(mask_texture)
+	# 底层元素只在已擦除像素处绘制；整卡虚化和效果淡出不会透出未揭晓内容。
+	rune_icon.material = RuneRevealCoverStyleScript.create_material(mask_texture, true)
+	slot.add_child(cover)
+	_rune_scrape_cover_icons[index] = cover
+	_rune_scrape_mask_textures[index] = mask_texture
 
 
 # --- 符文纹理与全局流光时间轴 ---
@@ -2465,7 +2532,20 @@ func _get_display_rune_element(index: int) -> CardData.ElementType:
 			var sticker_element := RuneStickerStyle.get_element_type(RuneStickerStyle.RUNE_IDS.find(sticker_id))
 			if sticker_element >= 0:
 				return sticker_element as CardData.ElementType
+	if _owned_card != null and index < _owned_card.resolved_runes.size():
+		return _owned_card.get_effective_rune(index)
 	return card_data.runes[index] as CardData.ElementType if card_data != null and index < card_data.runes.size() else CardData.ElementType.FIRE
+
+
+func _is_display_rune_known(index: int) -> bool:
+	if _owned_card == null:
+		# 敌方定义卡与明确的公开预览直接展示定义符文；玩家实例遵守揭晓状态。
+		return card_data != null and index >= 0 and index < card_data.runes.size()
+	if index >= _owned_card.rune_stickers.size():
+		return false
+	if not _rune_sticker_id(index).is_empty():
+		return true
+	return index < _owned_card.rune_revealed.size() and _owned_card.rune_revealed[index]
 
 
 func _get_rune_sticker_display_id(index: int) -> StringName:

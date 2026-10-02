@@ -300,9 +300,11 @@ func _refresh_target_priority_badge() -> void:
 	)
 
 
-func clear_battle_status() -> void:
+func clear_battle_status(clear_result_statistics: bool = false) -> void:
 	if not is_node_ready():
 		return
+	if clear_result_statistics:
+		clear_battle_result_statistics(false)
 	battle_status_label.visible = false
 	battle_action_label.visible = false
 	_battle_pattern_result = null
@@ -337,14 +339,18 @@ func show_battle_result_statistics(
 	_battle_result_defeated = defeated
 	_battle_result_action_type = action_type
 	_battle_result_active = true
-	_refresh()
+	var data := get_current_visual_squad_data()
+	if is_node_ready() and data != null and data.is_valid():
+		# 战绩只改变统计覆盖层；卡牌、符文和小队布局已经由快照恢复。
+		_apply_battle_result_visual_state(float(data.get_display_width()))
 
 
-func clear_battle_result_statistics() -> void:
+func clear_battle_result_statistics(refresh: bool = true) -> void:
 	_battle_result_statistics.clear()
 	_battle_result_defeated = false
 	_battle_result_active = false
-	_refresh()
+	if refresh:
+		_refresh()
 
 
 func set_battle_result_statistics_suppressed(suppressed: bool) -> void:
@@ -808,7 +814,7 @@ func _refresh() -> void:
 		size = CARD_SIZE
 		visible = false
 		return
-	_sync_card_views(data)
+	var created_cards := _sync_card_views(data)
 
 	var display_data := get_current_visual_squad_data()
 	if display_data.horizontal_cards.is_empty():
@@ -866,8 +872,10 @@ func _refresh() -> void:
 		card_view.set_layout_position(
 			Vector2(x_positions[horizontal_index], 0.0)
 		)
-		card_view.set_card_data(card_data)
-		card_view.set_owned_card(display_data.get_owned_card(card_data))
+		if card_view.card_data != card_data:
+			card_view.set_card_data(card_data)
+		if not created_cards.has(card_data):
+			card_view.set_owned_card(display_data.get_owned_card(card_data))
 		card_view.set_squad_attribute_preview_from_squad(display_data)
 		card_view.set_rune_pattern_highlights(
 			_get_card_highlight_indices(highlighted_runes_by_card, card_data),
@@ -1201,7 +1209,8 @@ func _get_card_highlight_indices(
 	return indices
 
 
-func _sync_card_views(data: SquadData) -> void:
+func _sync_card_views(data: SquadData) -> Array[CardData]:
+	var created_cards: Array[CardData] = []
 	# 与阶段 4 的固定 CardView 一样：已有卡牌复用原节点，只对真正
 	# 加入/离开小队的卡做创建和释放，避免刷新中断鼠标与拖拽状态。
 	for stored_card: CardData in _card_views.keys():
@@ -1221,6 +1230,7 @@ func _sync_card_views(data: SquadData) -> void:
 		var x_positions := data.get_card_x_positions()
 		card_view.position = Vector2(x_positions[horizontal_index], 0.0)
 		card_view.set_card_data(card_data)
+		card_view.set_owned_card(data.get_owned_card(card_data))
 		card_view.card_clicked.connect(_on_card_clicked.bind(card_data))
 		card_view.inspection_requested.connect(_on_card_inspection_requested)
 		card_view.click_carry_requested.connect(_on_card_click_carry_requested)
@@ -1240,9 +1250,11 @@ func _sync_card_views(data: SquadData) -> void:
 		)
 		card_visual_layer.add_child(card_view)
 		_card_views[card_data] = card_view
+		created_cards.append(card_data)
 
 	for stored_view: CardView in _card_views.values():
 		stored_view.visible = false
+	return created_cards
 
 
 func _clear_card_views() -> void:

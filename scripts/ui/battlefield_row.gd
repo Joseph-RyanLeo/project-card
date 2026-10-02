@@ -173,8 +173,8 @@ func add_squad(squad_data: SquadData, insert_index: int) -> BoardSlot:
 	if squad_data == null or not squad_data.is_valid():
 		return null
 	var slot := BOARD_SLOT_SCENE.instantiate() as BoardSlot
-	squad_row.add_child(slot)
 	slot.set_squad_data(squad_data)
+	squad_row.add_child(slot)
 	_connect_slot(slot)
 	_place_card_slot(slot, insert_index)
 	squads_changed.emit()

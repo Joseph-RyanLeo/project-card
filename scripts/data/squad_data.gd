@@ -157,6 +157,14 @@ func get_owned_card(card_data: CardData) -> OwnedCard:
 	return _owned_cards_by_card.get(card_data) as OwnedCard
 
 
+func get_card_data_for_owned_instance(instance_id: StringName) -> CardData:
+	for card_data: CardData in horizontal_cards:
+		var owned := get_owned_card(card_data)
+		if owned != null and owned.instance_id == instance_id:
+			return card_data
+	return null
+
+
 func get_action_source_instance() -> OwnedCard:
 	return get_owned_card(get_action_source())
 
@@ -240,7 +248,7 @@ func get_visible_status_static_modifier(
 
 
 func get_visible_rune_stat_bonus(stat: StringName) -> int:
-	# 槽位的可见性由小队遮挡规则唯一决定；贴纸覆盖元素时读取贴纸元素。
+	# 未揭晓槽返回 -1 断点，不提供属性；元素贴纸仍直接读取其自身元素。
 	var total := 0
 	for slot: Dictionary in get_visible_rune_slots():
 		match int(slot.get("element", -1)):
@@ -582,12 +590,16 @@ func get_visible_rune_slots() -> Array[Dictionary]:
 			)
 			if _is_card_center_covered_by_upper_layer(world_center_x, card_layer_index, x_positions):
 				continue
+			var owned := get_owned_card(card_data)
+			var sticker: Dictionary = owned.rune_stickers[rune_index] if owned != null and rune_index < owned.rune_stickers.size() else {}
+			var is_known := owned == null or (rune_index < owned.rune_revealed.size() and owned.rune_revealed[rune_index]) or not sticker.is_empty()
 			visible_slots.append({
 				"card": card_data,
 				"card_index": card_index,
 				"rune_index": rune_index,
-				"element": get_owned_card(card_data).get_effective_rune(rune_index) if get_owned_card(card_data) != null else card_data.runes[rune_index],
-				"sticker_id": get_owned_card(card_data).rune_stickers[rune_index].get("emblem_id", &"") if get_owned_card(card_data) != null and rune_index < get_owned_card(card_data).rune_stickers.size() else &"",
+				"element": (owned.get_effective_rune(rune_index) if owned != null else card_data.runes[rune_index]) if is_known else -1,
+				"hidden": not is_known,
+				"sticker_id": sticker.get("emblem_id", &""),
 				"world_center_x": world_center_x,
 			})
 

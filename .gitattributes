@@ -1,0 +1,4 @@
+# Windows诊断工具在仓库存LF，检出时恢复CRLF，保持命令行文件格式。
+tools/windows_performance_kit/*.cmd text eol=crlf
+tools/windows_performance_kit/*.ps1 text eol=crlf
+tools/windows_performance_kit/*.txt text eol=crlf

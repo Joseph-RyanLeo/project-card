@@ -1,0 +1,106 @@
+{
+  "before": {
+    "turn_collection_page": {
+      "n": 8,
+      "mean_ms": 13.796,
+      "max_ms": 15.048
+    },
+    "start_battle": {
+      "n": 1,
+      "mean_ms": 23.857,
+      "max_ms": 23.857
+    },
+    "_show_battle_result": {
+      "n": 1,
+      "mean_ms": 36.714,
+      "max_ms": 36.714
+    },
+    "_refresh_ordinary_shop_panel": {
+      "n": 4,
+      "mean_ms": 5.901,
+      "max_ms": 9.452
+    },
+    "_create_click_carry_preview": {
+      "n": 2,
+      "mean_ms": 1.917,
+      "max_ms": 2.168
+    },
+    "_update_card_carry_target": {
+      "n": 422,
+      "mean_ms": 0.719,
+      "max_ms": 6.643
+    },
+    "shop_default_hover": {
+      "n": 81,
+      "median_ms": 7.146,
+      "p95_ms": 11.39
+    },
+    "shop32_hover": {
+      "n": 516,
+      "median_ms": 8.056,
+      "p95_ms": 11.463
+    },
+    "drag_minion": {
+      "n": 303,
+      "median_ms": 9.202,
+      "p95_ms": 13.589
+    },
+    "drag_equipment": {
+      "n": 257,
+      "median_ms": 8.18,
+      "p95_ms": 10.441
+    }
+  },
+  "after": {
+    "turn_collection_page": {
+      "n": 8,
+      "mean_ms": 14.785,
+      "max_ms": 17.251
+    },
+    "start_battle": {
+      "n": 1,
+      "mean_ms": 26.68,
+      "max_ms": 26.68
+    },
+    "_show_battle_result": {
+      "n": 1,
+      "mean_ms": 45.686,
+      "max_ms": 45.686
+    },
+    "_refresh_ordinary_shop_panel": {
+      "n": 4,
+      "mean_ms": 6.516,
+      "max_ms": 9.91
+    },
+    "_create_click_carry_preview": {
+      "n": 2,
+      "mean_ms": 1.583,
+      "max_ms": 1.663
+    },
+    "_update_card_carry_target": {
+      "n": 422,
+      "mean_ms": 0.695,
+      "max_ms": 6.678
+    },
+    "shop_default_hover": {
+      "n": 78,
+      "median_ms": 8.703,
+      "p95_ms": 12.42
+    },
+    "shop32_hover": {
+      "n": 516,
+      "median_ms": 8.611,
+      "p95_ms": 12.407
+    },
+    "drag_minion": {
+      "n": 302,
+      "median_ms": 9.283,
+      "p95_ms": 13.653
+    },
+    "drag_equipment": {
+      "n": 257,
+      "median_ms": 7.65,
+      "p95_ms": 12.533
+    }
+  }
+}

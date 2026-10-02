@@ -21,7 +21,12 @@
 ## 日志字段
 
 - `frame_ms`：Godot 传给主界面每帧的时间间隔；汇总包含 p50、p95、最大值，以及超过 33ms 的帧数。
-- `drag_preview_ms`：鼠标拖动候选更新，包括原生拖动与点击携带。
+- `wall_frame_ms`：相邻主循环采样点之间的独立真实时间，首样本为0，避免引擎delta限制掩盖长阻塞；包括暂停、后台等待和F10写日志，不能全部归因为游戏计算。
+- `phase`：0准备、1战斗、2结果；`shop_open`、`collection_page`、`native_drag_active`、`click_carry_active` 用来核对尖峰所在界面和输入路径。
+- `collection_page_turn_ms`：本帧成功翻页入口的同步构建耗时；不包含整段 Tween 等待或 GPU 绘制。
+- `battle_start_ms`：本帧成功开战时的清理、快照、阵容和初始卡面构建耗时。
+- `battle_result_ms`：本帧进入结果页、恢复阵容、结算奖励与保存存档的同步耗时。以上字段与其他脚本耗时可能包含同一工作，不能相加；旧采样缺字段表示未测量。
+- `drag_preview_ms`：修复版同时覆盖点击携带与原生长按拖放的候选更新；原生拖动只计目标更新，不与点击外层重复相加。旧V0.2.70仅统计点击携带，因此旧日志的0值不能证明没有长按拖动负担。
 - `release_exact_snap_ms`：松手时的装备贴图遮罩精确搜索。
 - `battle_advance_ms`：`BattleController.advance_time` 的累计脚本耗时。
 - `state_sync_ms`：战斗状态刷新到卡面节点的脚本耗时。

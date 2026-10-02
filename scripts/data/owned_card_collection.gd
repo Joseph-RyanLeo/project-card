@@ -11,14 +11,15 @@ var _cards: Array[OwnedCard] = []
 var _next_instance_sequence: int = 1
 
 
-func create_card(card_data: CardData) -> OwnedCard:
+func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null) -> OwnedCard:
 	if card_data == null:
 		return null
 	var owned_card := OwnedCard.new()
 	owned_card.initialize(
 		card_data,
 		_take_next_instance_id(),
-		_cards.size()
+		_cards.size(),
+		instance_rng
 	)
 	_cards.append(owned_card)
 	return owned_card

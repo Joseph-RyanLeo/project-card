@@ -1,0 +1,840 @@
+{
+  "os": "macOS",
+  "processor": "Apple M4",
+  "adapter": "Apple M4",
+  "display": "macOS",
+  "window": [
+    1920,
+    1080
+  ],
+  "collection_cards": 72,
+  "battle_seed": 1331915,
+  "measurement": "第二轮：真实1080p原生窗口，正式函数计时、72张实例卡、双方3前排+3后排、1倍速。完整临时JSON已被后续复测覆盖，此文件保存本轮聚合数据。",
+  "modules": [
+    {
+      "stage": "startup",
+      "tag": "_build_card_definition_registry",
+      "count": 2,
+      "mean_ms": 2.005,
+      "max_ms": 2.506
+    },
+    {
+      "stage": "startup",
+      "tag": "_refresh_resource_preparation_trays",
+      "count": 3,
+      "mean_ms": 0.28400000000000003,
+      "max_ms": 0.341
+    },
+    {
+      "stage": "startup",
+      "tag": "get_filtered_collection_cards",
+      "count": 6,
+      "mean_ms": 0.014833333333333336,
+      "max_ms": 0.035
+    },
+    {
+      "stage": "startup",
+      "tag": "_build_collection_cards",
+      "count": 2,
+      "mean_ms": 4.582999999999999,
+      "max_ms": 8.774
+    },
+    {
+      "stage": "startup",
+      "tag": "_build_battle_formation",
+      "count": 8,
+      "mean_ms": 0.00425,
+      "max_ms": 0.009
+    },
+    {
+      "stage": "startup",
+      "tag": "_on_battle_states_changed",
+      "count": 4,
+      "mean_ms": 1.9475,
+      "max_ms": 7.455
+    },
+    {
+      "stage": "startup",
+      "tag": "_refresh_preparation_effect_preview",
+      "count": 2,
+      "mean_ms": 6.513,
+      "max_ms": 12.76
+    },
+    {
+      "stage": "startup",
+      "tag": "_get_shop_card_definitions",
+      "count": 1,
+      "mean_ms": 2.541,
+      "max_ms": 2.541
+    },
+    {
+      "stage": "startup",
+      "tag": "_create_collection_card_slot",
+      "count": 12,
+      "mean_ms": 0.12933333333333333,
+      "max_ms": 0.175
+    },
+    {
+      "stage": "page72",
+      "tag": "get_filtered_collection_cards",
+      "count": 96,
+      "mean_ms": 0.03786458333333333,
+      "max_ms": 0.086
+    },
+    {
+      "stage": "page72",
+      "tag": "_create_collection_card_slot",
+      "count": 288,
+      "mean_ms": 0.14261805555555554,
+      "max_ms": 0.372
+    },
+    {
+      "stage": "page72",
+      "tag": "_refresh_resource_preparation_trays",
+      "count": 8,
+      "mean_ms": 0.350875,
+      "max_ms": 0.397
+    },
+    {
+      "stage": "page72",
+      "tag": "_build_collection_cards",
+      "count": 8,
+      "mean_ms": 13.30025,
+      "max_ms": 17.438
+    },
+    {
+      "stage": "page72",
+      "tag": "_create_page_turn_snapshot",
+      "count": 32,
+      "mean_ms": 0.98671875,
+      "max_ms": 1.209
+    },
+    {
+      "stage": "page72",
+      "tag": "turn_collection_page",
+      "count": 8,
+      "mean_ms": 27.972625,
+      "max_ms": 33.415
+    },
+    {
+      "stage": "page72",
+      "tag": "_swap_page_turn_face",
+      "count": 8,
+      "mean_ms": 5.41125,
+      "max_ms": 6.708
+    },
+    {
+      "stage": "shop_default",
+      "tag": "_build_card_definition_registry",
+      "count": 13,
+      "mean_ms": 1.5145384615384616,
+      "max_ms": 2.329
+    },
+    {
+      "stage": "shop_default",
+      "tag": "_get_shop_card_definitions",
+      "count": 7,
+      "mean_ms": 1.5511428571428572,
+      "max_ms": 2.356
+    },
+    {
+      "stage": "shop_default",
+      "tag": "_can_buy_shop_card_pack",
+      "count": 6,
+      "mean_ms": 2.964166666666667,
+      "max_ms": 3.607
+    },
+    {
+      "stage": "shop_default",
+      "tag": "_create_shop_offer_tile",
+      "count": 12,
+      "mean_ms": 1.5439166666666668,
+      "max_ms": 3.789
+    },
+    {
+      "stage": "shop_default",
+      "tag": "_refresh_ordinary_shop_panel",
+      "count": 2,
+      "mean_ms": 10.618500000000001,
+      "max_ms": 11.834
+    },
+    {
+      "stage": "shop_default",
+      "tag": "_toggle_ordinary_shop",
+      "count": 1,
+      "mean_ms": 9.859,
+      "max_ms": 9.859
+    },
+    {
+      "stage": "shop_default_hover",
+      "tag": "save_run_to_path",
+      "count": 1,
+      "mean_ms": 4.815,
+      "max_ms": 4.815
+    },
+    {
+      "stage": "shop_default_hover",
+      "tag": "_build_card_definition_registry",
+      "count": 6,
+      "mean_ms": 1.906,
+      "max_ms": 2.472
+    },
+    {
+      "stage": "shop_default_hover",
+      "tag": "_get_shop_card_definitions",
+      "count": 3,
+      "mean_ms": 1.822,
+      "max_ms": 1.906
+    },
+    {
+      "stage": "shop_default_hover",
+      "tag": "_can_buy_shop_card_pack",
+      "count": 3,
+      "mean_ms": 3.905666666666667,
+      "max_ms": 4.466
+    },
+    {
+      "stage": "shop_default_hover",
+      "tag": "_create_shop_offer_tile",
+      "count": 6,
+      "mean_ms": 2.0283333333333333,
+      "max_ms": 4.587
+    },
+    {
+      "stage": "shop_default_hover",
+      "tag": "_refresh_ordinary_shop_panel",
+      "count": 1,
+      "mean_ms": 13.787,
+      "max_ms": 13.787
+    },
+    {
+      "stage": "shop_default_hover",
+      "tag": "_toggle_ordinary_shop",
+      "count": 1,
+      "mean_ms": 19.019,
+      "max_ms": 19.019
+    },
+    {
+      "stage": "shop32",
+      "tag": "_build_card_definition_registry",
+      "count": 138,
+      "mean_ms": 1.2789420289855074,
+      "max_ms": 2.075
+    },
+    {
+      "stage": "shop32",
+      "tag": "_get_shop_card_definitions",
+      "count": 70,
+      "mean_ms": 1.2957,
+      "max_ms": 2.096
+    },
+    {
+      "stage": "shop32",
+      "tag": "_can_buy_shop_card_pack",
+      "count": 64,
+      "mean_ms": 2.595234375,
+      "max_ms": 2.858
+    },
+    {
+      "stage": "shop32",
+      "tag": "_create_shop_offer_tile",
+      "count": 74,
+      "mean_ms": 2.3509054054054057,
+      "max_ms": 2.882
+    },
+    {
+      "stage": "shop32",
+      "tag": "_refresh_ordinary_shop_panel",
+      "count": 2,
+      "mean_ms": 92.231,
+      "max_ms": 92.481
+    },
+    {
+      "stage": "shop32",
+      "tag": "_toggle_ordinary_shop",
+      "count": 1,
+      "mean_ms": 92.479,
+      "max_ms": 92.479
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "save_run_to_path",
+      "count": 1,
+      "mean_ms": 4.6,
+      "max_ms": 4.6
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "_build_card_definition_registry",
+      "count": 66,
+      "mean_ms": 1.3609848484848486,
+      "max_ms": 2.114
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "_get_shop_card_definitions",
+      "count": 32,
+      "mean_ms": 1.36296875,
+      "max_ms": 1.85
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "_can_buy_shop_card_pack",
+      "count": 32,
+      "mean_ms": 2.78928125,
+      "max_ms": 4.055
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "_create_shop_offer_tile",
+      "count": 37,
+      "mean_ms": 2.524864864864865,
+      "max_ms": 4.149
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "_refresh_ordinary_shop_panel",
+      "count": 1,
+      "mean_ms": 99.329,
+      "max_ms": 99.329
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "_toggle_ordinary_shop",
+      "count": 1,
+      "mean_ms": 104.448,
+      "max_ms": 104.448
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "get_filtered_collection_cards",
+      "count": 3,
+      "mean_ms": 0.044333333333333336,
+      "max_ms": 0.069
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "_create_collection_card_slot",
+      "count": 12,
+      "mean_ms": 0.16541666666666666,
+      "max_ms": 0.349
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "_refresh_resource_preparation_trays",
+      "count": 1,
+      "mean_ms": 0.35,
+      "max_ms": 0.35
+    },
+    {
+      "stage": "shop32_hover",
+      "tag": "_build_collection_cards",
+      "count": 1,
+      "mean_ms": 20.259,
+      "max_ms": 20.259
+    },
+    {
+      "stage": "drag_minion_pickup",
+      "tag": "_create_click_carry_preview",
+      "count": 1,
+      "mean_ms": 2.975,
+      "max_ms": 2.975
+    },
+    {
+      "stage": "drag_minion_pickup",
+      "tag": "_update_card_carry_target",
+      "count": 1,
+      "mean_ms": 6.835,
+      "max_ms": 6.835
+    },
+    {
+      "stage": "drag_minion",
+      "tag": "_update_card_carry_target",
+      "count": 210,
+      "mean_ms": 4.201242857142857,
+      "max_ms": 16.23
+    },
+    {
+      "stage": "drag_minion",
+      "tag": "get_filtered_collection_cards",
+      "count": 6,
+      "mean_ms": 0.0335,
+      "max_ms": 0.052
+    },
+    {
+      "stage": "drag_minion",
+      "tag": "_create_collection_card_slot",
+      "count": 24,
+      "mean_ms": 0.14404166666666665,
+      "max_ms": 0.316
+    },
+    {
+      "stage": "drag_minion",
+      "tag": "_refresh_resource_preparation_trays",
+      "count": 2,
+      "mean_ms": 0.3175,
+      "max_ms": 0.351
+    },
+    {
+      "stage": "drag_minion",
+      "tag": "_build_collection_cards",
+      "count": 2,
+      "mean_ms": 9.1065,
+      "max_ms": 9.486
+    },
+    {
+      "stage": "drag_equipment_pickup",
+      "tag": "_create_click_carry_preview",
+      "count": 1,
+      "mean_ms": 2.428,
+      "max_ms": 2.428
+    },
+    {
+      "stage": "drag_equipment_pickup",
+      "tag": "_update_card_carry_target",
+      "count": 1,
+      "mean_ms": 0.089,
+      "max_ms": 0.089
+    },
+    {
+      "stage": "drag_equipment",
+      "tag": "_update_card_carry_target",
+      "count": 210,
+      "mean_ms": 0.08109047619047619,
+      "max_ms": 0.151
+    },
+    {
+      "stage": "drag_equipment",
+      "tag": "get_filtered_collection_cards",
+      "count": 3,
+      "mean_ms": 0.03666666666666667,
+      "max_ms": 0.049
+    },
+    {
+      "stage": "drag_equipment",
+      "tag": "_create_collection_card_slot",
+      "count": 12,
+      "mean_ms": 0.16416666666666666,
+      "max_ms": 0.273
+    },
+    {
+      "stage": "drag_equipment",
+      "tag": "_refresh_resource_preparation_trays",
+      "count": 1,
+      "mean_ms": 0.355,
+      "max_ms": 0.355
+    },
+    {
+      "stage": "drag_equipment",
+      "tag": "_build_collection_cards",
+      "count": 1,
+      "mean_ms": 10.676,
+      "max_ms": 10.676
+    },
+    {
+      "stage": "battle_start",
+      "tag": "_clear_battle_presentation_for_preparation",
+      "count": 1,
+      "mean_ms": 28.913,
+      "max_ms": 28.913
+    },
+    {
+      "stage": "battle_start",
+      "tag": "_capture_battle_snapshot",
+      "count": 1,
+      "mean_ms": 0.295,
+      "max_ms": 0.295
+    },
+    {
+      "stage": "battle_start",
+      "tag": "_build_battle_formation",
+      "count": 4,
+      "mean_ms": 0.0065,
+      "max_ms": 0.009
+    },
+    {
+      "stage": "battle_start",
+      "tag": "_build_card_definition_registry",
+      "count": 1,
+      "mean_ms": 1.622,
+      "max_ms": 1.622
+    },
+    {
+      "stage": "battle_start",
+      "tag": "_build_reward_card_catalog",
+      "count": 1,
+      "mean_ms": 1.676,
+      "max_ms": 1.676
+    },
+    {
+      "stage": "battle_start",
+      "tag": "_on_battle_states_changed",
+      "count": 3,
+      "mean_ms": 3.327666666666667,
+      "max_ms": 7.324
+    },
+    {
+      "stage": "battle_start",
+      "tag": "start_battle",
+      "count": 1,
+      "mean_ms": 50.187,
+      "max_ms": 50.187
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_on_battle_states_changed",
+      "count": 4165,
+      "mean_ms": 2.2762811524609843,
+      "max_ms": 3.96
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_refresh_preparation_effect_preview",
+      "count": 4,
+      "mean_ms": 0.0005,
+      "max_ms": 0.001
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_on_battle_finished",
+      "count": 1,
+      "mean_ms": 3.452,
+      "max_ms": 3.452
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_build_card_definition_registry",
+      "count": 2,
+      "mean_ms": 1.918,
+      "max_ms": 2.15
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_refresh_resource_preparation_trays",
+      "count": 4,
+      "mean_ms": 0.1515,
+      "max_ms": 0.235
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_restore_battle_snapshot",
+      "count": 1,
+      "mean_ms": 43.664,
+      "max_ms": 43.664
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_restore_battle_result_layout",
+      "count": 1,
+      "mean_ms": 56.838,
+      "max_ms": 56.838
+    },
+    {
+      "stage": "battle_running",
+      "tag": "get_filtered_collection_cards",
+      "count": 6,
+      "mean_ms": 0.02666666666666667,
+      "max_ms": 0.03
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_create_collection_card_slot",
+      "count": 24,
+      "mean_ms": 0.14225000000000002,
+      "max_ms": 0.199
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_build_collection_cards",
+      "count": 2,
+      "mean_ms": 8.8625,
+      "max_ms": 9.252
+    },
+    {
+      "stage": "battle_running",
+      "tag": "settle_current_battle",
+      "count": 1,
+      "mean_ms": 12.074,
+      "max_ms": 12.074
+    },
+    {
+      "stage": "battle_running",
+      "tag": "save_run_to_path",
+      "count": 1,
+      "mean_ms": 2.79,
+      "max_ms": 2.79
+    },
+    {
+      "stage": "battle_running",
+      "tag": "_show_battle_result",
+      "count": 1,
+      "mean_ms": 80.62,
+      "max_ms": 80.62
+    },
+    {
+      "stage": "drag_minion_pickup",
+      "tag": "row.update_stack_target_feedback_global",
+      "count": 2,
+      "mean_ms": 3.385,
+      "max_ms": 3.582
+    },
+    {
+      "stage": "drag_minion",
+      "tag": "row.update_stack_target_feedback_global",
+      "count": 420,
+      "mean_ms": 1.8722738095238096,
+      "max_ms": 4.715
+    },
+    {
+      "stage": "drag_minion",
+      "tag": "row._sync_dragged_card_preview_highlights",
+      "count": 17,
+      "mean_ms": 0.045941176470588235,
+      "max_ms": 0.72
+    },
+    {
+      "stage": "drag_minion",
+      "tag": "row._show_intent_preview",
+      "count": 17,
+      "mean_ms": 4.237764705882353,
+      "max_ms": 7.605
+    },
+    {
+      "stage": "drag_minion",
+      "tag": "row.preview_card_drop",
+      "count": 204,
+      "mean_ms": 0.4413333333333333,
+      "max_ms": 7.784
+    },
+    {
+      "stage": "drag_equipment_pickup",
+      "tag": "row.update_stack_target_feedback_global",
+      "count": 2,
+      "mean_ms": 0.015,
+      "max_ms": 0.021
+    },
+    {
+      "stage": "drag_equipment",
+      "tag": "row.update_stack_target_feedback_global",
+      "count": 420,
+      "mean_ms": 0.007983333333333334,
+      "max_ms": 0.03
+    },
+    {
+      "stage": "drag_equipment",
+      "tag": "row._preview_equipment_drop",
+      "count": 204,
+      "mean_ms": 0.013852941176470589,
+      "max_ms": 0.019
+    },
+    {
+      "stage": "drag_equipment",
+      "tag": "row.preview_card_drop",
+      "count": 204,
+      "mean_ms": 0.03752941176470588,
+      "max_ms": 0.059
+    }
+  ],
+  "draw_operations": [
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 43.233
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 35.252
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 35.838
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 39.663
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 36.15
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 39.71
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 36.906
+    },
+    {
+      "stage": "page72",
+      "tag": "page_input",
+      "to_draw_ms": 35.267
+    },
+    {
+      "stage": "shop_default",
+      "tag": "shop_open",
+      "to_draw_ms": 17.166
+    },
+    {
+      "stage": "shop32",
+      "tag": "shop_open",
+      "to_draw_ms": 98.121
+    },
+    {
+      "stage": "drag_minion_pickup",
+      "tag": "pickup",
+      "to_draw_ms": 19.859
+    },
+    {
+      "stage": "drag_equipment_pickup",
+      "tag": "pickup",
+      "to_draw_ms": 7.522
+    },
+    {
+      "stage": "battle_start",
+      "tag": "battle_start",
+      "to_draw_ms": 60.027
+    }
+  ],
+  "probes": {
+    "runes_hidden": {
+      "count": 20,
+      "mean_ms": 0.71775,
+      "max_ms": 1.048
+    },
+    "runes_revealed": {
+      "count": 20,
+      "mean_ms": 0.064,
+      "max_ms": 0.08
+    },
+    "mask_image": {
+      "count": 20,
+      "mean_ms": 0.18245,
+      "max_ms": 0.201
+    }
+  },
+  "stages": [
+    {
+      "stage": "startup",
+      "count": 139,
+      "p95_ms": 13.681,
+      "max_ms": 77.576,
+      "over33ms": 2,
+      "shop_close_excluded": false
+    },
+    {
+      "stage": "idle72",
+      "count": 121,
+      "p95_ms": 11.967,
+      "max_ms": 12.206,
+      "over33ms": 0,
+      "shop_close_excluded": false
+    },
+    {
+      "stage": "page72",
+      "count": 500,
+      "p95_ms": 11.747,
+      "max_ms": 43.44,
+      "over33ms": 8,
+      "shop_close_excluded": false
+    },
+    {
+      "stage": "shop_default",
+      "count": 45,
+      "p95_ms": 12.238,
+      "max_ms": 32.359,
+      "over33ms": 0,
+      "shop_close_excluded": false
+    },
+    {
+      "stage": "shop_default_hover",
+      "count": 80,
+      "p95_ms": 11.858,
+      "max_ms": 12.103,
+      "over33ms": 0,
+      "shop_close_excluded": true
+    },
+    {
+      "stage": "shop32",
+      "count": 33,
+      "p95_ms": 11.106,
+      "max_ms": 218.991,
+      "over33ms": 1,
+      "shop_close_excluded": false
+    },
+    {
+      "stage": "shop32_hover",
+      "count": 511,
+      "p95_ms": 11.986,
+      "max_ms": 27.226,
+      "over33ms": 0,
+      "shop_close_excluded": true
+    },
+    {
+      "stage": "drag_minion",
+      "count": 305,
+      "p95_ms": 22.772,
+      "max_ms": 29.768,
+      "over33ms": 0,
+      "shop_close_excluded": false
+    },
+    {
+      "stage": "drag_equipment",
+      "count": 256,
+      "p95_ms": 11.686,
+      "max_ms": 17.822,
+      "over33ms": 0,
+      "shop_close_excluded": false
+    },
+    {
+      "stage": "card_refresh",
+      "count": 42,
+      "p95_ms": 12.61,
+      "max_ms": 12.661,
+      "over33ms": 0,
+      "shop_close_excluded": false
+    },
+    {
+      "stage": "battle_running",
+      "count": 4230,
+      "p95_ms": 10.583,
+      "max_ms": 117.491,
+      "over33ms": 7,
+      "shop_close_excluded": false
+    },
+    {
+      "stage": "result_idle",
+      "count": 85,
+      "p95_ms": 11.583,
+      "max_ms": 12.058,
+      "over33ms": 0,
+      "shop_close_excluded": false
+    }
+  ],
+  "battle_events": [
+    {
+      "frame": 2148,
+      "ms": 50.187,
+      "stage": "battle_start",
+      "tag": "start_battle"
+    },
+    {
+      "frame": 6275,
+      "ms": 3.452,
+      "stage": "battle_running",
+      "tag": "_on_battle_finished"
+    },
+    {
+      "frame": 6320,
+      "ms": 80.62,
+      "stage": "battle_running",
+      "tag": "_show_battle_result"
+    }
+  ]
+}

@@ -566,6 +566,8 @@ func _test_paste_and_scrape_updates_card_view() -> void:
 	root.add_child(main)
 	await process_frame
 	await process_frame
+	main.scraper_count = 1
+	main.emblem_library.set_scraper_count(main.scraper_count)
 	var source_slot: Control
 	var owned: OwnedCard
 	for candidate: Control in main._get_collection_card_slots():
@@ -584,10 +586,12 @@ func _test_paste_and_scrape_updates_card_view() -> void:
 	owned.apply_permanent_growth(OwnedCard.STAT_BASE_VALUE, 2)
 	main._open_card_inspection(owned.card_data, owned, source_card)
 	await process_frame
+	main._toggle_inspection_library()
+	await create_timer(0.3).timeout
 	var long_sword: Dictionary = {}
 	for definition: Dictionary in main.emblem_library.get_definitions():
 		if definition.get("id", &"") == &"长剑":
-			long_sword = definition
+			long_sword = definition.duplicate(true)
 			long_sword["returned_state"] = main.emblem_library.get_inventory_item(&"static_modifier_sword")
 			break
 	var drag_data := {
@@ -609,15 +613,56 @@ func _test_paste_and_scrape_updates_card_view() -> void:
 		and main._inspection_card_view.get_node("StatusSlotLayer").get_child_count() == 1,
 		"检视中粘贴长剑后属性即时生效并显示，且与永久成长相加"
 	)
-	var scraper := {"kind": &"sticker_scraper"} as Dictionary
+	var scraper_control: TextureRect = main.emblem_library._scraper
+	var scraper_data: Dictionary = scraper_control._build_drag_data(scraper_control.blade_point, false)
+	await _click(scraper_control.get_global_rect().get_center())
+	var blade_pointer := _pointer_for_blade_center(main._inspection_surface, scraper_data, point)
+	await _click(blade_pointer)
 	_expect(
-		main._drop_emblem_on_inspection_card(main._inspection_card_view, point, scraper)
+		owned.emblem_slots[0].is_empty()
 		and owned.get_effective_base_value() == base_value + 2
 		and main._inspection_card_view.get_node("StatusSlotLayer").get_child_count() == 0
-		and owned.get_permanent_growth(OwnedCard.STAT_BASE_VALUE) == 2,
-		"检视中刮下长剑后立即还原其贡献并保留独立永久成长"
+		and owned.get_permanent_growth(OwnedCard.STAT_BASE_VALUE) == 2
+		and main.scraper_count == 0,
+		"真实点击刮刀移除长剑后还原其贡献、保留独立永久成长并扣除一把刀"
 	)
 	main.free()
+
+
+func _click(position: Vector2) -> void:
+	var down := InputEventMouseButton.new()
+	down.position = position
+	down.global_position = position
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	root.push_input(down, true)
+	await process_frame
+	var up := InputEventMouseButton.new()
+	up.position = position
+	up.global_position = position
+	up.button_index = MOUSE_BUTTON_LEFT
+	up.pressed = false
+	root.push_input(up, true)
+	await process_frame
+
+
+func _pointer_for_blade_center(surface: InspectionCardSurface, data: Dictionary, card_point: Vector2) -> Vector2:
+	var transform := surface.get_global_transform_with_canvas()
+	var scale := transform.get_scale()
+	var offset := (data.get("hit_rect_offset", Vector2.ZERO) as Vector2) / scale
+	var hit_size := (data.get("hit_rect_size", Vector2.ZERO) as Vector2) / scale
+	var blade_center_offset := offset + hit_size * 0.5
+	var surface_point := surface.PADDING + card_point - blade_center_offset
+	for _iteration: int in 8:
+		var sample_point := surface_point + blade_center_offset
+		var projected := surface.card_point(sample_point)
+		var error := card_point - projected
+		if error.length() < 0.001:
+			break
+		var dx := surface.card_point(sample_point + Vector2.RIGHT) - projected
+		var dy := surface.card_point(sample_point + Vector2.DOWN) - projected
+		surface_point += Transform2D(dx, dy, Vector2.ZERO).affine_inverse() * error
+	return transform * surface_point
 
 
 func _expect(condition: bool, message: String) -> void:

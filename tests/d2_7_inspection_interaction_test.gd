@@ -1,6 +1,7 @@
 extends SceneTree
 
 const StickerInventory = preload("res://scripts/data/emblem_sticker_inventory.gd")
+const MainScript = preload("res://scripts/main.gd")
 var failures := 0
 
 func _initialize() -> void:
@@ -13,12 +14,54 @@ func check(value: bool, message: String) -> void:
 	else:
 		print("PASS: " + message)
 
+
+func _pointer_for_blade_center(surface: InspectionCardSurface, data: Dictionary, card_point: Vector2) -> Vector2:
+	var transform := surface.get_global_transform_with_canvas()
+	var scale := transform.get_scale()
+	var offset := (data.get("hit_rect_offset", Vector2.ZERO) as Vector2) / scale
+	var hit_size := (data.get("hit_rect_size", Vector2.ZERO) as Vector2) / scale
+	var blade_center_offset := offset + hit_size * 0.5
+	var surface_point := surface.PADDING + card_point - blade_center_offset
+	# 倾斜是透视投影；在当前点迭代求逆，不能用左上角的仿射近似定位整张卡。
+	for _iteration: int in 8:
+		var sample_point := surface_point + blade_center_offset
+		var projected := surface.card_point(sample_point)
+		var error := card_point - projected
+		if error.length() < 0.001:
+			break
+		var dx := surface.card_point(sample_point + Vector2.RIGHT) - projected
+		var dy := surface.card_point(sample_point + Vector2.DOWN) - projected
+		surface_point += Transform2D(dx, dy, Vector2.ZERO).affine_inverse() * error
+	return transform * surface_point
+
+
+func _push_motion(point: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = point
+	event.global_position = point
+	root.push_input(event, true)
+	await process_frame
+
 func _run() -> void:
 	root.size = Vector2i(1280, 720)
 	var main = load("res://scenes/Main.tscn").instantiate()
 	root.add_child(main)
 	await process_frame
 	await process_frame
+	main.run_save_path = "/private/tmp/project-card-d2-7-gold-command-test.json"
+	var original_gold: int = main.run_reward_state.gold
+	main._on_developer_console_command_submitted("设置金币数 9007199254740991")
+	check(main.run_reward_state.gold == 9007199254740991, "中文金币命令接受可精确保存的最大非负整数")
+	var max_gold_checkpoint: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(main.run_save_path))
+	check(int(max_gold_checkpoint.get("reward_state", {}).get("gold", -1)) == 9007199254740991, "最大金币数写入JSON仍保持精确")
+	for invalid_gold: String in ["9007199254740992", "9223372036854775808", "-1", "1.5", "abc"]:
+		main._on_developer_console_command_submitted("gold set " + invalid_gold)
+		check(main.run_reward_state.gold == 9007199254740991, "非法金币输入%s不会更改余额" % invalid_gold)
+	main._on_developer_console_command_submitted("gold set 0")
+	check(main.run_reward_state.gold == 0, "英文金币命令接受零")
+	main._on_developer_console_command_submitted("gold set %d" % original_gold)
+	main.scraper_count = 4
+	main.emblem_library.set_scraper_count(main.scraper_count)
 	main.emblem_library.return_sticker({"instance_id": &"interaction_torch", "emblem_id": &"火把"})
 	main.emblem_library.return_sticker({"instance_id": &"interaction_light", "emblem_id": &"光贴纸", "element": CardData.ElementType.LIGHT})
 	main._on_developer_console_command_submitted("wound add 中毒Ⅰ")
@@ -26,13 +69,19 @@ func _run() -> void:
 	var source: CardView
 	for slot: Control in main._get_collection_card_slots():
 		var candidate: OwnedCard = slot.get_meta("owned_card", null)
-		if candidate != null and candidate.card_data.card_type == CardData.CardType.MINION and candidate.card_data.runes.size() == 3:
+		if candidate != null and candidate.card_data.card_type == CardData.CardType.MINION and candidate.card_data.runes.size() == 3 and CardData.ElementType.FIRE not in candidate.resolved_runes:
 			owned = candidate
 			source = slot.get_child(0)
 			break
 	check(main.emblem_library.position.x + main.emblem_library.size.x < 216, "横放工具箱常规状态沿用收藏书左侧边界")
 	main._open_card_inspection(owned.card_data, owned, source)
 	await process_frame
+	var hidden_rune_index := -1
+	var scrapers_before_reveal: int = main.scraper_count
+	for rune_index: int in owned.rune_revealed.size():
+		if not owned.rune_revealed[rune_index] and owned.rune_stickers[rune_index].is_empty() and owned.get_effective_rune(rune_index) != CardData.ElementType.FIRE:
+			hidden_rune_index = rune_index
+			break
 	var surface = main._inspection_surface
 	var first_scale: Vector2 = surface.scale
 	await create_timer(0.3).timeout
@@ -50,22 +99,47 @@ func _run() -> void:
 	check(visible_pattern_labels_hidden, "打开检视时临时隐藏四排小队牌型标签")
 	surface.force = Vector2.ZERO
 	check(surface.card_point(surface.PADDING + Vector2(5, 46)).distance_to(Vector2(5, 46)) < 0.01, "无倾斜时逆投影准确落在卡面槽位")
+	var cover_slot: Control = main._inspection_card_view.rune_row.get_child(hidden_rune_index)
+	var rune_under_cover := cover_slot.get_child(0) as TextureRect
+	var rarity_cover := cover_slot.get_child(1) as TextureRect
+	var actual_element := owned.get_effective_rune(hidden_rune_index)
+	check(
+		rune_under_cover.texture == main._inspection_card_view._get_rune_texture(actual_element)
+		and rune_under_cover.tooltip_text.is_empty()
+		and rarity_cover.texture.resource_path == "res://assets/card_ui/rune_covers/rarity_%s.png" % ["i", "ii", "iii", "iv", "v"][int(owned.card_data.rarity)],
+		"真实非火元素绘在对应品级遮罩下且未揭晓时不暴露提示"
+	)
+	var battle_masked_indices: Array[int] = [hidden_rune_index]
+	main._inspection_card_view.set_battle_masked_runes(battle_masked_indices)
+	var battle_masked_slot: Control = main._inspection_card_view.rune_row.get_child(hidden_rune_index)
+	check(
+		battle_masked_slot.get_child_count() == 1
+		and not (battle_masked_slot.get_child(0) as TextureRect).visible,
+		"战斗遮蔽符文不会被未知符文覆盖层重新显露"
+	)
+	main._inspection_card_view.clear_battle_masked_runes()
+	cover_slot = main._inspection_card_view.rune_row.get_child(hidden_rune_index)
+	rune_under_cover = cover_slot.get_child(0) as TextureRect
+	rarity_cover = cover_slot.get_child(1) as TextureRect
 	var initial_emblem_position := _first_empty_emblem_position(owned)
 	var initial_emblem_index: int = main._find_empty_emblem_slot_at(initial_emblem_position)
 	var torch_state: Dictionary = main.emblem_library.get_inventory_item(&"interaction_torch")
 	var torch_definition := _inventory_definition(main, &"火把", torch_state)
 	var emblem := {"kind": &"emblem_library", "emblem_id": &"火把", "definition": torch_definition}
 	check(main._drop_emblem_on_inspection_card(main._inspection_card_view, initial_emblem_position, emblem), "普通纹章可真实粘贴")
-	var scraper := {"kind": &"sticker_scraper"}
-	check(main._can_drop_emblem_on_inspection_card(main._inspection_card_view, initial_emblem_position, scraper), "刮刀可命中已贴纹章")
-	check(initial_emblem_index >= 0 and not owned.emblem_slots[initial_emblem_index].is_empty(), "拖过只检查、不提前刮除")
-	check(main._drop_emblem_on_inspection_card(main._inspection_card_view, initial_emblem_position, scraper), "松手刮下纹章")
-	check(owned.emblem_slots[initial_emblem_index].is_empty() and main.emblem_library.get_inventory_item(&"interaction_torch").is_empty(), "刮下实例被移除且不会返还工作包")
-	check(not main._can_drop_emblem_on_inspection_card(main._inspection_card_view, Vector2(5, 62), scraper), "伤势槽不接受刮刀")
+	check(initial_emblem_index >= 0 and not owned.emblem_slots[initial_emblem_index].is_empty(), "粘贴后纹章保存在对应实例槽")
+	var scraper_control: TextureRect = main.emblem_library._scraper
+	var scraper_data: Dictionary = scraper_control._build_drag_data(scraper_control.blade_point, false)
+	await _click(scraper_control.get_global_rect().get_center())
+	var emblem_pointer := _pointer_for_blade_center(main._inspection_surface, scraper_data, initial_emblem_position + Vector2(8, 8))
+	await _click(emblem_pointer)
+	check(owned.emblem_slots[initial_emblem_index].is_empty() and main.emblem_library.get_inventory_item(&"interaction_torch").is_empty(), "真实点击刀头移除纹章且不返还工作包")
+	check(main.scraper_count == scrapers_before_reveal - 1, "移除纹章只消耗一把刮刀")
 	var rune_state: Dictionary = main.emblem_library.get_inventory_item(&"interaction_light")
 	var rune_definition := _inventory_definition(main, &"光贴纸", rune_state)
 	var rune := {"kind": &"emblem_library", "emblem_id": &"光贴纸", "definition": rune_definition}
-	var original := owned.card_data.runes[0]
+	var original := owned.get_effective_rune(0)
+	var shared_definition_rune := owned.card_data.runes[0]
 	var revealed := owned.rune_revealed[0]
 	var slot_definitions: Array[Dictionary] = CardSlotLayout.get_slot_definitions(owned.card_data, owned)
 	var wound_position := Vector2.ZERO
@@ -96,14 +170,17 @@ func _run() -> void:
 	var expected_rune_landing: Vector2 = main._inspection_card_view.rune_area_position + (main._inspection_card_view.rune_slot_size - Vector2(27, 27)) * 0.5
 	check(main._can_drop_emblem_on_inspection_card(main._inspection_card_view, Vector2(19, 119), rune) and rune_landing.position.is_equal_approx(expected_rune_landing), "纹章槽全部占用时，空符文位仍可投放元素贴纸且虚影指向符文区")
 	check(main._drop_emblem_on_inspection_card(main._inspection_card_view, Vector2(19, 119), rune), "符文贴纸可以贴到元素槽")
-	check(owned.get_effective_rune(0) == CardData.ElementType.LIGHT and owned.card_data.runes[0] == original, "符文替换只更新实例、不改底层原符文")
+	check(owned.get_effective_rune(0) == CardData.ElementType.LIGHT and owned.card_data.runes[0] == shared_definition_rune, "符文替换只更新实例、不改底层原符文")
 	check(owned.emblem_slots == full_emblems and owned.wound_slots == original_wounds, "符文贴纸不会占用纹章槽或伤势槽")
 	check(not main._can_drop_emblem_on_inspection_card(main._inspection_card_view, Vector2(19, 119), rune) and not main._drop_emblem_on_inspection_card(main._inspection_card_view, Vector2(19, 119), rune), "同一位置不能覆盖已有符文贴纸")
 	owned.emblem_slots.assign(original_emblems)
 	var wound_index: int = main._find_empty_wound_slot_at(wound_position)
 	check(main._drop_emblem_on_inspection_card(main._inspection_card_view, wound_position, wound_item) and wound_index >= 0 and not owned.wound_slots[wound_index].is_empty() and owned.emblem_slots == original_emblems, "伤势只写入伤势槽，不写入纹章槽")
 	check(main.emblem_library.get_inventory_item(StringName(String(wound_state.instance_id))).is_empty(), "伤势粘贴后从同一工具箱移除真实实例")
-	check(not main._can_drop_emblem_on_inspection_card(main._inspection_card_view, wound_position, scraper), "贴纸刮刀不会绕过伤势解锁移除伤势")
+	var scrapers_before_wound: int = main.scraper_count
+	var wound_pointer := _pointer_for_blade_center(main._inspection_surface, scraper_data, wound_position + Vector2(8, 8))
+	await _click(wound_pointer)
+	check(owned.wound_slots[wound_index].is_empty() and main.scraper_count == scrapers_before_wound - 1, "真实刀头点击移除伤势并消耗一把刮刀")
 	check(not main._can_drop_emblem_on_inspection_card(main._inspection_card_view, wound_position, wound_item), "已占用的伤势槽拒绝再次投放")
 	owned.wound_slots.assign(original_wounds)
 	main._on_developer_console_command_submitted("wound add 中毒Ⅰ")
@@ -124,10 +201,18 @@ func _run() -> void:
 		and restored_wound.get("grid_y") == saved_wound.get("grid_y"),
 		"JSON保存再读取保留伤势实例身份、类型、等级与占格坐标"
 	)
-	check(main._drop_emblem_on_inspection_card(main._inspection_card_view, Vector2(19, 119), scraper), "刮刀可刮符文贴纸")
-	check(owned.get_effective_rune(0) == original and owned.rune_revealed[0] == revealed, "刮下恢复底层符文及原揭晓状态")
+	var rune_center: Vector2 = main._inspection_card_view.rune_area_position + main._inspection_card_view.rune_slot_size * 0.5
+	await _click(scraper_control.get_global_rect().get_center())
+	var rune_pointer := _pointer_for_blade_center(main._inspection_surface, scraper_data, rune_center)
+	await _click(rune_pointer)
+	check(owned.get_effective_rune(0) == original and owned.rune_revealed[0] == revealed, "真实刀头移除符文贴纸后恢复底层符文及揭晓状态")
 	check(main.emblem_library.get_inventory_item(&"interaction_light").is_empty(), "刮下符文贴纸也不会返还工作包")
-	check(not main._can_drop_emblem_on_inspection_card(main._inspection_card_view, Vector2(19, 119), scraper), "原生符文不可刮除")
+	var exit_scraper := InputEventKey.new()
+	exit_scraper.keycode = KEY_ESCAPE
+	exit_scraper.pressed = true
+	root.push_input(exit_scraper, true)
+	await process_frame
+	check(not main._rune_scraper_mode, "Esc退出刮刀模式后恢复检视键盘操作")
 	check(RuneStickerStyle.get_texture_by_id(&"万能贴纸").get_size() == Vector2(27, 27), "七符文素材保持原生27像素")
 	check(RuneStickerStyle.get_animation(0).size() == 14, "GIF保留全部14帧")
 	if "--capture" in OS.get_cmdline_user_args():

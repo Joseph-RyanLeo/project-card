@@ -1,0 +1,7 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/ui/CardView.tscn" id="1_card"]
+[ext_resource type="Script" path="res://scripts/ui/shop_card_view.gd" id="2_shop"]
+
+[node name="ShopCardView" instance=ExtResource("1_card")]
+script = ExtResource("2_shop")

@@ -346,10 +346,19 @@ func get_active_rune_slots() -> Array[Dictionary]:
 		var key := _rune_slot_key(card, rune_index)
 		if not masked_rune_slots.has(key):
 			var active_slot := slot.duplicate(true)
-			if runtime_rune_overrides.has(key):
+			if bool(active_slot.get("hidden", false)):
+				active_slot["element"] = -1
+			elif runtime_rune_overrides.has(key):
 				active_slot["element"] = int(runtime_rune_overrides[key])
 			result.append(active_slot)
 	return result
+
+
+func has_active_rune_slots() -> bool:
+	for slot: Dictionary in get_active_rune_slots():
+		if not bool(slot.get("hidden", false)):
+			return true
+	return false
 
 
 func get_active_rune_stat_bonus(stat: StringName) -> int:
@@ -376,7 +385,7 @@ func get_runtime_rune_overrides_by_card() -> Dictionary:
 		var card := slot.get("card") as CardData
 		var rune_index := int(slot.get("rune_index", -1))
 		var key := _rune_slot_key(card, rune_index)
-		if not runtime_rune_overrides.has(key):
+		if bool(slot.get("hidden", false)) or not runtime_rune_overrides.has(key):
 			continue
 		var values: Dictionary = {}
 		values.assign(result.get(card, {}))
@@ -413,7 +422,7 @@ func mask_rune_slot(card: CardData, rune_index: int) -> bool:
 	if masked_rune_slots.has(key):
 		return false
 	for slot: Dictionary in get_active_rune_slots():
-		if slot.get("card") == card and int(slot.get("rune_index", -1)) == rune_index:
+		if not bool(slot.get("hidden", false)) and slot.get("card") == card and int(slot.get("rune_index", -1)) == rune_index:
 			var armor_before := get_active_rune_stat_bonus(&"base_armor")
 			masked_rune_slots[key] = {
 				"card": card,

@@ -637,7 +637,8 @@ func _refresh_editor_summary(side_key: String) -> void:
 	var pattern := squad.get_rune_pattern_result()
 	var rune_names: Array[String] = []
 	for rune: CardData.ElementType in pattern.visible_runes:
-		rune_names.append(ELEMENT_NAMES[rune])
+		if int(rune) >= 0:
+			rune_names.append(ELEMENT_NAMES[int(rune)])
 	(controls["summary"] as Label).text = "牌型：%s　可见：%s　堆叠：%d 卡" % [pattern.get_pattern_name(), "".join(rune_names) if not rune_names.is_empty() else "无", squad.get_card_count()]
 	var effect_id := StringName(spec.get("effect_card", BattleLabEffectLibrary.NONE))
 	(controls["effect_description"] as Label).text = BattleLabEffectLibrary.get_description(effect_id)

@@ -1,0 +1,130 @@
+{
+  "_说明": "D2-7首批普通商店运行时配置。价格、概率与Demo贴纸开放范围集中于此，不在Main重复硬编码。",
+  "merchant_id": "ordinary",
+  "allowed_pack_ids": [
+    "ash_ledger"
+  ],
+  "excluded_pack_ids": [
+    "labyrinth"
+  ],
+  "card_rarity_weights": {
+    "I": 75,
+    "II": 20,
+    "III": 4,
+    "IV": 1,
+    "V": 0
+  },
+  "sticker_rarity_weights": {
+    "I": 85,
+    "II": 13,
+    "III": 2,
+    "V": 0
+  },
+  "sticker_unlocks": {
+    "water": true,
+    "wood": true,
+    "fire": true,
+    "light": true,
+    "dark": true,
+    "universal": true,
+    "chaos": true
+  },
+  "card_pack_sizes": {
+    "small": 3,
+    "large": 5
+  },
+  "card_pack_prices": {
+    "small": 12,
+    "large": 18
+  },
+  "large_pack_guarantee_minimum_rarity": "II",
+  "empty_rarity_pool_policy": "renormalize_nonempty",
+  "visible_card_prices": {
+    "I": 4,
+    "II": 8,
+    "III": 12,
+    "IV": 20,
+    "V": 50
+  },
+  "hidden_card_rarity_hint_prices": {
+    "I": 2,
+    "II": 5,
+    "III": 10,
+    "IV": 16,
+    "V": 40
+  },
+  "hidden_card_other_hint_price": 8,
+  "card_sale": {
+    "base_prices": {
+      "I": 1,
+      "II": 2,
+      "III": 4,
+      "IV": 8,
+      "V": 16
+    },
+    "sticker_bonus": 1,
+    "revealed_rune_bonus": 1,
+    "wound_penalty": 1,
+    "minimum_price": 1
+  },
+  "sticker_pack": {
+    "price": 15,
+    "sticker_count": 5
+  },
+  "scraper": {
+    "always_available": true,
+    "price": 2,
+    "starting_count": 0,
+    "unlimited_purchases": true
+  },
+  "tear_service": {
+    "always_available": true,
+    "prices_by_return_count": {
+      "1": 2,
+      "2": 5,
+      "3": 10
+    }
+  },
+  "refresh": {
+    "initial_price": 1,
+    "price_multiplier": 2
+  },
+  "temporary_offer_weights": {
+    "_说明": "用户授权暂定。暗单八类提示对当前有合法候选的类型采用相同权重；不适用的提示先排除。非稀有度提示沿用统一价格，轮播不影响报价或随机状态。",
+    "card_pack_count": {
+      "3": 50,
+      "4": 50
+    },
+    "card_pack_size": {
+      "small": 60,
+      "large": 40
+    },
+    "sticker_pack_count": {
+      "1": 50,
+      "2": 50
+    },
+    "single_card_count": {
+      "0": 50,
+      "1": 50
+    },
+    "single_card_visibility": {
+      "visible": 50,
+      "hidden": 50
+    },
+    "hidden_card_hint": {
+      "rarity": 1,
+      "action_type": 1,
+      "race": 1,
+      "card_type": 1,
+      "spell_trigger_kind": 1,
+      "spell_type": 1,
+      "equipment_type": 1,
+      "resource_type": 1
+    }
+  },
+  "save": {
+    "slot_count": 1,
+    "continue_game_entry": true
+  },
+  "_范围说明": "仅限制首批商店与卡包，不删除已有迷宫资源、装备、默认开发收藏、关卡自动资源或战斗奖励。普通卡包排除V；V单卡价格预留，当前灰烬证册没有V级。刮刀2金币为本商人的固定价，不按刷新随机定价。Demo开局刮刀数暂设0，不代表最终正式数值。sticker_unlocks集中控制本Demo可抽到的贴纸，后续接入局外解锁时再由进度覆盖。"
+}

@@ -442,6 +442,8 @@ func _effective_rune_elements(state: BattleSquadState) -> Array[int]:
 	if state == null:
 		return result
 	for slot: Dictionary in state.get_active_rune_slots():
+		if bool(slot.get("hidden", false)):
+			continue
 		result.append(int(slot.get("element", -1)))
 	return result
 
@@ -451,6 +453,8 @@ func _active_rune_slots(state: BattleSquadState) -> Array[Dictionary]:
 	if state == null:
 		return result
 	for slot: Dictionary in state.get_active_rune_slots():
+		if bool(slot.get("hidden", false)):
+			continue
 		var card := slot.get("card") as CardData
 		result.append({
 			"card_id": String(card.id) if card != null else "",

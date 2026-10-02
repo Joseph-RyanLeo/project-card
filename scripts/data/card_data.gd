@@ -101,6 +101,7 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export var is_derived: bool = false # 是否为战斗衍生卡；死亡触发与奖励池会读取
 @export var card_type: CardType = CardType.MINION # 卡牌大类，当前 Demo 主要使用随从
 @export var action_type: ActionType = ActionType.MELEE # 行动图标与行动方式
+@export var acquisition_action_types: Array[ActionType] = [] # 获得时可随机确定行动方式的候选；为空时沿用 action_type
 @export_range(-1, 4, 1) var preferred_target_action_type: int = -1 # 普通攻击明确优先寻找的敌方行动类型；-1 表示没有额外目标偏好
 @export_range(0, MAXIMUM_BASE_VALUE, 1) var base_value: int = 1: # 行动的基础数值
 	set(value):

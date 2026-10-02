@@ -594,7 +594,10 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 			var masked_slots: Array[Dictionary] = []
 			var mask_count := maxi(roundi(instance.applied_value), 0)
 			for _mask_index: int in mask_count:
-				var active_slots := target.get_active_rune_slots()
+				var active_slots: Array[Dictionary] = []
+				for active_slot: Dictionary in target.get_active_rune_slots():
+					if not bool(active_slot.get("hidden", false)):
+						active_slots.append(active_slot)
 				if active_slots.is_empty():
 					break
 				var selected_index := _random.randi_range(0, active_slots.size() - 1)
@@ -900,7 +903,7 @@ func _resolve_targets(
 			if source_state != null and not source_state.alive:
 				result.append(source_state)
 		BattleEffectDefinition.Target.SOURCE_ACTIVE_RUNE:
-			if source_state != null and not source_state.get_active_rune_slots().is_empty():
+			if source_state != null and source_state.has_active_rune_slots():
 				result.append(source_state)
 		BattleEffectDefinition.Target.ALL_FRIENDLY_COMBAT_UNITS:
 			if source_state != null: result.assign(controller.get_living_states(source_state.side))
@@ -964,7 +967,7 @@ func _is_target_still_legal(
 	if definition.target == BattleEffectDefinition.Target.SOURCE_DEAD_CARD:
 		return target == source.state and not target.alive and _all_conditions_pass(definition, source, target, event)
 	if definition.target == BattleEffectDefinition.Target.SOURCE_ACTIVE_RUNE:
-		return target == source.state and not target.get_active_rune_slots().is_empty() and _all_conditions_pass(definition, source, target, event)
+		return target == source.state and target.has_active_rune_slots() and _all_conditions_pass(definition, source, target, event)
 	if definition.trigger == BattleEffectDefinition.Trigger.SOURCE_HEALTH_LOST_ACCUMULATED:
 		return target == source.state and _all_conditions_pass(definition, source, target, event)
 	if not target.alive or target.current_health <= 0.0:

@@ -1,0 +1,463 @@
+{
+  "hardware": {
+    "collected_at": "2026-10-02T17:37:30.1975590+08:00",
+    "powershell": "5.1.19041.6456",
+    "os": {
+      "name": "Microsoft Windows 10 专业版",
+      "version": "10.0.19045",
+      "build": "19045",
+      "architecture": "64 位",
+      "total_ram_mb": 16324,
+      "free_ram_mb_before_game": 10339
+    },
+    "cpu": [
+      {
+        "name": "Intel(R) Core(TM) i5-7500 CPU @ 3.40GHz",
+        "cores": 4,
+        "logical_processors": 4,
+        "max_clock_mhz": 3401
+      }
+    ],
+    "gpu": [
+      {
+        "name": "NVIDIA GeForce GTX 1050 Ti",
+        "driver_version": "31.0.15.2698",
+        "reported_vram_mb": 4095,
+        "desktop_width": 1920,
+        "desktop_height": 1080,
+        "desktop_refresh_hz": 60
+      }
+    ],
+    "game": {
+      "filename": "PCD V0.2.70（商店初版）.exe",
+      "sha256": "D0B4E28EA0C98D76FB0F1BD74ED749790AC493F2AE89A74CB65DF571012F4C5E",
+      "bytes": 134424392,
+      "modified_at": "2026-10-02T16:09:33.9430989+08:00",
+      "file_version": "1.0.0.0"
+    }
+  },
+  "session": {
+    "schema_version": 1,
+    "started_at": "2026-10-02T17:37:33.4507711+08:00",
+    "ended_at": "2026-10-02T17:53:46.0881557+08:00",
+    "game": "PCD V0.2.70（商店初版）.exe",
+    "exit_code": null,
+    "f10_file_count": 6,
+    "traces": [
+      {
+        "file": "battle-performance-2026-10-02_17-38-04.json",
+        "exported_at": "2026-10-02T17:38:04.2516840+08:00",
+        "sha256": "ADE2C118621A387B0A8422E8F541CEC2A51514081F1A2D89E752860C8ECBA134"
+      },
+      {
+        "file": "battle-performance-2026-10-02_17-45-31.json",
+        "exported_at": "2026-10-02T17:45:31.6201505+08:00",
+        "sha256": "7E8C19500E010A957124E283FC5F703881A2C9E5C341F5939C9F1AA804DF58B5"
+      },
+      {
+        "file": "battle-performance-2026-10-02_17-49-55.json",
+        "exported_at": "2026-10-02T17:49:56.0540657+08:00",
+        "sha256": "7D718E4D7E57CBC9E8F07A13F06ACC6AEF80E679DEF0E9176D9D145B21EDCE6B"
+      },
+      {
+        "file": "battle-performance-2026-10-02_17-50-43.json",
+        "exported_at": "2026-10-02T17:50:43.5650538+08:00",
+        "sha256": "DF001DC11A5004F7A9C41C7F0678A18A50F32E805985F81FBA1042A6B2922D08"
+      },
+      {
+        "file": "battle-performance-2026-10-02_17-51-34.json",
+        "exported_at": "2026-10-02T17:51:34.2565555+08:00",
+        "sha256": "A34D255FE4D3B4108CE4314670CE1D88EDF084A242818154940065BB798FBED7"
+      },
+      {
+        "file": "battle-performance-2026-10-02_17-53-23.json",
+        "exported_at": "2026-10-02T17:53:23.5093162+08:00",
+        "sha256": "95A027C43BA90BE0E3AE1DAB50B6E2D2535CAAE0C2DB1AE2887E43AE40E193C0"
+      }
+    ],
+    "requested_window": "1920x1080 window, set inside game",
+    "requested_steps": [
+      "idle",
+      "collection_pages",
+      "shop_pack_hover",
+      "minion_drag",
+      "equipment_drag",
+      "battle_start_running_end"
+    ],
+    "step_assignment": "用户按 README 顺序执行；实际步骤需要结合日志份数与反馈核对，不自动猜测。"
+  },
+  "segments": [
+    {
+      "file": "performance/battle-performance-2026-10-02_17-38-04.json",
+      "suggested_step": "空闲（含启动/恢复）",
+      "cumulative_prefix_removed": 0,
+      "sample_count": 1484,
+      "engine_delta_over_33ms": 2,
+      "metrics": {
+        "frame_ms": {
+          "count": 1484,
+          "mean": 16.794972596585836,
+          "p50": 16.6666666666667,
+          "p95": 16.6666666666667,
+          "max": 149.999999999999
+        },
+        "drag_preview_ms": {
+          "count": 1484,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "release_exact_snap_ms": {
+          "count": 1484,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "battle_advance_ms": {
+          "count": 1484,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "state_sync_ms": {
+          "count": 1484,
+          "mean": 0.0073247978436657675,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 10.87
+        },
+        "effect_dispatch_ms": {
+          "count": 1484,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "draw_calls": {
+          "count": 1484,
+          "mean": 291.80323450134773,
+          "p50": 292.0,
+          "p95": 292.0,
+          "max": 292.0
+        }
+      },
+      "active_drag": null,
+      "active_battle": null
+    },
+    {
+      "file": "performance/battle-performance-2026-10-02_17-45-31.json",
+      "suggested_step": "收藏翻页",
+      "cumulative_prefix_removed": 1484,
+      "sample_count": 8449,
+      "engine_delta_over_33ms": 25,
+      "metrics": {
+        "frame_ms": {
+          "count": 8449,
+          "mean": 17.038985323706953,
+          "p50": 16.666,
+          "p95": 16.6666666666667,
+          "max": 150.0
+        },
+        "drag_preview_ms": {
+          "count": 8449,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "release_exact_snap_ms": {
+          "count": 8449,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "battle_advance_ms": {
+          "count": 8449,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "state_sync_ms": {
+          "count": 8449,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "effect_dispatch_ms": {
+          "count": 8449,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "draw_calls": {
+          "count": 8449,
+          "mean": 256.60811930405964,
+          "p50": 297.0,
+          "p95": 312.0,
+          "max": 440.0
+        }
+      },
+      "active_drag": null,
+      "active_battle": null
+    },
+    {
+      "file": "performance/battle-performance-2026-10-02_17-49-55.json",
+      "suggested_step": "商店进入与卡包悬停",
+      "cumulative_prefix_removed": 9933,
+      "sample_count": 3056,
+      "engine_delta_over_33ms": 23,
+      "metrics": {
+        "frame_ms": {
+          "count": 3056,
+          "mean": 17.587436845549746,
+          "p50": 16.666,
+          "p95": 16.6666666666667,
+          "max": 148.053999999983
+        },
+        "drag_preview_ms": {
+          "count": 3056,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "release_exact_snap_ms": {
+          "count": 3056,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "battle_advance_ms": {
+          "count": 3056,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "state_sync_ms": {
+          "count": 3056,
+          "mean": 2.058580170157068,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 3256.285
+        },
+        "effect_dispatch_ms": {
+          "count": 3056,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "draw_calls": {
+          "count": 3056,
+          "mean": 288.43553664921467,
+          "p50": 296.0,
+          "p95": 393.0,
+          "max": 446.0
+        }
+      },
+      "active_drag": null,
+      "active_battle": null
+    },
+    {
+      "file": "performance/battle-performance-2026-10-02_17-50-43.json",
+      "suggested_step": "离店与随从拖动",
+      "cumulative_prefix_removed": 12989,
+      "sample_count": 2840,
+      "engine_delta_over_33ms": 0,
+      "metrics": {
+        "frame_ms": {
+          "count": 2840,
+          "mean": 16.662657159624423,
+          "p50": 16.666,
+          "p95": 16.6666666666667,
+          "max": 16.6666666666667
+        },
+        "drag_preview_ms": {
+          "count": 2840,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "release_exact_snap_ms": {
+          "count": 2840,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "battle_advance_ms": {
+          "count": 2840,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "state_sync_ms": {
+          "count": 2840,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "effect_dispatch_ms": {
+          "count": 2840,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "draw_calls": {
+          "count": 2840,
+          "mean": 395.9119718309859,
+          "p50": 391.0,
+          "p95": 426.0,
+          "max": 429.0
+        }
+      },
+      "active_drag": null,
+      "active_battle": null
+    },
+    {
+      "file": "performance/battle-performance-2026-10-02_17-51-34.json",
+      "suggested_step": "装备拖动",
+      "cumulative_prefix_removed": 15829,
+      "sample_count": 3030,
+      "engine_delta_over_33ms": 1,
+      "metrics": {
+        "frame_ms": {
+          "count": 3030,
+          "mean": 16.69631661166117,
+          "p50": 16.666,
+          "p95": 16.6666666666667,
+          "max": 94.720333333315
+        },
+        "drag_preview_ms": {
+          "count": 3030,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "release_exact_snap_ms": {
+          "count": 3030,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "battle_advance_ms": {
+          "count": 3030,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "state_sync_ms": {
+          "count": 3030,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "effect_dispatch_ms": {
+          "count": 3030,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "draw_calls": {
+          "count": 3030,
+          "mean": 412.1310231023102,
+          "p50": 421.0,
+          "p95": 425.0,
+          "max": 426.0
+        }
+      },
+      "active_drag": null,
+      "active_battle": null
+    },
+    {
+      "file": "performance/battle-performance-2026-10-02_17-53-23.json",
+      "suggested_step": "战斗开始/进行/结算",
+      "cumulative_prefix_removed": 18859,
+      "sample_count": 2079,
+      "engine_delta_over_33ms": 4,
+      "metrics": {
+        "frame_ms": {
+          "count": 2079,
+          "mean": 16.636896745230096,
+          "p50": 16.6666666666667,
+          "p95": 16.6666666666667,
+          "max": 147.949333333312
+        },
+        "drag_preview_ms": {
+          "count": 2079,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "release_exact_snap_ms": {
+          "count": 2079,
+          "mean": 0.0,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 0.0
+        },
+        "battle_advance_ms": {
+          "count": 2079,
+          "mean": 1.8936507936507936,
+          "p50": 0.0,
+          "p95": 7.302,
+          "max": 41.481
+        },
+        "state_sync_ms": {
+          "count": 2079,
+          "mean": 3.5852352092352096,
+          "p50": 0.0,
+          "p95": 5.14,
+          "max": 4779.461
+        },
+        "effect_dispatch_ms": {
+          "count": 2079,
+          "mean": 0.005733525733525734,
+          "p50": 0.0,
+          "p95": 0.0,
+          "max": 3.131
+        },
+        "draw_calls": {
+          "count": 2079,
+          "mean": 374.5055315055315,
+          "p50": 400.0,
+          "p95": 410.0,
+          "max": 431.0
+        }
+      },
+      "active_drag": null,
+      "active_battle": {
+        "count": 517,
+        "mean": 7.614893617021277,
+        "p50": 7.206,
+        "p95": 7.754,
+        "max": 41.481
+      }
+    }
+  ],
+  "notes": [
+    "步骤名称只是README顺序建议，需要用户确认；首次空闲段含启动/恢复。",
+    "frame_ms是引擎delta，不是屏幕呈现时间；原采样器window_size是内部1280x720画布。",
+    "battle_advance_ms包含state_sync_ms和effect_dispatch_ms，不能相加。",
+    "每秒进程统计无法分解几十毫秒的瞬时停顿；F10日志提供逐帧脚本数据。"
+  ]
+}

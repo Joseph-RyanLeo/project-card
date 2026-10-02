@@ -21,6 +21,8 @@ static func identify(
 	var result := RunePatternResult.new()
 	result.visible_runes.assign(visible_runes)
 	for rune: CardData.ElementType in visible_runes:
+		if int(rune) < 0:
+			continue
 		result.element_counts[rune] = int(result.element_counts.get(rune, 0)) + 1
 
 	var runs := _build_consecutive_runs(visible_runes)
@@ -74,10 +76,13 @@ static func identify_slots(slots: Array[Dictionary]) -> RunePatternResult:
 	var wildcard := -1
 	var candidates: Array[int] = []
 	for index: int in slots.size():
-		runes.append(int(slots[index].element) as CardData.ElementType)
+		if bool(slots[index].get("hidden", false)):
+			runes.append(-1 as CardData.ElementType)
+			continue
+		runes.append(int(slots[index].get("element", -1)) as CardData.ElementType)
 		if String(slots[index].get("sticker_id", "")) == "万能贴纸":
 			wildcard = index
-		elif not candidates.has(int(slots[index].element)):
+		elif int(slots[index].get("element", -1)) >= 0 and not candidates.has(int(slots[index].element)):
 			candidates.append(int(slots[index].element))
 	for element: int in 5:
 		if not candidates.has(element):
@@ -127,7 +132,7 @@ static func _find_runs_of_length(
 	# 只接受长度恰好相等的区段，四连不会同时充当三连。
 	var matching_runs: Array[Dictionary] = []
 	for run: Dictionary in runs:
-		if int(run["length"]) == expected_length:
+		if int(run["element"]) >= 0 and int(run["length"]) == expected_length:
 			matching_runs.append(run)
 	return matching_runs
 

@@ -16,6 +16,8 @@ func _run() -> void:
 	root.add_child(main)
 	await process_frame
 	await process_frame
+	main.scraper_count = 8
+	main.emblem_library.set_scraper_count(main.scraper_count)
 	main.emblem_library.return_sticker({"instance_id": &"click_torch", "emblem_id": &"火把"})
 	main.emblem_library.return_sticker({"instance_id": &"click_sword", "emblem_id": &"长剑"})
 	main.emblem_library.return_sticker({"instance_id": &"click_light", "emblem_id": &"光贴纸", "element": CardData.ElementType.LIGHT})
@@ -167,103 +169,54 @@ func _run() -> void:
 
 	await _click(scraper.get_global_rect().get_center())
 	_expect(
-		main._click_carry_data.get("kind") == &"sticker_scraper"
-		and main._click_carry_data.get("source_type") == &"inspection_library"
-		and is_equal_approx(
-			main._click_carry_preview.get_global_rect().size.x,
-			scraper.get_global_rect().size.x
-		)
-		and is_equal_approx(
-			main._click_carry_preview.get_global_rect().size.y,
-			scraper.get_global_rect().size.y
-		),
-		"真实点击刮刀携带预览与来源图标保持相同屏幕尺寸"
+		main._rune_scraper_mode
+		and main._click_carry_data.is_empty()
+		and main._click_carry_preview == null
+		and not root.gui_is_dragging(),
+		"真实点击刮刀进入行动模式且不启动携带预览或原生拖拽"
 	)
 	await _click(blank)
 	_expect(
-		main._click_carry_data.is_empty()
+		main._rune_scraper_mode
+		and main._click_carry_data.is_empty()
 		and main._click_carry_preview == null
 		and owned.emblem_slots.all(func(slot: Dictionary) -> bool: return slot.is_empty())
 		and owned.rune_stickers.all(func(slot: Dictionary) -> bool: return slot.is_empty()),
-		"点击空白无效区安全结束携带且不误删状态"
+		"行动模式点击空白无效区不误删贴纸或改变槽位"
 	)
-
-	await _click(scraper.get_global_rect().get_center())
 	var escape := InputEventKey.new()
 	escape.pressed = true
 	escape.keycode = KEY_ESCAPE
 	root.push_input(escape, true)
 	await process_frame
-	_expect(main._click_carry_data.is_empty() and main._click_carry_preview == null, "Esc取消会清理刮刀预览与携带状态")
-	var wound_entry: EmblemLibraryEntry
-	for entry: EmblemLibraryEntry in main.emblem_library._entries:
-		if String(entry.definition.get("status_kind", "emblem")) == "wound":
-			wound_entry = entry
-			break
-	await _click(wound_entry.get_global_rect().get_center())
-	_expect(
-		main._click_carry_data.get("status_kind") == "wound"
-		and main._click_carry_preview is TextureRect,
-		"伤势点击携带使用检视贴纸预览，不进入装备预览状态"
-	)
-	var wound_target := main._inspection_surface.get_global_transform_with_canvas() * (
-		main._inspection_surface.PADDING + _status_slot_center(owned, CardSlotLayout.Kind.WOUND, 0)
-	)
-	await _click(wound_target)
-	_expect(
-		not owned.wound_slots[0].is_empty()
-		and main._click_carry_data.is_empty()
-		and main._click_carry_preview == null,
-		"伤势松手后只提交伤势并安全清理贴纸预览"
-	)
-	await create_timer(0.24).timeout
-
-	var emblem_state: Dictionary = main.emblem_library.get_inventory_item(&"click_torch")
-	var emblem_definition := _inventory_definition(main, &"火把", emblem_state)
-	var emblem_data := {
-		"kind": &"emblem_library",
-		"emblem_id": emblem_definition.id,
-		"definition": emblem_definition,
-	}
-	var first_emblem_position := _status_slot_center(owned, CardSlotLayout.Kind.EMBLEM, 0)
-	_expect(
-		main._drop_emblem_on_inspection_card(main._inspection_card_view, first_emblem_position, emblem_data),
-		"建立真实刮刀回归用的已贴纹章"
-	)
-	await _click(scraper.get_global_rect().get_center())
-	var carry_data: Dictionary = main._click_carry_data.duplicate(true)
-	var target_global: Vector2 = (
-		main._inspection_surface.get_global_transform_with_canvas()
-		* (main._inspection_surface.PADDING + first_emblem_position)
-		- (carry_data.get("tip_offset", Vector2.ZERO) as Vector2)
-	)
-	await _click(target_global)
-	_expect(
-		owned.emblem_slots[0].is_empty()
-		and main.emblem_library.get_inventory_item(&"click_torch").is_empty()
-		and main._click_carry_data.is_empty(),
-		"真实点击落在已贴纹章时只刮除一次且不返还工作包"
-	)
-
+	_expect(not main._rune_scraper_mode and not main._escape_pause_menu.is_menu_open() and is_instance_valid(main._inspection_overlay) and main._click_carry_data.is_empty() and main._click_carry_preview == null, "Esc只退出刮刀模式、不关闭检视或打开暂停菜单")
+	var first_emblem_position: Vector2 = _first_empty_emblem_position(owned)
+	var first_emblem_index: int = main._find_empty_emblem_slot_at(first_emblem_position)
 	var emblem_entry: Control = _entry_for_id(main, &"长剑")
+	main.emblem_library.get_node("Scroll").ensure_control_visible(emblem_entry)
+	await process_frame
 	await _click(emblem_entry.get_global_rect().get_center())
 	await _click(blank)
 	_expect(
-		owned.emblem_slots[0].is_empty()
+		owned.emblem_slots[first_emblem_index].is_empty()
 		and not main._inspection_placement_in_progress
 		and main._click_carry_data.is_empty(),
 		"普通纹章落到非法区域会取消且不写入卡牌"
 	)
+	emblem_entry = _entry_for_id(main, &"长剑")
+	main.emblem_library.get_node("Scroll").ensure_control_visible(emblem_entry)
+	await process_frame
 	await _click(emblem_entry.get_global_rect().get_center())
+	_expect(main._click_carry_data.get("emblem_id") == &"长剑", "再次点击工具箱长剑会进入携带状态")
 	var empty_emblem_slot := first_emblem_position
 	var emblem_target := main._inspection_surface.get_global_transform_with_canvas() * (
 		main._inspection_surface.PADDING + empty_emblem_slot
 	)
 	await _click(emblem_target)
 	var emblem_flight: Polygon2D = main._inspection_placement_visual
-	var emblem_start_polygon := emblem_flight.polygon.duplicate()
+	var emblem_start_polygon := emblem_flight.polygon.duplicate() if is_instance_valid(emblem_flight) else PackedVector2Array()
 	_expect(
-		not owned.emblem_slots[0].is_empty()
+		not owned.emblem_slots[first_emblem_index].is_empty()
 		and main._inspection_placement_in_progress
 		and emblem_flight != null
 		and main._inspection_card_view.get_node("StatusSlotLayer").get_child_count() == 1,
@@ -298,7 +251,7 @@ func _run() -> void:
 	)
 	await _click(rune_target)
 	var rune_flight: Polygon2D = main._inspection_placement_visual
-	var rune_start_polygon := rune_flight.polygon.duplicate()
+	var rune_start_polygon := rune_flight.polygon.duplicate() if is_instance_valid(rune_flight) else PackedVector2Array()
 	_expect(
 		owned.rune_stickers[0].get("emblem_id", &"") == &"光贴纸"
 		and main._inspection_placement_in_progress
@@ -414,11 +367,12 @@ func _run() -> void:
 	main._inspection_surface.set_process(false)
 
 	await _click(scraper.get_global_rect().get_center())
+	_expect(main._rune_scraper_mode, "关闭检视前刮刀模式确实处于启用状态")
 	main._close_card_inspection(true)
 	await process_frame
-	_expect(main._click_carry_data.is_empty() and main._click_carry_preview == null, "携带中关闭检视会取消并清理，不执行来源强转")
+	_expect(not main._rune_scraper_mode and main._click_carry_data.is_empty() and main._click_carry_preview == null, "关闭检视会退出刮刀模式并清理路径，不执行来源强转")
 	await _click(scraper.get_global_rect().get_center())
-	_expect(main._click_carry_data.is_empty(), "关闭检视后不能残留或重复拾取旧刮刀数据")
+	_expect(not main._rune_scraper_mode and main._click_carry_data.is_empty(), "关闭检视后不能残留旧刮刀行动状态")
 
 	main.queue_free()
 	await process_frame
@@ -443,6 +397,25 @@ func _click(position: Vector2) -> void:
 	await process_frame
 
 
+func _pointer_for_blade_center(surface: InspectionCardSurface, data: Dictionary, card_point: Vector2) -> Vector2:
+	var transform := surface.get_global_transform_with_canvas()
+	var scale := transform.get_scale()
+	var offset := (data.get("hit_rect_offset", Vector2.ZERO) as Vector2) / scale
+	var hit_size := (data.get("hit_rect_size", Vector2.ZERO) as Vector2) / scale
+	var blade_center_offset := offset + hit_size * 0.5
+	var surface_point := surface.PADDING + card_point - blade_center_offset
+	for _iteration: int in 8:
+		var sample_point := surface_point + blade_center_offset
+		var projected := surface.card_point(sample_point)
+		var error := card_point - projected
+		if error.length() < 0.001:
+			break
+		var dx := surface.card_point(sample_point + Vector2.RIGHT) - projected
+		var dy := surface.card_point(sample_point + Vector2.DOWN) - projected
+		surface_point += Transform2D(dx, dy, Vector2.ZERO).affine_inverse() * error
+	return transform * surface_point
+
+
 func _move_mouse(position: Vector2) -> void:
 	var motion := InputEventMouseMotion.new()
 	motion.position = position
@@ -463,6 +436,16 @@ func _expect(condition: bool, message: String) -> void:
 	else:
 		failures += 1
 		push_error("FAIL: " + message)
+
+
+func _first_empty_emblem_position(owned: OwnedCard) -> Vector2:
+	for definition: Dictionary in CardSlotLayout.get_slot_definitions(owned.card_data, owned):
+		if int(definition.get("kind", -1)) != CardSlotLayout.Kind.EMBLEM:
+			continue
+		var index := int(definition.get("storage_index", -1))
+		if index >= 0 and index < owned.emblem_slots.size() and owned.emblem_slots[index].is_empty():
+			return (definition.get("position", Vector2.ZERO) as Vector2) + Vector2(7, 7)
+	return Vector2.INF
 
 
 func _status_slot_center(owned: OwnedCard, kind: int, storage_index: int) -> Vector2:

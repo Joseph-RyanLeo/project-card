@@ -46,6 +46,8 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	var main = display.main_screen
+	main.scraper_count = 2
+	main.emblem_library.set_scraper_count(main.scraper_count)
 	main.emblem_library.return_sticker({"instance_id": &"native_torch", "emblem_id": &"火把"})
 	main.emblem_library.return_sticker({"instance_id": &"native_light", "emblem_id": &"光贴纸", "element": CardData.ElementType.LIGHT})
 	input_viewport = display.internal_viewport
@@ -174,30 +176,25 @@ func _run() -> void:
 		await button(false)
 		check(not owned.emblem_slots[emblem_index].is_empty(), "倾斜中的卡牌接受原生拖拽粘贴")
 	var scraper = main.emblem_library._scraper
-	await motion(scraper.get_global_transform_with_canvas() * Vector2(20, 20))
+	await motion(scraper.get_global_rect().get_center())
 	await button(true)
-	await motion(pointer + Vector2(25, 2), true)
-	check(input_viewport.gui_is_dragging(), "刮刀可真实长按拿起")
-	if input_viewport.gui_is_dragging():
-		var data: Dictionary = input_viewport.gui_get_drag_data()
-		var preview := data.get("drag_visual") as TextureRect
-		check(
-			data.get("preview_size") == scraper.size
-			and data.get("preview_scale") == scraper.get_global_transform_with_canvas().get_scale()
-			and is_instance_valid(preview)
-			and preview.get_global_rect().size.is_equal_approx(scraper.get_global_rect().size),
-			"原生刮刀预览沿用来源局部尺寸与单次来源缩放"
-		)
-		var target_canvas: Vector2 = surface.get_global_transform_with_canvas() * (surface.PADDING + emblem_local) - data.tip_offset
-		await motion(target_canvas, true)
-		for iteration: int in 8:
-			var local: Vector2 = surface.get_global_transform_with_canvas().affine_inverse() * pointer
-			var error: Vector2 = emblem_local - surface.card_point(surface._tool_point(local, data))
-			await motion(pointer + error * surface.scale, true)
-		check(not owned.emblem_slots[emblem_index].is_empty(), "刀头经过贴纸不会提前刮下")
-		await button(false)
-		check(owned.emblem_slots[emblem_index].is_empty(), "松开时刀头命中才能刮下纹章")
-		check(main.emblem_library.get_inventory_item(&"native_torch").is_empty(), "长按刮下纹章后不返还工作包")
+	await button(false)
+	check(main._rune_scraper_mode and not input_viewport.gui_is_dragging(), "真实点击刮刀进入行动模式且不启动原生拖拽")
+	var scraper_count_before: int = main.scraper_count
+	var scrape_data: Dictionary = main._rune_scraper_drag_data.duplicate(true)
+	var removal_pointer := _pointer_for_blade_center(surface, scrape_data, emblem_local)
+	await motion(removal_pointer)
+	await button(true)
+	await button(false)
+	check(owned.emblem_slots[emblem_index].is_empty(), "真实点击刀头命中贴纸槽时完成移除")
+	check(main.emblem_library.get_inventory_item(&"native_torch").is_empty(), "移除纹章后不返还工作包")
+	check(main.scraper_count == scraper_count_before - 1, "合法贴纸移除即时只消耗一把刮刀")
+	var exit_scraper := InputEventKey.new()
+	exit_scraper.pressed = true
+	exit_scraper.keycode = KEY_ESCAPE
+	root.push_input(exit_scraper, true)
+	await process_frame
+	check(not main._rune_scraper_mode, "Esc真实退出刮刀行动模式并恢复贴纸输入")
 	await create_timer(0.22).timeout
 	var rune_entry: Control = _entry_for_id(main, &"光贴纸")
 	var rune_pickup := rune_entry.get_global_rect().get_center()
@@ -244,6 +241,25 @@ func _run() -> void:
 	await process_frame
 	print("Native sticker drag failures: ", failures)
 	quit(1 if failures else 0)
+
+
+func _pointer_for_blade_center(surface: InspectionCardSurface, data: Dictionary, card_point: Vector2) -> Vector2:
+	var transform := surface.get_global_transform_with_canvas()
+	var scale := transform.get_scale()
+	var offset := (data.get("hit_rect_offset", Vector2.ZERO) as Vector2) / scale
+	var hit_size := (data.get("hit_rect_size", Vector2.ZERO) as Vector2) / scale
+	var blade_center_offset := offset + hit_size * 0.5
+	var surface_point := surface.PADDING + card_point - blade_center_offset
+	for _iteration: int in 8:
+		var sample_point := surface_point + blade_center_offset
+		var projected := surface.card_point(sample_point)
+		var error := card_point - projected
+		if error.length() < 0.001:
+			break
+		var dx := surface.card_point(sample_point + Vector2.RIGHT) - projected
+		var dy := surface.card_point(sample_point + Vector2.DOWN) - projected
+		surface_point += Transform2D(dx, dy, Vector2.ZERO).affine_inverse() * error
+	return transform * surface_point
 
 
 func _entry_for_id(main, emblem_id: StringName) -> Control:

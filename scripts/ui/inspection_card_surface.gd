@@ -8,6 +8,7 @@ const TILT := 10.0 # 检视鼠标倾斜最大角度
 var card: CardView
 var viewport: SubViewport
 var effect: ShaderMaterial
+const FOLLOW_SPEED := 12.0 # 检视倾斜跟随鼠标的平滑速度
 var force := Vector2.ZERO
 var drop_handler: Callable
 var tooltip_handler: Callable
@@ -17,17 +18,7 @@ func setup(value: CardView, handler: Callable, tooltip: Callable) -> void:
 	card = value
 	drop_handler = handler
 	tooltip_handler = tooltip
-	size = card.card_size + PADDING * 2.0
-	viewport = SubViewport.new()
-	viewport.size = Vector2i(size)
-	viewport.transparent_bg = true
-	viewport.disable_3d = true
-	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	add_child(viewport)
-	card.get_parent().remove_child(card)
-	viewport.add_child(card)
-	card.position = PADDING
-	card.scale = Vector2.ONE
+	_setup_content(card, card.card_size)
 	_drop_preview = TextureRect.new()
 	_drop_preview.name = "InspectionStickerPreview"
 	_drop_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -38,6 +29,22 @@ func setup(value: CardView, handler: Callable, tooltip: Callable) -> void:
 	_drop_preview.z_index = 100
 	_drop_preview.visible = false
 	card.add_child(_drop_preview)
+
+func setup_art(value: Control) -> void:
+	_setup_content(value, value.size)
+
+func _setup_content(value: Control, content_size: Vector2) -> void:
+	size = content_size + PADDING * 2.0
+	viewport = SubViewport.new()
+	viewport.size = Vector2i(size)
+	viewport.transparent_bg = true
+	viewport.disable_3d = true
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(viewport)
+	value.reparent(viewport)
+	value.position = PADDING
+	value.scale = Vector2.ONE
+	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture = viewport.get_texture()
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	effect = ShaderMaterial.new()
@@ -59,7 +66,7 @@ func _process(delta: float) -> void:
 	var target := Vector2.ZERO
 	if Rect2(Vector2.ZERO, size).has_point(pointer):
 		target = (pointer / size - Vector2(0.5, 0.5)) * 2.0
-	force = force.lerp(target, 1.0 - exp(-12.0 * delta))
+	force = force.lerp(target, 1.0 - exp(-FOLLOW_SPEED * delta))
 	effect.set_shader_parameter("pointer_force", force)
 
 func card_point(point: Vector2) -> Vector2:
@@ -74,6 +81,8 @@ func card_point(point: Vector2) -> Vector2:
 	return sample_uv * size - PADDING
 
 func _can_drop_data(point: Vector2, data: Variant) -> bool:
+	if not drop_handler.is_valid():
+		return false
 	var context := _drop_context(point, data)
 	var legal := bool(drop_handler.call(&"can_drop", card, context.point, context.data))
 	if legal:
@@ -83,6 +92,8 @@ func _can_drop_data(point: Vector2, data: Variant) -> bool:
 	return legal
 
 func _drop_data(point: Vector2, data: Variant) -> void:
+	if not drop_handler.is_valid():
+		return
 	var context := _drop_context(point, data)
 	clear_drop_preview()
 	drop_handler.call(&"animate_drop", card, context.point, context.data)
@@ -118,31 +129,8 @@ func _update_drop_preview(point: Vector2, data: Dictionary) -> void:
 	_drop_preview.visible = _drop_preview.texture != null
 
 func _drop_context(point: Vector2, data: Variant) -> Dictionary:
-	var adjusted_point := _tool_point(point, data)
 	var adjusted_data: Dictionary = data.duplicate() if data is Dictionary else {}
-	if data is Dictionary and data.get("kind") == &"sticker_scraper":
-		var surface_scale := get_global_transform_with_canvas().get_scale()
-		var offset := (data.get("hit_rect_offset", Vector2.ZERO) as Vector2) / surface_scale
-		var hit_size := (data.get("hit_rect_size", Vector2.ZERO) as Vector2) / surface_scale
-		var corners := [
-			card_point(point + offset),
-			card_point(point + offset + Vector2(hit_size.x, 0)),
-			card_point(point + offset + hit_size),
-			card_point(point + offset + Vector2(0, hit_size.y)),
-		]
-		var min_point := corners[0] as Vector2
-		var max_point := min_point
-		for corner_value: Variant in corners:
-			var corner := corner_value as Vector2
-			min_point = min_point.min(corner)
-			max_point = max_point.max(corner)
-		adjusted_data["_inspection_hit_rect"] = Rect2(min_point, max_point - min_point)
-	return {"point": card_point(adjusted_point), "data": adjusted_data}
-
-func _tool_point(point: Vector2, data: Variant) -> Vector2:
-	if data is Dictionary and data.get("kind") == &"sticker_scraper":
-		return point + (data.get("tip_offset", Vector2.ZERO) as Vector2) / get_global_transform_with_canvas().get_scale()
-	return point
+	return {"point": card_point(point), "data": adjusted_data}
 
 func _get_tooltip(point: Vector2) -> String:
 	return tooltip_handler.call(card_point(point)) if tooltip_handler.is_valid() else ""
