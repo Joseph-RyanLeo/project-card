@@ -1,0 +1,3318 @@
+{
+  "stable": {
+    "修复前": {
+      "失败": 0,
+      "显示服务": "headless",
+      "环境": {
+        "build": "steam",
+        "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+        "hex": 263938,
+        "major": 4,
+        "minor": 7,
+        "patch": 2,
+        "status": "stable",
+        "string": "4.7.2-stable (steam)",
+        "timestamp": 0
+      },
+      "负载": [
+        {
+          "场景": "弹道密集",
+          "带手铃": false,
+          "帧p95_ms": 38.968,
+          "帧中位_ms": 17.497,
+          "帧最大_ms": 81.153,
+          "弹道次数": 524,
+          "换位次数": 0,
+          "效果节点峰值": 241,
+          "规则p95_ms": 28.564,
+          "规则指纹": "32505f682b567049672120b0c85d91d4ba8d985e22d45f04881c20163bfff901",
+          "规则路径": {
+            "_apply_effect_event": {
+              "calls": 456,
+              "max_us": 3104,
+              "total_us": 294221
+            },
+            "_get_next_event_delay": {
+              "calls": 511,
+              "max_us": 1118,
+              "total_us": 198146
+            },
+            "_resolve_projectile_impact": {
+              "calls": 456,
+              "max_us": 3312,
+              "total_us": 322404
+            },
+            "_resolve_ready_batch": {
+              "calls": 279,
+              "max_us": 69279,
+              "total_us": 1203731
+            },
+            "recalculate_logical_layout": {
+              "calls": 343,
+              "max_us": 1154,
+              "total_us": 204740
+            }
+          },
+          "起始规则": [
+            [
+              1,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              2,
+              "player_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              3,
+              "player_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              4,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              5,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              6,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              7,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              8,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              9,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              10,
+              "player_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              11,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              12,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              13,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              14,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              15,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              16,
+              "enemy_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              17,
+              "enemy_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              18,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              19,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              20,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              21,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              22,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              23,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              24,
+              "enemy_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              25,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              26,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              27,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              28,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ]
+          ],
+          "起始随机": "-9190002244037547933",
+          "路径计时": {
+            "卡面状态同步": {
+              "calls": 240,
+              "max_us": 12651,
+              "total_us": 1527521
+            },
+            "弹道创建": {
+              "calls": 524,
+              "max_us": 1927,
+              "total_us": 60332
+            },
+            "换位卡槽同步": {
+              "calls": 64,
+              "max_us": 2042,
+              "total_us": 63117
+            },
+            "日志显示": {
+              "calls": 150,
+              "max_us": 1463,
+              "total_us": 127415
+            }
+          },
+          "采样帧数": 240,
+          "随机终态": "-3784527357949218698"
+        },
+        {
+          "场景": "弹道加换位",
+          "带手铃": false,
+          "帧p95_ms": 51.652,
+          "帧中位_ms": 19.763,
+          "帧最大_ms": 109.441,
+          "弹道次数": 587,
+          "换位次数": 160,
+          "效果节点峰值": 293,
+          "规则p95_ms": 30.587,
+          "规则指纹": "aa0413d4a542e39572342e2833554ce652269039b8ac315e0f6a5e91b878d17d",
+          "规则路径": {
+            "_apply_effect_event": {
+              "calls": 515,
+              "max_us": 1951,
+              "total_us": 317980
+            },
+            "_get_next_event_delay": {
+              "calls": 572,
+              "max_us": 6741,
+              "total_us": 229503
+            },
+            "_resolve_projectile_impact": {
+              "calls": 515,
+              "max_us": 1964,
+              "total_us": 348146
+            },
+            "_resolve_ready_batch": {
+              "calls": 340,
+              "max_us": 94642,
+              "total_us": 1379489
+            },
+            "recalculate_logical_layout": {
+              "calls": 564,
+              "max_us": 1644,
+              "total_us": 377868
+            }
+          },
+          "起始规则": [
+            [
+              1,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              2,
+              "player_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              3,
+              "player_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              4,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              5,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              6,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              7,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              8,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              9,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              10,
+              "player_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              11,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              12,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              13,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              14,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              15,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              16,
+              "enemy_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              17,
+              "enemy_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              18,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              19,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              20,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              21,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              22,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              23,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              24,
+              "enemy_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              25,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              26,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              27,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              28,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ]
+          ],
+          "起始随机": "-9190002244037547933",
+          "路径计时": {
+            "卡面状态同步": {
+              "calls": 240,
+              "max_us": 18463,
+              "total_us": 1538852
+            },
+            "弹道创建": {
+              "calls": 587,
+              "max_us": 903,
+              "total_us": 63618
+            },
+            "换位卡槽同步": {
+              "calls": 224,
+              "max_us": 3803,
+              "total_us": 224769
+            },
+            "日志显示": {
+              "calls": 155,
+              "max_us": 3074,
+              "total_us": 139449
+            }
+          },
+          "采样帧数": 240,
+          "随机终态": "-2083462001017978175"
+        }
+      ]
+    },
+    "修复后": {
+      "失败": 0,
+      "显示服务": "headless",
+      "环境": {
+        "build": "steam",
+        "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+        "hex": 263938,
+        "major": 4,
+        "minor": 7,
+        "patch": 2,
+        "status": "stable",
+        "string": "4.7.2-stable (steam)",
+        "timestamp": 0
+      },
+      "负载": [
+        {
+          "场景": "弹道密集",
+          "带手铃": false,
+          "帧p95_ms": 19.298,
+          "帧中位_ms": 9.234,
+          "帧最大_ms": 43.394,
+          "弹道次数": 524,
+          "换位次数": 0,
+          "效果节点峰值": 241,
+          "规则p95_ms": 12.401,
+          "规则指纹": "32505f682b567049672120b0c85d91d4ba8d985e22d45f04881c20163bfff901",
+          "规则路径": {
+            "_apply_effect_event": {
+              "calls": 456,
+              "max_us": 2326,
+              "total_us": 118267
+            },
+            "_get_next_event_delay": {
+              "calls": 511,
+              "max_us": 308,
+              "total_us": 37730
+            },
+            "_resolve_projectile_impact": {
+              "calls": 456,
+              "max_us": 2688,
+              "total_us": 144047
+            },
+            "_resolve_ready_batch": {
+              "calls": 279,
+              "max_us": 38204,
+              "total_us": 731845
+            },
+            "recalculate_logical_layout": {
+              "calls": 343,
+              "max_us": 1434,
+              "total_us": 200339
+            }
+          },
+          "起始规则": [
+            [
+              1,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              2,
+              "player_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              3,
+              "player_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              4,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              5,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              6,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              7,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              8,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              9,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              10,
+              "player_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              11,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              12,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              13,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              14,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              15,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              16,
+              "enemy_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              17,
+              "enemy_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              18,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              19,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              20,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              21,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              22,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              23,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              24,
+              "enemy_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              25,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              26,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              27,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              28,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ]
+          ],
+          "起始随机": "-9190002244037547933",
+          "路径计时": {
+            "卡面状态同步": {
+              "calls": 240,
+              "max_us": 8762,
+              "total_us": 757318
+            },
+            "弹道创建": {
+              "calls": 524,
+              "max_us": 1798,
+              "total_us": 54289
+            },
+            "换位卡槽同步": {
+              "calls": 64,
+              "max_us": 1451,
+              "total_us": 46143
+            },
+            "日志显示": {
+              "calls": 150,
+              "max_us": 2962,
+              "total_us": 119899
+            }
+          },
+          "采样帧数": 240,
+          "随机终态": "-3784527357949218698"
+        },
+        {
+          "场景": "弹道加换位",
+          "带手铃": false,
+          "帧p95_ms": 26.2,
+          "帧中位_ms": 9.821,
+          "帧最大_ms": 49.277,
+          "弹道次数": 587,
+          "换位次数": 160,
+          "效果节点峰值": 293,
+          "规则p95_ms": 12.737,
+          "规则指纹": "aa0413d4a542e39572342e2833554ce652269039b8ac315e0f6a5e91b878d17d",
+          "规则路径": {
+            "_apply_effect_event": {
+              "calls": 515,
+              "max_us": 873,
+              "total_us": 116040
+            },
+            "_get_next_event_delay": {
+              "calls": 572,
+              "max_us": 127,
+              "total_us": 41519
+            },
+            "_resolve_projectile_impact": {
+              "calls": 515,
+              "max_us": 1003,
+              "total_us": 143230
+            },
+            "_resolve_ready_batch": {
+              "calls": 340,
+              "max_us": 42612,
+              "total_us": 830270
+            },
+            "recalculate_logical_layout": {
+              "calls": 564,
+              "max_us": 987,
+              "total_us": 364741
+            }
+          },
+          "起始规则": [
+            [
+              1,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              2,
+              "player_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              3,
+              "player_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              4,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              5,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              6,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              7,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              8,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              9,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              10,
+              "player_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              11,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              12,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              13,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              14,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              15,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              16,
+              "enemy_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              17,
+              "enemy_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              18,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              19,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              20,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              21,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              22,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              23,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              24,
+              "enemy_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              25,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              26,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              27,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              28,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ]
+          ],
+          "起始随机": "-9190002244037547933",
+          "路径计时": {
+            "卡面状态同步": {
+              "calls": 240,
+              "max_us": 3770,
+              "total_us": 748955
+            },
+            "弹道创建": {
+              "calls": 587,
+              "max_us": 457,
+              "total_us": 54879
+            },
+            "换位卡槽同步": {
+              "calls": 224,
+              "max_us": 1430,
+              "total_us": 166313
+            },
+            "日志显示": {
+              "calls": 155,
+              "max_us": 1094,
+              "total_us": 118343
+            }
+          },
+          "采样帧数": 240,
+          "随机终态": "-2083462001017978175"
+        }
+      ]
+    },
+    "对照": [
+      {
+        "场景": "弹道密集",
+        "时间轴完全一致": true,
+        "随机终态一致": true,
+        "p95耗时降幅": 0.5048
+      },
+      {
+        "场景": "弹道加换位",
+        "时间轴完全一致": true,
+        "随机终态一致": true,
+        "p95耗时降幅": 0.4928
+      }
+    ]
+  },
+  "render": {
+    "修复前": {
+      "失败": 0,
+      "显示服务": "macOS",
+      "环境": {
+        "build": "steam",
+        "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+        "hex": 263938,
+        "major": 4,
+        "minor": 7,
+        "patch": 2,
+        "status": "stable",
+        "string": "4.7.2-stable (steam)",
+        "timestamp": 0
+      },
+      "负载": [
+        {
+          "场景": "弹道密集",
+          "带手铃": false,
+          "帧p95_ms": 44.651,
+          "帧中位_ms": 25.89,
+          "帧最大_ms": 90.459,
+          "弹道次数": 524,
+          "换位次数": 0,
+          "效果节点峰值": 241,
+          "规则p95_ms": 26.508,
+          "规则指纹": "32505f682b567049672120b0c85d91d4ba8d985e22d45f04881c20163bfff901",
+          "规则路径": {
+            "_apply_effect_event": {
+              "calls": 456,
+              "max_us": 3632,
+              "total_us": 300941
+            },
+            "_get_next_event_delay": {
+              "calls": 511,
+              "max_us": 566,
+              "total_us": 199702
+            },
+            "_resolve_projectile_impact": {
+              "calls": 456,
+              "max_us": 3787,
+              "total_us": 329956
+            },
+            "_resolve_ready_batch": {
+              "calls": 279,
+              "max_us": 59205,
+              "total_us": 1177474
+            },
+            "recalculate_logical_layout": {
+              "calls": 343,
+              "max_us": 930,
+              "total_us": 201353
+            }
+          },
+          "起始规则": [
+            [
+              1,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              2,
+              "player_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              3,
+              "player_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              4,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              5,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              6,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              7,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              8,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              9,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              10,
+              "player_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              11,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              12,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              13,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              14,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              15,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              16,
+              "enemy_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              17,
+              "enemy_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              18,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              19,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              20,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              21,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              22,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              23,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              24,
+              "enemy_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              25,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              26,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              27,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              28,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ]
+          ],
+          "起始随机": "-9190002244037547933",
+          "路径计时": {
+            "卡面状态同步": {
+              "calls": 240,
+              "max_us": 6715,
+              "total_us": 1474525
+            },
+            "弹道创建": {
+              "calls": 524,
+              "max_us": 1920,
+              "total_us": 60161
+            },
+            "换位卡槽同步": {
+              "calls": 64,
+              "max_us": 2695,
+              "total_us": 62280
+            },
+            "日志显示": {
+              "calls": 150,
+              "max_us": 1292,
+              "total_us": 139326
+            }
+          },
+          "采样帧数": 240,
+          "随机终态": "-3784527357949218698"
+        },
+        {
+          "场景": "弹道加换位",
+          "带手铃": false,
+          "帧p95_ms": 57.692,
+          "帧中位_ms": 26.932,
+          "帧最大_ms": 119.122,
+          "弹道次数": 571,
+          "换位次数": 160,
+          "效果节点峰值": 277,
+          "规则p95_ms": 25.98,
+          "规则指纹": "032b4ffea7c875e200b359914ab523d727ab54e8b7a7bc8cd774c2827c1b7784",
+          "规则路径": {
+            "_apply_effect_event": {
+              "calls": 502,
+              "max_us": 3196,
+              "total_us": 310100
+            },
+            "_get_next_event_delay": {
+              "calls": 554,
+              "max_us": 527,
+              "total_us": 214229
+            },
+            "_resolve_projectile_impact": {
+              "calls": 502,
+              "max_us": 3333,
+              "total_us": 340156
+            },
+            "_resolve_ready_batch": {
+              "calls": 322,
+              "max_us": 96161,
+              "total_us": 1380762
+            },
+            "recalculate_logical_layout": {
+              "calls": 546,
+              "max_us": 1095,
+              "total_us": 361329
+            }
+          },
+          "起始规则": [
+            [
+              1,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              2,
+              "player_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              3,
+              "player_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              4,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              5,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              6,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              7,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              8,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              9,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              10,
+              "player_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              11,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              12,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              13,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              14,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              15,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              16,
+              "enemy_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              17,
+              "enemy_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              18,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              19,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              20,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              21,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              22,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              23,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              24,
+              "enemy_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              25,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              26,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              27,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              28,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ]
+          ],
+          "起始随机": "-9190002244037547933",
+          "路径计时": {
+            "卡面状态同步": {
+              "calls": 240,
+              "max_us": 6419,
+              "total_us": 1480037
+            },
+            "弹道创建": {
+              "calls": 571,
+              "max_us": 1605,
+              "total_us": 62919
+            },
+            "换位卡槽同步": {
+              "calls": 224,
+              "max_us": 4053,
+              "total_us": 269465
+            },
+            "日志显示": {
+              "calls": 152,
+              "max_us": 1280,
+              "total_us": 141707
+            }
+          },
+          "采样帧数": 240,
+          "随机终态": "2960326013913095289"
+        }
+      ]
+    },
+    "修复后": {
+      "失败": 0,
+      "显示服务": "macOS",
+      "环境": {
+        "build": "steam",
+        "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+        "hex": 263938,
+        "major": 4,
+        "minor": 7,
+        "patch": 2,
+        "status": "stable",
+        "string": "4.7.2-stable (steam)",
+        "timestamp": 0
+      },
+      "负载": [
+        {
+          "场景": "弹道密集",
+          "带手铃": false,
+          "帧p95_ms": 30.839,
+          "帧中位_ms": 16.448,
+          "帧最大_ms": 64.088,
+          "弹道次数": 524,
+          "换位次数": 0,
+          "效果节点峰值": 241,
+          "规则p95_ms": 12.826,
+          "规则指纹": "32505f682b567049672120b0c85d91d4ba8d985e22d45f04881c20163bfff901",
+          "规则路径": {
+            "_apply_effect_event": {
+              "calls": 456,
+              "max_us": 2625,
+              "total_us": 134049
+            },
+            "_get_next_event_delay": {
+              "calls": 511,
+              "max_us": 154,
+              "total_us": 44339
+            },
+            "_resolve_projectile_impact": {
+              "calls": 456,
+              "max_us": 2793,
+              "total_us": 162574
+            },
+            "_resolve_ready_batch": {
+              "calls": 279,
+              "max_us": 39410,
+              "total_us": 757068
+            },
+            "recalculate_logical_layout": {
+              "calls": 343,
+              "max_us": 929,
+              "total_us": 199738
+            }
+          },
+          "起始规则": [
+            [
+              1,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              2,
+              "player_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              3,
+              "player_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              4,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              5,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              6,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              7,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              8,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              9,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              10,
+              "player_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              11,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              12,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              13,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              14,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              15,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              16,
+              "enemy_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              17,
+              "enemy_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              18,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              19,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              20,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              21,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              22,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              23,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              24,
+              "enemy_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              25,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              26,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              27,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              28,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ]
+          ],
+          "起始随机": "-9190002244037547933",
+          "路径计时": {
+            "卡面状态同步": {
+              "calls": 240,
+              "max_us": 3379,
+              "total_us": 761473
+            },
+            "弹道创建": {
+              "calls": 524,
+              "max_us": 1866,
+              "total_us": 59121
+            },
+            "换位卡槽同步": {
+              "calls": 64,
+              "max_us": 2481,
+              "total_us": 50322
+            },
+            "日志显示": {
+              "calls": 150,
+              "max_us": 1163,
+              "total_us": 133722
+            }
+          },
+          "采样帧数": 240,
+          "随机终态": "-3784527357949218698"
+        },
+        {
+          "场景": "弹道加换位",
+          "带手铃": false,
+          "帧p95_ms": 40.522,
+          "帧中位_ms": 17.907,
+          "帧最大_ms": 71.031,
+          "弹道次数": 586,
+          "换位次数": 160,
+          "效果节点峰值": 292,
+          "规则p95_ms": 13.248,
+          "规则指纹": "a09ee7dfa011d8051a99b6ae8b7fdd2a88d44acb3bf75e4221830052f69ca7cc",
+          "规则路径": {
+            "_apply_effect_event": {
+              "calls": 507,
+              "max_us": 1994,
+              "total_us": 134860
+            },
+            "_get_next_event_delay": {
+              "calls": 552,
+              "max_us": 167,
+              "total_us": 49020
+            },
+            "_resolve_projectile_impact": {
+              "calls": 508,
+              "max_us": 2138,
+              "total_us": 165597
+            },
+            "_resolve_ready_batch": {
+              "calls": 320,
+              "max_us": 50594,
+              "total_us": 857467
+            },
+            "recalculate_logical_layout": {
+              "calls": 544,
+              "max_us": 1270,
+              "total_us": 361638
+            }
+          },
+          "起始规则": [
+            [
+              1,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              2,
+              "player_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              3,
+              "player_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              4,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              5,
+              "player_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              6,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              7,
+              "player_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              8,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              9,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              10,
+              "player_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              11,
+              "player_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              12,
+              "player_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              13,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              14,
+              "player_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              15,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              16,
+              "enemy_front",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              17,
+              "enemy_front",
+              4,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              18,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              19,
+              "enemy_front",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              20,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              21,
+              "enemy_front",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ],
+            [
+              22,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_dancer"
+            ],
+            [
+              23,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_singer"
+            ],
+            [
+              24,
+              "enemy_back",
+              3,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "twilight_guard"
+            ],
+            [
+              25,
+              "enemy_back",
+              2,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "starmoon_leopard"
+            ],
+            [
+              26,
+              "enemy_back",
+              1,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "darkmoon_archer"
+            ],
+            [
+              27,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "moon_hawk"
+            ],
+            [
+              28,
+              "enemy_back",
+              0,
+              0.5,
+              [
+                4,
+                4,
+                4
+              ],
+              "shadowstep_assassin"
+            ]
+          ],
+          "起始随机": "-9190002244037547933",
+          "路径计时": {
+            "卡面状态同步": {
+              "calls": 240,
+              "max_us": 3785,
+              "total_us": 778840
+            },
+            "弹道创建": {
+              "calls": 586,
+              "max_us": 483,
+              "total_us": 63516
+            },
+            "换位卡槽同步": {
+              "calls": 224,
+              "max_us": 4168,
+              "total_us": 215541
+            },
+            "日志显示": {
+              "calls": 150,
+              "max_us": 1248,
+              "total_us": 138263
+            }
+          },
+          "采样帧数": 240,
+          "随机终态": "7833532607648863548"
+        }
+      ]
+    },
+    "对照": [
+      {
+        "场景": "弹道密集",
+        "时间轴完全一致": true,
+        "随机终态一致": true,
+        "p95耗时降幅": 0.3093
+      },
+      {
+        "场景": "弹道加换位",
+        "时间轴完全一致": false,
+        "随机终态一致": false,
+        "p95耗时降幅": 0.2976
+      }
+    ]
+  }
+}

@@ -5,11 +5,15 @@ extends RefCounted
 ## 本账本不决定伤势类型、纹章目标或进化配方；这些玩法系统以后只需把已经
 ## 确认的结果记录在这里，D2-5 的统一事务负责一次性提交或整体回滚。
 
+const KIND_RUNE_ELEMENT: StringName = &"rune_element"
+const KIND_DESTROY_CARD: StringName = &"destroy_card"
+const KIND_EQUIPMENT_DURABILITY: StringName = &"equipment_durability"
 const KIND_SET_WOUND_SLOT: StringName = &"set_wound_slot"
 const KIND_SET_EMBLEM_SLOT: StringName = &"set_emblem_slot"
 const KIND_ADD_EMBLEM_PROGRESS: StringName = &"add_emblem_progress"
 const KIND_CONSUME_EQUIPMENT: StringName = &"consume_equipment"
 const KIND_HEAL_RANDOM_SQUAD_WOUND: StringName = &"heal_random_squad_wound"
+const KIND_SET_PROGRESS: StringName = &"set_progress"
 const KIND_SET_WOUND_BATTLE_COUNTER: StringName = &"set_wound_battle_counter"
 
 var _entries: Array[Dictionary] = []
@@ -137,6 +141,13 @@ func record_wound_battle_counter(
 	return true
 
 
+func record_progress_value(owner: BattleEffectOwnerRef, key: StringName, value: int, effect_id: StringName, battle_id: StringName, logical_time_us: int = 0) -> bool:
+	if owner == null or owner.owned_card == null or key.is_empty() or value < 0: return false
+	for entry: Dictionary in _entries:
+		if entry.kind == KIND_SET_PROGRESS and entry.owned_card_instance_id == owner.owned_card_instance_id and entry.parameters.counter_key == key: return false
+	_append_entry(owner, KIND_SET_PROGRESS, effect_id, owner.runtime_id, logical_time_us, battle_id, {"counter_key": key, "counter_value": value})
+	return true
+
 func get_entries() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	for entry: Dictionary in _entries:
@@ -167,3 +178,13 @@ func _append_entry(
 		"logical_time_us": logical_time_us,
 		"parameters": parameters.duplicate(true),
 	})
+
+
+func record_content_change(owner: BattleEffectOwnerRef, kind: StringName, parameters: Dictionary, battle_id: StringName) -> bool:
+	if owner == null or owner.owned_card == null or owner.state.battle_summoned: return false
+	if kind not in [KIND_RUNE_ELEMENT, KIND_DESTROY_CARD, KIND_EQUIPMENT_DURABILITY]: return false
+	if kind != KIND_RUNE_ELEMENT:
+		for entry: Dictionary in _entries:
+			if entry.kind == kind and entry.owned_card_instance_id == owner.owned_card_instance_id: return false
+	_append_entry(owner, kind, kind, owner.runtime_id, 0, battle_id, parameters)
+	return true

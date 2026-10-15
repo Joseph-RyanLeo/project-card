@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/field_beer_machine.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"field_beer_machine"
+display_name = "随军啤酒机"
+pack_id = &"ironwall_inscription"
+effect_ids = Array[StringName]([&"field_beer_machine.effect.echo"])
+content_effect = &"field_beer_machine"
+cooldown_seconds = 6.0
+max_health = 1
+armor = 6
+runes = Array[int]([0, 1, 2])
+race_type = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-2, 24)
+effect_text = "回响：相邻矮人充能0.5秒。"

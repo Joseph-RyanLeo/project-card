@@ -13,8 +13,8 @@ const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 const ResourceHexLayout = preload("res://scripts/data/resource_hex_layout.gd")
 const ResourceBoardState = preload("res://scripts/data/resource_board_state.gd")
 
-const SCHEMA_VERSION: int = 8
-const STATUS_SLOT_MIGRATION_VERSION: int = 1
+const SCHEMA_VERSION: int = 9
+const STATUS_SLOT_MIGRATION_VERSION: int = 2
 const RUNE_SCRAPE_MIGRATION_VERSION: int = 2
 const ROW_KEYS: Array[StringName] = [
 	&"player_front",
@@ -47,6 +47,7 @@ func create_checkpoint(
 		"rune_scrape_migration_version": RUNE_SCRAPE_MIGRATION_VERSION,
 		"collection": encoded_collection,
 		"rows": encoded_rows,
+		"enemy_collection": _encode_collection_state(_capture_enemy_collection(rows)),
 		"battle_seed": battle_seed,
 		"pending_battle_instance_id": String(pending_battle_instance_id),
 		"next_battle_instance_sequence": maxi(next_battle_instance_sequence, 1),
@@ -136,7 +137,8 @@ func restore_checkpoint(
 		int(checkpoint.get("schema_version", 0)) < SCHEMA_VERSION
 		or int(checkpoint.get("status_slot_migration_version", 0)) < STATUS_SLOT_MIGRATION_VERSION,
 		int(checkpoint.get("schema_version", 0)),
-		rune_scrape_migration_version < RUNE_SCRAPE_MIGRATION_VERSION
+		rune_scrape_migration_version < RUNE_SCRAPE_MIGRATION_VERSION,
+		int(checkpoint.get("status_slot_migration_version", 0)) < STATUS_SLOT_MIGRATION_VERSION
 	)
 	if not bool(decoded_collection_result.get("success", false)):
 		return decoded_collection_result
@@ -146,10 +148,24 @@ func restore_checkpoint(
 	var validation_collection := OwnedCardCollection.new()
 	if not validation_collection.restore_state(decoded_collection):
 		return _failure("save_collection_invalid")
+	var enemy_collection := OwnedCardCollection.new()
+	var enemy_payload: Dictionary = checkpoint.get("enemy_collection", {})
+	if not enemy_payload.is_empty():
+		var migrate_enemy_slots := int(checkpoint.get("status_slot_migration_version", 0)) < STATUS_SLOT_MIGRATION_VERSION
+		var decoded_enemy := _decode_collection_state(
+			enemy_payload, card_registry, test_mode, migrate_enemy_slots,
+			int(checkpoint.get("schema_version", 0)),
+			rune_scrape_migration_version < RUNE_SCRAPE_MIGRATION_VERSION, migrate_enemy_slots
+		)
+		if not decoded_enemy.get("success", false) or not enemy_collection.restore_state(decoded_enemy.state):
+			return _failure("save_enemy_collection_invalid")
+	else:
+		enemy_collection = null
 	var validation_rows := _decode_rows(
 		checkpoint.get("rows", {}) as Dictionary,
 		validation_collection,
-		card_registry
+		card_registry,
+		enemy_collection
 	)
 	if not bool(validation_rows.get("success", false)):
 		return validation_rows
@@ -185,7 +201,8 @@ func restore_checkpoint(
 	var restored_rows := _decode_rows(
 		checkpoint.get("rows", {}) as Dictionary,
 		owned_collection,
-		card_registry
+		card_registry,
+		enemy_collection
 	)
 	if not bool(restored_rows.get("success", false)):
 		return restored_rows
@@ -250,9 +267,12 @@ func _encode_collection_state(collection_state: Dictionary) -> Dictionary:
 			"instance_id": String(instance_id),
 			"card_id": String(card_data.id),
 			"card_resource_path": card_data.resource_path,
+			"companion_source_id": String(state.get("companion_source_id", "")),
 			"acquisition_order": int(state.get("acquisition_order", -1)),
+			"is_new": bool(state.get("is_new", false)),
 			"resolved_action_type": int(state.get("resolved_action_type", -1)),
 			"resolved_runes": _json_safe(state.get("resolved_runes", [])),
+			"equipment_durability": int(state.get("equipment_durability", 0)),
 			"spell_durability": int(state.get("spell_durability", -1)),
 			"permanent_growth": _json_safe(state.get("permanent_growth", {})),
 			"crystallization_health_loss": maxi(int(state.get("crystallization_health_loss", 0)), 0),
@@ -307,7 +327,8 @@ func _decode_collection_state(
 	test_mode: bool = true,
 	migrate_status_slots: bool = true,
 	checkpoint_schema_version: int = SCHEMA_VERSION,
-	migrate_rune_reveals: bool = false
+	migrate_rune_reveals: bool = false,
+	migrate_minion_rune_slots: bool = false
 ) -> Dictionary:
 	if not data.get("cards", []) is Array:
 		return _failure("save_collection_cards_invalid")
@@ -328,11 +349,17 @@ func _decode_collection_state(
 			return _failure("save_card_identity_invalid")
 		var encoded_wound_slots := encoded.get("wound_slots", []) as Array
 		var encoded_emblem_slots := encoded.get("emblem_slots", []) as Array
-		var encoded_rune_revealed := encoded.get("rune_revealed", []) as Array
-		var encoded_rune_scrape_masks: Array = encoded.get("rune_scrape_masks", []) as Array
-		var encoded_resolved_runes: Array = encoded.get("resolved_runes", card_data.runes)
-		var stickers: Array = encoded.get("rune_stickers", OwnedCard._empty_slot_array(card_data.runes.size()))
-		if stickers.size() != card_data.runes.size():
+		var encoded_rune_revealed: Array = (encoded.get("rune_revealed", []) as Array).duplicate()
+		var encoded_rune_scrape_masks: Array = (encoded.get("rune_scrape_masks", []) as Array).duplicate()
+		var saved_rune_count := encoded_rune_revealed.size()
+		var expanding_runes := (
+			migrate_minion_rune_slots and card_data.card_type == CardData.CardType.MINION
+			and card_data.runes.size() == 3 and saved_rune_count in [1, 2]
+		)
+		var expected_saved_runes := saved_rune_count if expanding_runes else card_data.runes.size()
+		var encoded_resolved_runes: Array = (encoded.get("resolved_runes", card_data.runes.slice(0, expected_saved_runes)) as Array).duplicate()
+		var stickers: Array = (encoded.get("rune_stickers", OwnedCard._empty_slot_array(expected_saved_runes)) as Array).duplicate(true)
+		if stickers.size() != expected_saved_runes:
 			return _failure("save_rune_sticker_count_invalid")
 		for sticker: Variant in stickers:
 			if not sticker is Dictionary:
@@ -346,19 +373,28 @@ func _decode_collection_state(
 			or emblem_slots.size() != encoded_emblem_slots.size()
 		):
 			return _failure("save_card_slot_state_invalid")
-		if encoded_rune_revealed.size() != card_data.runes.size():
+		if encoded_rune_revealed.size() != expected_saved_runes:
 			return _failure("save_rune_revealed_count_invalid")
 		if not migrate_rune_reveals:
-			if encoded_rune_scrape_masks.size() != card_data.runes.size():
+			if encoded_rune_scrape_masks.size() != expected_saved_runes:
 				return _failure("save_rune_scrape_mask_count_invalid")
 			for mask_value: Variant in encoded_rune_scrape_masks:
 				if not mask_value is String or not OwnedCard.is_rune_scrape_mask_valid(mask_value as String):
 					return _failure("save_rune_scrape_mask_invalid")
-		if encoded_resolved_runes.size() != card_data.runes.size():
+		if encoded_resolved_runes.size() != expected_saved_runes:
 			return _failure("save_resolved_rune_count_invalid")
 		for rune_value: Variant in encoded_resolved_runes:
 			if not (rune_value is int or rune_value is float) or not is_finite(float(rune_value)) or float(rune_value) != floor(float(rune_value)) or int(rune_value) < 0 or int(rune_value) >= CardData.ElementType.size():
 				return _failure("save_resolved_rune_invalid")
+		if expanding_runes:
+			# 新补槽按实例身份固定元素，不使用本局随机流；反复载入不会重抽旧槽或新槽。
+			var migration_rng := RandomNumberGenerator.new()
+			migration_rng.seed = ("rune_slot_migration:%s" % instance_id).hash()
+			for _index: int in range(saved_rune_count, card_data.runes.size()):
+				encoded_resolved_runes.append(migration_rng.randi_range(0, CardData.ElementType.size() - 1))
+				encoded_rune_revealed.append(false)
+				encoded_rune_scrape_masks.append("")
+				stickers.append({})
 		var resolved_counts := CardSlotLayout.resolve_counts(card_data)
 		var saved_layout: Array = encoded.get("slot_layout", [])
 		var saved_layout_is_valid := CardSlotLayout.is_valid_layout(card_data, saved_layout)
@@ -442,9 +478,12 @@ func _decode_collection_state(
 		card_states.append({
 			"instance_id": instance_id,
 			"card_data": card_data,
+			"companion_source_id": StringName(encoded.get("companion_source_id", "")),
 			"acquisition_order": int(encoded.get("acquisition_order", -1)),
+			"is_new": bool(encoded.get("is_new", false)),
 			"resolved_action_type": int(encoded.get("resolved_action_type", -1)),
 			"resolved_runes": _decode_int_array(encoded_resolved_runes),
+			"equipment_durability": int(encoded.get("equipment_durability", card_data.equipment_durability)),
 			"spell_durability": int(encoded.get("spell_durability", -1)),
 			"permanent_growth": _decode_number_dictionary(
 				encoded.get("permanent_growth", {}) as Dictionary
@@ -471,6 +510,23 @@ func _decode_collection_state(
 			"cards": card_states,
 		},
 	}
+
+
+func _capture_enemy_collection(rows: Dictionary) -> Dictionary:
+	var cards: Array[Dictionary] = []
+	var seen: Dictionary = {}
+	for row_key: StringName in [&"enemy_front", &"enemy_back"]:
+		for squad: SquadData in rows.get(row_key, []):
+			var owned_cards: Array[OwnedCard] = []
+			for member: CardData in squad.horizontal_cards:
+				var owned := squad.get_owned_card(member)
+				if owned != null: owned_cards.append(owned)
+			if squad.get_equipped_item() != null: owned_cards.append(squad.get_equipped_item())
+			for owned: OwnedCard in owned_cards:
+				if seen.has(owned.instance_id): continue
+				seen[owned.instance_id] = true
+				cards.append(owned.capture_state())
+	return {"cards": cards, "next_instance_sequence": 1}
 
 
 func _encode_rows(rows: Dictionary) -> Dictionary:
@@ -509,12 +565,14 @@ func _encode_rows(rows: Dictionary) -> Dictionary:
 func _decode_rows(
 	data: Dictionary,
 	owned_collection: OwnedCardCollection,
-	card_registry: Dictionary
+	card_registry: Dictionary,
+	enemy_collection: OwnedCardCollection = null
 ) -> Dictionary:
 	var result: Dictionary = {}
 	var claimed_equipment_instance_ids: Dictionary = {}
 	var claimed_indicator_ids: Dictionary = {}
 	for row_key: StringName in ROW_KEYS:
+		var row_collection := enemy_collection if enemy_collection != null and row_key in [&"enemy_front", &"enemy_back"] else owned_collection
 		if not data.has(String(row_key)) and not data.has(row_key):
 			return _failure("save_row_missing")
 		var row_value: Variant = data.get(String(row_key), data.get(row_key, []))
@@ -527,12 +585,12 @@ func _decode_rows(
 			var encoded_squad := value as Dictionary
 			var horizontal_result := _decode_squad_card_refs(
 				encoded_squad.get("horizontal_cards", []) as Array,
-				owned_collection,
+				row_collection,
 				card_registry
 			)
 			var layer_result := _decode_squad_card_refs(
 				encoded_squad.get("layer_cards", []) as Array,
-				owned_collection,
+				row_collection,
 				card_registry
 			)
 			if (
@@ -563,7 +621,7 @@ func _decode_rows(
 				String(encoded_squad.get("equipped_item_instance_id", ""))
 			)
 			if not equipment_instance_id.is_empty():
-				var equipped_item := owned_collection.get_by_instance_id(
+				var equipped_item := row_collection.get_by_instance_id(
 					equipment_instance_id
 				)
 				var indicator_position := SquadData.UNSPECIFIED_EQUIPMENT_INDICATOR_POSITION
@@ -615,7 +673,7 @@ func _decode_squad_card_refs(
 		var owned_card := owned_collection.get_by_instance_id(owned_instance_id)
 		if not owned_instance_id.is_empty() and owned_card == null:
 			return _failure("save_squad_owned_card_missing")
-		var card_data: CardData = owned_card.card_data if owned_card != null else null
+		var card_data: CardData = owned_card.get_battlefield_card() if owned_card != null else null
 		if (
 			card_data != null
 			and not String(encoded.get("card_id", "")).is_empty()
@@ -732,7 +790,7 @@ func _decode_reward_state(data: Dictionary) -> Dictionary:
 	var ground_items: Array[Dictionary] = []
 	for value: Variant in data.get("pending_ground_items", []) as Array:
 		if value is Dictionary: ground_items.append((value as Dictionary).duplicate(true))
-	return {"gold": int(data.get("gold", 0)), "pending_random_card_requests": requests, "pending_emblem_instances": emblem_instances, "pending_ground_items": ground_items, "pending_next_level_from_id": StringName(String(data.get("pending_next_level_from_id", "")))}
+	return {"mining_totals": data.get("mining_totals", [0, 0]), "gold": int(data.get("gold", 0)), "pending_random_card_requests": requests, "pending_emblem_instances": emblem_instances, "pending_ground_items": ground_items, "pending_next_level_from_id": StringName(String(data.get("pending_next_level_from_id", "")))}
 
 
 func _encode_committed_battles(state: Dictionary) -> Array[String]:

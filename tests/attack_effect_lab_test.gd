@@ -16,7 +16,7 @@ func _init() -> void:
 
 func _run() -> void:
 	root.size = Vector2i(1280, 720)
-	BattleAttackEffectProfiles.reload(false)
+	BattleAttackEffectProfiles.reload_profiles(false)
 	var lab := LAB_SCENE.instantiate() as AttackEffectLab
 	root.add_child(lab)
 	await process_frame
@@ -25,7 +25,7 @@ func _run() -> void:
 		lab.profile_option.item_count == BattleAttackEffectProfiles.PROFILE_IDS.size()
 		and lab.mask_option.item_count == BattleAttackEffectProfiles.MASK_IDS.size()
 		and lab._numeric_controls.size() == BattleAttackEffectProfiles.NUMERIC_FIELDS.size(),
-		"页面展示全部攻击类型、两张遮罩和全部数值参数"
+		"页面展示全部攻击类型、特效样式和全部数值参数"
 	)
 	_expect(
 		lab.effect_layer.get_child_count() > 0,

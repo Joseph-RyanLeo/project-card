@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/crystal_shell_beetle.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"crystal_shell_beetle"
+display_name = "晶壳虫"
+pack_id = &"twisted_vein"
+effect_ids = Array[StringName]([&"crystal_shell_beetle.effect.last_wish"])
+content_effect = &"crystal_shell_beetle"
+acquisition_action_types = Array[int]([0, 4])
+base_value = 2
+cooldown_seconds = 6.0
+max_health = 2
+armor = 2
+runes = Array[int]([0, 1, 2])
+race_type = 7
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-3, -3)
+effect_text = "遗愿：召唤1张随机元素碎晶。"

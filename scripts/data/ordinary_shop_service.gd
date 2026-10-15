@@ -5,6 +5,11 @@ const HIDDEN_HINTS: Array[String] = ["rarity", "action_type", "race", "card_type
 
 ## 普通商店的候选筛选、报价生成和开包抽取。价格/权重均来自Demo JSON配置。
 
+# 仅用于读取本次平衡前已生成的商品；新卡池始终读取当前CardData。
+const PREVIOUS_CARD_RULES := {
+	&"moonlight_treant": {"action_type": CardData.ActionType.HEAL},
+	&"ironheart_pendant": {"rarity": CardData.Rarity.III},
+}
 const CONFIG_PATH := "res://data/demo2/ordinary_shop_config.json"
 const CardPackRegistryScript = preload("res://scripts/data/card_pack_registry.gd")
 
@@ -83,9 +88,15 @@ func validate_saved_state(
 		if offer.has("sold") and not offer["sold"] is bool:
 			return false
 		seen_offer_ids[offer_id] = true
+		var procurement_action := -1
+		if offer.has("procurement_action"):
+			if not _is_nonnegative_integer(offer.procurement_action) or int(offer.procurement_action) >= CardData.ActionType.size() or kind not in ["card_pack", "single_card"]:
+				return false
+			procurement_action = int(offer.procurement_action)
 		match kind:
 			"card_pack":
 				var size := String(offer.get("size", ""))
+				if procurement_action >= 0 and size != "small": return false
 				var expected_count := int((config.get("card_pack_sizes", {}) as Dictionary).get(size, 0))
 				var cards: Variant = offer.get("cards", null)
 				if expected_count <= 0 or not cards is Array or cards.size() != expected_count or int(offer.get("price", -1)) != int((config.get("card_pack_prices", {}) as Dictionary).get(size, -2)):
@@ -96,8 +107,10 @@ func validate_saved_state(
 				var pack_definitions: Array[CardData] = []
 				var seen_iv: Dictionary = {}
 				for card_id_value: Variant in cards:
-					var definition := cards_by_id.get(String(card_id_value)) as CardData
+					var definition := _definition_for_saved_offer(cards_by_id.get(String(card_id_value)) as CardData, offer)
 					if definition != null:
+						if procurement_action >= 0 and not supports_action(definition, procurement_action): return false
+						if procurement_action < 0 and definition.pack_id != StringName(offer.get("pack_id", "ash_ledger")): return false
 						pack_definitions.append(definition)
 						if definition.rarity == CardData.Rarity.IV:
 							if seen_iv.has(definition.id):
@@ -123,9 +136,10 @@ func validate_saved_state(
 				if (hidden and hint not in HIDDEN_HINTS) or (not hidden and not hint.is_empty()):
 					return false
 				if not card_definitions.is_empty():
-					var definition := cards_by_id.get(card_id) as CardData
+					var definition := _definition_for_saved_offer(cards_by_id.get(card_id) as CardData, offer)
 					if definition == null:
 						return false
+					if procurement_action >= 0 and (not supports_action(definition, procurement_action) or int(offer.get("resolved_action_type", -1)) != procurement_action or (hidden and hint != "action_type")): return false
 					var expected_price := int((config.get("visible_card_prices", {}) as Dictionary).get(_rarity_key(definition.rarity), 0))
 					var expected_hint_value := ""
 					if hidden:
@@ -144,7 +158,7 @@ func validate_saved_state(
 						return false
 					if int(offer.get("price", -1)) != expected_price:
 						return false
-				if not hidden and offer.has("resolved_action_type"):
+				if not hidden and offer.has("resolved_action_type") and procurement_action < 0:
 					return false
 			"scraper":
 				if int(offer.get("price", -1)) != int((config.get("scraper", {}) as Dictionary).get("price", 2)):
@@ -171,6 +185,26 @@ func validate_saved_state(
 
 func _is_decimal_integer(value: Variant) -> bool:
 	return (value is String and String(value).is_valid_int()) or value is int
+
+
+func _definition_for_saved_offer(definition: CardData, offer: Dictionary) -> CardData:
+	if definition == null: return null
+	var previous: Dictionary = PREVIOUS_CARD_RULES.get(definition.id, {})
+	if previous.is_empty(): return definition
+	var result := definition
+	var saved_action := int(offer.get("procurement_action", offer.get("resolved_action_type", -1)))
+	if previous.has("action_type") and saved_action == int(previous.action_type) and not supports_action(definition, saved_action):
+		result = definition.duplicate() as CardData
+		result.action_type = previous.action_type as CardData.ActionType
+	if previous.has("rarity") and offer.get("kind") == "single_card":
+		var old_rarity := int(previous.rarity)
+		var hidden := bool(offer.get("hidden", false))
+		var old_quote := int((config.get("visible_card_prices", {}) as Dictionary).get(_rarity_key(old_rarity), -1))
+		var old_rarity_hint: bool = hidden and offer.get("hint") == "rarity" and offer.get("hint_value") == _rarity_key(old_rarity)
+		if old_rarity_hint or (not hidden and int(offer.get("price", -1)) == old_quote):
+			if result == definition: result = definition.duplicate() as CardData
+			result.rarity = old_rarity as CardData.Rarity
+	return result
 
 
 func _is_nonnegative_integer(value: Variant) -> bool:
@@ -203,15 +237,31 @@ func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_defi
 	var count := _weighted_key(weights.get("card_pack_count", {}), next_rng)
 	if count < 0:
 		return false
+	var themed_pools: Dictionary = {}
+	for card: CardData in candidates:
+		if not themed_pools.has(card.pack_id): themed_pools[card.pack_id] = []
+		(themed_pools[card.pack_id] as Array).append(card)
 	var size_weights := weights.get("card_pack_size", {}) as Dictionary
 	for _index: int in count:
 		var size_key := _weighted_string(size_weights, next_rng)
 		var is_large := size_key == "large"
 		var count_in_pack := int((config.get("card_pack_sizes", {}) as Dictionary).get(size_key, 0))
-		var generated := draw_card_pack(candidates, is_large, count_in_pack, next_rng)
+		if themed_pools.is_empty(): return false
+		var themes: Array = themed_pools.keys()
+		if is_large:
+			themes = themes.filter(func(id: StringName) -> bool:
+				var themed: Array[CardData] = []
+				themed.assign(themed_pools[id])
+				return _contains_rarity_at_least(themed, _configured_minimum_pack_rarity())
+			)
+		if themes.is_empty(): return false
+		var pack_id: StringName = themes[next_rng.randi_range(0, themes.size() - 1)]
+		var pool: Array[CardData] = []
+		pool.assign(themed_pools[pack_id])
+		var generated := draw_card_pack(pool, is_large, count_in_pack, next_rng, owned_cards)
 		if not bool(generated.get("success", false)):
 			return false
-		next_offers.append({"kind": "card_pack", "size": size_key, "price": int((config.get("card_pack_prices", {}) as Dictionary).get(size_key, 0)), "cards": _card_ids(generated.cards), "offer_id": "card_%d" % next_offers.size()})
+		next_offers.append({"kind": "card_pack", "pack_id": String(pack_id), "size": size_key, "price": int((config.get("card_pack_prices", {}) as Dictionary).get(size_key, 0)), "cards": _card_ids(generated.cards), "offer_id": "card_%d" % next_offers.size()})
 	var sticker_count := _weighted_key(weights.get("sticker_pack_count", {}), next_rng)
 	if sticker_count < 0 or (sticker_count > 0 and sticker_candidates.is_empty()):
 		return false
@@ -231,7 +281,7 @@ func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_defi
 		if has_single:
 			var visibility := _weighted_string(weights.get("single_card_visibility", {}), next_rng)
 			var hidden := visibility == "hidden"
-			var definition: CardData = candidates[next_rng.randi_range(0, candidates.size() - 1)]
+			var definition: CardData = draw_card_candidate(candidates, next_rng, count_owned_cards(owned_cards))
 			var hint := ""
 			var hint_value := ""
 			var resolved_action_type := -1
@@ -244,7 +294,7 @@ func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_defi
 				var matching: Array[CardData] = hint_result.get("matching", []) as Array[CardData]
 				if matching.is_empty():
 					return false
-				definition = matching[next_rng.randi_range(0, matching.size() - 1)]
+				definition = draw_card_candidate(matching, next_rng, count_owned_cards(owned_cards))
 				if hint == "action_type":
 					var action_options: Array = definition.acquisition_action_types if not definition.acquisition_action_types.is_empty() else [definition.action_type]
 					resolved_action_type = int(action_options[next_rng.randi_range(0, action_options.size() - 1)])
@@ -259,6 +309,8 @@ func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_defi
 			if resolved_action_type >= 0:
 				single_offer["resolved_action_type"] = resolved_action_type
 			next_offers.append(single_offer)
+	if bool(config.get("action_procurement", {}).get("enabled", false)):
+		_append_action_procurement(next_offers, candidates, owned_cards, next_rng)
 	# 两项常驻服务独立生成且刷新不会移除；不消耗另一条随机流。
 	if bool((config.get("scraper", {}) as Dictionary).get("always_available", true)):
 		next_offers.append({"kind": "scraper", "price": int((config.get("scraper", {}) as Dictionary).get("price", 2)), "offer_id": "scraper"})
@@ -270,22 +322,70 @@ func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_defi
 	return true
 
 
-func draw_card_pack(card_definitions: Array[CardData], is_large: bool, draw_count: int, source_rng: RandomNumberGenerator = null) -> Dictionary:
+func count_owned_cards(owned_cards: Array) -> Dictionary:
+	var counts: Dictionary = {}
+	for owned: OwnedCard in owned_cards:
+		if owned != null and owned.card_data != null:
+			counts[owned.card_data.id] = int(counts.get(owned.card_data.id, 0)) + 1
+	return counts
+
+
+func card_name_weight(definition: CardData, held_counts: Dictionary) -> int:
+	var settings: Dictionary = config.get("duplicate_card_weight", {})
+	return int(settings.get("reduced_weight", 20)) if int(held_counts.get(definition.id, 0)) >= int(settings.get("threshold", 3)) else int(settings.get("normal_weight", 100))
+
+
+func draw_card_candidate(candidates: Array[CardData], source_rng: RandomNumberGenerator, held_counts: Dictionary = {}) -> CardData:
+	var total := 0
+	for definition: CardData in candidates:
+		total += card_name_weight(definition, held_counts)
+	if total <= 0: return null
+	var roll := source_rng.randi_range(1, total)
+	for definition: CardData in candidates:
+		roll -= card_name_weight(definition, held_counts)
+		if roll <= 0: return definition
+	return null
+
+
+func supports_action(definition: CardData, action: int) -> bool:
+	if definition == null or definition.card_type != CardData.CardType.MINION: return false
+	return definition.acquisition_action_types.has(action) if not definition.acquisition_action_types.is_empty() else int(definition.action_type) == action
+
+
+func _append_action_procurement(next_offers: Array[Dictionary], candidates: Array[CardData], owned_cards: Array, source_rng: RandomNumberGenerator) -> void:
+	var counts := count_owned_cards(owned_cards)
+	for action: int in CardData.ActionType.size():
+		var pool: Array[CardData] = []
+		for definition: CardData in candidates:
+			if supports_action(definition, action): pool.append(definition)
+		if pool.is_empty(): continue
+		var pack := draw_card_pack(pool, false, int(config.card_pack_sizes.small), source_rng, owned_cards)
+		if not pack.success: continue
+		next_offers.append({"kind": "card_pack", "size": "small", "procurement_action": action, "price": int(config.card_pack_prices.small), "cards": _card_ids(pack.cards), "offer_id": "action_%d_pack" % action})
+		for hidden: bool in [false, true]:
+			var definition := draw_card_candidate(pool, source_rng, counts)
+			var price := int(config.hidden_card_other_hint_price) if hidden else int(config.visible_card_prices[_rarity_key(definition.rarity)])
+			next_offers.append({"kind": "single_card", "card_id": String(definition.id), "procurement_action": action, "resolved_action_type": action, "price": price, "hidden": hidden, "hint": "action_type" if hidden else "", "hint_value": CardData.get_action_type_name_for(action as CardData.ActionType) if hidden else "", "offer_id": "action_%d_%s" % [action, "hidden" if hidden else "visible"], "instance_seed": str(source_rng.randi())})
+
+
+func draw_card_pack(card_definitions: Array[CardData], is_large: bool, draw_count: int, source_rng: RandomNumberGenerator = null, owned_cards: Array = []) -> Dictionary:
 	var active_rng := _copy_rng(source_rng if source_rng != null else rng)
 	if draw_count <= 0:
 		return {"success": false, "reason": "invalid_pack_size"}
 	var picks: Array[CardData] = []
 	var picked_iv: Dictionary = {}
+	var held_counts := count_owned_cards(owned_cards)
 	var minimum_rarity := _configured_minimum_pack_rarity()
 	if minimum_rarity < CardData.Rarity.I or minimum_rarity > CardData.Rarity.V:
 		return {"success": false, "reason": "invalid_guarantee_rarity"}
 	for draw_index: int in draw_count:
-		var eligible := _eligible_cards(card_definitions, [], picked_iv)
+		var eligible := _eligible_cards(card_definitions, owned_cards, picked_iv)
 		var guarantee := is_large and draw_index == draw_count - 1 and not _contains_rarity_at_least(picks, minimum_rarity)
-		var selected := _draw_by_rarity_weights(eligible, active_rng, minimum_rarity if guarantee else CardData.Rarity.I)
+		var selected := _draw_by_rarity_weights(eligible, active_rng, minimum_rarity if guarantee else CardData.Rarity.I, held_counts)
 		if selected == null:
 			return {"success": false, "reason": "no_valid_candidate"}
 		picks.append(selected)
+		held_counts[selected.id] = int(held_counts.get(selected.id, 0)) + 1
 		if selected.rarity == CardData.Rarity.IV:
 			picked_iv[selected.id] = true
 	if source_rng == null:
@@ -309,7 +409,13 @@ func _eligible_cards(definitions: Array[CardData], owned_cards: Array, additiona
 	for definition: CardData in definitions:
 		if definition == null or not definition.is_available or definition.is_derived:
 			continue
-		if not allowed.has(String(definition.pack_id)) or excluded.has(String(definition.pack_id)):
+		var pack_allowed := false
+		var pack_excluded := false
+		for pack: Variant in allowed:
+			if CardPackRegistryScript.belongs_to_pack(definition, StringName(String(pack))): pack_allowed = true
+		for pack: Variant in excluded:
+			if CardPackRegistryScript.belongs_to_pack(definition, StringName(String(pack))): pack_excluded = true
+		if not pack_allowed or pack_excluded:
 			continue
 		if definition.rarity == CardData.Rarity.V:
 			continue
@@ -319,7 +425,7 @@ func _eligible_cards(definitions: Array[CardData], owned_cards: Array, additiona
 	return eligible
 
 
-func _draw_by_rarity_weights(candidates: Array[CardData], source_rng: RandomNumberGenerator, minimum_rarity: int = CardData.Rarity.I) -> CardData:
+func _draw_by_rarity_weights(candidates: Array[CardData], source_rng: RandomNumberGenerator, minimum_rarity: int = CardData.Rarity.I, held_counts: Dictionary = {}) -> CardData:
 	var weighted := get_effective_card_tier_weights(candidates, minimum_rarity)
 	var total := int(weighted.get("total", 0))
 	if total <= 0:
@@ -329,7 +435,7 @@ func _draw_by_rarity_weights(candidates: Array[CardData], source_rng: RandomNumb
 		roll -= int(tier.weight)
 		if roll <= 0:
 			var pool := tier.pool as Array[CardData]
-			return pool[source_rng.randi_range(0, pool.size() - 1)]
+			return draw_card_candidate(pool, source_rng, held_counts)
 	return null
 
 

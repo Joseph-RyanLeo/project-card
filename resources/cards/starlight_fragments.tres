@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/damage_fireball.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"starlight_fragments"
+display_name = "星芒碎屑"
+pack_id = &"silvermoon_chapter"
+content_effect = &"starlight_fragments"
+card_type = 2
+rarity = 0
+effect_text = "开战时：对最低受击优先级敌军造成2点法术伤害，破除影蔽并本场受击优先级+5。"
+spell_type = 2
+spell_trigger_kind = 1
+art_texture = ExtResource("2_art")
+base_value = 0
+max_health = 0
+armor = 0
+race_type = 9

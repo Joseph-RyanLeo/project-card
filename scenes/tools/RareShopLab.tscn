@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/Main.tscn" id="1_main"]
+[ext_resource type="Script" path="res://scripts/tools/rare_shop_lab.gd" id="2_lab"]
+
+[node name="RareShopLab" instance=ExtResource("1_main")]
+script = ExtResource("2_lab")
+short_maze_enabled = false

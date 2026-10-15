@@ -57,9 +57,9 @@ func _test_real_card_pools_and_guarantees() -> void:
 	var eligible: Array[CardData] = service._eligible_cards(definitions, [])
 	var counts := [0, 0, 0, 0, 0]
 	for card: CardData in eligible:
-		counts[int(card.rarity)] += 1
-		_expect(card.pack_id == &"ash_ledger" and not card.is_derived and card.is_available, "普通卡池只包含可用、非衍生灰烬证册卡牌")
-	_expect(counts == [10, 10, 6, 3, 0], "当前真实卡池I至V档候选数为10/10/6/3/0")
+		if card.pack_id == &"ash_ledger": counts[int(card.rarity)] += 1
+		_expect(card.pack_id in [&"ash_ledger", &"silvermoon_chapter", &"ironwall_inscription"] and not card.is_derived and card.is_available, "普通卡池只包含三个已开放卡包的可用非衍生卡牌")
+	_expect(counts == [11, 10, 6, 3, 0], "灰烬子池I至V档候选数仍为11/10/6/3/0，不将新卡包混入旧子池计数")
 	var no_iv: Array[CardData] = []
 	for card: CardData in eligible:
 		if card.rarity <= CardData.Rarity.III:
@@ -273,7 +273,9 @@ func _test_main_transactions_and_save() -> void:
 	_expect(latest_cards.size() == cards_before_pack + pack_size and main.run_reward_state.gold == 100 - pack_price and large_guarantee and bool(service.offers[pack_index].get("sold", false)), "成功购买真实卡包按价格扣款、准确发卡并满足大包保底")
 	_expect(main.owned_card_collection.get_by_instance_id(held_equipment.instance_id) == held_equipment and equipment_slot.get_squad_data().get_equipped_item() == held_equipment and main.owned_card_collection.get_by_instance_id(prepared_spell.instance_id) == prepared_spell and main.prepared_spell_instance_ids.has(prepared_spell.instance_id), "开包保留已有装备实例、装备引用与准备中法术")
 	_expect(main._shop_pack_opening, "成功交易后进入不可重复提交的开包动画")
-	await create_timer(1.1).timeout # 等待已提交交易的放大、停留与溶解完成后再测试下一交易
+	# 本测试专验事务；完整撕包和逐张揭卡的真实输入由card_pack_opening_test覆盖。
+	main._close_card_inspection(true)
+	await process_frame
 	if sticker_index >= 0:
 		var full_inventory: Array[Dictionary] = []
 		for item: int in main.emblem_library.get_inventory_capacity():
@@ -291,7 +293,12 @@ func _test_main_transactions_and_save() -> void:
 		var sticker_price: int = int(service.offers[sticker_index].get("price", 0))
 		main._on_ordinary_shop_offer_pressed(sticker_index)
 		_expect(main.emblem_library.get_inventory_state().size() == before_sticker_count + int(service.config.sticker_pack.sticker_count) and main.run_reward_state.gold == 100 - sticker_price and bool(service.offers[sticker_index].get("sold", false)), "成功购买贴纸包精确收入五枚独立实例并按报价扣款")
-	await create_timer(1.1).timeout # 贴纸包动画结束后再生成单卡报价
+	await create_timer(0.35).timeout
+	if is_instance_valid(main._sticker_pack_opening):
+		main._sticker_pack_opening.auto_peel()
+		await create_timer(1.5).timeout
+		main._sticker_pack_opening.collect()
+		await create_timer(0.3).timeout
 	var offer_weights: Dictionary = service.config.get("temporary_offer_weights", {})
 	offer_weights["single_card_count"] = {"1": 1}
 	offer_weights["single_card_visibility"] = {"hidden": 1}
@@ -306,7 +313,7 @@ func _test_main_transactions_and_save() -> void:
 	var hidden_cards_before := main.owned_card_collection.get_cards().size()
 	if hidden_index >= 0:
 		main._on_ordinary_shop_offer_pressed(hidden_index)
-	var hidden_owned: OwnedCard = main.owned_card_collection.get_cards().back() if main.owned_card_collection.get_cards().size() > hidden_cards_before else null
+	var hidden_owned: OwnedCard = main.owned_card_collection.get_cards()[hidden_cards_before] if main.owned_card_collection.get_cards().size() > hidden_cards_before else null
 	_expect(hidden_offer.get("hint") == "action_type" and not hidden_card_id.is_empty() and hidden_owned != null and String(hidden_owned.card_data.id) == hidden_card_id and hidden_owned.resolved_action_type == hidden_action_type and bool(service.offers[hidden_index].get("sold", false)) and service.reveal_by_offer.get(String(hidden_offer.get("offer_id", ""))) == hidden_card_id, "暗牌购买揭晓具体定义且行动提示与真正获得的实例行动方式一致")
 	_expect(not _shop_list_contains_offer_index(main.ordinary_shop_offer_list, hidden_index), "购买后的商品从可购买报价列表移除")
 	offer_weights["single_card_visibility"] = {"visible": 1}
@@ -342,7 +349,8 @@ func _test_main_transactions_and_save() -> void:
 	var visible_cards_before := main.owned_card_collection.get_cards().size()
 	if visible_index >= 0:
 		main._on_ordinary_shop_offer_pressed(visible_index)
-	var purchased_visible_card: OwnedCard = main.owned_card_collection.get_cards().back() if main.owned_card_collection.get_cards().size() > visible_cards_before else null
+	# 枪械大师等会追加获得奖励卡；比较新增加的主卡，不能把数组末尾的奖励当成商品。
+	var purchased_visible_card: OwnedCard = main.owned_card_collection.get_cards()[visible_cards_before] if main.owned_card_collection.get_cards().size() > visible_cards_before else null
 	_expect(purchased_visible_card != null and purchased_visible_card.resolved_action_type == preview_action and purchased_visible_card.resolved_runes == preview_runes and purchased_visible_card.slot_layout == preview_layout, "明单预览与实购复用同一随机行动方式、符文和槽位实例结果")
 	var scraper_index := -1
 	for index: int in service.offers.size():
@@ -454,7 +462,8 @@ func _test_tear_confirmation_and_equipment_return(main: MainScript) -> void:
 	var same_name_owned := main.owned_card_collection.create_card(owned.card_data, main.ordinary_shop_service.rng)
 	var same_name_squad := SquadData.from_owned_card(same_name_owned)
 	var same_name_slot := main.back_row.add_squad(same_name_squad, main.back_row.get_squad_count())
-	_expect(same_name_slot != null and same_name_slot.get_squad_data().get_card_data_for_owned_instance(same_name_owned.instance_id) == owned.card_data, "同名卡以另一个OwnedCard实例部署到另一小队")
+	var same_name_member := same_name_owned.get_battlefield_card()
+	_expect(same_name_slot != null and same_name_slot.get_squad_data().get_card_data_for_owned_instance(same_name_owned.instance_id) == same_name_member and same_name_slot.get_squad_data().get_owned_card(same_name_member) == same_name_owned, "同名卡以另一个OwnedCard实例部署到另一小队")
 	main.run_reward_state.gold = 20
 	var card_picker := OptionButton.new()
 	card_picker.add_item(owned.card_data.display_name)
@@ -480,7 +489,7 @@ func _test_tear_confirmation_and_equipment_return(main: MainScript) -> void:
 		await process_frame
 	_expect(main.owned_card_collection.get_by_instance_id(owned.instance_id) == null and main.emblem_library.get_inventory_item(&"tear_selected").size() > 0, "确认后销毁宿主卡并只将选择贴纸返还工具箱")
 	_expect(main.owned_card_collection.get_by_instance_id(equipment.instance_id) == equipment, "撕卡宿主携带的装备实例仍留在收藏且保有唯一资格")
-	_expect(main.owned_card_collection.get_by_instance_id(same_name_owned.instance_id) == same_name_owned and same_name_slot.get_squad_data().get_card_data_for_owned_instance(same_name_owned.instance_id) == owned.card_data, "撕卡仅移除所选OwnedCard，不拆除另一队同名卡或误返装备")
+	_expect(main.owned_card_collection.get_by_instance_id(same_name_owned.instance_id) == same_name_owned and same_name_slot.get_squad_data().get_card_data_for_owned_instance(same_name_owned.instance_id) == same_name_member and same_name_slot.get_squad_data().get_owned_card(same_name_member) == same_name_owned, "撕卡仅移除所选OwnedCard，不拆除另一队同名卡或误返装备")
 	if is_instance_valid(card_picker):
 		card_picker.free()
 	for picker: OptionButton in pickers:

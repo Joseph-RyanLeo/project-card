@@ -17,7 +17,8 @@ var _card_origin_in_texture: Vector2 = Vector2.ZERO
 func configure(
 	source_card_view: Control,
 	card_size: Vector2,
-	output_texture_filter: CanvasItem.TextureFilter = CanvasItem.TEXTURE_FILTER_LINEAR
+	output_texture_filter: CanvasItem.TextureFilter = CanvasItem.TEXTURE_FILTER_LINEAR,
+	render_factor: int = SUPERSAMPLE_FACTOR # 快照内部渲染倍率；像素展示用1倍，拖动沿用2倍
 ) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_source_card_view = source_card_view
@@ -29,8 +30,10 @@ func configure(
 
 	_viewport = SubViewport.new()
 	_viewport.name = "CardSnapshotViewport"
-	_viewport.size = Vector2i(_capture_size * SUPERSAMPLE_FACTOR)
+	_viewport.size = Vector2i(_capture_size * render_factor)
 	_viewport.transparent_bg = true
+	if output_texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST:
+		_viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 	_viewport.gui_disable_input = true
 	_viewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
 	# 拖拽期间只有这一张活动卡使用独立渲染目标。保持实时更新，
@@ -47,9 +50,9 @@ func configure(
 	_source_card_view.pivot_offset = Vector2.ZERO
 	# set_snapshot_mode() 会先清理交互状态，因此整数放大必须在它之后设置。
 	_source_card_view.position = (
-		_card_origin_in_texture * SUPERSAMPLE_FACTOR
+		_card_origin_in_texture * render_factor
 	)
-	_source_card_view.scale = Vector2.ONE * SUPERSAMPLE_FACTOR
+	_source_card_view.scale = Vector2.ONE * render_factor
 	_source_card_view.rotation = 0.0
 	_viewport.add_child(_source_card_view)
 

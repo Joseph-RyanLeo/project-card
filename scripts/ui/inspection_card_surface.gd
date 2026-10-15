@@ -4,15 +4,21 @@ extends TextureRect
 ## 整张卡先合成后倾斜；命中点使用与着色器相同的逆投影，避免贴纸错位。
 const SHADER = preload("res://shaders/card_preview_3d.gdshader")
 const PADDING := Vector2(18, 18) # 容纳卡面外角标和贴纸
+var content_padding := PADDING # 合成画布边距；翻皮演出可扩大，普通卡牌保持默认边距
+var render_scale := 1.0 # 合成纹理相对原生尺寸的分辨率倍率；贴纸包检视使用4倍精度
 const TILT := 10.0 # 检视鼠标倾斜最大角度
 var card: CardView
 var viewport: SubViewport
 var effect: ShaderMaterial
 const FOLLOW_SPEED := 12.0 # 检视倾斜跟随鼠标的平滑速度
 var force := Vector2.ZERO
+var tilt_locked := false
 var drop_handler: Callable
 var tooltip_handler: Callable
 var _drop_preview: TextureRect
+var _fusion_highlights: Control
+var _fusion_rects: Array[Rect2] = []
+const FUSION_HALO_MARGIN := 1.0 # 可合成目标紫光超出原纹章的原生像素边距
 
 func setup(value: CardView, handler: Callable, tooltip: Callable) -> void:
 	card = value
@@ -29,22 +35,31 @@ func setup(value: CardView, handler: Callable, tooltip: Callable) -> void:
 	_drop_preview.z_index = 100
 	_drop_preview.visible = false
 	card.add_child(_drop_preview)
+	_fusion_highlights = Control.new()
+	_fusion_highlights.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fusion_highlights.z_index = 99
+	card.add_child(_fusion_highlights)
 
-func setup_art(value: Control) -> void:
+func setup_art(value: Control, padding: Vector2 = PADDING, texture_scale: float = 1.0) -> void:
+	content_padding = padding
+	render_scale = texture_scale
 	_setup_content(value, value.size)
 
 func _setup_content(value: Control, content_size: Vector2) -> void:
-	size = content_size + PADDING * 2.0
+	size = content_size + content_padding * 2.0
 	viewport = SubViewport.new()
-	viewport.size = Vector2i(size)
+	viewport.size = Vector2i((size * render_scale).round())
 	viewport.transparent_bg = true
 	viewport.disable_3d = true
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(viewport)
 	value.reparent(viewport)
-	value.position = PADDING
+	value.position = content_padding
 	value.scale = Vector2.ONE
 	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 内容入树后画布才已注册；位置和命中仍用原生像素，只提高采样密度。
+	viewport.canvas_transform = Transform2D.IDENTITY.scaled(Vector2.ONE * render_scale)
+	expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	texture = viewport.get_texture()
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	effect = ShaderMaterial.new()
@@ -58,14 +73,20 @@ func _setup_content(value: Control, content_size: Vector2) -> void:
 	effect.set_shader_parameter("flash_intensity", 0.2)
 	effect.set_shader_parameter("flash_type", 1)
 	effect.set_shader_parameter("card_texture_size_px", size)
+	effect.set_shader_parameter("texture_render_scale", render_scale)
 	material = effect
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func _process(delta: float) -> void:
 	var pointer := get_local_mouse_position()
 	var target := Vector2.ZERO
-	if Rect2(Vector2.ZERO, size).has_point(pointer):
-		target = (pointer / size - Vector2(0.5, 0.5)) * 2.0
+	var hover_rect := Rect2(content_padding - PADDING, size - (content_padding - PADDING) * 2.0)
+	if not tilt_locked and hover_rect.has_point(pointer):
+		target = ((pointer - hover_rect.position) / hover_rect.size - Vector2(0.5, 0.5)) * 2.0
+	update_pointer_force(target, delta)
+
+func update_pointer_force(target: Vector2, delta: float) -> void:
+	# 商店从固定商品区域提供归一化坐标，检视从自身区域提供；共用同一套平滑。
 	force = force.lerp(target, 1.0 - exp(-FOLLOW_SPEED * delta))
 	effect.set_shader_parameter("pointer_force", force)
 
@@ -78,7 +99,7 @@ func card_point(point: Vector2) -> Vector2:
 	var projected := rotation * Vector3(uv.x - 0.5, uv.y - 0.5, 0.5 / perspective)
 	var distance := 0.5 / perspective + 0.5
 	var sample_uv := Vector2(projected.x, projected.y) * distance * rotation.z.z / projected.z - Vector2(rotation.z.x, rotation.z.y) * distance + Vector2(0.5, 0.5)
-	return sample_uv * size - PADDING
+	return sample_uv * size - content_padding
 
 func _can_drop_data(point: Vector2, data: Variant) -> bool:
 	if not drop_handler.is_valid():
@@ -139,3 +160,43 @@ func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 		get_parent().close_requested.emit()
 		accept_event()
+
+
+func set_fusion_targets(rects: Array[Rect2]) -> void:
+	if _fusion_rects == rects or not is_instance_valid(_fusion_highlights):
+		return
+	_fusion_rects.assign(rects)
+	for child: Node in _fusion_highlights.get_children():
+		_fusion_highlights.remove_child(child)
+		child.queue_free()
+	for rect: Rect2 in rects:
+		var glow := ColorRect.new()
+		glow.position = rect.position - Vector2.ONE * FUSION_HALO_MARGIN
+		glow.size = rect.size + Vector2.ONE * FUSION_HALO_MARGIN * 2.0
+		glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var shader_material := ShaderMaterial.new()
+		shader_material.shader = preload("res://shaders/emblem_fusion_glow.gdshader")
+		glow.material = shader_material
+		_fusion_highlights.add_child(glow)
+
+
+func card_canvas_point(card_local: Vector2) -> Vector2:
+	# card_point()的正向投影：把原卡面像素映射回当前倾斜纹理的画布位置。
+	var perspective := tan(deg_to_rad(72.0) * 0.5)
+	var y := deg_to_rad(force.x * TILT)
+	var x := deg_to_rad(-force.y * TILT)
+	var rotation := Basis(Vector3(cos(y), 0, -sin(y)), Vector3(sin(y)*sin(x), cos(x), cos(y)*sin(x)), Vector3(sin(y)*cos(x), -sin(x), cos(y)*cos(x)))
+	var distance := 0.5 / perspective + 0.5
+	var uv := (card_local + content_padding) / size
+	var projected_xy := (uv - Vector2(0.5, 0.5) + Vector2(rotation.z.x, rotation.z.y) * distance) / (distance * rotation.z.z)
+	var ray := rotation.inverse() * Vector3(projected_xy.x, projected_xy.y, 1.0)
+	ray *= (0.5 / perspective) / ray.z
+	var point := (Vector2(ray.x, ray.y) * (1.0 + perspective) + Vector2(0.5, 0.5)) * size
+	return get_global_transform_with_canvas() * point
+
+
+func card_canvas_rect(rect: Rect2) -> Rect2:
+	var bounds := Rect2(card_canvas_point(rect.position), Vector2.ZERO)
+	for point: Vector2 in [rect.position + Vector2(rect.size.x, 0), rect.end, rect.position + Vector2(0, rect.size.y)]:
+		bounds = bounds.expand(card_canvas_point(point))
+	return bounds

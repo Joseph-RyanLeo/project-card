@@ -35,6 +35,8 @@ func to_bbcode() -> String:
 	clauses.append_array(direct_effect_lines)
 	for index: int in events.size():
 		var event := events[index]
+		if event.sentry_absorbed > 0.0:
+			clauses.append("%s哨位为%s吸收%s点伤害（剩余容量%s）" % [{"front": "前排", "back": "后排", "spells": "法术区"}.get(event.sentry_region, ""), _format_event_target_name(event), format_number(event.sentry_absorbed), format_number(event.sentry_remaining)])
 		if event.missed:
 			clauses.append("对%s的%s落空" % [
 				_format_event_target_name(event),

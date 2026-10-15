@@ -1,0 +1,475 @@
+{
+  "schema_version": 2,
+  "cards": [
+    {
+      "card_id": "il_ancient_speaker",
+      "effects": [
+        {
+          "effect_id": "il_ancient_speaker.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "il_ancient_speaker.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "silvermoon",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "正常战后按生命来源或行动来源实例提交永久成长",
+          "end_operation": "提交永久成长",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "il_ancient_speaker"
+          },
+          "reading": "双方每个小队分别比较有效光暗符文；净光每枚永久生命+2，净暗每枚永久数值+1",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "starlight_weaver",
+      "effects": [
+        {
+          "effect_id": "starlight_weaver.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "starlight_weaver.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "silvermoon",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "正常战后加入所属玩家收藏",
+          "end_operation": "提交卡牌奖励",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "starlight_weaver"
+          },
+          "reading": "突击获得1张月露，按来源阵营入奖励账本",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "moon_dancer",
+      "effects": [
+        {
+          "effect_id": "moon_dancer.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "moon_dancer.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "silvermoon",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "moon_dancer"
+          },
+          "reading": "按人工确认银月规则执行echo",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "moon_singer",
+      "effects": [
+        {
+          "effect_id": "moon_singer.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "moon_singer.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "silvermoon",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "moon_singer"
+          },
+          "reading": "按人工确认银月规则执行echo",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "stargazer",
+      "effects": [
+        {
+          "effect_id": "stargazer.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "stargazer.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "silvermoon",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "stargazer"
+          },
+          "reading": "按人工确认银月规则执行rush",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "silvermoon_apprentice",
+      "effects": [
+        {
+          "effect_id": "silvermoon_apprentice.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "silvermoon_apprentice.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "silvermoon",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "silvermoon_apprentice"
+          },
+          "reading": "按人工确认银月规则执行rush",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "dancer_handbell",
+      "effects": [
+        {
+          "effect_id": "dancer_handbell.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "dancer_handbell.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "silvermoon",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "dancer_handbell"
+          },
+          "reading": "按人工确认银月规则执行echo",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "twilight_knight",
+      "effects": [
+        {
+          "effect_id": "twilight_knight.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "twilight_knight.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "silvermoon",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "眩晕1秒；疲劳持续到战斗结束；换排重触所在小队全部突击",
+          "end_operation": "到期或战后清理",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "twilight_knight"
+          },
+          "reading": "前排随机3名敌军眩晕1秒；后排随机3名敌军疲劳1层；前后排变化重触本小队全部突击",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "moonlight_treant",
+      "effects": [
+        {
+          "effect_id": "moonlight_treant.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "moonlight_treant.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "silvermoon",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本场改写最左端有效槽位，不写回拥有卡牌",
+          "end_operation": "战斗结束清理临时符文",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "moonlight_treant"
+          },
+          "reading": "突击：最左端符文变为暗符文。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "darkmoon_judge",
+      "effects": [
+        {
+          "effect_id": "darkmoon_judge.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "darkmoon_judge.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "silvermoon",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "回响结算时比较双方当前生命",
+          "end_operation": "完成本次疲劳施加",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "darkmoon_judge"
+          },
+          "reading": "回响：对所有当前生命值低于此卡的随从施加1层疲劳。",
+          "questions": []
+        }
+      ]
+    }
+  ]
+}

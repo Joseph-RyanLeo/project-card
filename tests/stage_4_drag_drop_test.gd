@@ -516,9 +516,9 @@ func _test_card_art_tuner_preview() -> void:
 	var card_type_selector := tuner.get_node("%CardTypeSelector") as OptionButton
 	var card_selector := tuner.get_node("%CardSelector") as ItemList
 	_expect(
-		card_type_selector.item_count == 3
-		and card_selector.item_count == 24,
-		"运行时调整器把 53 张卡分为三类，并用固定高度滚动列表显示随从"
+		card_type_selector.item_count == 5
+		and card_selector.item_count == CardArtTuner.discover_card_resource_paths().size(),
+		"运行时调整器提供全部及四种类型，并用滚动列表自动收录全部卡牌"
 	)
 	var nudge_right_button := tuner.get_node("%NudgeRightButton") as Button
 	nudge_right_button.emit_signal("pressed")

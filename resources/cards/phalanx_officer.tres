@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/phalanx_officer.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"phalanx_officer"
+display_name = "方阵长官"
+pack_id = &"ironwall_inscription"
+content_effect = &"phalanx_officer"
+base_value = 3
+cooldown_seconds = 5.0
+max_health = 7
+armor = 3
+runes = Array[int]([0, 1, 2])
+race_type = 2
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(9, 17)
+effect_text = "组成小队时：相邻小队每次行动的数值+1d4。"

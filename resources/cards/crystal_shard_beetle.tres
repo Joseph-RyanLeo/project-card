@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/crystal_shard_beetle.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"crystal_shard_beetle"
+display_name = "碎晶虫"
+pack_id = &"twisted_vein"
+keywords = Array[StringName]([&"mining"])
+content_effect = &"crystal_shard_beetle"
+base_value = 4
+cooldown_seconds = 6.0
+max_health = 6
+armor = 4
+runes = Array[int]([0, 1, 2])
+race_type = 7
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-3, -8)
+effect_text = "开采；开采时数值+1、生命+1。"

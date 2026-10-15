@@ -328,20 +328,19 @@ func _test_main_preparation_snapshot_and_save() -> void:
 	var early_preview_index: int = main.spell_preparation_tray._preview_index
 	main.spell_preparation_tray.call("_drop_data", Vector2(150.0, 250.0), early_drag_data)
 	_expect(
-		main.prepared_spell_instance_ids.slice(1) == [early_prepared.instance_id, late_prepared.instance_id]
+		main.prepared_spell_instance_ids.slice(1) == [late_prepared.instance_id, early_prepared.instance_id]
 		and late_drop_preview
 		and early_drop_preview
 		and late_preview_index == 1
-		and early_preview_index == 1
-		and is_equal_approx(main.battle_controller.get_elapsed_spell_trigger_seconds(VOLLEY_ORDER), 8.0)
-		and is_equal_approx(main.battle_controller.get_elapsed_spell_trigger_seconds(RETURN_TO_BATTLEFIELD), 15.0),
-		"準備類按效果定義中的秒數排序，时序读取8秒与15秒效果参数"
+		and early_preview_index == 2
+		and is_equal_approx(VOLLEY_ORDER.spell_preparation_seconds, 5.0)
+		and is_equal_approx(RETURN_TO_BATTLEFIELD.spell_preparation_seconds, 10.0),
+		"准备类按玩家放置顺序保留，准备秒数由卡牌资源读取"
 	)
-	main._on_spell_preparation_drop_requested({"owned_card": late_prepared}, 1)
+	var reordered: bool = main._on_spell_preparation_drop_requested({"owned_card": early_prepared}, 1)
 	_expect(
-		main.prepared_spell_instance_ids.slice(1) == [early_prepared.instance_id, late_prepared.instance_id]
-		and main.play_area_label.text.contains("只能调整相同秒数"),
-		"跨准备秒数排序明确提示并拒绝，原存储顺序不变"
+		reordered and main.prepared_spell_instance_ids.slice(1) == [early_prepared.instance_id, late_prepared.instance_id],
+		"跨准备秒数可自由换序，预览与实际提交都采用队列顺序"
 	)
 	main._on_collection_card_dropped(
 		{"source_type": &"spell_preparation", "owned_card": late_prepared}, Vector2.ZERO
@@ -520,14 +519,14 @@ func _test_main_revival_after_death_departure() -> void:
 		and not main._battle_state_slots.has(revived_state),
 		"真实死亡后卡面完成退场并从战场槽映射中移除"
 	)
-	main.battle_controller.advance_time(15.0)
+	main.battle_controller.advance_time(10.0)
 	var revived_slot := main._battle_state_slots.get(revived_state) as BoardSlot
 	_expect(
 		revived_state.alive and is_instance_valid(revived_slot)
 		and revived_slot.get_parent() == main.front_row.squad_row
 		and revived_slot.get_squad_data().horizontal_cards.has(doomed_card)
 		and is_equal_approx(revived_state.current_health, 10.0),
-		"第15秒真实复活重新创建並映射卡面，恢复50%生命"
+		"第10秒真实复活重新创建並映射卡面，恢复50%生命"
 	)
 	if revived_state.alive:
 		revived_state.remaining_cooldown = 0.01
@@ -651,12 +650,12 @@ func _test_volley_and_revival_schedules() -> void:
 	reinforcement.mode = BattleModifier.Mode.ADD
 	reinforcement.value = 3.0
 	ranged_state.modifiers.add_modifier(reinforcement)
-	volley_controller.advance_time(8.0)
+	volley_controller.advance_time(5.0)
 	_expect(
 		is_zero_approx(ranged_state.cooldown_progress)
 		and is_equal_approx(ranged_state.modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT), 0.0)
 		and volley_controller._elapsed_spell_attempted.has(volley.instance_id),
-		"齐射令第8秒只尝试一次远程立即行动，并消耗强化、重置冷却"
+		"齐射令第5秒只尝试一次远程立即行动，并消耗强化、重置冷却"
 	)
 	_free_controller(volley_controller)
 
@@ -672,12 +671,12 @@ func _test_volley_and_revival_schedules() -> void:
 	dead_state.current_health = 0.0
 	dead_state.alive = false
 	revive_controller._death_history.append({"state": dead_state, "sequence": 1, "time": 0.0})
-	revive_controller.advance_time(15.0)
+	revive_controller.advance_time(10.0)
 	_expect(
 		dead_state.alive
 		and is_equal_approx(dead_state.current_health, 10.0)
 		and revive_controller._elapsed_spell_attempted.has(revive.instance_id),
-		"重返战场在第15秒复活最近死亡非衍生友军至50%生命"
+		"重返战场在第10秒复活最近死亡非衍生友军至50%生命"
 	)
 	_free_controller(revive_controller)
 
@@ -691,15 +690,15 @@ func _test_prepared_spells_consume_empty_attempts() -> void:
 		[_entry(SquadData.from_card(enemy), &"enemy_front", 0, 60.0)],
 		[volley]
 	)
-	controller.advance_time(8.0)
+	controller.advance_time(5.0)
 	var state := controller.player_states[0]
 	state.row_key = &"player_back"
 	state.set_runtime_action_type(CardData.ActionType.RANGED)
 	controller.advance_time(1.0)
 	_expect(
 		controller._elapsed_spell_attempted.has(volley.instance_id)
-		and is_equal_approx(state.remaining_cooldown, 51.0),
-		"齐射令第8秒没有合法目标时消耗机会且稍后不补放"
+		and is_equal_approx(state.remaining_cooldown, 54.0),
+		"齐射令第5秒没有合法目标时消耗机会且稍后不补放"
 	)
 	_free_controller(controller)
 
@@ -711,16 +710,16 @@ func _test_prepared_spells_consume_empty_attempts() -> void:
 		[_entry(SquadData.from_card(foe), &"enemy_front", 0, 60.0)],
 		[revive]
 	)
-	revive_controller.advance_time(15.0)
+	revive_controller.advance_time(10.0)
 	var later_dead_state := revive_controller.player_states[0]
 	later_dead_state.current_health = 0.0
 	later_dead_state.alive = false
-	revive_controller._death_history.append({"state": later_dead_state, "sequence": 2, "time": 15.0})
+	revive_controller._death_history.append({"state": later_dead_state, "sequence": 2, "time": 10.0})
 	revive_controller.advance_time(1.0)
 	_expect(
 		revive_controller._elapsed_spell_attempted.has(revive.instance_id)
 		and not later_dead_state.alive,
-		"重返战场第15秒无目标时消耗机会，之后出现死亡目标也不重试"
+		"重返战场第10秒无目标时消耗机会，之后出现死亡目标也不重试"
 	)
 	_free_controller(revive_controller)
 
@@ -739,7 +738,7 @@ func _test_prepared_spells_consume_empty_attempts() -> void:
 	relocated_state.current_health = 0.0
 	relocated_state.alive = false
 	occupied_controller._death_history.append({"state": relocated_state, "sequence": 1, "time": 0.0})
-	occupied_controller.advance_time(15.0)
+	occupied_controller.advance_time(10.0)
 	_expect(
 		relocated_state.alive and relocated_state.formation_index == 1,
 		"重返战场原位被占用时改放到同排右侧"
@@ -764,7 +763,7 @@ func _test_prepared_spells_consume_empty_attempts() -> void:
 	space_blocked_state.current_health = 0.0
 	space_blocked_state.alive = false
 	full_row_controller._death_history.append({"state": space_blocked_state, "sequence": 1, "time": 0.0})
-	full_row_controller.advance_time(15.0)
+	full_row_controller.advance_time(10.0)
 	_expect(
 		full_row_controller._elapsed_spell_attempted.has(no_space_spell.instance_id)
 		and not space_blocked_state.alive,

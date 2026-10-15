@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/moonlight_treant.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"moonlight_treant"
+display_name = "月华树人"
+pack_id = &"silvermoon_chapter"
+effect_ids = Array[StringName]([&"moonlight_treant.effect.rush"])
+content_effect = &"moonlight_treant"
+action_type = 0
+base_value = 2
+cooldown_seconds = 4.0
+max_health = 4
+runes = Array[int]([0, 1, 2])
+race_type = 4
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(7, 17)
+effect_text = "突击：最左端符文变为暗符文。"

@@ -13,6 +13,7 @@ const PREVIEW_MARGIN_X: float = 92.0 # 预览起终点距离面板左右边缘�
 const PREVIEW_REPLAY_GAP: float = 0.16 # 一次尾迹完全结束到下一次自动播放的间隔（秒）
 const CONTROL_LABEL_WIDTH: float = 118.0 # 参数中文名称占用的固定宽度
 const CONTROL_SPIN_WIDTH: float = 102.0 # 数值输入框的固定宽度
+const FILE_DIALOG_SIZE := Vector2i(900, 560) # 配置导入／导出文件选择窗口的默认尺寸
 
 const PREVIEW_COLOR_NAMES: Array[String] = ["无元素·白", "光·黄", "暗·紫", "火·红", "水·蓝", "木·绿"]
 const PREVIEW_COLORS: Array[Color] = [
@@ -32,6 +33,8 @@ var _auto_play: bool = true
 var _replay_seconds: float = 0.0
 var _preview_start := Vector2.ZERO
 var _preview_end := Vector2.ZERO
+var _import_dialog: FileDialog
+var _export_dialog: FileDialog
 
 var profile_option: OptionButton
 var mask_option: OptionButton
@@ -98,7 +101,9 @@ func _build_interface() -> void:
 
 
 func _build_top_bar() -> Control:
+	var top := VBoxContainer.new()
 	var bar := HBoxContainer.new()
+	top.add_child(bar)
 	bar.custom_minimum_size.y = 40.0
 	bar.add_theme_constant_override("separation", 8)
 	var back := Button.new()
@@ -118,7 +123,7 @@ func _build_top_bar() -> Control:
 	profile_option.item_selected.connect(_on_profile_selected)
 	bar.add_child(profile_option)
 	var save := Button.new()
-	save.text = "保存全部配置"
+	save.text = "保存并应用"
 	save.pressed.connect(_save_all_profiles)
 	bar.add_child(save)
 	var reset := Button.new()
@@ -129,15 +134,22 @@ func _build_top_bar() -> Control:
 	reload.text = "重新载入已保存"
 	reload.pressed.connect(_reload_saved_profiles)
 	bar.add_child(reload)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.add_child(spacer)
+	var import_button := Button.new()
+	import_button.name = "ImportProfilesButton"
+	import_button.text = "导入配置"
+	import_button.pressed.connect(_open_import_dialog)
+	bar.add_child(import_button)
+	var export_button := Button.new()
+	export_button.name = "ExportProfilesButton"
+	export_button.text = "导出配置"
+	export_button.pressed.connect(_open_export_dialog)
+	bar.add_child(export_button)
 	status_label = Label.new()
 	status_label.text = "修改任意参数会立即重播"
 	status_label.add_theme_color_override("font_color", Color("9fd6ac"))
-	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	bar.add_child(status_label)
-	return bar
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	top.add_child(status_label)
+	return top
 
 
 func _build_settings_panel() -> Control:
@@ -148,7 +160,7 @@ func _build_settings_panel() -> Control:
 	layout.add_theme_constant_override("separation", 6)
 	panel.add_child(layout)
 	var mask_title := Label.new()
-	mask_title.text = "尾迹遮罩"
+	mask_title.text = "攻击特效样式"
 	mask_title.add_theme_font_size_override("font_size", 17)
 	layout.add_child(mask_title)
 	mask_option = OptionButton.new()
@@ -156,6 +168,11 @@ func _build_settings_panel() -> Control:
 		mask_option.add_item(BattleAttackEffectProfiles.MASK_NAMES[mask_id])
 	mask_option.item_selected.connect(_on_mask_selected)
 	layout.add_child(mask_option)
+	var soul_preset := Button.new()
+	soul_preset.text = "应用灵魂光带预设"
+	soul_preset.tooltip_text = "替换当前类型的外观参数；保留播放时间、变速强度、拖尾长度与头尾柔化。保存后用于正式战斗。"
+	soul_preset.pressed.connect(_apply_soul_ribbon_preset)
+	layout.add_child(soul_preset)
 	var separator := HSeparator.new()
 	layout.add_child(separator)
 	var numeric_title := Label.new()
@@ -181,6 +198,7 @@ func _build_numeric_row(field: Dictionary) -> Control:
 	row.add_theme_constant_override("separation", 6)
 	var label := Label.new()
 	label.text = String(field["label"])
+	label.tooltip_text = String(field.get("hint", ""))
 	label.custom_minimum_size.x = CONTROL_LABEL_WIDTH
 	row.add_child(label)
 	var slider := HSlider.new()
@@ -259,7 +277,7 @@ func _build_preview_panel() -> Control:
 	preview_canvas.add_child(source_marker)
 	preview_canvas.add_child(target_marker)
 	var help := Label.new()
-	help.text = "边缘阈值越大，外围灰雾裁得越多；边缘柔化越小，边界越锐利。教程扭曲四参数也可独立调整，保存后正式战斗立即读取。"
+	help.text = "选择行动类型，再选择特效样式。灵魂光带预设会生成细尾、亮芯与终点吸收；收尾指数和亮芯宽度仅用于光带。保存后正式战斗读取同一配置；头尾颜色在此仅供预览，实战沿用元素颜色。"
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help.add_theme_color_override("font_color", Color("a9bac8"))
 	layout.add_child(help)
@@ -347,6 +365,14 @@ func _on_mask_selected(index: int) -> void:
 	_restart_preview()
 
 
+func _apply_soul_ribbon_preset() -> void:
+	_drafts[_current_profile_id] = BattleAttackEffectProfiles.make_soul_ribbon_profile(
+		_current_profile_id, _drafts[_current_profile_id] as Dictionary
+	)
+	_load_profile_into_controls(_current_profile_id)
+	status_label.text = "灵魂光带预设已应用；保存后用于战斗"
+
+
 func _on_slider_changed(value: float, key: StringName, spin: SpinBox) -> void:
 	if _loading_controls:
 		return
@@ -421,7 +447,50 @@ func _reset_current_profile() -> void:
 
 
 func _reload_saved_profiles() -> void:
-	BattleAttackEffectProfiles.reload(true)
+	BattleAttackEffectProfiles.reload_profiles(true)
 	_load_drafts()
 	_load_profile_into_controls(_current_profile_id)
 	status_label.text = "已重新载入保存配置"
+
+
+func _open_import_dialog() -> void:
+	if not is_instance_valid(_import_dialog):
+		_import_dialog = _make_profile_dialog("导入攻击特效配置", FileDialog.FILE_MODE_OPEN_FILE)
+		_import_dialog.file_selected.connect(_import_profile_file)
+	_import_dialog.popup_centered(FILE_DIALOG_SIZE)
+
+
+func _open_export_dialog() -> void:
+	if not is_instance_valid(_export_dialog):
+		_export_dialog = _make_profile_dialog("导出全部攻击特效配置", FileDialog.FILE_MODE_SAVE_FILE)
+		_export_dialog.current_file = "attack-effect-profiles.json"
+		_export_dialog.file_selected.connect(_export_profile_file)
+	_export_dialog.popup_centered(FILE_DIALOG_SIZE)
+
+
+func _make_profile_dialog(title: String, mode: FileDialog.FileMode) -> FileDialog:
+	var dialog := FileDialog.new()
+	dialog.title = title
+	dialog.file_mode = mode
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.filters = PackedStringArray(["*.json ; 攻击特效配置"])
+	add_child(dialog)
+	return dialog
+
+
+func _import_profile_file(path: String) -> void:
+	var result := BattleAttackEffectProfiles.read_profile_file(path)
+	if not result.success:
+		status_label.text = "导入失败：" + String(result.error)
+		status_label.add_theme_color_override("font_color", Color("ff8c82"))
+		return
+	_drafts = result.profiles.duplicate(true)
+	_load_profile_into_controls(_current_profile_id)
+	status_label.text = "已导入全部九类配置；点击“保存并应用”用于正式战斗"
+	status_label.add_theme_color_override("font_color", Color("9fd6ac"))
+
+
+func _export_profile_file(path: String) -> void:
+	var error := BattleAttackEffectProfiles.export_profiles(path, _drafts)
+	status_label.text = "已导出当前全部草稿：" + path if error == OK else "导出失败：" + error_string(error)
+	status_label.add_theme_color_override("font_color", Color("9fd6ac") if error == OK else Color("ff8c82"))

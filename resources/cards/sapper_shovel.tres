@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/sapper_shovel.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"sapper_shovel"
+display_name = "工兵铲"
+pack_id = &"ironwall_inscription"
+keywords = Array[StringName]([&"mining"])
+content_effect = &"sapper_shovel"
+mining_uses = 1
+card_type = 1
+equipment_type = 1
+equipment_action_delta = 1
+equipment_zeal_delta = -2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-2, -5)
+effect_text = "开采1。成功开采后召唤一张诡雷。"

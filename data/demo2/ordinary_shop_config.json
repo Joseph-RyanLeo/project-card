@@ -2,7 +2,9 @@
   "_说明": "D2-7首批普通商店运行时配置。价格、概率与Demo贴纸开放范围集中于此，不在Main重复硬编码。",
   "merchant_id": "ordinary",
   "allowed_pack_ids": [
-    "ash_ledger"
+    "ash_ledger",
+    "silvermoon_chapter",
+    "ironwall_inscription"
   ],
   "excluded_pack_ids": [
     "labyrinth"
@@ -126,5 +128,21 @@
     "slot_count": 1,
     "continue_game_entry": true
   },
-  "_范围说明": "仅限制首批商店与卡包，不删除已有迷宫资源、装备、默认开发收藏、关卡自动资源或战斗奖励。普通卡包排除V；V单卡价格预留，当前灰烬证册没有V级。刮刀2金币为本商人的固定价，不按刷新随机定价。Demo开局刮刀数暂设0，不代表最终正式数值。sticker_unlocks集中控制本Demo可抽到的贴纸，后续接入局外解锁时再由进度覆盖。"
+  "_范围说明": "仅限制首批商店与卡包，不删除已有迷宫资源、装备、默认开发收藏、关卡自动资源或战斗奖励。普通卡包排除V；V单卡价格预留，当前灰烬证册没有V级。刮刀2金币为本商人的固定价，不按刷新随机定价。Demo开局刮刀数暂设0，不代表最终正式数值。sticker_unlocks集中控制本Demo可抽到的贴纸，后续接入局外解锁时再由进度覆盖。",
+  "duplicate_card_weight": {
+    "_说明": "持有至少3张同名卡后，同品级抽取权重降为20%；本包已抽取计入。部署与装备仍算持有。",
+    "threshold": 3,
+    "normal_weight": 100,
+    "reduced_weight": 20
+  },
+  "action_procurement": {
+    "_说明": "五种行动方式定向小包与明暗单卡，数量与报价沿用普通商品；每店每类各一件，刷新补货。",
+    "enabled": true
+  },
+  "card_exchange": {
+    "_说明": "三张同品级非衍生随从换当前开放随从池高一级卡；免费、不继承原卡状态，装备返还。",
+    "input_count": 3,
+    "maximum_input_rarity": "III",
+    "gold_cost": 0
+  }
 }

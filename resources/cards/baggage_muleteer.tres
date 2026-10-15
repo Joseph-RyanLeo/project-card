@@ -18,4 +18,4 @@ runes = Array[int]([2, 3, 0])
 rarity = 0
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-3, 20)
-effect_text = "突击：获得1金币；乡邻额外获得2金币。"
+effect_text = "突击：获得1金币，乡邻：立即开采一次。"

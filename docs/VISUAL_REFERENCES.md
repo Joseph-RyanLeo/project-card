@@ -55,7 +55,7 @@ Demo 测试卡已固定分配种族和 I～V 稀有度。`CardData.race_type` �
 
 单张卡可通过 `CardData.art_offset` 调整取景，默认值为 `Vector2i(0, 0)`。正 X 将人物向右移动，负 X 向左移动；正 Y 将人物向下移动并露出更多头部，负 Y 向上移动并露出更多下半身。偏移必须使用整数，避免像素落在半像素坐标而变模糊。`ArtTexture` 放在普通 `ArtContent` 控件内，因为直接作为 `PanelContainer` 子节点时，Container 会覆盖手动设置的 `position`。
 
-实时调整入口为 `scenes/tools/CardArtTuner.tscn`。运行 `Main.tscn` 后可点击底部“卡面调整器”进入，在当前白名单的 62 张随从、法术和装备卡之间切换，通过 X / Y 数值框或 1px 方向按钮实时调整立绘取景，并可返回主界面。四张灰烬征册正式法术也在该白名单中，按“法术”分类显示。调整器适配完整 `1280×720` 虚拟画布，卡牌使用 4 倍整数像素预览。该 `@tool` 场景仍支持直接在 Godot 编辑器中实时显示：选中根节点后，也能在检查器选择 `Card Data` 并修改 `Preview Art Offset`。两种入口都使用 `CardData` 副本，只有点击“保存到卡牌资源”才会调用 `ResourceSaver.save()` 写入对应 `.tres`；也可重新载入资源值或把预览偏移归零。
+实时调整入口为 `scenes/tools/CardArtTuner.tscn`，从游戏Esc菜单打开“卡面调整器”。2026-10-13已移除手工白名单：自动扫描`resources/cards/`下所有CardData资源，包含衍生、停用及无卡图的卡牌。可组合卡包／种类筛选并搜索名称或ID；打开后新增资源可点“刷新卡牌”收录。支持名称、随从基础数值／生命／护甲、装备对应属性修正、资源生命／护甲，以及X／Y取景编辑。法术没有通用基础数值，不提供这三项属性编辑。切换卡牌保留当前工具会话的草稿，点击“保存卡牌修改”写入`.tres`，重新载入仅放弃当前卡草稿，偏移归零不清除名称／属性编辑。画布仍为`1280×720`，保留4倍像素、3D与扫光；`@tool`检查器仍可选择CardData和编辑Preview Art Offset。详细流程、数据与写法见[调整器重构说明](CARD_ART_TUNER_REFACTOR_20261013.md)。
 
 4 倍预览会先用 `118×144` `SubViewport` 合成完整多层卡面，再由单一 Shader 统一执行鼠标跟随的 3D 透视和整卡扫光；左侧 10px 安全边按五种行动中最远伸到 `X=-9` 的治疗行动数字确定，同时容纳法术、治疗等不同尺寸图标和右侧生命槽，方向按钮绑定键盘方向键。参考效果来自 [Godot 4.5 卡牌 3D 与扫光示例代码](https://pastebin.com/2LvqYQRf) 和 [效果视频](https://www.bilibili.com/video/BV1f1xPztEpz/)。扫光不以法线贴图为前置条件；`CardData.art_normal_texture` 只保留为后续接入正式法线素材的可选增强入口，当前没有 Demo 卡绑定临时法线图。
 

@@ -33,10 +33,11 @@ func turn_collection_page(page: int, method: StringName = &"direct") -> bool:
 
 func _build_collection_cards(
 	entering_card: CardData = null,
-	entry_global_position: Variant = null
+	entry_global_position: Variant = null,
+	reuse_unchanged: bool = false
 ) -> void:
 	var began := Time.get_ticks_usec()
-	super._build_collection_cards(entering_card, entry_global_position)
+	super._build_collection_cards(entering_card, entry_global_position, reuse_unchanged)
 	diagnostic_record("_build_collection_cards", began)
 
 func _create_page_turn_snapshot(

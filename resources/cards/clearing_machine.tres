@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/clearing_machine.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"clearing_machine"
+display_name = "清障机"
+pack_id = &"twisted_vein"
+effect_ids = Array[StringName]([&"clearing_machine.effect.last_wish"])
+content_effect = &"clearing_machine"
+action_type = 2
+base_value = 2
+cooldown_seconds = 6.0
+max_health = 1
+armor = 6
+runes = Array[int]([0, 1, 2])
+race_type = 3
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-12, -11)
+effect_text = "遗愿：开采2个资源；每成功开采1张，对随机敌人造成2点法术伤害。"

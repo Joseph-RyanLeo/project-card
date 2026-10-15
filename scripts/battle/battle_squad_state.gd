@@ -10,9 +10,13 @@ const EmblemLibraryData = preload("res://scripts/data/emblem_library_data.gd")
 signal integer_settlement_committed(event: Dictionary)
 signal health_lost_accumulated(event: Dictionary)
 signal armor_depleted(state: BattleSquadState)
+signal card_destruction_requested(state: BattleSquadState)
 signal injury_mask_changed(state: BattleSquadState, injury_id: StringName, masked: bool)
 
 enum Side { PLAYER, ENEMY }
+
+const INITIAL_CONTENT_SLEEP_SOURCE: StringName = &"initial_content_sleep"
+const INITIAL_CONTENT_SLEEP_SECONDS: float = 30.0 # 信徒和残骸入场后暂停普通行动的时长
 
 const CHANNEL_HEALTH_DAMAGE: StringName = &"health_damage"
 const CHANNEL_ARMOR_DAMAGE: StringName = &"armor_damage"
@@ -23,7 +27,10 @@ var squad_data: SquadData
 var runtime_id: int = 0 # 本场战斗内的稳定实例编号，不作为跨战斗收藏身份
 var side: int = Side.PLAYER
 var row_key: StringName = &""
+var direct_damage_guard: Callable # 英雄对无事件的效果直伤提供致命伤害免死检查
 var formation_index: int = 0
+var initial_row_key: StringName = &"" # 战前所在排；换排不改变，用于战后统计定位
+var initial_formation_index: int = -1 # 战前排位保持不变；战中生成单位为-1，用于结算分类和映射
 var current_health: float = 0.0:
 	set(value):
 		current_health = value
@@ -48,6 +55,11 @@ var remaining_cooldown: float = 0.0:
 		if not _syncing_cooldown:
 			var interval := get_action_interval()
 			cooldown_progress = clampf(1.0 - remaining_cooldown / interval, 0.0, 1.0) if interval > 0.0 else 1.0
+signal damage_taken(amount: float, source_state: BattleSquadState, event: BattleEffectEvent)
+signal armor_gained(amount: float)
+signal protection_changed(before: int, after: int)
+
+var is_repairing: bool = false # 已阵亡造物修复期间保留原占位，不能行动或成为目标
 var alive: bool = true
 var skip_next_ordinary_action: bool = false # 内伤Ⅲ命中后留到下一次普通行动窗口消费的跳行动标记
 var buff_stacks: Dictionary = {} # 本场战斗的临时 Buff 层数，键使用稳定标识
@@ -85,11 +97,21 @@ var runtime_rune_overrides: Dictionary = {} # 本场符文元素覆盖；键为�
 var protection_charges_by_source: Dictionary = {} # 保护N的来源→剩余次数
 var emblem_shadow_source_ids: Dictionary = {} # 斗篷纹章实例到临时关键词来源ID；每枚按本场确定的持续时间到期
 var sleep_source_until: Dictionary = {} # 休眠来源实例→确定性战斗时钟到期时间
+var is_banished: bool = false
+var masking_forbidden: bool = false
+var priority_reduction_forbidden: bool = false
+var masked_emblem_sources: Dictionary = {} # 纹章实例→独立遮蔽来源；不删除原纹章
 var moon_shadowed: bool = false
 var moon_restore_time: float = INF
 var life_generation: int = 0 # 每次重新入场递增，用于区分已经失效的旧退场动画
 var battle_participated: bool = false
 var battle_ever_defeated: bool = false
+var permanently_destroyed: bool = false
+var battle_summoned: bool = false
+var runtime_base_target_multiplier: float = 1.0
+var death_action_value: float = 0.0
+var death_action_snapshot: Dictionary = {}
+var death_neighbors: Array[BattleSquadState] = []
 
 var _precise_write: bool = false
 var _syncing_cooldown: bool = false
@@ -100,12 +122,15 @@ func initialize(
 	battle_side: int,
 	row: StringName,
 	index: int,
-	base_cooldown_override: float = -1.0
+	base_cooldown_override: float = -1.0,
+	entry_seconds: float = 0.0
 ) -> void:
 	squad_data = value.duplicate_squad() if value != null else null
 	side = battle_side
 	row_key = row
 	formation_index = index
+	initial_row_key = row
+	initial_formation_index = index
 	runtime_base_cooldown_override = base_cooldown_override
 	_set_exact_health(value.get_effective_max_health() if value != null else 0)
 	_set_exact_armor(value.get_effective_base_armor() if value != null else 0)
@@ -122,11 +147,21 @@ func initialize(
 	moon_shadowed = squad_data != null and squad_data.has_indicator(CelestialIndicator.Kind.MOON)
 	moon_restore_time = INF
 	_load_owned_card_injuries()
+	if has_active_content_effect(&"greedy_acolyte") or has_active_content_effect(&"guard_remains"):
+		apply_sleep(INITIAL_CONTENT_SLEEP_SOURCE, entry_seconds + INITIAL_CONTENT_SLEEP_SECONDS)
 	reset_action_cooldown()
 	clear_battle_statistics()
 
 
 func clear_precise_runtime() -> void:
+	direct_damage_guard = Callable()
+	is_banished = false
+	is_repairing = false
+	masking_forbidden = false
+	priority_reduction_forbidden = false
+	masked_emblem_sources.clear()
+	death_neighbors.clear()
+	death_action_snapshot.clear()
 	for channel: StringName in fractional_accumulators.keys():
 		fractional_accumulators[channel] = 0.0
 	pending_kill_source = null
@@ -160,13 +195,13 @@ func clear_battle_statistics() -> void:
 func revive_at_current_maximum(health_amount: float) -> bool:
 	# 重新入场只恢复已确认的生命与基础护甲；冷却、强化和符文遮蔽
 	# 保持本场当前状态，避免替未确认规则擅自重置。
-	if get_vitals_source() == null or squad_data == null:
+	if permanently_destroyed or get_vitals_source() == null or squad_data == null:
 		return false
 	var restored_health := minf(maxf(health_amount, 0.0), float(get_max_health()))
 	if restored_health <= 0.0:
 		return false
 	_set_exact_health(restored_health)
-	_set_exact_armor(float(squad_data.get_effective_base_armor()) + runtime_permanent_armor_growth)
+	_set_exact_armor(float(squad_data.get_effective_base_armor() - get_masked_emblem_bonus(&"base_armor")) + runtime_permanent_armor_growth)
 	displayed_health = clampi(roundi(current_health), 0, get_max_health())
 	displayed_armor = clampi(roundi(current_armor), 0, CardData.MAXIMUM_ARMOR)
 	for channel: StringName in fractional_accumulators:
@@ -221,10 +256,19 @@ func set_runtime_rune_override(card: CardData, rune_index: int, element: CardDat
 func grant_protection(source_id: StringName, charges: int = 1) -> void:
 	if source_id.is_empty() or charges <= 0:
 		return
+	var before := get_protection_count()
 	protection_charges_by_source[source_id] = int(protection_charges_by_source.get(source_id, 0)) + charges
+	protection_changed.emit(before, get_protection_count())
+
+
+func get_protection_count() -> int:
+	var count := 0
+	for charges: int in protection_charges_by_source.values(): count += charges
+	return count
 
 
 func consume_protection() -> bool:
+	var before := get_protection_count()
 	for source_id: StringName in protection_charges_by_source.keys():
 		var remaining := int(protection_charges_by_source[source_id])
 		if remaining <= 0:
@@ -235,6 +279,7 @@ func consume_protection() -> bool:
 			protection_charges_by_source.erase(source_id)
 		else:
 			protection_charges_by_source[source_id] = remaining
+		protection_changed.emit(before, get_protection_count())
 		return true
 	return false
 
@@ -261,24 +306,32 @@ func get_max_health() -> int:
 	if has_unmasked_wound(&"晶体化"):
 		# 临时额外生命已由 BattleEffectRuntime 等量转成临时护甲，不再抬高生命上限。
 		temporary_health = minf(temporary_health, 0.0)
-	return clampi(roundi(base + temporary_health), 0, CardData.MAXIMUM_HEALTH)
+	return clampi(roundi(base + temporary_health - get_masked_emblem_bonus(&"max_health")), 0, CardData.MAXIMUM_HEALTH)
 
 
 func get_target_weight() -> int:
-	var base := float(CardData.get_base_target_priority_for_action(get_effective_action_type()))
+	var base := float(CardData.get_base_target_priority_for_action(get_effective_action_type())) * runtime_base_target_multiplier
+	var item := squad_data.get_equipped_item() if squad_data != null else null
+	if item != null and item.card_data.content_effect == &"portable_mine_lamp" and not is_banished and not has_effective_shadow() and not has_runtime_keyword(&"silenced"): base += 1.0
 	base += float(get_active_rune_stat_bonus(&"target_priority"))
-	if has_unmasked_wound(&"暗蚀"):
+	if has_unmasked_wound(&"暗蚀") and not priority_reduction_forbidden:
 		base -= 4.0
-	var adjusted := roundi(base + modifiers.get_additive(BattleModifier.Stat.TARGET_PRIORITY))
+	var priority_delta := modifiers.get_additive(BattleModifier.Stat.TARGET_PRIORITY)
+	if priority_reduction_forbidden:
+		priority_delta = 0.0
+		for modifier: BattleModifier in modifiers.modifiers:
+			if modifier.active and modifier.stat == BattleModifier.Stat.TARGET_PRIORITY and modifier.mode == BattleModifier.Mode.ADD:
+				priority_delta += maxf(modifier.value, 0.0)
+	var adjusted := roundi(base + priority_delta)
 	# 带 target_priority 标记的卡牌显式允许最低0；暗蚀仍保证合法普通候选保留至少1权重。
 	var minimum_weight := 0 if has_targeting_keyword(&"target_priority") else 1
 	if has_unmasked_wound(&"暗蚀"):
 		minimum_weight = 1
-	return maxi(adjusted, minimum_weight)
+	return clampi(adjusted, minimum_weight, 99)
 
 
 func has_unmasked_wound(wound_id: StringName) -> bool:
-	if squad_data == null or wound_id.is_empty():
+	if squad_data == null or wound_id.is_empty() or battle_active_injury_ids.is_empty():
 		return false
 	var active_ids := get_unmasked_active_injuries()
 	for slot: Dictionary in squad_data.get_visible_wound_slots():
@@ -318,7 +371,7 @@ func has_targeting_keyword(keyword: StringName) -> bool:
 		if StringName(String((EmblemLibraryData.WOUND_BATTLE_EFFECTS.get(wound_id, {}) as Dictionary).get("keyword", ""))) == keyword:
 			return true
 	for card: CardData in squad_data.horizontal_cards:
-		if card != null and card.has_keyword(keyword):
+		if card != null and card.has_keyword(keyword) and (card.content_effect.is_empty() or (card == get_effect_source() and not is_banished and not has_effective_shadow() and not has_runtime_keyword(&"silenced"))):
 			return true
 	var item := squad_data.get_equipped_item()
 	return item != null and item.card_data != null and item.card_data.has_keyword(keyword)
@@ -344,7 +397,7 @@ func get_active_rune_slots() -> Array[Dictionary]:
 		var card := slot.get("card") as CardData
 		var rune_index := int(slot.get("rune_index", -1))
 		var key := _rune_slot_key(card, rune_index)
-		if not masked_rune_slots.has(key):
+		if masking_forbidden or not masked_rune_slots.has(key):
 			var active_slot := slot.duplicate(true)
 			if bool(active_slot.get("hidden", false)):
 				active_slot["element"] = -1
@@ -374,12 +427,14 @@ func get_active_rune_stat_bonus(stat: StringName) -> int:
 			CardData.ElementType.DARK:
 				if stat == &"zeal": total += 1
 				elif stat == &"target_priority": total -= 1
+	if priority_reduction_forbidden and stat == &"target_priority":
+		return get_active_rune_slots().filter(func(slot: Dictionary) -> bool: return int(slot.get("element", -1)) == CardData.ElementType.LIGHT).size()
 	return total
 
 
 func get_runtime_rune_overrides_by_card() -> Dictionary:
 	var result: Dictionary = {}
-	if squad_data == null:
+	if squad_data == null or runtime_rune_overrides.is_empty():
 		return result
 	for slot: Dictionary in squad_data.get_visible_rune_slots():
 		var card := slot.get("card") as CardData
@@ -407,6 +462,8 @@ func track_fire_rune_reinforcement(card: CardData, rune_index: int, source_id: i
 
 
 func sync_fire_rune_reinforcement_activity() -> void:
+	if fire_rune_reinforcement_sources.is_empty():
+		return
 	var active_keys: Dictionary = {}
 	for slot: Dictionary in get_active_rune_slots():
 		if int(slot.get("element", -1)) == CardData.ElementType.FIRE:
@@ -481,6 +538,7 @@ func _load_owned_card_injuries() -> void:
 
 func get_unmasked_active_injuries() -> Array[StringName]:
 	var result: Array[StringName] = []
+	if is_banished or battle_active_injury_ids.is_empty(): return result
 	var visible_injuries: Dictionary = {}
 	if squad_data != null:
 		for slot: Dictionary in squad_data.get_visible_wound_slots():
@@ -495,7 +553,7 @@ func get_unmasked_active_injuries() -> Array[StringName]:
 		if not visible_injuries.has(injury_id):
 			continue
 		var sources := injury_mask_sources.get(injury_id, {}) as Dictionary
-		if sources.is_empty():
+		if masking_forbidden or sources.is_empty():
 			result.append(injury_id)
 	return result
 
@@ -534,7 +592,7 @@ func unmask_injury(injury_id: StringName, source_instance_id: int) -> bool:
 
 
 func is_injury_masked(injury_id: StringName) -> bool:
-	return not (injury_mask_sources.get(injury_id, {}) as Dictionary).is_empty()
+	return not masking_forbidden and not (injury_mask_sources.get(injury_id, {}) as Dictionary).is_empty()
 
 
 func get_masked_wound_indices_by_card() -> Dictionary:
@@ -556,7 +614,8 @@ func get_masked_wound_indices_by_card() -> Dictionary:
 
 
 func grant_runtime_keyword(keyword: StringName, source_instance_id: int) -> bool:
-	if keyword.is_empty() or source_instance_id <= 0:
+	# 内容光环使用负数保留来源，通用效果使用正数实例；0才表示没有来源。
+	if keyword.is_empty() or source_instance_id == 0:
 		return false
 	var sources := runtime_keyword_sources.get(keyword, {}) as Dictionary
 	sources[source_instance_id] = true
@@ -579,6 +638,7 @@ func has_runtime_keyword(keyword: StringName) -> bool:
 
 func get_masked_rune_indices_by_card() -> Dictionary:
 	var result: Dictionary = {}
+	if masking_forbidden: return result
 	for slot_value: Variant in masked_rune_slots.values():
 		var slot := slot_value as Dictionary
 		var card := slot.get("card") as CardData
@@ -628,12 +688,12 @@ func get_action_value_without_reinforcement() -> int:
 func get_action_base_value() -> int:
 	if get_action_source() == null or squad_data == null:
 		return 0
-	return squad_data.get_effective_action_base_value(get_unmasked_active_injuries(), true, true, runtime_base_action_multiplier, runtime_permanent_action_growth)
+	return clampi(squad_data.get_effective_action_base_value(get_unmasked_active_injuries(), true, true, runtime_base_action_multiplier, runtime_permanent_action_growth) - get_masked_emblem_bonus(&"base_value"), 0, CardData.MAXIMUM_BASE_VALUE)
 
 
 func get_zeal_layers() -> int:
 	return (
-		roundi(modifiers.get_additive(BattleModifier.Stat.ZEAL))
+		roundi(modifiers.get_additive(BattleModifier.Stat.ZEAL)) - get_masked_emblem_bonus(&"zeal")
 		+ get_active_rune_stat_bonus(&"zeal")
 		+ (squad_data.get_equipment_zeal_delta() if squad_data != null else 0)
 		+ (
@@ -709,13 +769,24 @@ func is_action_ready(epsilon: float = 0.0001) -> bool:
 
 
 func apply_damage_exact(amount: float, source_state: BattleSquadState = null, event: BattleEffectEvent = null, pierces_armor: bool = false) -> Dictionary:
+	if is_banished: return {"armor_damage": 0.0, "health_damage": 0.0, "total": 0.0}
+	if event == null and direct_damage_guard.is_valid() and direct_damage_guard.call(self, amount, pierces_armor):
+		return {"armor_damage": 0.0, "health_damage": 0.0, "total": 0.0}
 	var damage := maxf(amount, 0.0)
+	var health_before: float = current_health
+	var crystal_skin := has_active_content_effect(&"crystal_skin_sentry")
+	if crystal_skin:
+		damage = minf(damage, 1.0)
+		if pierces_armor and (event == null or not event.is_environment_damage):
+			damage = maxf(current_health, damage)
+			card_destruction_requested.emit(self)
 	var armor_damage := 0.0
 	if not pierces_armor:
 		armor_damage = minf(current_armor, damage)
 		_set_exact_armor(current_armor - armor_damage)
 		damage -= armor_damage
-	var health_before: float = float(current_health)
+	if crystal_skin and current_armor <= 0.0:
+		damage = maxf(damage, current_health)
 	var health_damage := damage
 	_set_exact_health(current_health - health_damage)
 	if armor_damage > 0.0:
@@ -750,7 +821,12 @@ func apply_damage_exact(amount: float, source_state: BattleSquadState = null, ev
 				if event != null
 				else source_state.get_effective_action_type()
 			)
-			source_state.record_damage_dealt(source_action_type, total_damage)
+			if event != null and event.visual_kind in [&"wound_poison_tick", &"wound_poison_action"]:
+				source_state.battle_damage_dealt += total_damage
+				source_state.battle_damage_dealt_by_action[&"poison"] = float(source_state.battle_damage_dealt_by_action.get(&"poison", 0.0)) + total_damage
+			else:
+				source_state.record_damage_dealt(source_action_type, total_damage)
+		damage_taken.emit(total_damage, source_state, event)
 	return {"armor_damage": armor_damage, "health_damage": health_damage, "total": total_damage}
 
 
@@ -758,7 +834,11 @@ func destroy_armor_exact(amount: float, source_state: BattleSquadState = null, e
 	var effective := minf(maxf(amount, 0.0), maxf(current_armor, 0.0))
 	if effective <= 0.0:
 		return 0.0
+	var health_before := current_health
 	_set_exact_armor(current_armor - effective)
+	if health_before > 0.0 and current_health <= 0.0 and pending_kill_event == null:
+		pending_kill_source = source_state
+		pending_kill_event = event
 	_accumulate(CHANNEL_ARMOR_DAMAGE, effective, source_state, event)
 	if current_armor <= 0.0:
 		displayed_armor = 0
@@ -770,10 +850,11 @@ func apply_direct_health_damage_exact(amount: float, source_state: BattleSquadSt
 
 
 func apply_healing_exact(amount: float, source_state: BattleSquadState = null, event: BattleEffectEvent = null) -> float:
-	if has_unmasked_wound(&"暗蚀"):
+	if amount <= 0.0 or has_unmasked_wound(&"暗蚀"):
 		return 0.0
 	var before: float = float(current_health)
-	var effective := minf(maxf(amount, 0.0), maxf(float(get_max_health()) - current_health, 0.0))
+	var received_amount := amount + modifiers.get_additive(BattleModifier.Stat.HEALING_RECEIVED)
+	var effective := minf(maxf(received_amount, 0.0), maxf(float(get_max_health()) - current_health, 0.0))
 	_set_exact_health(current_health + effective)
 	if effective > 0.0:
 		_accumulate(CHANNEL_HEALING, effective, source_state, event)
@@ -793,6 +874,7 @@ func apply_armor_exact(amount: float, source_state: BattleSquadState = null, eve
 	_set_exact_armor(current_armor + effective)
 	if effective > 0.0:
 		_accumulate(CHANNEL_ARMOR_GAIN, effective, source_state, event)
+		armor_gained.emit(effective)
 	if current_armor >= float(CardData.MAXIMUM_ARMOR):
 		displayed_armor = CardData.MAXIMUM_ARMOR
 	return effective
@@ -913,3 +995,27 @@ func _set_exact_armor(value) -> void:
 	_precise_write = true
 	current_armor = value
 	_precise_write = false
+
+
+func has_active_content_effect(key: StringName) -> bool:
+	var source := get_effect_source()
+	return source != null and source.is_available and source.content_effect == key and not is_banished and not has_effective_shadow() and not has_runtime_keyword(&"silenced")
+
+
+func has_effective_shadow() -> bool:
+	return not priority_reduction_forbidden and (moon_shadowed or has_runtime_keyword(&"emblem_shadow"))
+
+func is_emblem_masked(instance_id: StringName) -> bool:
+	return is_banished or (not masking_forbidden and not (masked_emblem_sources.get(instance_id, {}) as Dictionary).is_empty())
+
+func get_masked_emblem_bonus(stat: StringName) -> int:
+	if squad_data == null or (not is_banished and masked_emblem_sources.is_empty()): return 0
+	var total := 0
+	for card: CardData in squad_data.horizontal_cards:
+		var owned := squad_data.get_owned_card(card)
+		if owned == null: continue
+		var indices: Array[int] = []
+		for index: int in squad_data.get_visible_emblem_slot_indices(card):
+			if is_emblem_masked(StringName(owned.emblem_slots[index].get("instance_id", ""))): indices.append(index)
+		total += owned.get_emblem_static_modifier(stat, indices)
+	return total

@@ -71,10 +71,10 @@ func _test_ash_ledger_resources(data: Dictionary) -> void:
 		_expect(card.effect_ids == expected_effect_ids, "%s 精确绑定原子效果ID" % card.id)
 		if expected_active:
 			_test_confirmed_stats(card, card_record.get("source_fields", {}))
-	_expect(active_count == 20, "20张启用随从进入当前卡池")
-	_expect(active_effect_count == 26, "20张启用随从共绑定26条活动效果")
+	_expect(active_count == 21, "城镇牧师重做后21张启用随从进入当前卡池")
+	_expect(active_effect_count == 27, "城镇牧师新增效果后21张启用随从共绑定27条活动效果")
 	var priest := load("res://resources/cards/town_priest.tres") as CardData
-	_expect(priest != null and not priest.is_available and priest.effect_ids.is_empty(), "城镇牧师保留资源但停用且不补造效果")
+	_expect(priest != null and priest.is_available and priest.effect_ids == [&"town_priest.effect.01"], "城镇牧师重做后恢复可用并绑定新乡邻效果")
 
 
 func _test_confirmed_stats(card: CardData, source_fields: Dictionary) -> void:
@@ -130,8 +130,8 @@ func _test_battle_lab_real_effect_bundles(data: Dictionary) -> void:
 		real_option_count += 1
 		real_effect_count += definitions.size()
 		_expect(BattleLabEffectLibrary.get_option_index(card_id) > 0, "战斗实验室提供真实卡选项：%s" % card_id)
-	_expect(real_option_count == 20 and real_effect_count == 26, "战斗实验室可选择20张真实随从的26条效果")
-	_expect(BattleLabEffectLibrary.get_option_index(&"town_priest") == 0, "战斗实验室不提供停用城镇牧师")
+	_expect(real_option_count == 21 and real_effect_count == 27, "战斗实验室可选择21张真实随从的27条效果")
+	_expect(BattleLabEffectLibrary.get_option_index(&"town_priest") > 0, "战斗实验室提供重做城镇牧师")
 
 
 func _test_tide_archer_deferred_hook() -> void:
@@ -156,7 +156,7 @@ func _test_positioning_cards_remain_available() -> void:
 		cards_by_id[card.id] = card
 	for card_id: StringName in [&"town_priest", &"tide_archer", &"ember_squire", &"spark_mage"]:
 		_expect(cards_by_id.has(card_id), "%s 继续保留在收藏站位资源中" % card_id)
-	_expect((cards_by_id[&"town_priest"] as CardData).effect_text.is_empty(), "城镇牧师特效栏留空")
+	_expect((cards_by_id[&"town_priest"] as CardData).effect_text == "乡邻：本卡与相邻人类受到的生命恢复量+1。", "城镇牧师展示新乡邻特效")
 	_expect((cards_by_id[&"ember_squire"] as CardData).effect_text.is_empty(), "余烬侍从特效栏留空")
 	_expect((cards_by_id[&"spark_mage"] as CardData).effect_text.is_empty(), "星火法师特效栏留空")
 	_expect((cards_by_id[&"tide_archer"] as CardData).effect_text == "开采：+1强化", "潮汐射手显示暂不生效的开采特效")

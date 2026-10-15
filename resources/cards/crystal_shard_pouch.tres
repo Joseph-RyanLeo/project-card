@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/crystal_shard_pouch.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"crystal_shard_pouch"
+display_name = "碎晶小包"
+pack_id = &"twisted_vein"
+effect_ids = Array[StringName]([&"crystal_shard_pouch.effect.rush"])
+content_effect = &"crystal_shard_pouch"
+equipment_durability = 10
+card_type = 1
+rarity = 1
+equipment_type = 5
+equipment_zeal_delta = -1
+equipment_armor_delta = 5
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-15, -5)
+effect_text = "突击：携带者获得1种随机元素碎晶的收获效果（剩余10次）。"

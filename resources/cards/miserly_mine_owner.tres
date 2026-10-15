@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/miserly_mine_owner.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"miserly_mine_owner"
+display_name = "吝啬的矿主"
+pack_id = &"twisted_vein"
+effect_ids = Array[StringName]([&"miserly_mine_owner.effect.rush"])
+content_effect = &"miserly_mine_owner"
+base_value = 0
+cooldown_seconds = 5.0
+max_health = 2
+armor = 10
+runes = Array[int]([0, 1, 2])
+race_type = 5
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(15, 20)
+effect_text = "突击：获得等同于本局开采次数的强化与生命。"

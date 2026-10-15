@@ -37,6 +37,7 @@ scale = Vector2(1, 1)
 [node name="Main" parent="RenderContainer/InternalViewport/DesignCanvas" instance=ExtResource("2_main")]
 layout_mode = 1
 process_mode = 1
+short_maze_enabled = true
 
 [node name="DisplayModePanel" type="PanelContainer" parent="."]
 layout_mode = 1

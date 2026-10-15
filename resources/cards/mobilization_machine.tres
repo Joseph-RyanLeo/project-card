@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/mobilization_machine.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"mobilization_machine"
+display_name = "动员机兵"
+pack_id = &"ironwall_inscription"
+effect_ids = Array[StringName]([&"mobilization_machine.effect.rush"])
+content_effect = &"mobilization_machine"
+action_type = 1
+base_value = 4
+cooldown_seconds = 6.0
+max_health = 3
+armor = 5
+runes = Array[int]([0, 1, 2])
+race_type = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-14, 11)
+effect_text = "突击：相邻友军各随机获得一枚本场纹章。"

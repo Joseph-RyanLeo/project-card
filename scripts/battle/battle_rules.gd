@@ -10,8 +10,8 @@ const MINIMUM_ACTION_SPEED: float = 0.30 # 汇总全部热诚后允许的最低�
 const MINIMUM_ACTION_INTERVAL_SECONDS: float = 0.5 # 热诚结算后的普通行动最短间隔
 const MAXIMUM_ACTION_INTERVAL_SECONDS: float = 99.0 # 热诚结算后的普通行动最长间隔
 const FATIGUE_BUFF_ID: StringName = &"fatigue" # 疲劳在统一战斗 Buff 容器中的稳定标识
-const FATIGUE_START_SECONDS: float = 30.0 # 战斗经过多少秒后首次获得疲劳并立即承受疲劳伤害
-const FATIGUE_STACK_INTERVAL_SECONDS: float = 2.0 # 疲劳开始后每隔多少秒增加一层
+const FATIGUE_START_SECONDS: float = 30.0 # 疲劳风暴首次造成环境伤害的战斗秒数
+const FATIGUE_STACK_INTERVAL_SECONDS: float = 2.0 # 风暴伤害每隔多少秒增加1点
 const FATIGUE_DAMAGE_INTERVAL_SECONDS: float = 1.0 # 疲劳开始后每隔多少秒结算一次直伤
 const FATIGUE_DAMAGE_PER_STACK: int = 1 # 每层疲劳在每次结算时造成的无视护甲生命伤害
 const LOGICAL_ROW_WIDTH: float = 832.0 # 每排用于投影、邻接和遮挡的逻辑宽度
@@ -141,7 +141,7 @@ static func get_action_interval(
 	zeal_layers: int = 0,
 	maximum_base_cooldown: float = MAXIMUM_COOLDOWN_SECONDS
 ) -> float:
-	# 正式卡牌仍受9.9秒基础冷却上限约束；实验室可显式放宽到实际行动间隔上限99秒。
+	# 正式卡牌和实际行动间隔均支持99秒；先汇总冷却，再结算热诚速度。
 	var base_cooldown := clampf(cooldown_seconds, MINIMUM_COOLDOWN_SECONDS, maximum_base_cooldown)
 	return clampf(
 		base_cooldown / get_action_speed(zeal_layers),

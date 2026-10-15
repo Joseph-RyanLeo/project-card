@@ -43,9 +43,10 @@ static func from_card(card_data: CardData) -> SquadData:
 
 
 static func from_owned_card(owned_card: OwnedCard) -> SquadData:
-	var squad := from_card(owned_card.card_data if owned_card != null else null)
+	var member := owned_card.get_battlefield_card() if owned_card != null else null
+	var squad := from_card(member)
 	if owned_card != null:
-		squad.bind_owned_card(owned_card.card_data, owned_card)
+		squad.bind_owned_card(member, owned_card)
 	return squad
 
 
@@ -145,7 +146,7 @@ func bind_owned_card(card_data: CardData, owned_card: OwnedCard) -> bool:
 	if (
 		card_data == null
 		or owned_card == null
-		or owned_card.card_data != card_data
+		or (owned_card.card_data != card_data and owned_card.get_battlefield_card() != card_data)
 		or not contains(card_data)
 	):
 		return false
@@ -183,6 +184,7 @@ func can_equip_item(owned_item: OwnedCard) -> bool:
 		and owned_item != null
 		and owned_item.is_valid()
 		and owned_item.card_data.card_type == CardData.CardType.EQUIPMENT
+		and (not owned_item.card_data.has_keyword(&"squad_equipment") or get_card_count() > 1)
 	)
 
 
@@ -225,14 +227,14 @@ func get_visible_status_static_modifier(
 ) -> int:
 	# 纹章和伤势修正归小队；基础卡面值及永久成长仍由原属性来源卡提供。
 	var total := 0
-	var visible_wounds := get_visible_wound_slots()
+	var visible_wounds := get_visible_wound_slots(true)
 	for card_data: CardData in horizontal_cards:
 		var owned_card := get_owned_card(card_data)
 		if owned_card == null:
 			continue
 		total += owned_card.get_emblem_static_modifier(
 			stat,
-			get_visible_emblem_slot_indices(card_data)
+			get_visible_emblem_slot_indices(card_data, true)
 		)
 		for wound_slot: Dictionary in visible_wounds:
 			if wound_slot.get("card") != card_data:
@@ -333,7 +335,7 @@ func get_effective_action_base_value(
 	)
 	var equipment := _equipped_item.card_data if _equipped_item != null else null
 	var visible_greed := false
-	for wound_slot: Dictionary in get_visible_wound_slots():
+	for wound_slot: Dictionary in get_visible_wound_slots(true):
 		var wound_card := wound_slot.get("card") as CardData
 		var wound_owner := get_owned_card(wound_card)
 		var slot_index := int(wound_slot.get("slot_index", -1))
@@ -355,7 +357,8 @@ func get_effective_action_base_value(
 				active_wound_ids,
 				filter_wounds_by_active_ids
 			)
-			+ (equipment.equipment_action_delta if equipment != null else 0)
+			+ (equipment.equipment_action_delta + _equipped_item.get_permanent_growth(&"base_value") if equipment != null else 0)
+			+ get_ironwall_squad_bonus(&"base_value")
 			+ (CelestialIndicator.SUN_VALUE if has_indicator(CelestialIndicator.Kind.SUN) else 0)
 			+ _get_star_action_value()
 		),
@@ -391,6 +394,7 @@ func get_effective_max_health() -> int:
 	return clampi(
 		 roundi(
 			base + get_visible_rune_stat_bonus(&"max_health")
+			+ get_ironwall_squad_bonus(&"max_health")
 			+ added_health
 		),
 		0,
@@ -457,7 +461,7 @@ func _get_crystallization_base_health() -> int:
 
 
 func _has_visible_crystallization() -> bool:
-	for slot: Dictionary in get_visible_wound_slots():
+	for slot: Dictionary in get_visible_wound_slots(true):
 		var card := slot.get("card") as CardData
 		var owner := get_owned_card(card)
 		var slot_index := int(slot.get("slot_index", -1))
@@ -611,11 +615,15 @@ func get_visible_rune_slots() -> Array[Dictionary]:
 	return visible_slots
 
 
-func get_visible_wound_slots() -> Array[Dictionary]:
+func get_visible_wound_slots(occupied_only: bool = false) -> Array[Dictionary]:
+	# 属性查询只需已安装状态；默认保留空槽供卡面和拖放使用。
 	# 使用贴纸中心判定遮挡，并沿用OwnedCard伤势数组的storage_index。
 	var visible_slots: Array[Dictionary] = []
 	var x_positions := get_card_x_positions()
 	for card_data: CardData in horizontal_cards:
+		var owner := get_owned_card(card_data)
+		if occupied_only and (owner == null or owner.wound_slots.all(func(slot: Dictionary) -> bool: return slot.is_empty())):
+			continue
 		var horizontal_index := horizontal_cards.find(card_data)
 		var layer_index := layer_cards.find(card_data)
 		if horizontal_index < 0 or layer_index < 0:
@@ -624,6 +632,8 @@ func get_visible_wound_slots() -> Array[Dictionary]:
 			if int(definition.get("kind", -1)) != CardSlotLayout.Kind.WOUND:
 				continue
 			var slot_index := int(definition.get("storage_index", -1))
+			if occupied_only and (slot_index < 0 or slot_index >= owner.wound_slots.size() or owner.wound_slots[slot_index].is_empty()):
+				continue
 			var position := definition.get("position", Vector2.ZERO) as Vector2
 			var marker_center_x := x_positions[horizontal_index] + position.x + 7.0
 			if _is_card_center_covered_by_upper_layer(marker_center_x, layer_index, x_positions):
@@ -636,10 +646,13 @@ func get_visible_wound_slots() -> Array[Dictionary]:
 	return visible_slots
 
 
-func get_visible_emblem_slot_indices(card_data: CardData) -> Array[int]:
+func get_visible_emblem_slot_indices(card_data: CardData, occupied_only: bool = false) -> Array[int]:
 	# 属性只读取该小队实际属性来源卡上、未被上层卡遮住的纹章槽。
 	var visible_indices: Array[int] = []
 	if card_data == null or not contains(card_data):
+		return visible_indices
+	var owner := get_owned_card(card_data)
+	if occupied_only and (owner == null or owner.emblem_slots.all(func(slot: Dictionary) -> bool: return slot.is_empty())):
 		return visible_indices
 	var x_positions := get_card_x_positions()
 	var horizontal_index := horizontal_cards.find(card_data)
@@ -650,6 +663,8 @@ func get_visible_emblem_slot_indices(card_data: CardData) -> Array[int]:
 		if int(definition.get("kind", -1)) != CardSlotLayout.Kind.EMBLEM:
 			continue
 		var slot_index := int(definition.get("storage_index", -1))
+		if occupied_only and (slot_index < 0 or slot_index >= owner.emblem_slots.size() or owner.emblem_slots[slot_index].is_empty()):
+			continue
 		var position := definition.get("position", Vector2.ZERO) as Vector2
 		var marker_center_x := x_positions[horizontal_index] + position.x + 7.0
 		if not _is_card_center_covered_by_upper_layer(marker_center_x, layer_index, x_positions):
@@ -861,3 +876,12 @@ func _ensure_three_card_visibility() -> void:
 	if layer_cards[0] != middle_card and layer_cards[1] != middle_card:
 		layer_cards.erase(middle_card)
 		layer_cards.insert(1, middle_card)
+
+
+func get_ironwall_squad_bonus(stat: StringName) -> int:
+	if get_card_count() < 2: return 0
+	var result := 0
+	for card: CardData in horizontal_cards:
+		if card.content_effect == &"formation_infantry": result += 1
+	if _equipped_item != null and _equipped_item.card_data.content_effect == &"officer_badge": result += 2 if stat == &"base_value" else 3
+	return result

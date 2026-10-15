@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/walking_fighter.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"walking_fighter"
+display_name = "步行战斗机"
+pack_id = &"ironwall_inscription"
+effect_ids = Array[StringName]([&"walking_fighter.effect.echo"])
+keywords = Array[StringName]([&"forbid_stacking"])
+content_effect = &"walking_fighter"
+acquisition_action_types = Array[int]([0, 4])
+base_value = 4
+cooldown_seconds = 6.0
+max_health = 2
+armor = 15
+runes = Array[int]([0, 1, 2])
+race_type = 3
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(10, 25)
+effect_text = "无法堆叠。每次实际获得护甲，本场数值+1；回响切换近战／防御。"

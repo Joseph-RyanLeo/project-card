@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/unstable_explosive_robot.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"unstable_explosive_robot"
+display_name = "自爆机械人"
+pack_id = &"ironwall_inscription"
+effect_ids = Array[StringName]([&"unstable_explosive_robot.effect.last_wish"])
+content_effect = &"unstable_explosive_robot"
+action_type = 2
+cooldown_seconds = 4.0
+max_health = 1
+armor = 4
+runes = Array[int]([0, 1, 2])
+race_type = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-9, -5)
+effect_text = "遗愿：对随机敌军造成1d10无类型伤害。"

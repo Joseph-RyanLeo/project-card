@@ -47,7 +47,7 @@ static func build_document(record: Dictionary) -> Dictionary:
 
 
 static func to_json(document: Dictionary) -> String:
-	return JSON.stringify(document, "\t", true, true)
+	return JSON.stringify(document, "", true, true)
 
 
 static func save_to_path(record: Dictionary, path: String) -> Dictionary:

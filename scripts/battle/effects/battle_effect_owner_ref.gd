@@ -57,7 +57,7 @@ static func for_owned_card_in_state(
 	result.card_data = owned.card_data if owned != null else null
 	result.owned_card_instance_id = owned.instance_id if owned != null else &""
 	result.card_index = (
-		value.squad_data.horizontal_cards.find(owned.card_data)
+		value.squad_data.horizontal_cards.find(value.squad_data.get_card_data_for_owned_instance(owned.instance_id))
 		if value != null and value.squad_data != null and owned != null
 		else -1
 	)
@@ -71,7 +71,7 @@ func is_valid() -> bool:
 
 
 func is_alive() -> bool:
-	return state != null and state.alive and state.current_health > 0.0
+	return state != null and state.alive and state.current_health > 0.0 and not state.is_banished
 
 
 func stable_key() -> String:

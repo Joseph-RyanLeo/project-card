@@ -23,7 +23,7 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	BattleAttackEffectProfiles.reload(false)
+	BattleAttackEffectProfiles.reload_profiles(false)
 	_test_config_and_element_groups()
 	_test_precise_channels_and_attribution()
 	await _test_attack_type_multipliers_and_formula()

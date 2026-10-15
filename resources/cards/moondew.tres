@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[ext_resource type="Texture2D" path="res://assets/card_art/resources/水元素碎晶.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"moondew"
+display_name = "月露"
+pack_id = &"silvermoon_chapter"
+content_effect = &"moondew"
+card_type = 3
+rarity = 0
+effect_text = "收获：所在方每个随从独立等概率获得本场生命+2、数值+1或热诚+1。"
+is_derived = true
+max_health = 1
+armor = 0
+resource_type = 0
+art_texture = ExtResource("2_art")
+base_value = 0
+race_type = 9

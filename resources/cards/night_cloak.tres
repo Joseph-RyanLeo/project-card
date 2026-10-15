@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/night_cloak.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"night_cloak"
+display_name = "暗夜披风"
+pack_id = &"silvermoon_chapter"
+content_effect = &"night_cloak"
+card_type = 1
+base_value = 0
+max_health = 0
+race_type = 9
+rarity = 1
+equipment_type = 2
+equipment_action_delta = -1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(0, 5)
+effect_text = "数值-1。即将受到远程攻击时投掷1d6，>4时无法被该攻击命中。"

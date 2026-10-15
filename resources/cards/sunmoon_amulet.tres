@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/sunmoon_amulet.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"sunmoon_amulet"
+display_name = "日月护符"
+pack_id = &"silvermoon_chapter"
+content_effect = &"sunmoon_amulet"
+card_type = 1
+base_value = 0
+max_health = 0
+race_type = 9
+rarity = 2
+equipment_type = 3
+equipment_armor_delta = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-8, -5)
+effect_text = "均衡。前排时，数值+1。后排时，热诚+2。"
+front_effect_text = "均衡。前排时，数值+1。"
+back_effect_text = "均衡。后排时，热诚+2。"

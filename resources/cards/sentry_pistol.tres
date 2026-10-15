@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/sentry_pistol.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"sentry_pistol"
+display_name = "哨位短铳"
+pack_id = &"ironwall_inscription"
+effect_ids = Array[StringName]([&"sentry_pistol.effect.echo"])
+content_effect = &"sentry_pistol"
+card_type = 1
+equipment_action_delta = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-6, 7)
+effect_text = "本场前2次回响：对随机敌军造成1d6远程伤害。"

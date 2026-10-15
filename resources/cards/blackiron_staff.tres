@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/blackiron_staff.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"blackiron_staff"
+display_name = "黑铁法杖"
+pack_id = &"ironwall_inscription"
+content_effect = &"blackiron_staff"
+card_type = 1
+rarity = 2
+equipment_type = 4
+equipment_action_delta = -1
+equipment_zeal_delta = -12
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(8, 6)
+effect_text = "法术行动额外执行一次。"

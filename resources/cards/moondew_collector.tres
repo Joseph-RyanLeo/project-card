@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/moondew_collector.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"moondew_collector"
+display_name = "月露采集者"
+pack_id = &"silvermoon_chapter"
+keywords = Array[StringName]([&"mining"])
+content_effect = &"moondew_collector"
+cooldown_seconds = 4.0
+max_health = 3
+armor = 1
+runes = Array[int]([0, 1, 2])
+race_type = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(3, 33)
+effect_text = "开采。成功开采后，为数值最高的友方随从充能0.5秒，可选自身。"

@@ -11,7 +11,7 @@ func configure(data: Dictionary) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	z_index = CardDragPreview.DRAG_PREVIEW_Z_INDEX
 	visual = TextureRect.new()
-	visual.texture = CelestialIndicatorStyle.get_texture((data["indicator"] as CelestialIndicator).kind)
+	visual.texture = data["texture"] if data.has("texture") else CelestialIndicatorStyle.get_texture((data["indicator"] as CelestialIndicator).kind)
 	texture_size = visual.texture.get_size()
 	visual.size = texture_size
 	visual.mouse_filter = Control.MOUSE_FILTER_IGNORE

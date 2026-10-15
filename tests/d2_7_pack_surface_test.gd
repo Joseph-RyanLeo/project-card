@@ -11,6 +11,7 @@ func _run() -> void:
 	create_timer(45.0).timeout.connect(func(): push_error("包装检视验收超时"); quit(1))
 	await _check_coin_pixels()
 	shell = DISPLAY.instantiate()
+	shell.get_node("RenderContainer/InternalViewport/DesignCanvas/Main").short_maze_enabled = false
 	root.add_child(shell)
 	shell.apply_display_mode(DisplayScript.DisplayMode.WINDOW_2K)
 	await create_timer(0.7).timeout
@@ -70,7 +71,11 @@ func _run() -> void:
 	stack = main.ordinary_shop_offer_list.find_child("ShopPackStack_sticker_pack", true, false)
 	check(stack != null and stack._offers.size() == 1, "购买后剩余贴纸包正确重新叠放")
 	check(main.battle_log_text.get_theme_font("normal_font") == main.BATTLE_LOG_FONT and main.battle_result_summary_label.get_theme_font("normal_font") == main.BATTLE_LOG_FONT, "战斗正文继续使用原字体而不引入金币图片度量")
-	await create_timer(1.1).timeout # 等待已提交交易的开包动画结束
+	await create_timer(0.35).timeout
+	await click(main._inspection_surface.get_global_rect().get_center(), MOUSE_BUTTON_RIGHT)
+	await create_timer(1.5).timeout
+	await click(main._inspection_surface.get_global_rect().get_center())
+	await create_timer(0.3).timeout
 	main._toggle_ordinary_shop()
 	DirAccess.remove_absolute(main.run_save_path)
 	shell.queue_free()
@@ -86,14 +91,24 @@ func _check_pack_surface(tag: String) -> void:
 	await move(surface.get_global_transform_with_canvas() * (surface.size * Vector2(0.8, 0.65)))
 	await create_timer(0.35).timeout
 	var hovered: Vector2 = surface.effect.get_shader_parameter("pointer_force")
-	check(hovered.x > 0.35 and hovered.y > 0.1 and surface.effect.get_shader_parameter("use_3d") and surface.effect.get_shader_parameter("use_flash"), tag + "真实鼠标驱动倾斜与光栅")
+	check(hovered.x > 0.35 and hovered.y > 0.1 and surface.effect.get_shader_parameter("use_3d"), tag + "真实鼠标驱动倾斜")
+	var sticker_art = surface.viewport.get_node("InspectionPackArt") if tag == "sticker" else null
+	check(not surface.effect.get_shader_parameter("use_flash") and (tag == "sticker" or surface.effect.get_shader_parameter("use_pack_foil")), tag + "包装关闭整面扫光，只使用指定金色反光")
 	await RenderingServer.frame_post_draw
 	var with_flash: Image = main.get_viewport().get_texture().get_image()
-	surface.effect.set_shader_parameter("use_flash", false)
+	if tag == "sticker":
+		for layer: TextureRect in [sticker_art.upper, sticker_art.lower]:
+			(layer.material as ShaderMaterial).set_shader_parameter("use_foil", false)
+	else:
+		surface.effect.set_shader_parameter("use_pack_foil", false)
 	await RenderingServer.frame_post_draw
 	var without_flash: Image = main.get_viewport().get_texture().get_image()
 	check(with_flash.get_data() != without_flash.get_data(), tag + "实际渲染可见扫光变化")
-	surface.effect.set_shader_parameter("use_flash", true)
+	if tag == "sticker":
+		for layer: TextureRect in [sticker_art.upper, sticker_art.lower]:
+			(layer.material as ShaderMaterial).set_shader_parameter("use_foil", true)
+	else:
+		surface.effect.set_shader_parameter("use_pack_foil", true)
 	await capture("surface-" + tag + "-hover")
 	await move(Vector2(40, 450))
 	await create_timer(0.5).timeout

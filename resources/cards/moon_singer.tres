@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/moon_singer.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"moon_singer"
+display_name = "月之歌者"
+pack_id = &"silvermoon_chapter"
+effect_ids = Array[StringName]([&"moon_singer.effect.echo"])
+content_effect = &"moon_singer"
+action_type = 2
+base_value = 4
+cooldown_seconds = 6.0
+max_health = 7
+runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(2, 19)
+effect_text = "回响：目标与同侧另一排随机随从换位，优先相同宽度。"

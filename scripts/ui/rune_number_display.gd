@@ -79,6 +79,8 @@ const SIGN_MINUS_REGION := Rect2(14, 0, 7, 10) # 用户负号在原图中的7×1
 		_sync_size_and_redraw()
 @export var text: String = "":
 	set(value):
+		if text == value:
+			return
 		text = value
 		_sync_size_and_redraw()
 
@@ -90,6 +92,9 @@ func _init() -> void:
 
 
 func _draw() -> void:
+	if text == "∞":
+		_draw_infinity()
+		return
 	match number_style:
 		NumberStyle.LARGE:
 			_draw_digit_run(text, LARGE_TEXTURE, LARGE_GLYPH_RECTS, Vector2.ZERO)
@@ -100,6 +105,7 @@ func _draw() -> void:
 
 
 func get_rendered_size() -> Vector2:
+	if text == "∞": return Vector2(14, LARGE_HEIGHT)
 	match number_style:
 		NumberStyle.LARGE:
 			return Vector2(_measure_digit_run(text, LARGE_GLYPH_RECTS), LARGE_HEIGHT)
@@ -199,3 +205,14 @@ func _sync_size_and_redraw() -> void:
 	custom_minimum_size = rendered_size
 	size = rendered_size
 	queue_redraw()
+
+
+func _draw_infinity() -> void:
+	# 数字图集没有无限字形；使用原生像素矩形画独立符号，保持现有PNG与数字图集不变。
+	var rows := ["011100001110", "110110011011", "100011110001", "100001100001", "100011110001", "110110011011", "011100001110"]
+	var pixels: Array[Vector2] = []
+	for y: int in rows.size():
+		for x: int in rows[y].length():
+			if rows[y][x] == "1": pixels.append(Vector2(x + 1, y + 3))
+	for pixel: Vector2 in pixels: draw_rect(Rect2(pixel - Vector2.ONE, Vector2(3, 3)), Color.BLACK)
+	for pixel: Vector2 in pixels: draw_rect(Rect2(pixel, Vector2.ONE), Color.WHITE)

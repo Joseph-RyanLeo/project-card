@@ -10,6 +10,14 @@ var side: int = BattleSquadState.Side.PLAYER
 var current_health: int = 0
 var destroyed: bool = false
 var harvested: bool = false
+var anchor: Vector2i = Vector2i.ZERO # 战斗资源在六边形板中的合法落点
+
+func revive() -> bool:
+	if owned_card == null or not destroyed: return false
+	current_health = owned_card.card_data.max_health
+	destroyed = false
+	harvested = false
+	return current_health > 0
 
 func initialize(card: OwnedCard, card_side: int) -> void:
 	owned_card = card

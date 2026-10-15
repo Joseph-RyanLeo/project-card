@@ -1,0 +1,297 @@
+{
+  "_说明": "2026-10-04：第一层八天与一级／四级八项天赋接入Main。七级／十级只保留设计定义；至高天正式内容暂缓。",
+  "hero_id": "ioann_warden",
+  "display_name": "伊奥恩·沃登",
+  "initial_gold": 0,
+  "initial_card_ids": [
+    "coarse_bandage",
+    "musketeer",
+    "town_priest",
+    "shieldwall_private",
+    "elegy_poet"
+  ],
+  "initial_card_notes": {
+    "town_priest": "2026-10-03重做为乡邻恢复量+1，恢复可用并进入正式卡池；基础数值沿用现有资源3治疗、3秒冷却、7生命。"
+  },
+  "sentry": {
+    "daily_count": 1,
+    "inventory_limit": 3,
+    "capacity_base": 5,
+    "capacity_per_hero_level": 1,
+    "shared_damage_per_hit": 1,
+    "area_damage_types": {
+      "front": "melee",
+      "back": "ranged",
+      "spells": "magic"
+    },
+    "_说明": "每区域最多1枚，不占战场容量；容量按部署时等级锁定，库存跨日跨层保留，本场参战哨位战后销毁。",
+    "visual_variants": 4,
+    "visual_selection": "equal_weight_on_creation",
+    "texture_path": "res://assets/card_ui/sentry/source/sentry_variants.png",
+    "_外观说明": "四种外观随机出现，只改变外观；随实例保存，移动、界面重建和读档不重抽。"
+  },
+  "talent_choices": {
+    "1": [
+      "sentry_guard",
+      "sentry_break",
+      "sentry_sharp",
+      "sentry_spell"
+    ],
+    "4": [
+      "sentry_fortify",
+      "sentry_alchemy",
+      "sentry_protection",
+      "sentry_needle"
+    ],
+    "7": [
+      "firmament_blessing",
+      "sentry_unbreakable",
+      "lone_star",
+      "three_celestial_marks"
+    ],
+    "10": [
+      "twin_sentries",
+      "all_first_talents",
+      "rear_veil",
+      "supernova"
+    ]
+  },
+  "talents": {
+    "sentry_guard": {
+      "level": 1,
+      "display_name": "护",
+      "source_text": "哨位获得战吼：额外为前排卡牌提供1×等级点护甲。",
+      "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
+      "confirmed_rules": {
+        "target": "all_friendly_front_squads",
+        "per_deployed_sentry": true,
+        "armor_per_hero_level": 1
+      }
+    },
+    "sentry_break": {
+      "level": 1,
+      "display_name": "破",
+      "source_text": "哨位每4秒对随机敌方卡牌造成1×等级的远程伤害。",
+      "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
+      "confirmed_rules": {
+        "interval_seconds": 4,
+        "target": "random_living_enemy_squad",
+        "selection": "equal_weight",
+        "uses_ranged_multiplier": true,
+        "affected_by_minion_control": false,
+        "damage_per_hero_level": 1
+      }
+    },
+    "sentry_sharp": {
+      "level": 1,
+      "display_name": "锐",
+      "source_text": "哨位获得亡语：为随机一张友方卡牌提供+（0.5×等级）/+（1×等级）。",
+      "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
+      "confirmed_rules": {
+        "triggers": [
+          "capacity_exhaustion",
+          "protection_sacrifice"
+        ],
+        "cleanup_triggers": false,
+        "target": "random_living_friendly_squad",
+        "action_per_hero_level": 0.5,
+        "health_per_hero_level": 1,
+        "duration": "battle",
+        "increase_current_health": true
+      }
+    },
+    "sentry_spell": {
+      "level": 1,
+      "display_name": "咒",
+      "source_text": "哨位获得战吼：随机获得1张属于辉光同盟的法术。",
+      "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
+      "confirmed_rules": {
+        "trigger": "rush",
+        "pool": "implemented_available_radiant_alliance_spells",
+        "tier_weights_from": "res://data/demo2/ordinary_shop_config.json",
+        "award_at": "normal_battle_settlement",
+        "durability": "rarity",
+        "exclude_held_iv": true
+      }
+    },
+    "sentry_fortify": {
+      "level": 4,
+      "display_name": "坚固",
+      "source_text": "任务：前排部署7个独立的防御行动随从并赢得一场战斗。奖励：哨位每次最多分担3点伤害，吸收容量额外+10。",
+      "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
+      "confirmed_rules": {
+        "independent_defense_minions": 7,
+        "shared_damage_per_hit": 3,
+        "extra_capacity": 10
+      }
+    },
+    "sentry_alchemy": {
+      "level": 4,
+      "display_name": "点金",
+      "source_text": "哨位储存上限变为4枚，立即获得1枚。正式开战时，每投入1枚哨位获得5金币。",
+      "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
+      "confirmed_rules": {
+        "inventory_limit": 4,
+        "immediate_count": 1,
+        "gold_per_deployed_sentry": 5
+      }
+    },
+    "sentry_protection": {
+      "level": 4,
+      "display_name": "保护",
+      "source_text": "友军即将受到致命伤害时，摧毁1枚已部署哨位，免疫本次伤害并恢复5点生命。优先选择剩余容量最少的哨位，相同则前排、后排、法术堆依次优先。",
+      "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
+      "confirmed_rules": {
+        "healing": 5,
+        "capacity_tie_order": [
+          "front",
+          "back",
+          "spells"
+        ]
+      }
+    },
+    "sentry_needle": {
+      "level": 4,
+      "display_name": "针刺",
+      "source_text": "哨位吸收伤害时对随机敌方卡牌造成等量同类型伤害，哨位可以额外吸收5点伤害。",
+      "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
+      "confirmed_rules": {
+        "extra_capacity": 5,
+        "return_amount": "actual_shared_damage",
+        "return_damage_type": "same_as_incoming",
+        "target": "random_living_enemy_squad",
+        "uses_attack_type_multiplier": false
+      }
+    },
+    "firmament_blessing": {
+      "level": 7,
+      "display_name": "至高天",
+      "source_text": "每四天可在准备阶段消耗两枚哨位获得至高天穹的祝福。",
+      "boundary_status": "特殊商店模型规则已确认；用户要求正式商品内容暂缓，入店货币数与具体商品后续配置",
+      "confirmed_rules": {
+        "kind": "special_shop",
+        "price": 0,
+        "cooldown_days": 4,
+        "stored_uses": false,
+        "consumes_sentries": 2,
+        "card_pool": null,
+        "offer_count": null,
+        "pick_count": null,
+        "shop_model": "special_shop_session",
+        "offer_pool_status": "deferred_by_user",
+        "currency_granted_on_entry": null,
+        "purchase_currency": "shop_local_only",
+        "clear_currency_on_exit": true,
+        "bundled_offers": true
+      }
+    },
+    "sentry_unbreakable": {
+      "level": 7,
+      "display_name": "不坏身",
+      "source_text": "哨位可吸收的伤害翻倍。",
+      "boundary_status": "已确认；第一层不实现，保留定义供后续层接入",
+      "confirmed_rules": {
+        "capacity_multiplier": 2,
+        "includes_talent_extra_capacity": true
+      }
+    },
+    "lone_star": {
+      "level": 7,
+      "display_name": "孤星耀",
+      "source_text": "每场一次：只剩最后一个友军时，免疫伤害5秒并立即行动2次。开场仅有一个单兵或小队时也触发。",
+      "boundary_status": "已确认；第一层不实现，保留定义供后续层接入"
+    },
+    "three_celestial_marks": {
+      "level": 7,
+      "display_name": "三星印",
+      "source_text": "获得太阳、月亮、星星指示物各一枚。",
+      "boundary_status": "已确认；第一层不实现，保留定义供后续层接入"
+    },
+    "twin_sentries": {
+      "level": 10,
+      "display_name": "双哨共鸣",
+      "source_text": "每天可以获得两枚哨位。",
+      "boundary_status": "已确认；第一层不实现，保留定义供后续层接入"
+    },
+    "all_first_talents": {
+      "level": 10,
+      "display_name": "万法皆成",
+      "source_text": "获得所有一级天赋。",
+      "boundary_status": "已确认；第一层不实现，保留定义供后续层接入",
+      "confirmed_rules": {
+        "grant_levels": [
+          1
+        ],
+        "skip_already_owned": true
+      }
+    },
+    "rear_veil": {
+      "level": 10,
+      "display_name": "重幕庇影",
+      "source_text": "友方前排存在卡牌时，后排不能被双方行动选为主目标，包括友方治疗和防御；元素副目标不受限制。",
+      "boundary_status": "已确认；第一层不实现，保留定义供后续层接入"
+    },
+    "supernova": {
+      "level": 10,
+      "display_name": "超星燃爆",
+      "source_text": "战斗开始5秒内所有友方卡牌属性值翻倍，友方卡牌延迟5秒进入疲劳阶段。",
+      "boundary_status": "已确认；第一层不实现，保留定义供后续层接入",
+      "confirmed_rules": {
+        "duration_seconds": 5,
+        "double_base_action": true,
+        "double_base_health": true,
+        "double_armor": false,
+        "health_on_expiry": "min(current_health, health_before_effect)",
+        "maximum_health_on_expiry": "maximum_health_before_effect",
+        "friendly_fatigue_delay_seconds": 5
+      }
+    }
+  },
+  "terminology_notes": "战吼已由用户明确确认对应突击（rush），亡语沿用遗愿（last_wish）；超星爆燃的本次描述对应已有supernova/超星燃爆同一天赋。",
+  "experience": {
+    "level_thresholds": [
+      0,
+      2,
+      6,
+      12,
+      20,
+      30,
+      42,
+      56,
+      72,
+      90
+    ],
+    "victory_base": 2,
+    "victory_per_floor": 4,
+    "defeat_per_floor": 1,
+    "ordinary_event": 0,
+    "dedicated_event": 1,
+    "_说明": "L级升下一级需要2L；F层胜利2+4(F-1)、失败F；推算全胜进度不含事件经验。"
+  },
+  "battle_rewards": {
+    "victory_gold": 12,
+    "defeat_gold_min": 1,
+    "defeat_gold_max": 6,
+    "drop_weights": {
+      "gold": 6,
+      "scraper": 3,
+      "emblem": 1
+    },
+    "drop_gold_min": 1,
+    "drop_gold_max": 3,
+    "_说明": "每场胜利另抽一份掉落：金币1～3／刮刀1／随机I级纹章1，权重6:3:1；金币数量区间内等概率，失败无额外掉落。"
+  },
+  "wound_event": {
+    "wound_ids": [
+      "中毒Ⅰ",
+      "内伤Ⅰ",
+      "骨折Ⅰ",
+      "烧伤Ⅰ",
+      "撕裂Ⅰ",
+      "尸毒Ⅰ",
+      "魔痕Ⅰ"
+    ],
+    "no_target": "no_effect",
+    "_说明": "从有空伤势槽的已拥有随从等概率选目标，新增随机I级伤势；不替换、不升级，无目标不执行，不给补偿金币。"
+  }
+}

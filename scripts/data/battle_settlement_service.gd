@@ -30,7 +30,8 @@ func settle(
 	journal: RunSettlementJournal,
 	owned_change_entries: Array[Dictionary] = [],
 	card_registry: Dictionary = {},
-	resource_board_state: ResourceBoardState = null
+	resource_board_state: ResourceBoardState = null,
+	random_card_resolver: Callable = Callable()
 ) -> Dictionary:
 	if (
 		snapshot == null
@@ -103,7 +104,8 @@ func settle(
 		var growth_stat := entry.get("stat", &"") as StringName
 		var growth_applied_success := false
 		if owned_card != null and growth_stat == BattlePermanentGrowthLedger.STAT_CRYSTALLIZATION_HEALTH_LOSS:
-			growth_applied_success = owned_card.apply_crystallization_health_loss(roundi(float(entry.get("amount", 0.0))))
+			# 账本记生命变化（-1），OwnedCard保存累计损失量（+1）。
+			growth_applied_success = owned_card.apply_crystallization_health_loss(-roundi(float(entry.get("amount", 0.0))))
 		elif owned_card != null:
 			growth_applied_success = owned_card.apply_permanent_growth(
 				_map_growth_stat(growth_stat),
@@ -118,6 +120,7 @@ func settle(
 			continue
 		if entry.get("kind") in [
 			BattleOwnedCardChangeLedger.KIND_CONSUME_EQUIPMENT,
+			BattleOwnedCardChangeLedger.KIND_DESTROY_CARD,
 			BattleOwnedCardChangeLedger.KIND_HEAL_RANDOM_SQUAD_WOUND,
 		]:
 			continue
@@ -149,12 +152,23 @@ func settle(
 		):
 			_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 			return _failure("spell_durability_apply_failed", battle_id)
+		if owned_spell.card_data.spell_durability_unlimited:
+			continue
 		owned_spell.spell_durability -= 1
 		spell_durability_spent += 1
 		if owned_spell.spell_durability == 0:
 			owned_collection.remove_by_instance_id(spell_instance_id)
 			spent_spells_removed += 1
 	for entry: Dictionary in reward_entries:
+		if entry.get("kind") == BattleRunRewardLedger.KIND_MINING_COUNT:
+			reward_state.mining_totals[int(entry.side)] += int(entry.amount)
+			continue
+		if entry.get("kind") == BattleRunRewardLedger.KIND_PLAYER_THEFT:
+			gold_added += reward_state.apply_gold_delta(-int(entry.amount))
+			continue
+		if entry.get("kind") == BattleRunRewardLedger.KIND_PLAYER_REFUND:
+			gold_added += reward_state.apply_gold_delta(int(entry.amount))
+			continue
 		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
 			continue
 		var kind := entry.get("kind", &"") as StringName
@@ -198,6 +212,11 @@ func settle(
 			_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 			return _failure("equipment_consumption_failed", battle_id)
 		equipment_consumed += 1
+	for entry: Dictionary in owned_change_entries:
+		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER: continue
+		var owned := owned_collection.get_by_instance_id(entry.owned_card_instance_id)
+		if entry.kind == BattleOwnedCardChangeLedger.KIND_DESTROY_CARD or (entry.kind == BattleOwnedCardChangeLedger.KIND_EQUIPMENT_DURABILITY and owned != null and owned.equipment_durability == 0):
+			owned_collection.remove_by_instance_id(entry.owned_card_instance_id)
 	if resource_board_state != null:
 		for instance_id_value: Variant in (snapshot.get_resource_board_state().get("deployments", {}).get("player", {}) as Dictionary).keys():
 			if resource_board_state.is_level_resource("player", String(instance_id_value)):
@@ -207,6 +226,14 @@ func settle(
 				resource_board_state.restore_state(rollback_resource_board, card_registry)
 				return _failure("deployed_resource_consumption_failed", battle_id)
 		resource_board_state.clear_level_resources()
+	var random_card_names: Array = []
+	if random_card_resolver.is_valid():
+		var resolved: Dictionary = random_card_resolver.call()
+		if not bool(resolved.get("success", false)):
+			_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
+			if resource_board_state != null: resource_board_state.restore_state(rollback_resource_board, card_registry)
+			return _failure(String(resolved.get("reason", "random_card_resolution_failed")), battle_id)
+		random_card_names.assign(resolved.get("cards", []))
 	if not journal.mark_committed(battle_id):
 		_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 		if resource_board_state != null:
@@ -226,6 +253,7 @@ func settle(
 		"spent_spells_removed": spent_spells_removed,
 		"gold_added": gold_added,
 		"random_card_requests_queued": random_requests_queued,
+		"random_card_names": random_card_names,
 		"resource_cards_awarded": resource_cards_awarded,
 		"emblem_instances_queued": emblem_instances_queued,
 	}
@@ -245,7 +273,12 @@ func _validate_entries(
 		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
 			continue
 		var stat := entry.get("stat", &"") as StringName
-		if _map_growth_stat(stat).is_empty() or is_zero_approx(float(entry.get("amount", 0.0))):
+		var amount := float(entry.get("amount", 0.0))
+		if stat == BattlePermanentGrowthLedger.STAT_CRYSTALLIZATION_HEALTH_LOSS:
+			# 晶体化扣基础生命，用专用累计字段保存，不能映射为普通生命成长。
+			if not is_finite(amount) or amount >= 0.0 or amount != floor(amount):
+				return _failure("invalid_growth_entry_value", battle_id)
+		elif _map_growth_stat(stat).is_empty() or is_zero_approx(amount):
 			return _failure("invalid_growth_entry_value", battle_id)
 		var instance_id := entry.get("owned_card_instance_id", &"") as StringName
 		if not instance_id.is_empty() and owned_collection.get_by_instance_id(instance_id) == null:
@@ -264,6 +297,14 @@ func _validate_entries(
 		var kind := entry.get("kind", &"") as StringName
 		var parameters := entry.get("parameters", {}) as Dictionary
 		match kind:
+			BattleOwnedCardChangeLedger.KIND_RUNE_ELEMENT:
+				var index := int(parameters.get("index", -1))
+				if index < 0 or index >= owned_card.resolved_runes.size() or int(parameters.get("element", -1)) != CardData.ElementType.FIRE:
+					return _failure("invalid_rune_element_change", battle_id)
+			BattleOwnedCardChangeLedger.KIND_EQUIPMENT_DURABILITY:
+				if owned_card.card_data.equipment_durability <= 0 or owned_card.equipment_durability <= 0: return _failure("invalid_equipment_durability", battle_id)
+			BattleOwnedCardChangeLedger.KIND_DESTROY_CARD:
+				if owned_card.card_data.card_type != CardData.CardType.MINION: return _failure("invalid_destroyed_card", battle_id)
 			BattleOwnedCardChangeLedger.KIND_CONSUME_EQUIPMENT:
 				if (
 					owned_card.card_data.card_type != CardData.CardType.EQUIPMENT
@@ -291,12 +332,12 @@ func _validate_entries(
 					or int(parameters.get("amount", 0)) <= 0
 				):
 					return _failure("invalid_emblem_progress", battle_id)
-			BattleOwnedCardChangeLedger.KIND_SET_WOUND_BATTLE_COUNTER:
+			BattleOwnedCardChangeLedger.KIND_SET_PROGRESS, BattleOwnedCardChangeLedger.KIND_SET_WOUND_BATTLE_COUNTER:
 				if (
 					(parameters.get("counter_key", &"") as StringName).is_empty()
 					or int(parameters.get("counter_value", -1)) < 0
 				):
-					return _failure("invalid_wound_battle_counter", battle_id)
+					return _failure("invalid_owned_progress" if kind == BattleOwnedCardChangeLedger.KIND_SET_PROGRESS else "invalid_wound_battle_counter", battle_id)
 			BattleOwnedCardChangeLedger.KIND_HEAL_RANDOM_SQUAD_WOUND:
 				var instance_ids := parameters.get("squad_card_instance_ids", []) as Array
 				if instance_ids.is_empty():
@@ -310,6 +351,9 @@ func _validate_entries(
 	for entry: Dictionary in reward_entries:
 		if not _validate_common_entry(entry, battle_id, seen_entry_ids):
 			return _failure("invalid_reward_entry_identity", battle_id)
+		if entry.get("kind") in [BattleRunRewardLedger.KIND_MINING_COUNT, BattleRunRewardLedger.KIND_PLAYER_THEFT, BattleRunRewardLedger.KIND_PLAYER_REFUND]:
+			if int(entry.get("side", -1)) not in [BattleSquadState.Side.PLAYER, BattleSquadState.Side.ENEMY] or int(entry.get("amount", 0)) <= 0:
+				return _failure("invalid_cross_side_reward_value", battle_id)
 		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
 			continue
 		if (
@@ -319,6 +363,9 @@ func _validate_entries(
 				BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE,
 				BattleRunRewardLedger.KIND_OWNED_CARD_AWARD,
 				BattleRunRewardLedger.KIND_GOLD_DELTA,
+				BattleRunRewardLedger.KIND_MINING_COUNT,
+				BattleRunRewardLedger.KIND_PLAYER_THEFT,
+				BattleRunRewardLedger.KIND_PLAYER_REFUND,
 			]
 			or int(entry.get("amount", 0)) <= 0
 		):
@@ -360,6 +407,17 @@ func _apply_owned_change(
 	var kind := entry.get("kind", &"") as StringName
 	var parameters := entry.get("parameters", {}) as Dictionary
 	match kind:
+		BattleOwnedCardChangeLedger.KIND_EQUIPMENT_DURABILITY:
+			owned_card.equipment_durability -= int(parameters.get("amount", 1))
+			return {"success": owned_card.equipment_durability >= 0, "applied": 1}
+		BattleOwnedCardChangeLedger.KIND_RUNE_ELEMENT:
+			var index := int(parameters.index)
+			if bool(parameters.get("sticker", false)):
+				var sticker := owned_card.rune_stickers[index].duplicate(true)
+				sticker["element"] = int(parameters.element)
+				owned_card.set_rune_sticker(index, sticker)
+			else: owned_card.resolved_runes[index] = int(parameters.element)
+			return {"success": true, "applied": 1}
 		BattleOwnedCardChangeLedger.KIND_SET_WOUND_SLOT:
 			return {
 				"success": owned_card.set_wound_slot(
@@ -376,6 +434,9 @@ func _apply_owned_change(
 				),
 				"applied": 1,
 			}
+		BattleOwnedCardChangeLedger.KIND_SET_PROGRESS:
+			owned_card.progress_by_source[parameters.counter_key] = int(parameters.counter_value)
+			return {"success": true, "applied": 1}
 		BattleOwnedCardChangeLedger.KIND_ADD_EMBLEM_PROGRESS:
 			var progress_result := owned_card.add_emblem_progress(
 				parameters.get("emblem_instance_id", &"") as StringName,

@@ -13,4 +13,4 @@ max_health = 6
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(1, -1)
-effect_text = "收获：1d10<9获一张元素碎晶，>8获一个纹章。"
+effect_text = "收获：1d10<9获得一张元素碎晶，>8获得一个纹章。"

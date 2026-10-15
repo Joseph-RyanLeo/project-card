@@ -1,0 +1,611 @@
+{
+  "schema_version": 2,
+  "cards": [
+    {
+      "card_id": "walking_fighter",
+      "effects": [
+        {
+          "effect_id": "walking_fighter.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "walking_fighter.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "walking_fighter"
+          },
+          "reading": "无法堆叠。每次实际获得护甲，本场数值+1；回响切换近战／防御。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "formation_commander",
+      "effects": [
+        {
+          "effect_id": "formation_commander.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "formation_commander.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "formation_commander"
+          },
+          "reading": "突击、遗愿：相邻小队获得保护1。",
+          "questions": []
+        },
+        {
+          "effect_id": "formation_commander.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "formation_commander.group.last_wish",
+          "group_order": 2,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "formation_commander"
+          },
+          "reading": "突击、遗愿：相邻小队获得保护1。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "bomb_apprentice",
+      "effects": [
+        {
+          "effect_id": "bomb_apprentice.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "bomb_apprentice.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "bomb_apprentice"
+          },
+          "reading": "保护1。遗愿：召唤一张诡雷。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "inscription_scholar",
+      "effects": [
+        {
+          "effect_id": "inscription_scholar.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "inscription_scholar.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "inscription_scholar"
+          },
+          "reading": "回响：已装备物品的友军获得强化1、护甲1。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "field_beer_machine",
+      "effects": [
+        {
+          "effect_id": "field_beer_machine.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "field_beer_machine.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "field_beer_machine"
+          },
+          "reading": "回响：相邻矮人充能0.5秒。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "mobilization_machine",
+      "effects": [
+        {
+          "effect_id": "mobilization_machine.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "mobilization_machine.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "mobilization_machine"
+          },
+          "reading": "突击：相邻友军各随机获得一枚本场纹章。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "armament_apprentice",
+      "effects": [
+        {
+          "effect_id": "armament_apprentice.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "armament_apprentice.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "armament_apprentice"
+          },
+          "reading": "突击：投1d10，=1摧毁携带装备，否则装备永久数值+1。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "scout",
+      "effects": [
+        {
+          "effect_id": "scout.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "scout.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "scout"
+          },
+          "reading": "回响：相邻远程友军获得强化+1。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "unstable_explosive_robot",
+      "effects": [
+        {
+          "effect_id": "unstable_explosive_robot.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "unstable_explosive_robot.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "unstable_explosive_robot"
+          },
+          "reading": "遗愿：对随机敌军造成1d10无类型伤害。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "anvilbone_ledger",
+      "effects": [
+        {
+          "effect_id": "anvilbone_ledger.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "anvilbone_ledger.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "anvilbone_ledger"
+          },
+          "reading": "获胜且存活后永久数值+1、生命+2。遗愿：击杀者受到的下3次行动伤害翻倍。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "sentry_pistol",
+      "effects": [
+        {
+          "effect_id": "sentry_pistol.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "sentry_pistol.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 2
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "sentry_pistol"
+          },
+          "reading": "本场前2次回响：对随机敌军造成1d6远程伤害。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "booby_mine",
+      "effects": [
+        {
+          "effect_id": "booby_mine.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "booby_mine.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "ironwall",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "booby_mine"
+          },
+          "reading": "遗愿：对击杀来源造成1d10无类型伤害。",
+          "questions": []
+        }
+      ]
+    }
+  ]
+}

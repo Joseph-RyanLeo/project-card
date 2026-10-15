@@ -30,6 +30,8 @@ var _scraper_groove: TextureRect
 var _scraper_count_label: Label
 var _sticker_inventory: Variant = StickerInventoryScript.new()
 var _scraper_count: int = 0
+var fusion_busy := false
+var _hidden_item_ids: Array[StringName] = []
 
 
 func return_sticker(state: Dictionary) -> bool:
@@ -80,15 +82,15 @@ func set_inspect_mode(value: bool) -> void:
 func set_drag_enabled(value: bool) -> void:
 	_drag_enabled = value
 	if is_instance_valid(_scraper):
-		_scraper.enabled = value and _scraper_count > 0
+		_scraper.enabled = value and not fusion_busy and _scraper_count > 0
 	for entry: Variant in _entries:
-		entry.set_drag_enabled(value)
+		entry.set_drag_enabled(value and not fusion_busy)
 
 
 func set_scraper_count(value: int) -> void:
 	_scraper_count = maxi(value, 0)
 	if is_instance_valid(_scraper):
-		_scraper.enabled = _drag_enabled and _scraper_count > 0
+		_scraper.enabled = _drag_enabled and not fusion_busy and _scraper_count > 0
 		_scraper.tooltip_text = "符文刮刀 ×%d\n点击进入刮擦模式；左键点击或按住移动以刮开符文。右键或 Esc 退出。" % _scraper_count
 	if is_instance_valid(_scraper_count_label):
 		_scraper_count_label.text = "×%d" % _scraper_count
@@ -190,7 +192,7 @@ func can_move_sticker(instance_id: StringName, target_cell: Vector2i) -> bool:
 
 
 func try_move_sticker_global(instance_id: StringName, global_position: Vector2, drag_data: Dictionary) -> bool:
-	if not _drag_enabled or not is_instance_valid(_grid):
+	if not _drag_enabled or fusion_busy or not is_instance_valid(_grid):
 		return false
 	return move_sticker(instance_id, _grid.cell_for_drag(drag_data, global_position))
 
@@ -279,7 +281,7 @@ func _build_controls() -> void:
 	_scraper.size = _scraper.texture.get_size() # 刮刀以59×59原生像素摆放，检视与手持共用4倍缩放
 	_scraper.blade_point = RuneStickerStyle.get_scraper_hit_point()
 	_scraper.blade_rect = RuneStickerStyle.get_scraper_hit_rect()
-	_scraper.enabled = _drag_enabled and _scraper_count > 0
+	_scraper.enabled = _drag_enabled and not fusion_busy and _scraper_count > 0
 	_scraper.position = Vector2(14, 48) # 原生刮刀在工具箱左侧工具区的位置
 	_scraper.action_mode_requested.connect(_on_scraper_action_mode_requested)
 	_scraper_groove = TextureRect.new()
@@ -348,7 +350,8 @@ func _refresh_entries() -> void:
 				display_definitions.append(inventory_definition)
 	for definition: Dictionary in display_definitions:
 		var entry: Variant = EmblemLibraryEntryScript.new()
-		entry.configure(definition, _drag_enabled)
+		entry.configure(definition, _drag_enabled and not fusion_busy)
+		entry.modulate.a = 0.0 if StringName(String(definition.returned_state.instance_id)) in _hidden_item_ids else 1.0
 		entry.click_carry_requested.connect(_on_item_click_carry_requested)
 		_grid.add_child(entry)
 		_entries.append(entry)
@@ -367,3 +370,34 @@ func _update_title() -> void:
 
 func _on_item_click_carry_requested(data: Dictionary, pointer_global_position: Vector2) -> void:
 	click_carry_requested.emit(data, pointer_global_position)
+
+
+func get_item_canvas_rect(instance_id: StringName) -> Rect2:
+	for entry: Control in _entries:
+		if StringName(String(entry.definition.returned_state.instance_id)) == instance_id:
+			return Rect2(entry._icon.get_global_transform_with_canvas().origin, entry._icon.size * entry._icon.get_global_transform_with_canvas().get_scale())
+	return Rect2()
+
+
+func set_fusion_busy(value: bool, hidden_ids: Array[StringName] = []) -> void:
+	fusion_busy = value
+	set_hidden_item_ids(hidden_ids)
+	for entry: Control in _entries:
+		entry.set_drag_enabled(_drag_enabled and not fusion_busy)
+	if is_instance_valid(_scraper):
+		_scraper.enabled = _drag_enabled and not fusion_busy and _scraper_count > 0
+
+
+func set_hidden_item_ids(instance_ids: Array[StringName]) -> void:
+	# 只隐藏演出中的实例图标，库存与格位不变；合成和开包共用这一显示接口。
+	_hidden_item_ids.assign(instance_ids)
+	for entry: Control in _entries:
+		entry.modulate.a = 0.0 if StringName(String(entry.definition.returned_state.instance_id)) in _hidden_item_ids else 1.0
+
+
+func commit_fusion_onto_card(source_id: StringName, owned: OwnedCard, slot_index: int, target_id: StringName) -> Dictionary:
+	var result: Dictionary = _sticker_inventory.fuse_onto_card(source_id, owned, slot_index, target_id)
+	if result.is_empty():
+		return {}
+	_refresh_entries()
+	return result

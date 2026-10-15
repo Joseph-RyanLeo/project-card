@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-10",
+  "engine": "Godot 4.7.2",
+  "tests": [
+    {
+      "script": "balance_row_text_20261010_test.gd",
+      "checks": 191,
+      "failures": 0
+    },
+    {
+      "script": "silvermoon_battle_test.gd",
+      "checks": 467,
+      "failures": 0
+    },
+    {
+      "script": "silvermoon_followup_regression_test.gd",
+      "checks": 73,
+      "failures": 0
+    },
+    {
+      "script": "battle_load_optimization_test.gd",
+      "checks": 26,
+      "failures": 0
+    },
+    {
+      "script": "silvermoon_game_integration_test.gd",
+      "checks": 11,
+      "failures": 0
+    },
+    {
+      "script": "battle_result_summons_test.gd",
+      "checks": 69,
+      "failures": 0
+    }
+  ],
+  "native_checks": 193,
+  "native_failures": 0,
+  "screenshots": [
+    "balance-front-20261010.png",
+    "balance-equipment-back-20261010.png"
+  ],
+  "existing_test_updates": "随新版玩法替换4个已失效的骑士旧光环和护符旧数值预期",
+  "full_suite_run": false,
+  "total_checks": 837
+}

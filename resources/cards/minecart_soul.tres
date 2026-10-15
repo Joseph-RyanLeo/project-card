@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/minecart_soul.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"minecart_soul"
+display_name = "矿车亡魂"
+pack_id = &"twisted_vein"
+effect_ids = Array[StringName]([&"minecart_soul.effect.rush", &"minecart_soul.effect.last_wish"])
+content_effect = &"minecart_soul"
+base_value = 3
+cooldown_seconds = 6.0
+max_health = 2
+armor = 5
+runes = Array[int]([0, 1, 2])
+race_type = 5
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-8, 17)
+effect_text = "突击：立即行动1次。遗愿：再行动1次！"

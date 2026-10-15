@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/gold_sprite.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"gold_sprite"
+display_name = "金光妖"
+pack_id = &"twisted_vein"
+keywords = Array[StringName]([&"mining"])
+content_effect = &"gold_sprite"
+base_value = 2
+cooldown_seconds = 5.0
+max_health = 3
+runes = Array[int]([0, 1, 2])
+race_type = 6
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-1, 6)
+effect_text = "开采；开采行动可选2个目标。"

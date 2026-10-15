@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/array_heavy_crossbow.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"array_heavy_crossbow"
+display_name = "阵列重弩"
+pack_id = &"ironwall_inscription"
+keywords = Array[StringName]([&"squad_equipment"])
+content_effect = &"array_heavy_crossbow"
+card_type = 1
+rarity = 2
+equipment_action_delta = 2
+equipment_zeal_delta = -3
+equipment_armor_delta = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(6, 2)
+effect_text = "仅小队可装备；该小队造成的所有远程伤害穿甲。"

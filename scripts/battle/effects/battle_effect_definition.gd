@@ -21,12 +21,14 @@ enum Trigger {
 	SOURCE_ARMOR_GAINED,
 	SOURCE_HEALTH_LOST_ACCUMULATED,
 	EQUIPPED_UNIT_AFTER_BASIC_ACTION_DAMAGE,
+	ADJACENT_ALLY_MINED,
 }
 
 enum Condition {
 	ALWAYS,
 	SOURCE_EFFECT_ACTIVE,
 	TARGET_HAS_ARMOR,
+	TARGET_HAS_EQUIPMENT,
 	TARGET_IS_HUMAN,
 	TARGET_IS_NON_ELF,
 	NEIGHBOR_ACTIVE,
@@ -44,6 +46,7 @@ enum Condition {
 	SOURCE_EQUIPMENT_PARTICIPATED,
 	NOT_SAME_EFFECT_GENERATED_GAIN,
 	ACCUMULATED_HEALTH_LOSS_AT_LEAST_VALUE,
+	EVENT_ACTOR_IN_SAME_ROW,
 }
 
 enum Target {
@@ -66,6 +69,7 @@ enum Target {
 	FRIENDLY_NEIGHBOR_EFFECTS,
 	GRANTED_EFFECT_HOLDER,
 	OWNING_PLAYER,
+	FRONT_ROW_FRIENDLY_UNITS,
 }
 
 enum Operation {
@@ -91,6 +95,10 @@ enum Operation {
 	MODIFY_EFFECT,
 	FORBID_STACKING,
 	CONSUME_EQUIPMENT,
+	TWISTED_VEIN,
+	SILVERMOON,
+	IRONWALL,
+	MINE,
 }
 
 enum OwnerKind {
@@ -131,6 +139,7 @@ const TRIGGER_BY_NAME: Dictionary = {
 	"battle_start_spell": Trigger.BATTLE_START_SPELL,
 	"elapsed_battle_time": Trigger.ELAPSED_BATTLE_TIME,
 	"other_ally_action_after": Trigger.OTHER_ALLY_ACTION_AFTER,
+	"adjacent_ally_mined": Trigger.ADJACENT_ALLY_MINED,
 	"after_basic_heal": Trigger.AFTER_BASIC_HEAL,
 	"ally_about_to_be_destroyed": Trigger.ALLY_ABOUT_TO_BE_DESTROYED,
 	"adjacent_ally_destroyed": Trigger.ADJACENT_ALLY_DESTROYED,
@@ -147,12 +156,14 @@ const CONDITION_BY_NAME: Dictionary = {
 	"always": Condition.ALWAYS,
 	"source_effect_active": Condition.SOURCE_EFFECT_ACTIVE,
 	"target_has_armor": Condition.TARGET_HAS_ARMOR,
+	"target_has_equipment": Condition.TARGET_HAS_EQUIPMENT,
 	"target_is_human": Condition.TARGET_IS_HUMAN,
 	"target_is_non_elf": Condition.TARGET_IS_NON_ELF,
 	"neighbor_active": Condition.NEIGHBOR_ACTIVE,
 	"has_granted_effect": Condition.HAS_GRANTED_EFFECT,
 	"per_battle_count_below_limit": Condition.PER_BATTLE_COUNT_BELOW_LIMIT,
 	"event_actor_is_other_ally": Condition.EVENT_ACTOR_IS_OTHER_ALLY,
+	"event_actor_in_same_row": Condition.EVENT_ACTOR_IN_SAME_ROW,
 	"target_has_active_injury": Condition.TARGET_HAS_ACTIVE_INJURY,
 	"destruction_caused_by_health_reaching_zero": Condition.DESTRUCTION_CAUSED_BY_HEALTH_REACHING_ZERO,
 	"damage_source_exists": Condition.DAMAGE_SOURCE_EXISTS,
@@ -173,6 +184,7 @@ const TARGET_BY_NAME: Dictionary = {
 	"source_active_rune": Target.SOURCE_ACTIVE_RUNE,
 	"source_equipment": Target.SOURCE_EQUIPMENT,
 	"all_friendly_combat_units": Target.ALL_FRIENDLY_COMBAT_UNITS,
+	"front_row_friendly_units": Target.FRONT_ROW_FRIENDLY_UNITS,
 	"adjacent_friendly_units": Target.ADJACENT_FRIENDLY_UNITS,
 	"same_row_friendly_units": Target.SAME_ROW_FRIENDLY_UNITS,
 	"self_and_adjacent_human_units": Target.SELF_AND_ADJACENT_HUMAN_UNITS,
@@ -189,12 +201,16 @@ const TARGET_BY_NAME: Dictionary = {
 }
 
 const OPERATION_BY_NAME: Dictionary = {
+	"twisted_vein": Operation.TWISTED_VEIN,
+	"silvermoon": Operation.SILVERMOON,
+	"ironwall": Operation.IRONWALL,
 	"add_attribute": Operation.ADD_ATTRIBUTE,
 	"add_target_priority": Operation.ADD_TARGET_PRIORITY,
 	"add_action_multiplier": Operation.ADD_ACTION_MULTIPLIER,
 	"add_zeal": Operation.ADD_ZEAL,
 	"add_reinforcement": Operation.ADD_REINFORCEMENT,
 	"gain_armor": Operation.GAIN_ARMOR,
+	"mine": Operation.MINE,
 	"gain_gold": Operation.GAIN_GOLD,
 	"deal_non_action_damage": Operation.DEAL_NON_ACTION_DAMAGE,
 	"permanently_add_armor": Operation.PERMANENTLY_ADD_ARMOR,

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/star_chant_apprentice.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"star_chant_apprentice"
+display_name = "星咏学徒"
+pack_id = &"silvermoon_chapter"
+content_effect = &"star_chant_apprentice"
+action_type = 2
+base_value = 2
+cooldown_seconds = 4.0
+max_health = 3
+armor = 2
+runes = Array[int]([0, 1, 2])
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(14, 37)
+effect_text = "回响（命中后）：目标相邻随从各受1点法术伤害。"

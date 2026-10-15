@@ -634,7 +634,7 @@
         "伤势槽位": "3",
         "卡牌名": "符文刻匠",
         "卡牌类型": "随从",
-        "卡面短文本": "有护甲的友军行动倍率+0.1。",
+        "卡面短文本": "每累计胜利并存活两场战斗，随机获得一张元素贴纸。（还剩2次）",
         "原基础护甲": "12",
         "原基础数值": "6",
         "原基础生命值": "3",
@@ -642,7 +642,7 @@
         "原行动冷却": "8s",
         "品级": "Ⅲ",
         "子类型/种族": "人类",
-        "完整规则说明": "当前护甲大于0的友军行动倍率+0.1。多张符文刻匠的效果可以叠加。",
+        "完整规则说明": "每累计胜利并存活两场战斗，随机获得一张元素贴纸。（还剩2次）",
         "审阅状态": "已确认",
         "建议基础护甲": "10",
         "建议基础数值": "4",
@@ -650,7 +650,7 @@
         "建议行动冷却": "8s",
         "待确认事项": null,
         "徽章槽位": "2",
-        "数值调整理由": "全体倍率光环已占较高预算，降低基础行动与护甲，并为多来源设上限。",
+        "数值调整理由": "2026-10-05用户重做效果，基础数值保持现有资源配置。",
         "标准词条": [
           {
             "record_ids": [
@@ -670,7 +670,7 @@
         ],
         "源单元格": "K19",
         "源工作表": "灰烬证册",
-        "确认结果（人填）": null,
+        "确认结果（人填）": "2026-10-13用户确认：每累计胜利并存活两场战斗，随机获得一张元素贴纸。（还剩2次）",
         "稳定卡牌ID": null,
         "符文槽位": "3",
         "行动方式": [
@@ -679,50 +679,7 @@
         "衍生物？": null,
         "风险等级": "高"
       },
-      "effects": [
-        {
-          "effect_id": "rune_engraver.effect.01",
-          "review_status": "confirmed",
-          "effect_group": "rune_engraver.group.01",
-          "group_order": 1,
-          "trigger": "continuous",
-          "conditions": [
-            "source_effect_active",
-            "target_has_armor"
-          ],
-          "target": "all_friendly_combat_units",
-          "operation": "add_action_multiplier",
-          "value": {
-            "kind": "fixed",
-            "amount": 0.1
-          },
-          "duration": {
-            "kind": "while_active"
-          },
-          "stacking": {
-            "kind": "additive"
-          },
-          "source_owner": "minion_card_instance",
-          "result_owner": "affected_combat_unit",
-          "end_conditions": [
-            "来源效果失效",
-            "条件不再满足",
-            "战斗结束"
-          ],
-          "end_relation": "任一满足",
-          "end_parameters": "来源效果可用且条件成立时持续生效；失效移除本来源修正，恢复合法后重新计算，不逐帧累加",
-          "end_operation": "移除本来源修正，保留其他来源",
-          "trigger_limit": {
-            "scope": "continuous"
-          },
-          "tags": [],
-          "related_effects": [],
-          "modifier": null,
-          "parameters": {},
-          "reading": "当前护甲大于0的友军行动倍率+0.1；多个符文刻匠可叠加。",
-          "questions": []
-        }
-      ],
+      "effects": [],
       "resource_path": "res://resources/cards/rune_engraver.tres"
     },
     {
@@ -737,7 +694,7 @@
         "伤势槽位": "2",
         "卡牌名": "民兵指挥官",
         "卡牌类型": "随从",
-        "卡面短文本": "友方人类每有一个相邻人类，获得+1/+1。",
+        "卡面短文本": "所有Ⅰ级友方随从获得乡邻：所有对应种族的友方随从获得+1/+1。",
         "原基础护甲": "6",
         "原基础数值": "6",
         "原基础生命值": "6",
@@ -745,7 +702,7 @@
         "原行动冷却": "5s",
         "品级": "Ⅲ",
         "子类型/种族": "人类",
-        "完整规则说明": "逐个计算友方人类自身的相邻人类数量，每个提供数值与生命+1；不再统计全场相邻组合或使用最多3组上限。",
+        "完整规则说明": "所有Ⅰ级友方随从获得乡邻：所有对应种族的友方随从获得+1/+1。",
         "审阅状态": "待确认",
         "建议基础护甲": "5",
         "建议基础数值": "4",
@@ -773,7 +730,7 @@
         ],
         "源单元格": "O19",
         "源工作表": "灰烬证册",
-        "确认结果（人填）": "能不能改成：为所有友方人类提供相等于其相邻人类数量的+1/+1",
+        "确认结果（人填）": "2026-10-13用户确认：所有Ⅰ级友方随从获得乡邻：所有对应种族的友方随从获得+1/+1。",
         "稳定卡牌ID": null,
         "符文槽位": "3",
         "行动方式": [
@@ -790,15 +747,14 @@
           "group_order": 2,
           "trigger": "continuous",
           "conditions": [
-            "source_effect_active",
-            "target_is_human"
+            "source_effect_active"
           ],
           "target": "all_friendly_combat_units",
           "operation": "add_attribute",
           "value": {
             "kind": "count_scaled",
-            "query": "target_adjacent_friendly_humans",
-            "per_count": 2
+            "query": "friendly_tier_i_neighbor_holders_matching_target_race",
+            "per_count": 1
           },
           "duration": {
             "kind": "while_active"
@@ -810,27 +766,71 @@
           "result_owner": "affected_combat_unit",
           "end_conditions": [
             "来源死亡",
-            "来源效果失效",
+            "条件不再满足",
             "战斗结束"
           ],
           "end_relation": "任一满足",
-          "end_parameters": "来源生效时实时按目标相邻人类数量重算；来源被消灭后撤销本来源加成",
-          "end_operation": "移除本来源生命加成",
+          "end_parameters": "逐个统计同族Ⅰ级乡邻持有者，实时重算；指挥官失效后撤销",
+          "end_operation": "移除本来源属性加成",
           "trigger_limit": {
             "scope": "continuous"
           },
-          "tags": [],
+          "tags": [
+            "乡邻"
+          ],
           "related_effects": [],
           "modifier": null,
           "parameters": {
             "stat": "max_health",
-            "increase_current_health": true,
-            "human_confirmation": {
-              "question": "这是实时邻接加成，还是突击时固定本场加成？",
-              "reply": "实时，民兵指挥官被消灭后所有已获得的该效果会失效，另外民兵指挥官特效感觉过强，把+1/+1改成+2生命值"
-            }
+            "increase_current_health": true
           },
-          "reading": "每个友方人类按自身相邻人类数量，每名相邻人类使其生命+2；实时变化，指挥官被消灭后撤销。不再增加行动数值。 多个指挥官的生命加成叠加。",
+          "reading": "所有Ⅰ级友方随从获得乡邻：所有对应种族的友方随从获得+1/+1。",
+          "questions": []
+        },
+        {
+          "effect_id": "militia_commander.effect.03",
+          "review_status": "confirmed",
+          "effect_group": "militia_commander.adjacency_value",
+          "group_order": 3,
+          "trigger": "continuous",
+          "conditions": [
+            "source_effect_active"
+          ],
+          "target": "all_friendly_combat_units",
+          "operation": "add_attribute",
+          "value": {
+            "kind": "count_scaled",
+            "query": "friendly_tier_i_neighbor_holders_matching_target_race",
+            "per_count": 1
+          },
+          "duration": {
+            "kind": "while_active"
+          },
+          "stacking": {
+            "kind": "additive"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "来源死亡",
+            "条件不再满足",
+            "战斗结束"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "逐个统计同族Ⅰ级乡邻持有者，实时重算；指挥官失效后撤销",
+          "end_operation": "移除本来源属性加成",
+          "trigger_limit": {
+            "scope": "continuous"
+          },
+          "tags": [
+            "乡邻"
+          ],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "stat": "base_value"
+          },
+          "reading": "所有Ⅰ级友方随从获得乡邻：所有对应种族的友方随从获得+1/+1。",
           "questions": []
         }
       ],
@@ -1178,7 +1178,7 @@
         "伤势槽位": "3",
         "卡牌名": "盾墙列兵",
         "卡牌类型": "随从",
-        "卡面短文本": "乡邻：每次获得护甲时，额外获得1点。",
+        "卡面短文本": "耀眼。乡邻：每次获得护甲时，额外获得1点。",
         "原基础护甲": "5",
         "原基础数值": "3",
         "原基础生命值": "4",
@@ -1186,7 +1186,7 @@
         "原行动冷却": "6s",
         "品级": "Ⅱ",
         "子类型/种族": "人类",
-        "完整规则说明": "乡邻：每次自身获得护甲时额外获得1点；该额外护甲不再次触发本效果。老狼的额外触发各加1，不递归产生新触发。",
+        "完整规则说明": "乡邻生效时，每次获得护甲额外+1；老狼额外触发每次再+1，额外护甲不再次触发本效果。 人工确认：3×2+1=7",
         "审阅状态": "已确认",
         "建议基础护甲": "5",
         "建议基础数值": "3",
@@ -1291,7 +1291,7 @@
         "伤势槽位": "3",
         "卡牌名": "伙夫",
         "卡牌类型": "随从",
-        "卡面短文本": "突击：全场每个生效火符文使最大生命+2（最多5个）。",
+        "卡面短文本": "耀眼。突击：场上每有一个生效的火符文，此卡获得2点生命值。",
         "原基础护甲": "0",
         "原基础数值": "8",
         "原基础生命值": "1",
@@ -1299,7 +1299,7 @@
         "原行动冷却": "8s",
         "品级": "Ⅱ",
         "子类型/种族": "元素",
-        "完整规则说明": "突击：统计敌我双方所有未被遮蔽且当前生效的火符文，每个使此卡本场最大生命值+2，最多计算5个。",
+        "完整规则说明": "突击统计双方生效且未遮蔽的火符文，每个使本单位本场最大生命与当前生命各+2；不设旧5枚上限。 获得此卡实例时在治疗与魔法中随机确定一种，保存后不重抽；耀眼保持。",
         "审阅状态": "已确认",
         "建议基础护甲": "0",
         "建议基础数值": "6",
@@ -1307,7 +1307,7 @@
         "建议行动冷却": "8s",
         "待确认事项": null,
         "徽章槽位": "2",
-        "数值调整理由": "全场符文数量可能让Ⅱ级生命无限增长，限制为小队可见符文上限。",
+        "数值调整理由": "2026-10-05用户重做效果，基础数值保持现有资源配置。",
         "标准词条": [
           {
             "record_ids": [
@@ -1331,11 +1331,12 @@
         ],
         "源单元格": "S32",
         "源工作表": "灰烬证册",
-        "确认结果（人填）": null,
+        "确认结果（人填）": "2026-10-08用户确认：耀眼；获得时随机确定治疗或魔法。",
         "稳定卡牌ID": null,
         "符文槽位": "3",
         "行动方式": [
-          "治疗"
+          "治疗",
+          "魔法"
         ],
         "衍生物？": null,
         "风险等级": "中"
@@ -1355,8 +1356,7 @@
           "value": {
             "kind": "count_scaled",
             "query": "all_active_fire_runes_both_sides",
-            "per_count": 2,
-            "max_count": 5
+            "per_count": 2
           },
           "duration": {
             "kind": "battle"
@@ -1385,7 +1385,7 @@
             "snapshot_timing": "on_effect_resolution",
             "increase_current_health": true
           },
-          "reading": "突击统计双方生效且未遮蔽的火符文，每个使本单位本场最大生命+2，最多计算5个；按生命成长通则同时增加当前生命。",
+          "reading": "突击统计双方生效且未遮蔽的火符文，每个使本单位本场最大生命与当前生命各+2；不设旧5枚上限。",
           "questions": []
         }
       ],
@@ -1403,7 +1403,7 @@
         "伤势槽位": "2",
         "卡牌名": "随军医者",
         "卡牌类型": "随从",
-        "卡面短文本": "治疗后，遮蔽目标1处伤势5秒。",
+        "卡面短文本": "治疗行动会临时遮蔽目标一处伤势，持续至战斗结束。",
         "原基础护甲": "0",
         "原基础数值": "3",
         "原基础生命值": "8",
@@ -1411,7 +1411,7 @@
         "原行动冷却": "5s",
         "品级": "Ⅱ",
         "子类型/种族": "精灵",
-        "完整规则说明": "此卡完成基础治疗行动后，随机临时遮蔽目标身上1处生效伤势5秒。没有生效伤势时不触发；重复命中同一伤势时刷新持续时间。",
+        "完整规则说明": "基础治疗完成后遮蔽治疗目标1处生效伤势，持续至战斗结束；沿用既有最高等级优先、同级随机选择，已遮蔽伤势不进入候选池，无目标跳过。",
         "审阅状态": "已确认",
         "建议基础护甲": "0",
         "建议基础数值": "3",
@@ -1419,7 +1419,7 @@
         "建议行动冷却": "5s",
         "待确认事项": null,
         "徽章槽位": "1",
-        "数值调整理由": "保留Ⅱ级辅助定位，略降生命并明确遮蔽选择与刷新规则。",
+        "数值调整理由": "2026-10-05只更改遮蔽持续期，基础数值保持现有资源配置。",
         "标准词条": [
           {
             "record_ids": [
@@ -1469,8 +1469,7 @@
             "amount": 1
           },
           "duration": {
-            "kind": "seconds",
-            "amount": 5
+            "kind": "battle"
           },
           "stacking": {
             "kind": "independent_by_source"
@@ -1478,11 +1477,10 @@
           "source_owner": "minion_card_instance",
           "result_owner": "affected_combat_unit",
           "end_conditions": [
-            "持续时间到期",
             "战斗结束"
           ],
           "end_relation": "任一满足",
-          "end_parameters": "施加后5秒或战后清理",
+          "end_parameters": "本场结束后解除遮蔽",
           "end_operation": "移除本来源遮蔽；其他遮蔽仍有效时不强行恢复伤势",
           "trigger_limit": {
             "scope": "event",
@@ -1492,14 +1490,14 @@
           "related_effects": [],
           "modifier": null,
           "parameters": {
-            "selection": "random",
+            "selection": "highest_level_then_random",
             "masked_injury_eligible": false,
             "human_confirmation": {
               "question": "候选池只含生效伤势，与“重复命中同一伤势刷新”存在边界：已被此效果遮蔽的伤势是否仍可进入候选？",
               "reply": "不可以。"
             }
           },
-          "reading": "基础治疗完成后随机遮蔽治疗目标1处生效伤势5秒；已遮蔽伤势不进入候选池，无目标跳过。 人工确认：不可以。",
+          "reading": "基础治疗完成后遮蔽治疗目标1处生效伤势，持续至战斗结束；沿用既有最高等级优先、同级随机选择，已遮蔽伤势不进入候选池，无目标跳过。",
           "questions": []
         }
       ],
@@ -1623,7 +1621,7 @@
         "伤势槽位": "2",
         "卡牌名": "胆怯的步兵",
         "卡牌类型": "随从",
-        "卡面短文本": "其他友军行动后：获得强化1（本效果最多累计5）。",
+        "卡面短文本": "同排其他友军行动后：获得强化1。",
         "原基础护甲": "2",
         "原基础数值": "0",
         "原基础生命值": "3",
@@ -1631,7 +1629,7 @@
         "原行动冷却": "6s",
         "品级": "Ⅰ",
         "子类型/种族": "人类",
-        "完整规则说明": "其他友军行动后获得强化1，仅强化下一次行动，本效果最多累计5；自身行动消耗并清零。不再提供本场永久累加的基础数值。",
+        "完整规则说明": "同排其他友军每次实际行动后，本单位获得1点强化，无旧5点贡献上限；自己行动后按已有强化规则消耗。其他排和敌人行动不触发。",
         "审阅状态": "已确认",
         "建议基础护甲": "2",
         "建议基础数值": "0",
@@ -1659,7 +1657,7 @@
         ],
         "源单元格": "C58",
         "源工作表": "灰烬证册",
-        "确认结果（人填）": null,
+        "确认结果（人填）": "2026-10-08用户平衡更新：同排其他友军行动后：获得强化1。",
         "稳定卡牌ID": null,
         "符文槽位": "3",
         "行动方式": [
@@ -1676,7 +1674,9 @@
           "group_order": 1,
           "trigger": "other_ally_action_after",
           "conditions": [
-            "event_actor_is_other_ally"
+            "source_effect_active",
+            "event_actor_is_other_ally",
+            "event_actor_in_same_row"
           ],
           "target": "source_combat_unit",
           "operation": "add_reinforcement",
@@ -1688,8 +1688,7 @@
             "kind": "until_consumed_by_action"
           },
           "stacking": {
-            "kind": "capped_additive",
-            "cap": 5
+            "kind": "additive"
           },
           "source_owner": "minion_card_instance",
           "result_owner": "affected_combat_unit",
@@ -1708,10 +1707,9 @@
           "related_effects": [],
           "modifier": null,
           "parameters": {
-            "cap_scope": "this_effect_contribution",
             "reset_contribution_on_action": true
           },
-          "reading": "其他友军行动后自己获得强化1，本效果提供的强化最多累计5；自身行动消耗清零，下次可重新累计。",
+          "reading": "同排其他友军每次实际行动后，本单位获得1点强化，无旧5点贡献上限；自己行动后按已有强化规则消耗。其他排和敌人行动不触发。",
           "questions": []
         }
       ],
@@ -1729,7 +1727,7 @@
         "伤势槽位": "2",
         "卡牌名": "铸甲师",
         "卡牌类型": "随从",
-        "卡面短文本": "相邻友军被消灭后，永久护甲+1（每场1次）。",
+        "卡面短文本": "相邻友军每进行一次开采，前排友军获得1点护甲。",
         "原基础护甲": "3",
         "原基础数值": "2",
         "原基础生命值": "2",
@@ -1737,7 +1735,7 @@
         "原行动冷却": "5s",
         "品级": "Ⅰ",
         "子类型/种族": "矮人",
-        "完整规则说明": "每场第一次有相邻友方随从被消灭时，永久基础护甲+1。每场一次，本卡复活或重新入场不重置次数。",
+        "完整规则说明": "相邻友军每成功开采1张资源，存活前排友军各获得1点护甲；双开采按两张成功资源分别触发。普通攻击击碎资源不触发，前排铸甲师自身属于前排友军，后排与敌军不受益。",
         "审阅状态": "已确认",
         "建议基础护甲": "3",
         "建议基础数值": "2",
@@ -1767,7 +1765,7 @@
         ],
         "源单元格": "G58",
         "源工作表": "灰烬证册",
-        "确认结果（人填）": null,
+        "确认结果（人填）": "2026-10-08用户平衡更新：相邻友军每进行一次开采，前排友军获得1点护甲。",
         "稳定卡牌ID": null,
         "符文槽位": "3",
         "行动方式": [
@@ -1782,43 +1780,41 @@
           "review_status": "confirmed",
           "effect_group": "armorsmith.group.01",
           "group_order": 1,
-          "trigger": "adjacent_ally_destroyed",
+          "trigger": "adjacent_ally_mined",
           "conditions": [
-            "per_battle_count_below_limit"
+            "source_effect_active"
           ],
-          "target": "source_combat_unit",
-          "operation": "permanently_add_armor",
+          "target": "front_row_friendly_units",
+          "operation": "gain_armor",
           "value": {
             "kind": "fixed",
             "amount": 1
           },
           "duration": {
-            "kind": "current_run_permanent"
+            "kind": "instant"
           },
           "stacking": {
-            "kind": "additive"
+            "kind": "not_applicable"
           },
           "source_owner": "minion_card_instance",
-          "result_owner": "armor_provider_card",
+          "result_owner": "affected_combat_unit",
           "end_conditions": [
-            "本局结束"
+            "操作结算完成"
           ],
           "end_relation": "任一满足",
-          "end_parameters": "成长随获得者保留到本局结束",
+          "end_parameters": "本次获得护甲完成，不产生永久成长",
           "end_operation": "无额外结束动作",
           "trigger_limit": {
-            "scope": "battle",
-            "count": 1,
-            "reset_on_reentry": false
+            "scope": "event",
+            "count": 1
           },
           "tags": [],
           "related_effects": [],
           "modifier": null,
           "parameters": {
-            "adjacency_timing": "before_dead_unit_removed",
-            "increase_current_armor": true
+            "apply_armor_gain_modifiers": true
           },
-          "reading": "每场首次有相邻友方随从被消灭时，永久基础护甲+1；归当时实际提供护甲的单卡，复活不重置次数。",
+          "reading": "相邻友军每成功开采1张资源，存活前排友军各获得1点护甲；双开采按两张成功资源分别触发。普通攻击击碎资源不触发，前排铸甲师自身属于前排友军，后排与敌军不受益。",
           "questions": []
         }
       ],
@@ -1836,7 +1832,7 @@
         "伤势槽位": "2",
         "卡牌名": "辎重驮夫",
         "卡牌类型": "随从",
-        "卡面短文本": "突击：获得1金币；乡邻额外获得2金币。",
+        "卡面短文本": "突击：获得1金币，乡邻：立即开采一次。",
         "原基础护甲": "0",
         "原基础数值": "2",
         "原基础生命值": "5",
@@ -1844,7 +1840,7 @@
         "原行动冷却": "5s",
         "品级": "Ⅰ",
         "子类型/种族": "人类",
-        "完整规则说明": "突击获得1金币；该次突击结算时若乡邻生效，额外获得2金币。不是全体生命加成。",
+        "完整规则说明": "本次突击给持有者1金币；乡邻增幅不重复这部分。 仅开场突击阶段乡邻成立时立即开采1次；乡邻在战中恢复、复活或召唤不补触发，无资源则本次失效。老狼可额外执行，不消耗普通开采次数、强化或触发回响。",
         "审阅状态": "已确认",
         "建议基础护甲": "0",
         "建议基础数值": "2",
@@ -1872,7 +1868,7 @@
         ],
         "源单元格": "K58",
         "源工作表": "灰烬证册",
-        "确认结果（人填）": null,
+        "确认结果（人填）": "2026-10-08用户平衡更新：突击：获得1金币，乡邻：立即开采一次。",
         "稳定卡牌ID": "baggage_muleteer",
         "符文槽位": "3",
         "行动方式": [
@@ -1927,22 +1923,23 @@
         },
         {
           "effect_id": "baggage_muleteer.effect.02",
-          "end_operation": "结算完成，不撤回已获得金币",
+          "end_operation": "无额外结束动作",
           "end_conditions": [
             "操作结算完成"
           ],
           "end_relation": "任一满足",
-          "end_parameters": "金币发放完成，不撤回奖励",
-          "effect_group": "baggage_muleteer.rush",
+          "end_parameters": "本次开场开采完成，不保留持续生命修正",
+          "effect_group": "baggage_muleteer.neighbor",
           "trigger": "rush",
           "conditions": [
+            "source_effect_active",
             "neighbor_active"
           ],
-          "target": "owning_player",
-          "operation": "gain_gold",
+          "target": "source_combat_unit",
+          "operation": "mine",
           "value": {
             "kind": "fixed",
-            "amount": 2
+            "amount": 1
           },
           "duration": {
             "kind": "instant"
@@ -1951,14 +1948,11 @@
             "kind": "not_applicable"
           },
           "source_owner": "minion_card_instance",
-          "result_owner": "owning_player",
+          "result_owner": "affected_combat_unit",
           "parameters": {
-            "乡邻增幅适用": true,
-            "条件读取": "本次突击结算时",
-            "之后满足不补发": true,
-            "额外触发不递归": true
+            "wolf_extra_execution_allowed": true
           },
-          "reading": "同一次突击若乡邻生效，额外给2金币；老狼只额外触发此部分。",
+          "reading": "仅开场突击阶段乡邻成立时立即开采1次；乡邻在战中恢复、复活或召唤不补触发，无资源则本次失效。老狼可额外执行，不消耗普通开采次数、强化或触发回响。",
           "review_status": "confirmed",
           "group_order": 2,
           "tags": [
@@ -2265,12 +2259,12 @@
       "source_cell": "C71",
       "card_type": "随从",
       "review_status": "confirmed",
-      "availability": "disabled",
+      "availability": "active",
       "source_fields": {
         "伤势槽位": "2",
         "卡牌名": "城镇牧师",
         "卡牌类型": "随从",
-        "卡面短文本": "暂时移除，待重新设计。",
+        "卡面短文本": "乡邻：本卡与相邻人类受到的生命恢复量+1。",
         "原基础护甲": "0",
         "原基础数值": "3",
         "原基础生命值": "7",
@@ -2278,15 +2272,15 @@
         "原行动冷却": "3s",
         "品级": "Ⅰ",
         "子类型/种族": "人类",
-        "完整规则说明": "已确认暂时从当前可用卡池移除，旧效果停用。保留此记录与原始字段供后续重新设计，不作为当前可实现卡牌。",
+        "完整规则说明": "乡邻生效时，本卡与同排左右相邻人类小队每次受到的生命恢复量+1；失效或来源死亡时撤销，不改治疗者行动数值。",
         "审阅状态": "已确认",
-        "建议基础护甲": null,
-        "建议基础数值": null,
-        "建议基础生命值": null,
-        "建议行动冷却": null,
+        "建议基础护甲": 0,
+        "建议基础数值": 3,
+        "建议基础生命值": 7,
+        "建议行动冷却": "3s",
         "待确认事项": null,
         "徽章槽位": "1",
-        "数值调整理由": "暂时移除；旧数值建议撤回，重新设计时再评估。",
+        "数值调整理由": "2026-10-03恢复可用并重做特效；保留现有资源基础数值。",
         "标准词条": [
           {
             "record_ids": null,
@@ -2307,11 +2301,62 @@
         "衍生物？": null,
         "风险等级": null
       },
-      "effects": [],
-      "questions": [
-        "暂时移出卡池，待重新设计；仅保留卡牌ID与源记录，不生成旧效果。"
+      "effects": [
+        {
+          "effect_id": "town_priest.effect.01",
+          "review_status": "confirmed",
+          "effect_group": "town_priest.neighbor",
+          "group_order": 1,
+          "trigger": "continuous",
+          "conditions": [
+            "source_effect_active",
+            "neighbor_active"
+          ],
+          "target": "self_and_adjacent_human_units",
+          "operation": "add_attribute",
+          "value": {
+            "kind": "fixed",
+            "amount": 1
+          },
+          "duration": {
+            "kind": "while_active"
+          },
+          "stacking": {
+            "kind": "additive"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "来源效果失效",
+            "条件不再满足",
+            "战斗结束"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "来源效果可用且条件成立时持续生效；失效移除本来源修正，恢复合法后重新计算，不逐帧累加",
+          "end_operation": "移除本来源修正，保留其他来源",
+          "trigger_limit": {
+            "scope": "continuous"
+          },
+          "tags": [
+            "乡邻"
+          ],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "stat": "healing_received"
+          },
+          "reading": "乡邻生效时，本卡与同排左右相邻人类小队每次受到的生命恢复量+1；失效或来源死亡时撤销，不改治疗者行动数值。",
+          "questions": []
+        }
       ],
-      "resource_path": "res://resources/cards/town_priest.tres"
+      "questions": [],
+      "resource_path": "res://resources/cards/town_priest.tres",
+      "confirmed_update": {
+        "date": "2026-10-03",
+        "source": "用户本次明确重新设计",
+        "effect_text": "乡邻：本卡与相邻人类受到的生命恢复量+1。",
+        "previous_design": "停用及清除一层减益的旧效果被取代"
+      }
     },
     {
       "card_id": "musketeer",
@@ -2439,7 +2484,7 @@
         "伤势槽位": "3",
         "卡牌名": "悲歌诗人",
         "卡牌类型": "随从",
-        "卡面短文本": "非衍生友军被消灭后，本场数值与护甲+1（最多3次）。",
+        "卡面短文本": "每有一个友军被消灭，相邻友军获得热诚+1。",
         "原基础护甲": "2",
         "原基础数值": "1",
         "原基础生命值": "4",
@@ -2447,7 +2492,7 @@
         "原行动冷却": "5s",
         "品级": "Ⅰ",
         "子类型/种族": "精灵",
-        "完整规则说明": "每当另一张非衍生友方随从被消灭时，此卡在本场战斗中的基础数值和护甲各+1，最多触发3次。重新入场后的重复死亡仍计入上限。",
+        "完整规则说明": "其他友军（包括衍生物）每次被消灭，存活诗人当前左右相邻友军各获得本场热诚+1；不包括诗人自身死亡。",
         "审阅状态": "已确认",
         "建议基础护甲": "2",
         "建议基础数值": "1",
@@ -2455,7 +2500,7 @@
         "建议行动冷却": "5s",
         "待确认事项": null,
         "徽章槽位": "1",
-        "数值调整理由": "原每次+2/+2无上限，与多次复活和召唤物组合远超Ⅰ级，改为单场有上限。",
+        "数值调整理由": "2026-10-05用户重做效果，基础数值保持现有资源配置。",
         "标准词条": [
           {
             "record_ids": [
@@ -2477,7 +2522,7 @@
         ],
         "源单元格": "K71",
         "源工作表": "灰烬证册",
-        "确认结果（人填）": null,
+        "确认结果（人填）": "2026-10-08用户平衡更新：每有一个非衍生物友军被消灭，相邻友军获得热诚+1。；2026-10-13用户平衡更新：取消非衍生物限制，其他友军均计入，沿用自身死亡不触发的已确认边界。",
         "稳定卡牌ID": null,
         "符文槽位": "3",
         "行动方式": [
@@ -2494,12 +2539,11 @@
           "group_order": 1,
           "trigger": "other_ally_destroyed",
           "conditions": [
-            "event_actor_is_other_ally",
-            "dead_unit_not_derived",
-            "per_battle_count_below_limit"
+            "source_effect_active",
+            "event_actor_is_other_ally"
           ],
-          "target": "source_combat_unit",
-          "operation": "add_attribute",
+          "target": "adjacent_friendly_units",
+          "operation": "add_zeal",
           "value": {
             "kind": "fixed",
             "amount": 1
@@ -2519,66 +2563,16 @@
           "end_parameters": "本场结束后清理",
           "end_operation": "移除本场效果",
           "trigger_limit": {
-            "scope": "group_battle",
-            "count": 3,
-            "counter_key": "elegy_poet.death_reward",
-            "reset_on_reentry": false
+            "scope": "event",
+            "count": 1
           },
           "tags": [],
           "related_effects": [],
           "modifier": null,
           "parameters": {
-            "stat": "base_value",
             "repeat_deaths_count": true
           },
-          "reading": "其他非衍生友方随从死亡后，本场基础数值+1；两项奖励共用每场3次计数。",
-          "questions": []
-        },
-        {
-          "effect_id": "elegy_poet.effect.02",
-          "review_status": "confirmed",
-          "effect_group": "elegy_poet.death_reward",
-          "group_order": 2,
-          "trigger": "other_ally_destroyed",
-          "conditions": [
-            "event_actor_is_other_ally",
-            "dead_unit_not_derived",
-            "per_battle_count_below_limit"
-          ],
-          "target": "source_combat_unit",
-          "operation": "add_attribute",
-          "value": {
-            "kind": "fixed",
-            "amount": 1
-          },
-          "duration": {
-            "kind": "battle"
-          },
-          "stacking": {
-            "kind": "additive"
-          },
-          "source_owner": "minion_card_instance",
-          "result_owner": "affected_combat_unit",
-          "end_conditions": [
-            "战斗结束"
-          ],
-          "end_relation": "任一满足",
-          "end_parameters": "本场结束后清理",
-          "end_operation": "移除本场效果",
-          "trigger_limit": {
-            "scope": "group_battle",
-            "count": 3,
-            "counter_key": "elegy_poet.death_reward",
-            "reset_on_reentry": false
-          },
-          "tags": [],
-          "related_effects": [],
-          "modifier": null,
-          "parameters": {
-            "stat": "base_armor",
-            "repeat_deaths_count": true
-          },
-          "reading": "其他非衍生友方随从死亡后，本场护甲+1；两项奖励共用每场3次计数。",
+          "reading": "其他友军（包括衍生物）每次被消灭，存活诗人当前左右相邻友军各获得本场热诚+1；不包括诗人自身死亡。",
           "questions": []
         }
       ],
@@ -2970,17 +2964,17 @@
           "related_effects": [],
           "modifier": null,
           "parameters": {
-            "at_seconds": 15,
+            "timing_source": "card_preparation_seconds",
             "position": "original_else_right",
             "retrigger_rush": false,
             "single_copy_attempts": 1,
             "restore_armor": "base_armor",
-            "multiple_copy_schedule": "same_battle_timestamp",
+            "multiple_copy_schedule": "preparation_queue",
             "on_no_target": "consume_attempt",
             "retry": false,
-            "consume_attempt_at": "scheduled_trigger"
+            "consume_attempt_at": "preparation_complete"
           },
-          "reading": "战斗计时15秒时，使最近死亡的非衍生友军以50%最大生命重新入场；不重复突击，无目标或空间按法术通则跳过。 每张在第15秒同时获得一次触发机会，无合法目标也消耗，不重试、不延后。",
+          "reading": "本卡按准备栏顺序读秒完成时，使最近死亡的非衍生友军以50%最大生命重新入场；不重复突击，无目标或空间按法术通则跳过。 每张在自身准备完成时获得一次触发机会，无合法目标也消耗，不重试、不延后。",
           "questions": []
         }
       ],
@@ -3082,16 +3076,16 @@
           "related_effects": [],
           "modifier": null,
           "parameters": {
-            "at_seconds": 8,
+            "timing_source": "card_preparation_seconds",
             "consume_reinforcement": true,
             "reset_cooldown": true,
             "single_copy_attempts": 1,
-            "multiple_copy_schedule": "same_battle_timestamp",
+            "multiple_copy_schedule": "preparation_queue",
             "on_no_target": "consume_attempt",
             "retry": false,
-            "consume_attempt_at": "scheduled_trigger"
+            "consume_attempt_at": "preparation_complete"
           },
-          "reading": "战斗计时8秒时，后排当前远程行动的友军各立即行动1次；消耗强化、重置冷却，正常触发回响、元素与命中。 每张在第8秒同时获得一次触发机会，无合法目标也消耗，不重试、不延后。",
+          "reading": "本卡按准备栏顺序读秒完成时，后排当前远程行动的友军各立即行动1次；消耗强化、重置冷却，正常触发回响、元素与命中。 每张在自身准备完成时获得一次触发机会，无合法目标也消耗，不重试、不延后。",
           "questions": []
         }
       ],
@@ -3760,6 +3754,7 @@
   ],
   "retired_effect_ids": [
     "militia_commander.effect.01",
-    "diplomat.effect.02"
+    "diplomat.effect.02",
+    "elegy_poet.effect.02"
   ]
 }

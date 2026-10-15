@@ -29,7 +29,7 @@ func _run() -> void:
 func _test_default_and_custom_slot_layout() -> void:
 	var card := CardData.new()
 	var expected_counts: Array[Vector2i] = [
-		Vector2i(2, 2), Vector2i(2, 2), Vector2i(3, 3), Vector2i(4, 4), Vector2i(3, 5),
+		Vector2i(2, 2), Vector2i(2, 2), Vector2i(3, 3), Vector2i(4, 4), Vector2i(4, 4),
 	]
 	var defaults_match := true
 	var default_slot_counts_match := true

@@ -39,7 +39,7 @@ func _run() -> void:
 	for initial_card: CardData in main_instance.get("collection_cards"):
 		if initial_card.id == &"mining_pick": initial_pick_count += 1
 	_expect(initial_pick_count == 1, "新运行初始收藏含一张现有矿镐定义")
-	_expect(CardArtTuner.CARD_RESOURCE_PATHS.count("res://resources/cards/mining_pick.tres") == 1, "卡面调试器列表指向同一个矿镐定义")
+	_expect(CardArtTuner.discover_card_resource_paths().count("res://resources/cards/mining_pick.tres") == 1, "卡面调试器列表指向同一个矿镐定义")
 	main_instance.free()
 	if failures == 0:
 		print("D2-6C resource card intake checks passed.")

@@ -15,7 +15,16 @@ var _description: Control
 func configure(price: Control) -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_price(price)
-	mouse_exited.connect(_set_hover_offer.bind(null))
+	set_process(false)
+
+
+func _ready() -> void:
+	set_process(is_instance_valid(_hover_offer))
+
+
+func _process(_delta: float) -> void:
+	# 悬停归属统一由叠包维护；检视暗幕接管GUI后立即让位，避免遗留选中状态。
+	_set_hover_offer(_pick_offer(get_local_mouse_position()) if get_viewport().gui_get_hovered_control() == self else null)
 
 
 func add_offer(offer: ShopOfferView) -> void:
@@ -35,15 +44,18 @@ func remove_offer(offer: ShopOfferView) -> void:
 
 
 func _layout_offers() -> void:
-	var width := maxf(ShopOfferView.TILE_SIZE.x, 99.0 + PACK_STEP * (_offers.size() - 1))
-	custom_minimum_size = Vector2(width, ShopOfferView.TILE_SIZE.y)
+	var pack_size := Vector2(99, ShopOfferView.ART_HEIGHT)
+	for offer: ShopOfferView in _offers:
+		pack_size = pack_size.max(offer._visual.size)
+	var width := maxf(ShopOfferView.TILE_SIZE.x, pack_size.x + PACK_STEP * maxi(0, _offers.size() - 1))
+	custom_minimum_size = Vector2(width, pack_size.y + ShopOfferView.TILE_SIZE.y - ShopOfferView.ART_HEIGHT)
 	size = custom_minimum_size
-	var left := (width - 99.0 - PACK_STEP * (_offers.size() - 1)) * 0.5
+	var left := (width - pack_size.x - PACK_STEP * maxi(0, _offers.size() - 1)) * 0.5
 	for index: int in _offers.size():
 		_offers[index].position = Vector2(left + index * PACK_STEP, 0)
 		_offers[index].z_index = HOVER_Z if _offers[index] == _hover_offer else index
-	_description.position = Vector2(2, ShopOfferView.ART_HEIGHT + 2)
-	_description.size = Vector2(width - 4, ShopOfferView.TILE_SIZE.y - ShopOfferView.ART_HEIGHT - 2)
+	_description.position = Vector2(2, pack_size.y + 2)
+	_description.size = Vector2(width - 4, size.y - pack_size.y - 2)
 
 
 func _pick_offer(point: Vector2) -> ShopOfferView:
@@ -66,6 +78,7 @@ func _set_hover_offer(offer: ShopOfferView) -> void:
 		_hover_offer.set_pointer_hover(false)
 		_hover_offer.z_index = _offers.find(_hover_offer)
 	_hover_offer = offer
+	set_process(is_instance_valid(offer))
 	if is_instance_valid(offer):
 		offer.z_index = HOVER_Z
 		offer.set_pointer_hover(true)

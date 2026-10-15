@@ -85,6 +85,8 @@ func _is_card_drag(data: Variant) -> bool:
 		return false
 
 	var drag_data := data as Dictionary
+	if drag_data.get("source_type") == &"card_service":
+		return drag_data.get("owned_card") is OwnedCard and is_instance_valid(drag_data.get("source_slot"))
 	if (
 		drag_data.get("source_type") == &"spell_preparation"
 		and drag_data.get("kind") == &"card"

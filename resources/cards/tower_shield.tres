@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/tower_shield.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"tower_shield"
+display_name = "塔盾"
+pack_id = &"ironwall_inscription"
+content_effect = &"tower_shield"
+card_type = 1
+rarity = 1
+equipment_type = 2
+equipment_zeal_delta = -2
+equipment_armor_delta = 10
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-6, 14)
+effect_text = "非疲劳伤害降低50%；开采之外的行动投1d6，<4则失败。"

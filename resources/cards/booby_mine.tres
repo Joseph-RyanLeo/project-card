@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/booby_mine.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"booby_mine"
+display_name = "诡雷"
+pack_id = &"ironwall_inscription"
+effect_ids = Array[StringName]([&"booby_mine.effect.last_wish"])
+content_effect = &"booby_mine"
+is_derived = true
+action_type = 1
+base_value = 0
+cooldown_seconds = 5.0
+max_health = 1
+armor = 2
+runes = Array[int]([0, 1, 2])
+race_type = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-23, 9)
+effect_text = "遗愿：对击杀来源造成1d10无类型伤害。"

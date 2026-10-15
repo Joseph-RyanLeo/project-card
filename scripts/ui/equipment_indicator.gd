@@ -13,6 +13,9 @@ const FULL_CARD_CENTER := Vector2(49.5, 68.0) # 指示物离开卡面变回完�
 const HOVER_LIFT_OFFSET := 6.0 # 鼠标指向装备指示物时，图标向上跳起的距离
 const HOVER_LIFT_DURATION := 0.10 # 指示物向上跳起的动画时长（秒）
 const DROP_DURATION := 0.14 # 鼠标离开后，指示物向下落回卡面的动画时长（秒）
+const RETURN_DURATION := 0.28 # 取消抓取或非法放置时飞回原位置的时长（秒）
+
+signal inspection_requested(card_view: CardView, card_data: CardData, owned_card: OwnedCard)
 
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 
@@ -20,14 +23,17 @@ var owned_item: OwnedCard
 var source_row: Node
 var source_slot: Control
 var drag_enabled: bool = false
+var _hover_card: CardView
 var _left_button_pressed: bool = false
 var _indicator_visual: TextureRect
 var _indicator_shadow: TextureRect
 var _lift_tween: Tween
 var _hover_requires_reentry: bool = false
+var _returning_to_source: bool = false
 
 
 func _ready() -> void:
+	add_to_group("card_indicator_views")
 	expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
@@ -102,7 +108,7 @@ func clear_pointer_hover_feedback() -> void:
 	_animate_lift(false)
 
 
-func play_drop_feedback(release_global_center: Vector2 = Vector2.INF) -> void:
+func play_drop_feedback(release_global_center: Vector2 = Vector2.INF, duration: float = DROP_DURATION) -> void:
 	if not is_instance_valid(_indicator_visual) or not is_instance_valid(_indicator_shadow):
 		return
 	_hover_requires_reentry = true
@@ -115,14 +121,68 @@ func play_drop_feedback(release_global_center: Vector2 = Vector2.INF) -> void:
 		else Vector2(0.0, -HOVER_LIFT_OFFSET)
 	)
 	_indicator_shadow.position = EquipmentIndicatorStyleScript.LIFTED_SHADOW_OFFSET
-	_animate_lift(false)
+	_animate_lift(false, duration)
+
+
+func play_return_feedback(release_global_center: Vector2) -> void:
+	_returning_to_source = false
+	play_drop_feedback(release_global_center, RETURN_DURATION)
+	_returning_to_source = true
+	_lift_tween.finished.connect(func() -> void: _returning_to_source = false)
 
 
 func _on_mouse_entered() -> void:
 	show_pointer_hover_feedback()
+	if owned_item == null or is_instance_valid(_hover_card): return
+	_hover_card = preload("res://scenes/ui/CardView.tscn").instantiate() as CardView
+	_hover_card.set_card_data(owned_item.card_data)
+	_hover_card.set_owned_card(owned_item)
+	_hover_card.configure_drag_source(false, &"board", source_row, source_slot)
+	_hover_card.set_meta("inspection_hover_owner", self)
+	var host: Control = self
+	var ancestor: Node = self
+	while ancestor != null:
+		var layer := ancestor.get_node_or_null("ClickCarryLayer") as Control
+		if layer != null:
+			host = layer
+			break
+		ancestor = ancestor.get_parent()
+	host.add_child(_hover_card)
+	var viewport_point := get_global_transform_with_canvas() * Vector2(size.x + 8, 0) # 完整物品卡显示在图标右侧
+	_hover_card.position = host.get_global_transform_with_canvas().affine_inverse() * viewport_point
+	_hover_card.z_index = -200 if host != self else 400 # 主场景详情层低于暂停与检视
+	_set_hover_mouse_ignore(_hover_card)
+
+func _set_hover_mouse_ignore(node: Node) -> void:
+	if node is Control: (node as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for child: Node in node.get_children(): _set_hover_mouse_ignore(child)
+
+func _clear_hover_card(force: bool = false) -> void:
+	# Main检视暂时隐藏来源弹窗，保留它供关闭动画返回原位置。
+	if not force and is_instance_valid(_hover_card) and not _hover_card.visible:
+		return
+	if is_instance_valid(_hover_card): _hover_card.queue_free()
+	_hover_card = null
+
+func _exit_tree() -> void:
+	_clear_hover_card(true)
+
+func finish_hover_inspection(source: CardView, pointer_position: Vector2) -> void:
+	if source != _hover_card or not is_instance_valid(source) or not source.visible:
+		return
+	var local := get_global_transform_with_canvas().affine_inverse() * pointer_position
+	if not is_visible_in_tree() or not Rect2(Vector2.ZERO, size).has_point(local):
+		_clear_hover_card()
+
+func inspect_at(local: Vector2) -> bool:
+	if owned_item == null or not Rect2(Vector2.ZERO, size).has_point(local): return false
+	_on_mouse_entered()
+	inspection_requested.emit(_hover_card, owned_item.card_data, owned_item)
+	return true
 
 
 func _on_mouse_exited() -> void:
+	_clear_hover_card()
 	_try_finish_hover_reentry(get_viewport().get_mouse_position())
 	if not _left_button_pressed:
 		clear_pointer_hover_feedback()
@@ -142,12 +202,14 @@ func _try_finish_hover_reentry(pointer_viewport_position: Vector2) -> void:
 		_hover_requires_reentry = false
 
 
-func _animate_lift(lifted: bool) -> void:
+func _animate_lift(lifted: bool, duration_override: float = -1.0) -> void:
+	if _returning_to_source:
+		return
 	if not is_instance_valid(_indicator_visual) or not is_instance_valid(_indicator_shadow):
 		return
 	if _lift_tween != null and _lift_tween.is_valid():
 		_lift_tween.kill()
-	var duration := HOVER_LIFT_DURATION if lifted else DROP_DURATION
+	var duration := duration_override if duration_override > 0.0 else (HOVER_LIFT_DURATION if lifted else DROP_DURATION)
 	_lift_tween = create_tween().set_parallel(true)
 	_lift_tween.set_trans(Tween.TRANS_QUAD)
 	_lift_tween.set_ease(Tween.EASE_OUT if lifted else Tween.EASE_IN)
@@ -173,9 +235,13 @@ func _gui_input(event: InputEvent) -> void:
 	if not event is InputEventMouseButton:
 		return
 	var mouse_event := event as InputEventMouseButton
+	if mouse_event.button_index == MOUSE_BUTTON_RIGHT and mouse_event.pressed:
+		if inspect_at(mouse_event.position): accept_event()
+		return
 	if mouse_event.button_index != MOUSE_BUTTON_LEFT:
 		return
 	if mouse_event.pressed:
+		_returning_to_source = false
 		_left_button_pressed = true
 		_animate_lift(true)
 	elif _left_button_pressed:
@@ -231,6 +297,7 @@ func build_drag_data(at_position: Vector2) -> Dictionary:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_DRAG_BEGIN:
+		_clear_hover_card()
 		_left_button_pressed = false
 		var drag_data: Variant = get_viewport().gui_get_drag_data()
 		if (

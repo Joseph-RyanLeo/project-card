@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/legion_aegis.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"legion_aegis"
+display_name = "军团圣盾"
+pack_id = &"ironwall_inscription"
+content_effect = &"legion_aegis"
+card_type = 1
+rarity = 2
+equipment_type = 2
+equipment_zeal_delta = -2
+equipment_armor_delta = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-21, 14)
+effect_text = "保护2；友军失去所有保护时，对随机敌军造成2无类型伤害。"

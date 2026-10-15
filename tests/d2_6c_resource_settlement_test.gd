@@ -166,6 +166,7 @@ func _run() -> void:
 
 func _new_main():
 	var main := MAIN_SCENE.instantiate()
+	main.run_save_path = SAVE_PATH
 	root.add_child(main)
 	await process_frame
 	await process_frame
@@ -179,9 +180,9 @@ func _new_main():
 		var owned: OwnedCard = main.owned_card_collection.find_first_by_definition(definition)
 		_expect(owned != null and owned.resource_shape.size() > 0 and owned.resource_shape.size() <= 5, "新运行默认拥有合法固定形状资源 %s" % card_id)
 	var tuner_resources := 0
-	for path: String in CardArtTuner.CARD_RESOURCE_PATHS:
+	for path: String in CardArtTuner.discover_card_resource_paths():
 		var definition := load(path) as CardData
-		if definition != null and definition.card_type == CardData.CardType.RESOURCE: tuner_resources += 1
+		if definition != null and definition.card_type == CardData.CardType.RESOURCE and definition.id in default_resource_ids: tuner_resources += 1
 	_expect(tuner_resources == 9, "卡面调整器资源筛选来源包含九张实际资源定义")
 	return main
 

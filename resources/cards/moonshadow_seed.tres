@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/moonshadow_seed.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"moonshadow_seed"
+display_name = "月影树种"
+pack_id = &"silvermoon_chapter"
+content_effect = &"moonshadow_seed"
+card_type = 1
+base_value = 0
+max_health = 0
+race_type = 9
+rarity = 2
+equipment_type = 3
+equipment_health_delta = -2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-10, 8)
+effect_text = "生命-2。疲劳风暴启动后，携带者每次行动额外再行动1次。"

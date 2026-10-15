@@ -10,6 +10,10 @@ render_mode unshaded;
 
 uniform sampler2D trail_mask : filter_linear, repeat_disable;
 uniform bool flip_mask_x = false;
+uniform bool soul_ribbon = false;
+uniform float soul_taper : hint_range(0.2, 3.0) = 0.75; // 细尾到宽头的收尾指数
+uniform float soul_core_width : hint_range(0.0, 0.8) = 0.30; // 白色亮芯的宽度比例
+uniform float impact_progress = 1.0; // 目标在实际路径上的位置，光带不越过此点
 uniform vec4 head_color : source_color = vec4(1.0);
 uniform vec4 tail_color : source_color = vec4(1.0);
 uniform float noise_seed = 0.0;
@@ -98,8 +102,25 @@ void fragment() {
 	if (flip_mask_x) {
 		texture_uv.x = 1.0 - texture_uv.x;
 	}
-	vec3 mask_sample = texture(trail_mask, texture_uv).rgb;
-	float painted_mask = dot(mask_sample, vec3(0.299, 0.587, 0.114));
+	float painted_mask;
+	float soul_core = 0.0;
+	if (soul_ribbon) {
+		// 外形由数学轮廓生成，无需借用参考视频的纹理或素材。
+		float along = clamp(trail_position, 0.0, 1.0);
+		float rounded_head = sqrt(max(1.0 - pow(max((along - 0.90) / 0.10, 0.0), 2.0), 0.0));
+		float absorption = clamp((impact_progress - trail_start) / max(trail_length, 0.001), 0.0, 1.0);
+		float half_width = 0.44 * pow(along, soul_taper) * rounded_head * sqrt(absorption);
+		float cross_distance = abs(mask_uv.y - 0.5);
+		float feather = max(edge_softness, 0.002);
+		painted_mask = (1.0 - smoothstep(max(half_width - feather, 0.0), half_width + feather, cross_distance));
+		painted_mask *= smoothstep(0.0, 0.07, along) * step(uv.x, impact_progress);
+		float core_width = half_width * soul_core_width;
+		soul_core = (1.0 - smoothstep(core_width * 0.45, max(core_width, 0.001), cross_distance));
+		soul_core *= step(0.001, soul_core_width);
+	} else {
+		vec3 mask_sample = texture(trail_mask, texture_uv).rgb;
+		painted_mask = dot(mask_sample, vec3(0.299, 0.587, 0.114));
+	}
 	painted_mask = max(painted_mask - mask_cutoff, 0.0) / max(1.0 - mask_cutoff, 0.001);
 	painted_mask = pow(clamp(painted_mask, 0.0, 1.0), mask_power);
 	// 只收紧低透明度轮廓；主体仍保留原图内部的灰度层次和动态流动。
@@ -141,6 +162,9 @@ void fragment() {
 		head_color,
 		clamp(trail_position, 0.0, 1.0)
 	);
+	if (soul_ribbon) {
+		result.rgb = mix(result.rgb, vec3(1.0), soul_core * 0.68);
+	}
 	result.a *= painted_mask * travel_window * flow_alpha;
 
 	if (handle_edges) {

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/standard_quiver.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"standard_quiver"
+display_name = "制式箭袋"
+pack_id = &"ironwall_inscription"
+content_effect = &"standard_quiver"
+card_type = 1
+rarity = 1
+equipment_type = 3
+equipment_zeal_delta = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(1, 26)
+effect_text = "本场前3次远程行动获得强化2。"

@@ -1,0 +1,503 @@
+{
+  "source": "Feishu 银月之章人工复审 2026-10-09",
+  "cards": [
+    {
+      "id": "theran_shadowmoon",
+      "record_id": "recvuepG0rv9oq",
+      "name": "瑟兰·影月",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/theran_shadowmoon.png",
+        "sha256": "0b453ad59aa40124f6fc675e58beae0a8122fd6ec064535a5ae37677ef6fb8c1"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/theran_shadowmoon.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        3,
+        20
+      ]
+    },
+    {
+      "id": "il_ancient_speaker",
+      "record_id": "recvuepG0rj9PS",
+      "name": "“古语者”伊尔",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/il_ancient_speaker.png",
+        "sha256": "0410afa88bca547215d61275123ad6ec3dedb4e9eb58d345d539934530b95af5"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/il_ancient_speaker.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -8,
+        24
+      ]
+    },
+    {
+      "id": "silvermoon_priest",
+      "record_id": "recvuepG0rzrBU",
+      "name": "银月祭祀",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/silvermoon_priest.png",
+        "sha256": "f95f95beed848f475d54b62ca73a1d7446827cffcf93343126934f40266aa704"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/silvermoon_priest.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -6,
+        0
+      ]
+    },
+    {
+      "id": "darkmoon_judge",
+      "record_id": "recvuepG0rxL5e",
+      "name": "暗月审判者",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/darkmoon_judge.png",
+        "sha256": "ba495d55c5a9c84acf3cd6c6d058fce48e33cffcaaf1b8668c5efd642b8017f7"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/darkmoon_judge.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -2,
+        28
+      ]
+    },
+    {
+      "id": "moon_dancer",
+      "record_id": "recvuepG0rYiLR",
+      "name": "月之舞者",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/moon_dancer.png",
+        "sha256": "fa769f21a1196c954b177536d8f231c961e9909d21caff59b8b8204139123823"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/moon_dancer.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -4,
+        23
+      ]
+    },
+    {
+      "id": "twilight_knight",
+      "record_id": "recvuepG0rCZxF",
+      "name": "晨昏骑士",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/twilight_knight.png",
+        "sha256": "eb51134614aaed8c278b5cfb6bffd3d4d1a3e2db37de32f33efaedc35727b289"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/twilight_knight.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -4,
+        20
+      ]
+    },
+    {
+      "id": "twilight_guard",
+      "record_id": "recvuepG0rE8wV",
+      "name": "晨昏守卫",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/twilight_guard.png",
+        "sha256": "00d4101586b8f4ee029e72879429a58694595a09a6e692ad24e0e11a6b3fdb07"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/twilight_guard.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -8,
+        20
+      ]
+    },
+    {
+      "id": "darkmoon_archer",
+      "record_id": "recvuepG0rDOop",
+      "name": "暗月弓手",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/darkmoon_archer.png",
+        "sha256": "277ec427553b7ec6928c146882e35d58acf4f25a8a0ebd4df4d95d8154ab5cd3"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/darkmoon_archer.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -3,
+        20
+      ]
+    },
+    {
+      "id": "moon_singer",
+      "record_id": "recvuepG0rwTze",
+      "name": "月之歌者",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/moon_singer.png",
+        "sha256": "06deb008f6c74716f986c42570248f30bdd3e896103fc2384f4cb449e3cfcf0e"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/moon_singer.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        3,
+        12
+      ]
+    },
+    {
+      "id": "starlight_weaver",
+      "record_id": "recvuepG0r0uiF",
+      "name": "星芒编者",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/starlight_weaver.png",
+        "sha256": "9cc9682b4952d77a2af963523ff2315203f3bb386ae20a423c0096d639c81803"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/starlight_weaver.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -6,
+        27
+      ]
+    },
+    {
+      "id": "twilight_elemental",
+      "record_id": "recvuepG0rO0kz",
+      "name": "晨昏元素",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/twilight_elemental.png",
+        "sha256": "d63c1eed17b7b47ea3b1af4f86c91a2c156eeb0b5bb808314b124a62ef19d090"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/twilight_elemental.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -1,
+        15
+      ]
+    },
+    {
+      "id": "stargazer",
+      "record_id": "recvuepG0rfgsQ",
+      "name": "观星者",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/stargazer.png",
+        "sha256": "46833cdfde6262381feecccd75e7c4772da749c7c70b4736d1000603685058d2"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/stargazer.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        6,
+        20
+      ]
+    },
+    {
+      "id": "silvermoon_apprentice",
+      "record_id": "recvuepG0rg1xf",
+      "name": "银月学徒",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/silvermoon_apprentice.png",
+        "sha256": "6e266538723d612a10af21b2d44aa17d853460b589ed15a2cc106d5d6f6ee770"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/silvermoon_apprentice.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        11,
+        24
+      ]
+    },
+    {
+      "id": "star_chant_apprentice",
+      "record_id": "recvuepG0rmDN8",
+      "name": "星咏学徒",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/star_chant_apprentice.png",
+        "sha256": "5ff71f2ce547b122c71fcad58f9a61f88d1f0af8611b29215fe4625574b28b02"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/star_chant_apprentice.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        12,
+        27
+      ]
+    },
+    {
+      "id": "shadowstep_assassin",
+      "record_id": "recvuepG0rxnM1",
+      "name": "影步刺客",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/shadowstep_assassin.png",
+        "sha256": "e51dddd321b056a2e0e523d50e96e1c28bb61199daf919ad25bdd7a59333668a"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/shadowstep_assassin.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -8,
+        27
+      ]
+    },
+    {
+      "id": "moon_hawk",
+      "record_id": "recvuepG0r2yWe",
+      "name": "月鹰",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/moon_hawk.png",
+        "sha256": "0905ea57eabe3baee0b0c3eaf798bb48cbc6bbbdefa4ba89e15fc548cb9363ed"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/moon_hawk.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -8,
+        20
+      ]
+    },
+    {
+      "id": "starmoon_leopard",
+      "record_id": "recvuepG0rYDNx",
+      "name": "星月豹",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/starmoon_leopard.png",
+        "sha256": "52d37b0f5525906848213a4e5836a713dd99d3af3085e6c3e0cb3bec312348e4"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/starmoon_leopard.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -8,
+        12
+      ]
+    },
+    {
+      "id": "moondew_collector",
+      "record_id": "recvuepG0rFgdR",
+      "name": "月露采集者",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/moondew_collector.png",
+        "sha256": "11df508074090ffaed1a260bb8af1e2e77f96725a0429b92d40312764efacea8"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/moondew_collector.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -15,
+        28
+      ]
+    },
+    {
+      "id": "moonlight_treant",
+      "record_id": "recvuepG0rT5ao",
+      "name": "月华树人",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/moonlight_treant.png",
+        "sha256": "7e1ffef37ede8dd287b3c5ef24bb7ec2f9b7accc7a565affd430e58c1131641c"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/moonlight_treant.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        2,
+        15
+      ]
+    },
+    {
+      "id": "moonshadow_stoneguard",
+      "record_id": "recvuepG0rqf22",
+      "name": "月影石卫",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/moonshadow_stoneguard.png",
+        "sha256": "ad492eab6113bd42c62655d75aaa1d1a230ecccf5696a88b01ca107e73edd2a4"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/moonshadow_stoneguard.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections",
+      "art_offset": [
+        -3,
+        22
+      ]
+    },
+    {
+      "id": "moon_tears",
+      "record_id": "recvuepG0r1FVc",
+      "name": "月之泪",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/moon_tears.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "starfire",
+      "record_id": "recvuepG0ruCQP",
+      "name": "星火术",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/starfire.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "solar_eclipse",
+      "record_id": "recvuepG0rTbyI",
+      "name": "日蚀",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/solar_eclipse.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "moonfire",
+      "record_id": "recvuepG0reqU5",
+      "name": "月火术",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/moonfire.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "twilight_veil",
+      "record_id": "recvuepG0rISEW",
+      "name": "暮光面纱",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/twilight_veil.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "silvermoon_breath",
+      "record_id": "recvuepG0r8AZr",
+      "name": "银月之息",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/silvermoon_breath.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "nightfall",
+      "record_id": "recvuepG0rCDpO",
+      "name": "黑夜",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/nightfall.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "moonshadow",
+      "record_id": "recvuepG0rWJMi",
+      "name": "月影",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/moonshadow.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "starlight_fragments",
+      "record_id": "recvuepG0rGmBs",
+      "name": "星芒碎屑",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/starlight_fragments.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "dancer_handbell",
+      "record_id": "recvuepG0r9KuP",
+      "name": "舞者的手铃",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/dancer_handbell.png",
+        "sha256": "c73ac964e0325722213f24192a4dd289c26515574d01afb9a229e43b7888d369"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/dancer_handbell.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "moonblade_scimitar",
+      "record_id": "recvuepG0rf6F7",
+      "name": "月刃弯刀",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/moonblade_scimitar.png",
+        "sha256": "9159b1b43b6445f7476a31aa567b82bd973038e2902d187792d06853e45e2acc"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/moonblade_scimitar.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "sunmoon_amulet",
+      "record_id": "recvuepG0rwNML",
+      "name": "日月护符",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/sunmoon_amulet.png",
+        "sha256": "6b2b1249b1b88099ad95cb9c8186a84b9af1ae66c440f04e9441ec42aa625526"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/sunmoon_amulet.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "night_cloak",
+      "record_id": "recvuepG0r1y4l",
+      "name": "暗夜披风",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/night_cloak.png",
+        "sha256": "1649ea0f812ec93aba16acef390153211014dfe8b6b86c86224ef5b2d9bed1cd"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/night_cloak.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "moonshadow_seed",
+      "record_id": "recvuepG0rO4AV",
+      "name": "月影树种",
+      "art": {
+        "path": "assets/card_art/silvermoon_chapter/moonshadow_seed.png",
+        "sha256": "ef4636e90156527dc8dcad3cd28a4b38fa7ec9d58fb3e409adb67039da5ca52a"
+      },
+      "placeholder": false,
+      "resource": "resources/cards/moonshadow_seed.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "victory_prophecy",
+      "record_id": "recvuepG0rFx7p",
+      "name": "预言胜利",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/victory_prophecy.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "failure_prophecy",
+      "record_id": "recvuepG0rEhek",
+      "name": "失败预言",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/failure_prophecy.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    },
+    {
+      "id": "moondew",
+      "record_id": "recvuepG0rp7hB",
+      "name": "月露",
+      "art": null,
+      "placeholder": true,
+      "resource": "resources/cards/moondew.tres",
+      "numeric_policy": "original_except_explicit_manual_corrections"
+    }
+  ],
+  "pack_art": {
+    "银月大包": {
+      "path": "assets/card_ui/shop/silvermoon_large.png",
+      "sha256": "3aafeb635ccc7e9e506773ad92cdcf1a372092b6ba7f31a465a79bf6e55f62ec"
+    },
+    "银月小包": {
+      "path": "assets/card_ui/shop/silvermoon_small.png",
+      "sha256": "b56bb71a00c2a9b1e36720c8593ab2a907bddfceb4e336d553c007f63483b7e8"
+    }
+  }
+}

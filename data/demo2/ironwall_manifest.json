@@ -1,0 +1,459 @@
+{
+  "来源": "飞书确认表实时读回与铁壁铭刻.zip，2026-10-13",
+  "cards": [
+    {
+      "id": "ironhand_arno",
+      "name": "铁手阿诺",
+      "record_id": "reczz28LiK45XThT",
+      "stable_source_id": "iron_inscription_0ad98ff1eb87",
+      "resource": "resources/cards/ironhand_arno.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/ironhand_arno.png",
+        "sha256": "51eaddbf86de2d0737de0045c95597b66685db0f00ae74d6251a3cb06218e2d4"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "augustus_ironwall",
+      "name": "奥古斯都·铁壁",
+      "record_id": "reczz28LiK45UnX7",
+      "stable_source_id": "iron_inscription_bf4455cc363c",
+      "resource": "resources/cards/augustus_ironwall.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/augustus_ironwall.png",
+        "sha256": "537ced86b39e04ee4cd32d3ec93d7608564c5f6ff26ac8fef9125b55d1a02551"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "skirmish_formation",
+      "name": "散兵阵",
+      "record_id": "reczz28LiK45VVH4",
+      "stable_source_id": "iron_inscription_16e5107f51af",
+      "resource": "resources/cards/skirmish_formation.tres",
+      "art": null,
+      "placeholder": true
+    },
+    {
+      "id": "rally_formation",
+      "name": "集结阵",
+      "record_id": "reczz28LiK45WQjY",
+      "stable_source_id": "iron_inscription_060be22f9322",
+      "resource": "resources/cards/rally_formation.tres",
+      "art": null,
+      "placeholder": true
+    },
+    {
+      "id": "walking_fighter",
+      "name": "步行战斗机",
+      "record_id": "reczz28LiK45XkQu",
+      "stable_source_id": "iron_inscription_93d2cea2cefd",
+      "resource": "resources/cards/walking_fighter.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/walking_fighter.png",
+        "sha256": "5d06dc187f5939b82cc2090af2a44687213aeb323fed5e6fbb6aba7fbfd934b9"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "gunsmith_master",
+      "name": "枪械大师",
+      "record_id": "reczz28LiK45VRsO",
+      "stable_source_id": "iron_inscription_b97056ee64f8",
+      "resource": "resources/cards/gunsmith_master.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/gunsmith_master.png",
+        "sha256": "52fe2495354d8421391e6f063d568b7911ade5c1b7a6e1918ae563c9c76c7aae"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "phalanx_officer",
+      "name": "方阵长官",
+      "record_id": "reczz28LiK45XyFP",
+      "stable_source_id": "iron_inscription_5ecfd5db0cd3",
+      "resource": "resources/cards/phalanx_officer.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/phalanx_officer.png",
+        "sha256": "84e9118ba5199122ba2d8c9e3dc47957f5576edf4fb1958fd3e45b3afbe8e9fd"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "formation_commander",
+      "name": "军阵指挥官",
+      "record_id": "reczz28LiK45Xcol",
+      "stable_source_id": "iron_inscription_6af84e6e403d",
+      "resource": "resources/cards/formation_commander.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/formation_commander.png",
+        "sha256": "6808ac6edcefceb1e65482e09ea0dff621ed300d60b6663b814b831250b34e81"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "logistics_robot",
+      "name": "后勤机器人",
+      "record_id": "reczz28LiK45WwyD",
+      "stable_source_id": "iron_inscription_272b8fd2e1f2",
+      "resource": "resources/cards/logistics_robot.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/logistics_robot.png",
+        "sha256": "1345de649e9bba72547d320b65716034ab09a21925613d7ee34fddb3db08d97f"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "bomb_apprentice",
+      "name": "爆弹学徒",
+      "record_id": "reczz28LiK45Vczv",
+      "stable_source_id": "iron_inscription_63cfdf33f4ba",
+      "resource": "resources/cards/bomb_apprentice.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/bomb_apprentice.png",
+        "sha256": "04d2716a1a4f0b7b3a5c43eb89015e4bf9567765807046f511024bed38129c51"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "thunderstorm_infantry",
+      "name": "雷暴步兵",
+      "record_id": "reczz28LiK45XMce",
+      "stable_source_id": "iron_inscription_bf8ff7981fba",
+      "resource": "resources/cards/thunderstorm_infantry.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/thunderstorm_infantry.png",
+        "sha256": "e6ce87d8411a60e1d143be57f9dada997fe6645dd5e80246491eacb12d2acca0"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "inscription_scholar",
+      "name": "铭文学者",
+      "record_id": "reczz28LiK45V3FS",
+      "stable_source_id": "iron_inscription_f884a473191c",
+      "resource": "resources/cards/inscription_scholar.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/inscription_scholar.png",
+        "sha256": "b6d3205588a73dc6ddbc32e1d369bcfdaa55e4ad02ee0f0181e3ca6ac8d7f38f"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "ore_appraiser",
+      "name": "矿石鉴定师",
+      "record_id": "reczz28LiK45V5cf",
+      "stable_source_id": "iron_inscription_52d4833c9b23",
+      "resource": "resources/cards/ore_appraiser.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/ore_appraiser.png",
+        "sha256": "4fd72bf3246811b9a588452cb061744cc5969755fc7f375426d4363c9fa483c1"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "recycling_robot",
+      "name": "回收机械人",
+      "record_id": "reczz28LiK45UvMM",
+      "stable_source_id": "iron_inscription_e2a944d4ebdf",
+      "resource": "resources/cards/recycling_robot.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/recycling_robot.png",
+        "sha256": "dcf88e0c090bf191e5e2509013c43c3a2b6281964a0700b81fc403eb35fbc191"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "field_beer_machine",
+      "name": "随军啤酒机",
+      "record_id": "reczz28LiK45Y0I3",
+      "stable_source_id": "iron_inscription_6d9747432dbf",
+      "resource": "resources/cards/field_beer_machine.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/field_beer_machine.png",
+        "sha256": "19234e54b9598ac05e874dc577d07de722a685ff1e9b21877c33c2d2536318df"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "mobilization_machine",
+      "name": "动员机兵",
+      "record_id": "reczz28LiK45UxI3",
+      "stable_source_id": "iron_inscription_5909842d74af",
+      "resource": "resources/cards/mobilization_machine.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/mobilization_machine.png",
+        "sha256": "8d544c5e5b69d3a1dfc480d8cfeae52f34f7d10cb3827037778ea50c36c4f453"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "sentry_machine",
+      "name": "警戒机械",
+      "record_id": "reczz28LiK45VMp8",
+      "stable_source_id": "iron_inscription_7858d88149c0",
+      "resource": "resources/cards/sentry_machine.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/sentry_machine.png",
+        "sha256": "a4b6691d4db759ca1ced34da5e148b32e2256ad3e24ceee43e1e5fc5ccf040dc"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "formation_infantry",
+      "name": "列阵步兵",
+      "record_id": "reczz28LiK45XjqY",
+      "stable_source_id": "iron_inscription_6fcda76bf79a",
+      "resource": "resources/cards/formation_infantry.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/formation_infantry.png",
+        "sha256": "122e178db4b5d2daa077300d58d7062d13f746cccbbf0e6fae11b4634393b9c9"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "swordshield_master",
+      "name": "剑盾大师",
+      "record_id": "reczz28LiK45Wavj",
+      "stable_source_id": "iron_inscription_988c8a65e1a0",
+      "resource": "resources/cards/swordshield_master.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/swordshield_master.png",
+        "sha256": "4036a1d3843141ee2f9002298055cc6fd0323b513a298b4e90180127009f035e"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "armament_apprentice",
+      "name": "军械学徒",
+      "record_id": "reczz28LiK45XtZN",
+      "stable_source_id": "iron_inscription_f6f2e0cf78ab",
+      "resource": "resources/cards/armament_apprentice.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/armament_apprentice.png",
+        "sha256": "c3722015df119e8d3669b71fa8fd91f8cba87673871a1e03fbce81dc189ab72f"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "scout",
+      "name": "侦查员",
+      "record_id": "reczz28LiK45WsvX",
+      "stable_source_id": "iron_inscription_74b372c761be",
+      "resource": "resources/cards/scout.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/scout.png",
+        "sha256": "f39787993337d235a42828fb7245ac906e4ef8fd2bae1c6abcae7b389dd850b1"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "unstable_explosive_robot",
+      "name": "不稳定的自爆机械人",
+      "record_id": "reczz28LiK45Xj7j",
+      "stable_source_id": "iron_inscription_97580aa74abe",
+      "resource": "resources/cards/unstable_explosive_robot.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/unstable_explosive_robot.png",
+        "sha256": "4623b759a35e4861ef8b48658cd4db55619db9a4f579d5d96d9bd93645f184e8"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "ancestral_blessing",
+      "name": "先祖庇佑",
+      "record_id": "reczz28LiK45UirQ",
+      "stable_source_id": "iron_inscription_88196782091e",
+      "resource": "resources/cards/ancestral_blessing.tres",
+      "art": null,
+      "placeholder": true
+    },
+    {
+      "id": "officer_badge",
+      "name": "军官徽章",
+      "record_id": "reczz28LiK45UKFN",
+      "stable_source_id": "iron_inscription_b4112e50be5a",
+      "resource": "resources/cards/officer_badge.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/officer_badge.png",
+        "sha256": "f2bdd73fcd15f5a9f81f49cdf1f380e90e2d1e1d4685d12559e6128710cbfebb"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "legion_aegis",
+      "name": "军团圣盾",
+      "record_id": "reczz28LiK45Wws0",
+      "stable_source_id": "iron_inscription_c0eac79e5dad",
+      "resource": "resources/cards/legion_aegis.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/legion_aegis.png",
+        "sha256": "0e6042c3b9453ce2eaf01981f6f4ae830acbcdba5bd7b21023232fd30bb8f4b7"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "array_heavy_crossbow",
+      "name": "阵列重弩",
+      "record_id": "reczz28LiK45Xnpc",
+      "stable_source_id": "iron_inscription_c1b7a07cd649",
+      "resource": "resources/cards/array_heavy_crossbow.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/array_heavy_crossbow.png",
+        "sha256": "08e495344920688ca8dde4a053b81d926d369b38859ef0332a0ed6deab2b5538"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "tower_shield",
+      "name": "塔盾",
+      "record_id": "reczz28LiK45W6ub",
+      "stable_source_id": "iron_inscription_2576297cfd3d",
+      "resource": "resources/cards/tower_shield.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/tower_shield.png",
+        "sha256": "4a0ffae80c8bf1c6d916b6a09fb0d7fa42c521cdb908c3d789fa9eb6ab74e936"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "repeater_gun",
+      "name": "连珠铳",
+      "record_id": "reczz28LiK45VHqT",
+      "stable_source_id": "iron_inscription_12c1b26c390b",
+      "resource": "resources/cards/repeater_gun.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/repeater_gun.png",
+        "sha256": "fc75c639e16cec99cb2b119c4e4fb84ee29608a4978000edce585225e7d431fd"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "blackiron_staff",
+      "name": "黑铁法杖",
+      "record_id": "reczz28LiK45XrQr",
+      "stable_source_id": "iron_inscription_b5acaefbda75",
+      "resource": "resources/cards/blackiron_staff.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/blackiron_staff.png",
+        "sha256": "ad8f2ace89c4f809423dbd424abc6a2f4a97effeca2e08a126727bf173a9652a"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "anvilbone_ledger",
+      "name": "砧骨铁册",
+      "record_id": "reczz28LiK45WYzI",
+      "stable_source_id": "iron_inscription_e9acdb809581",
+      "resource": "resources/cards/anvilbone_ledger.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/anvilbone_ledger.png",
+        "sha256": "059a5c75499171ec6cb2d5bf80095054d7004719f049095db74e5702f9acc41f"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "runic_anvil",
+      "name": "符文铁砧",
+      "record_id": "reczz28LiK45Wsg0",
+      "stable_source_id": "iron_inscription_9b1bcea301a1",
+      "resource": "resources/cards/runic_anvil.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/runic_anvil.png",
+        "sha256": "7672ea6862e425c25f1b67dcfe2174e74f3d399eb0c37dd224ea1c475d8a861b"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "sentry_pistol",
+      "name": "哨位短铳",
+      "record_id": "reczz28LiK45WD2L",
+      "stable_source_id": "iron_inscription_d6ef960e5946",
+      "resource": "resources/cards/sentry_pistol.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/sentry_pistol.png",
+        "sha256": "057f411e1cc3a4ac50c65b20e88206a5f543a95deada3256614997f6daaaddc0"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "beer_mug",
+      "name": "啤酒杯🍺",
+      "record_id": "reczz28LiK45URzU",
+      "stable_source_id": "iron_inscription_22e3ec15e44a",
+      "resource": "resources/cards/beer_mug.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/beer_mug.png",
+        "sha256": "2e01a494f71a6fbb445854b4024ba69e6353ecaa20f937fc8e0894adad31b77d"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "standard_quiver",
+      "name": "制式箭袋",
+      "record_id": "reczz28LiK45UYat",
+      "stable_source_id": "iron_inscription_1c366746fdc1",
+      "resource": "resources/cards/standard_quiver.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/standard_quiver.png",
+        "sha256": "85b08c741137a8be214db7e9adda562a068447533e2d7ce6554c819a2f2580c7"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "ironheart_pendant",
+      "name": "铁心吊坠",
+      "record_id": "reczz28LiK45X76G",
+      "stable_source_id": "iron_inscription_6c3e1936aea7",
+      "resource": "resources/cards/ironheart_pendant.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/ironheart_pendant.png",
+        "sha256": "8a16594c6ce4f0f70e17899650bb272788e25678900c4cd57b923f044c53bda7"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "sapper_shovel",
+      "name": "工兵铲",
+      "record_id": "reczz28LiK45WCAb",
+      "stable_source_id": "iron_inscription_1740936141fc",
+      "resource": "resources/cards/sapper_shovel.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/sapper_shovel.png",
+        "sha256": "26f96177ce0c68dbf7992111052f3bf1a113f2f7c2ff326b73b9adcd2a1a733b"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "booby_mine",
+      "name": "诡雷",
+      "record_id": "reczz28LiK45VP4i",
+      "stable_source_id": "iron_inscription_320aaeb3c021",
+      "resource": "resources/cards/booby_mine.tres",
+      "art": {
+        "path": "assets/card_art/ironwall_inscription/booby_mine.png",
+        "sha256": "6b80ecb71b77ebd1e8e2be325d8370c871a96cbf9769489c14e282302e1a18ce"
+      },
+      "placeholder": false
+    },
+    {
+      "id": "gear_scrap",
+      "name": "齿轮废料",
+      "record_id": "reczz28LiK45UyRE",
+      "stable_source_id": "iron_inscription_0952d495d08c",
+      "resource": "resources/cards/gear_scrap.tres",
+      "art": null,
+      "placeholder": true
+    }
+  ],
+  "pack_art": {
+    "铁壁大包": {
+      "path": "assets/card_ui/shop/ironwall_large.png",
+      "sha256": "472e7e0a5011817a54422b34b84b97dd4b81139177260f112dd25999a83543e6"
+    },
+    "铁壁小包": {
+      "path": "assets/card_ui/shop/ironwall_small.png",
+      "sha256": "0e2ff94a3da5896ec78c4191431d1bf6d6972f0bd1b55699d69ea7e1a20f666f"
+    }
+  }
+}

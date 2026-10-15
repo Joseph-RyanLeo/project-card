@@ -16,11 +16,16 @@ func _init() -> void:
 func _run() -> void:
 	root.size = Vector2i(1280, 720)
 	var main = MAIN_SCENE.instantiate()
+	main.run_save_path = "/private/tmp/project-card-battle-diagnostic-export-test-run.json"
 	root.add_child(main)
 	await process_frame
 	await process_frame
 	main.front_row.clear_squads()
-	main.front_row.add_squad(SquadData.from_card(load("res://resources/cards/militia.tres")), 0)
+	# 用低数值、高生命的独立资源副本，确保时间线确实跨过UI日志上限。
+	var durable_militia := (load("res://resources/cards/militia.tres") as CardData).duplicate() as CardData
+	durable_militia.base_value = 1
+	durable_militia.max_health = 100
+	main.front_row.add_squad(SquadData.from_card(durable_militia), 0)
 	main.front_row.add_squad(SquadData.from_card(load("res://resources/cards/militia_commander.tres")), 1)
 	await process_frame
 	_expect(main.export_battle_data_button.disabled, "准备阶段禁用导出按钮")
@@ -47,6 +52,8 @@ func _run() -> void:
 	_expect(main._battle_diagnostic_recorder.is_complete, "战斗结束时采集记录完整冻结")
 	_expect(not main.export_battle_data_button.disabled, "完整记录就绪后启用导出按钮")
 	var first_record: Dictionary = main._battle_diagnostic_recorder.get_record_copy()
+	var captured_profiles: Dictionary = first_record.settings.get("attack_effect_profiles", {})
+	_expect(captured_profiles.size() == 9 and captured_profiles == BattleAttackEffectProfiles.get_profiles(), "诊断导出记录本场九类完整攻击特效配置")
 	var first_document := BattleDiagnosticSerializer.build_document(first_record)
 	var second_document := BattleDiagnosticSerializer.build_document(
 		main._battle_diagnostic_recorder.get_record_copy()

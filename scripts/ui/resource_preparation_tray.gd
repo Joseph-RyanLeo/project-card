@@ -3,6 +3,8 @@ extends Control
 
 ## 一方资源板的准备界面；OwnedCard 仍是资源形状的唯一来源。
 
+signal inspection_requested(card_view: CardView, card_data: CardData, owned_card: OwnedCard)
+
 signal drop_requested(data: Dictionary, resolution: Dictionary)
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 
@@ -45,18 +47,39 @@ var _pending_click_data: Dictionary = {}
 var _pending_press_position := Vector2.ZERO
 var _pending_press_cell: Variant = null
 var _battle_health_by_id: Dictionary = {}
+var _battle_display_snapshot: Array = []
 
 func _ready() -> void:
 	set_process(true)
 	_build_board()
 	refresh()
 
+func sync_battle_state(board: BoardState, owner_side: String, states: Array) -> void:
+	var owned: Dictionary = {}
+	var health: Dictionary = {}
+	for state: RefCounted in states:
+		var card := state.get("owned_card") as OwnedCard
+		if card == null: continue
+		var id := String(card.instance_id)
+		owned[id] = card
+		health[id] = int(state.get("current_health"))
+	var snapshot: Array = [board, owner_side, board.disabled_by_side.get(owner_side, []), board.deployments.get(owner_side, {}), owned, health]
+	if snapshot == _battle_display_snapshot: return
+	_battle_display_snapshot = snapshot.duplicate(true)
+	board_state = board
+	side = owner_side
+	_owned_by_id = owned
+	_battle_health_by_id = health
+	refresh()
+
 func configure(board: BoardState, owner_side: String) -> void:
+	_battle_display_snapshot.clear()
 	board_state = board
 	side = owner_side
 	if is_inside_tree(): refresh()
 
 func set_owned_cards(cards: Array[OwnedCard]) -> void:
+	_battle_display_snapshot.clear()
 	_owned_by_id.clear()
 	for card in cards:
 		if card != null:
@@ -73,16 +96,25 @@ func set_battle_health(states: Array) -> void:
 	refresh()
 
 func clear_battle_health() -> void:
+	_battle_display_snapshot.clear()
 	_battle_health_by_id.clear()
 	refresh()
 
 func get_instance_center_global(instance_id: StringName) -> Vector2:
 	var placement: Dictionary = board_state.deployments.get(side, {}).get(String(instance_id), {})
-	if placement.is_empty(): return global_position + BOARD_SIZE * 0.5
+	if placement.is_empty(): return get_global_transform_with_canvas() * (BOARD_SIZE * 0.5)
 	var anchor := Vector2i(int(placement.anchor[0]), int(placement.anchor[1]))
-	var shape: Array = placement.get("shape", [])
+	var shape: Array[Vector2i] = []
+	for pair: Array in placement.get("shape", []): shape.append(Vector2i(int(pair[0]), int(pair[1])))
+	return _shape_center_global(anchor, shape)
+
+func get_resource_center_global(resource: RefCounted) -> Vector2:
+	# 已击碎拼图可能被新资源腾位；弹道仍使用该资源保存的锚点与实例形状。
+	return _shape_center_global(resource.anchor, resource.owned_card.resource_shape)
+
+func _shape_center_global(anchor: Vector2i, shape: Array[Vector2i]) -> Vector2:
 	var center := Vector2.ZERO
-	for pair in shape: center += Layout.center(anchor + Vector2i(int(pair[0]), int(pair[1])))
+	for cell: Vector2i in shape: center += Layout.center(anchor + cell)
 	if not shape.is_empty(): center /= float(shape.size())
 	return get_global_transform_with_canvas() * (LAYOUT_ORIGIN + center)
 
@@ -95,7 +127,6 @@ func set_drop_enabled(enabled: bool) -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_PASS
 	if not enabled:
 		clear_preview()
-		_clear_hover_card()
 
 func set_carry_active(active: bool) -> void:
 	_carry_active = active
@@ -106,11 +137,13 @@ func begin_carry(instance_id: StringName) -> void:
 	for icon: CanvasItem in _icon_nodes_by_id.get(String(instance_id), []): icon.modulate.a = 0.28
 
 func refresh() -> void:
+	var previous_hover := _hover_instance_id
 	if not is_inside_tree() or board_state == null: return
 	_hover_instance_id = &""
 	_clear_hover_card()
 	for child in get_children():
 		if child.name in ["ResourceBoardBackground", "ResourceHexLayout", "ResourceBoardTitle", "ResourceBoardOverlay"]: continue
+		if child == _hover_card: continue
 		child.queue_free()
 	_piece_by_cell.clear()
 	_tile_nodes_by_id.clear()
@@ -149,6 +182,8 @@ func refresh() -> void:
 			by_id.append(tile)
 		_tile_nodes_by_id[String(instance_id)] = by_id
 		_icon_nodes_by_id[String(instance_id)] = _create_piece_icons(owned, anchor, piece_cells)
+	if not previous_hover.is_empty() and _tile_nodes_by_id.has(String(previous_hover)):
+		_set_hover_instance(previous_hover)
 	_queue_overlay_redraw()
 
 func is_drop_position_global(point: Vector2) -> bool:
@@ -215,6 +250,7 @@ func _queue_overlay_redraw() -> void:
 	if is_instance_valid(_overlay): _overlay.queue_redraw()
 
 func _build_board() -> void:
+	add_to_group("card_indicator_views")
 	name = "ResourcePreparationTray"
 	size = BOARD_SIZE
 	custom_minimum_size = BOARD_SIZE
@@ -342,7 +378,19 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_update_hover_at((event as InputEventMouseMotion).position)
 
+func inspect_at(local: Vector2) -> bool:
+	var cell: Variant = _hit_test_piece_cell(local)
+	var owned := _owned_by_id.get(String(_piece_by_cell.get(cell, &""))) as OwnedCard
+	if owned == null: return false
+	_set_hover_instance(owned.instance_id)
+	if not is_instance_valid(_hover_card): _refresh_hover_card()
+	inspection_requested.emit(_hover_card, owned.card_data, owned)
+	return true
+
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+		if inspect_at(event.position): accept_event()
+		return
 	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
 		var button := event as InputEventMouseButton
 		if button.pressed:
@@ -486,6 +534,8 @@ func _clear_hover_instance(instance_id: StringName) -> void:
 		_set_hover_instance(&"")
 
 func _refresh_hover_card() -> void:
+	if is_instance_valid(_hover_card) and not _hover_card.visible:
+		return
 	_clear_hover_card()
 	var owned := _owned_by_id.get(String(_hover_instance_id)) as OwnedCard
 	if owned == null: return
@@ -496,6 +546,7 @@ func _refresh_hover_card() -> void:
 	_hover_card.scale = Vector2.ONE
 	_hover_card.set_card_data(owned.card_data)
 	_hover_card.set_owned_card(owned)
+	_hover_card.set_meta("inspection_hover_owner", self)
 	_hover_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var hover_host := _find_hover_card_host()
 	if hover_host != self:
@@ -522,9 +573,21 @@ func _set_mouse_ignore_recursive(node: Node) -> void:
 	if node is Control: (node as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for child in node.get_children(): _set_mouse_ignore_recursive(child)
 
-func _clear_hover_card() -> void:
+func _clear_hover_card(force: bool = false) -> void:
+	# 与装备弹窗共用Main的检视往返动画，隐藏期间不能释放来源。
+	if not force and is_instance_valid(_hover_card) and not _hover_card.visible:
+		return
 	if is_instance_valid(_hover_card): _hover_card.queue_free()
 	_hover_card = null
+
+func _exit_tree() -> void:
+	_clear_hover_card(true)
+
+func finish_hover_inspection(source: CardView, pointer_position: Vector2) -> void:
+	if source != _hover_card or not is_instance_valid(source) or not source.visible:
+		return
+	_update_hover_at(pointer_position)
+	if _hover_instance_id.is_empty(): _clear_hover_card()
 
 func _on_mouse_exited() -> void:
 	_set_hover_instance(&"")

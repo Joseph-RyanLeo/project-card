@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/moon_hawk.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"moon_hawk"
+display_name = "月鹰"
+pack_id = &"silvermoon_chapter"
+keywords = Array[StringName]([&"sleep"])
+content_effect = &"moon_hawk"
+base_value = 2
+cooldown_seconds = 5.0
+max_health = 4
+runes = Array[int]([0, 1, 2])
+race_type = 7
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(10, -15)
+effect_text = "休眠30秒。敌军位移后，对随机敌军造成2点无类型伤害（单卡冷却0.1秒）。"

@@ -5,6 +5,8 @@ extends Resource
 ## CardData 继续只保存共享定义；永久成长、伤势、纹章等可变状态必须留在这里，
 ## 避免两张同名卡因共用同一份 .tres 资源而互相污染。
 
+const RUNE_ENGRAVER_PROGRESS: StringName = &"rune_engraver_wins"
+const RUNE_ENGRAVER_WINS_REQUIRED: int = 2 # 符文刻匠每次元素贴纸奖励需要的累计胜利存活场数
 const STAT_BASE_VALUE: StringName = &"base_value"
 const STAT_MAX_HEALTH: StringName = &"max_health"
 const STAT_BASE_ARMOR: StringName = &"base_armor"
@@ -16,11 +18,22 @@ const EmblemLibraryDataScript = preload("res://scripts/data/emblem_library_data.
 const CardSlotLayoutScript = preload("res://scripts/data/card_slot_layout.gd")
 const ResourceHexLayoutScript = preload("res://scripts/data/resource_hex_layout.gd")
 
+var _battlefield_card: CardData
+
+
+func get_battlefield_card() -> CardData:
+	# 收藏在同名引用冲突时分配独立只读引用；实例状态仍只在OwnedCard中。
+	return _battlefield_card if _battlefield_card != null else card_data
+
+
 @export var instance_id: StringName = &"" # 本局内稳定且唯一的卡牌实例身份
 @export var card_data: CardData # 共享卡牌定义；不得把永久变化直接写回此资源
+@export var is_new: bool = true # 新获得卡牌右上角绿点，首次悬停后消除
+@export var companion_source_id: StringName = &"" # 专属衍生法术所属主卡实例；空值表示独立拥有
 @export var acquisition_order: int = -1 # 同稀有度收藏排序使用的获得先后
 @export var resolved_action_type: int = -1 # 多行动方式卡获得时确定的结果；-1表示沿用定义
 @export var resolved_runes: Array[int] = [] # 获得时固定的符文元素，按实例存档，不改共享定义
+@export var equipment_durability: int = 0 # 本局装备剩余可用战斗数，0也用于无耐久装备
 @export var spell_durability: int = -1 # 法术剩余耐久；-1表示尚未初始化
 @export var permanent_growth: Dictionary = {} # 属性稳定ID→本局永久增加量
 @export var crystallization_health_loss: int = 0 # 晶体化护甲归零造成的永久基础生命损失
@@ -42,11 +55,15 @@ func initialize(
 	instance_rng: RandomNumberGenerator = null
 ) -> void:
 	card_data = definition
+	_battlefield_card = null
+	is_new = true
 	instance_id = stable_instance_id
+	companion_source_id = &""
 	acquisition_order = order
 	resolved_action_type = -1
 	resolved_runes.clear()
 	spell_durability = -1
+	equipment_durability = definition.equipment_durability if definition != null else 0
 	if definition != null and definition.card_type == CardData.CardType.SPELL:
 		# 品级枚举 I～V 正好是 0～4，因此 +1 就是新法术的 1～5 点耐久。
 		spell_durability = int(definition.rarity) + 1
@@ -65,7 +82,7 @@ func initialize(
 	if instance_rng == null:
 		layout_rng.randomize()
 	if definition != null:
-		if definition.acquisition_action_types.size() > 1:
+		if definition.acquisition_action_types.size() > 1 and not definition.has_keyword(&"balance"):
 			resolved_action_type = definition.acquisition_action_types[layout_rng.randi_range(0, definition.acquisition_action_types.size() - 1)]
 		else:
 			resolved_action_type = definition.action_type
@@ -86,6 +103,27 @@ func initialize(
 		for _rune_index: int in definition.runes.size():
 			rune_revealed.append(false)
 			rune_scrape_masks.append("")
+
+
+func set_acquired_action_type(value: int) -> void:
+	if card_data == null:
+		resolved_action_type = value
+		return
+	# 固定行动跟随当前定义；多行动卡只保留仍合法的获得结果，不重投随机数。
+	var allowed: Array = card_data.acquisition_action_types if not card_data.acquisition_action_types.is_empty() else [card_data.action_type]
+	resolved_action_type = value if allowed.has(value) else int(card_data.action_type)
+
+
+func get_effect_text_for_row(row: StringName) -> String:
+	if card_data == null:
+		return ""
+	var text := card_data.get_effect_text_for_row(row)
+	if card_data.id == &"rune_engraver":
+		var wins := int(progress_by_source.get(RUNE_ENGRAVER_PROGRESS, 0))
+		text = text.replace("还剩2次", "还剩%d次" % (RUNE_ENGRAVER_WINS_REQUIRED - wins))
+	if card_data.equipment_durability > 0:
+		text = text.replace("整局剩余10次", "整局剩余%d次" % equipment_durability)
+	return text
 
 
 func is_valid() -> bool:
@@ -308,9 +346,12 @@ func capture_state() -> Dictionary:
 	return {
 		"instance_id": instance_id,
 		"card_data": card_data,
+		"companion_source_id": companion_source_id,
 		"acquisition_order": acquisition_order,
+		"is_new": is_new,
 		"resolved_action_type": resolved_action_type,
 		"resolved_runes": resolved_runes.duplicate(),
+		"equipment_durability": equipment_durability,
 		"spell_durability": spell_durability,
 		"permanent_growth": permanent_growth.duplicate(true),
 		"crystallization_health_loss": crystallization_health_loss,
@@ -366,9 +407,12 @@ func restore_state(snapshot: Dictionary) -> bool:
 		return false
 	instance_id = snapshot_instance_id
 	card_data = snapshot_card_data
+	is_new = bool(snapshot.get("is_new", false))
+	companion_source_id = StringName(snapshot.get("companion_source_id", ""))
 	acquisition_order = int(snapshot.get("acquisition_order", -1))
-	self.resolved_action_type = resolved_action_type
+	set_acquired_action_type(resolved_action_type)
 	resolved_runes.assign(prevalidated_runes)
+	equipment_durability = int(snapshot.get("equipment_durability", card_data.equipment_durability))
 	spell_durability = int(snapshot.get("spell_durability", -1))
 	permanent_growth = (snapshot.get("permanent_growth", {}) as Dictionary).duplicate(true)
 	crystallization_health_loss = maxi(int(snapshot.get("crystallization_health_loss", 0)), 0)

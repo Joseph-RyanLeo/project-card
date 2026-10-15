@@ -4,10 +4,11 @@ extends Control
 signal escape_pressed
 signal tool_requested(tool: StringName)
 signal return_requested
+signal diagnostic_export_requested
 signal restore_requested
 signal target_priority_display_changed(enabled: bool)
 
-const MENU_PANEL_SIZE := Vector2(360.0, 390.0) # 暂停菜单面板宽高
+const MENU_PANEL_SIZE := Vector2(360.0, 482.0) # 暂停菜单面板宽高
 const MENU_BUTTON_SIZE := Vector2(260.0, 38.0) # 暂停菜单按钮宽高
 const MENU_BUTTON_SEPARATION: int = 8 # 菜单各按钮之间的垂直间距
 const ESCAPE_BUTTON_POSITION := Vector2(0.0, 0.0) # 位于左上角
@@ -69,6 +70,7 @@ func _build_controls() -> void:
 	title.add_theme_font_size_override("font_size", 18)
 	layout.add_child(title)
 	_add_menu_button(layout, "攻击特效调试器", &"attack_effect_lab")
+	_add_menu_button(layout, "开包特效调整器", &"pack_effect_tuner")
 	_add_menu_button(layout, "卡面调整器", &"card_art_tuner")
 	_add_menu_button(layout, "战斗实验室", &"battle_lab")
 	_target_priority_check = CheckButton.new()
@@ -78,6 +80,9 @@ func _build_controls() -> void:
 	_target_priority_check.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_target_priority_check.toggled.connect(target_priority_display_changed.emit)
 	layout.add_child(_target_priority_check)
+	var export_button := _add_menu_button(layout, "导出诊断日志", &"diagnostics")
+	export_button.name = "ExportRunDiagnosticsButton"
+	export_button.tooltip_text = "导出最近操作、卡牌状态变化、存档和上一场战斗数据"
 	_add_menu_button(layout, "返回", &"return")
 	_restore_button = _add_menu_button(layout, "还原", &"restore")
 	_restore_button.disabled = true
@@ -134,8 +139,10 @@ func _on_escape_pressed() -> void:
 
 func _on_menu_action(action: StringName) -> void:
 	match action:
-		&"attack_effect_lab", &"card_art_tuner", &"battle_lab":
+		&"attack_effect_lab", &"card_art_tuner", &"battle_lab", &"pack_effect_tuner":
 			tool_requested.emit(action)
+		&"diagnostics":
+			diagnostic_export_requested.emit()
 		&"return":
 			return_requested.emit()
 		&"restore":

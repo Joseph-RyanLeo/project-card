@@ -9,6 +9,7 @@ const BattleSquadState = preload("res://scripts/battle/battle_squad_state.gd")
 const BattleRules = preload("res://scripts/battle/battle_rules.gd")
 const BattlePermanentGrowthLedger = preload("res://scripts/battle/battle_permanent_growth_ledger.gd")
 const BattleRunRewardLedger = preload("res://scripts/battle/battle_run_reward_ledger.gd")
+const SAVE_PATH := "/private/tmp/project-card-stage7-test-save.json"
 
 var _failure_count: int = 0
 var _card_serial: int = 0
@@ -480,6 +481,7 @@ func _test_fatigue_buff_and_battle_speed() -> void:
 
 func _test_main_preparation_aura_preview() -> void:
 	var main = MAIN_SCENE.instantiate()
+	main.run_save_path = SAVE_PATH
 	root.add_child(main)
 	await process_frame
 	main.front_row.clear_squads()
@@ -566,6 +568,7 @@ func _test_main_preparation_aura_preview() -> void:
 
 func _test_main_battle_loop_and_restart() -> void:
 	var main = MAIN_SCENE.instantiate()
+	main.run_save_path = SAVE_PATH
 	root.add_child(main)
 	await process_frame
 	await process_frame
@@ -873,6 +876,7 @@ func _test_main_battle_loop_and_restart() -> void:
 
 func _test_departure_entry_and_row_recentering() -> void:
 	var main = MAIN_SCENE.instantiate()
+	main.run_save_path = SAVE_PATH
 	root.add_child(main)
 	await process_frame
 	for row: BattlefieldRow in [main.front_row, main.back_row, main.enemy_front_row, main.enemy_back_row]:
@@ -982,6 +986,7 @@ func _test_departure_entry_and_row_recentering() -> void:
 
 func _test_reentry_cancels_obsolete_departure() -> void:
 	var main = MAIN_SCENE.instantiate()
+	main.run_save_path = SAVE_PATH
 	root.add_child(main)
 	await process_frame
 	for row: BattlefieldRow in [main.front_row, main.back_row, main.enemy_front_row, main.enemy_back_row]:

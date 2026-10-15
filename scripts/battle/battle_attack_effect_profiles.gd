@@ -5,6 +5,8 @@ extends RefCounted
 ## 默认值随项目代码保存；开发者在调试器中保存的覆盖值写入 user://。
 
 const SAVE_PATH := "user://battle_attack_effects.cfg"
+const FILE_FORMAT := "project_card_attack_effects"
+const FILE_VERSION: int = 1
 const PROFILE_IDS: Array[StringName] = [
 	&"melee_attack",
 	&"ranged_attack",
@@ -27,8 +29,28 @@ const PROFILE_NAMES := {
 	&"wood_pierce": "木·穿刺",
 	&"light_reflect": "光·折射",
 }
-const MASK_IDS: Array[StringName] = [&"energy", &"projectile"]
-const MASK_NAMES := {&"energy": "宽能量尾迹", &"projectile": "尖头弹体尾迹"}
+const MASK_IDS: Array[StringName] = [&"energy", &"projectile", &"soul_ribbon"]
+const MASK_NAMES := {&"energy": "宽能量尾迹", &"projectile": "尖头弹体尾迹", &"soul_ribbon": "灵魂光带"}
+
+# 只替换外观参数，保留当前行动的播放时间与变速强度，沿用既有命中时序。
+const SOUL_RIBBON_PRESET := {
+	"mask_kind": &"soul_ribbon",
+	"beam_height": 28.0, # 光带最宽处的厚度（像素）
+	"end_padding": 0.0, # 光带停在目标中心，不向目标后方延伸
+	"pixel_size": 3.0, # 光带轮廓的像素块大小
+	"curve_segments": 40.0, # 贝塞尔路径的采样段数
+	"arc_height": -150.0, # 从攻击方上方弯出，再落向目标
+	"flow_speed": 1.5, # 带内亮纹的流动速度
+	"flow_frequency": 4.0, # 带内亮纹的重复密度
+	"flow_strength": 0.18, # 带内亮纹对透明度的影响强度
+	"warp_strength": 0.015, # 光带边缘的轻微摆动幅度
+	"mask_cutoff": 0.0, # 不裁掉程序生成的光带主体
+	"mask_power": 1.0, # 光带透明度对比
+	"edge_threshold": 0.08, # 光带外围裁切阈值
+	"edge_softness": 0.015, # 光带外围裁切的柔化范围
+	"soul_taper": 0.75, # 越大，细尾向宽头过渡越集中在头部
+	"soul_core_width": 0.30, # 白色亮芯占光带宽度的比例
+}
 
 # 调试器按此顺序生成所有数值控件；min/max/step 同时负责保存前的安全钳制。
 const NUMERIC_FIELDS: Array[Dictionary] = [
@@ -39,6 +61,8 @@ const NUMERIC_FIELDS: Array[Dictionary] = [
 	{"key": &"pixel_size", "label": "像素块大小", "min": 1.0, "max": 16.0, "step": 1.0, "suffix": " px"},
 	{"key": &"trail_length", "label": "拖尾长度", "min": 0.05, "max": 1.00, "step": 0.01, "suffix": ""},
 	{"key": &"trail_softness", "label": "头尾柔化", "min": 0.001, "max": 0.200, "step": 0.001, "suffix": ""},
+	{"key": &"soul_taper", "label": "光带收尾指数", "min": 0.20, "max": 3.00, "step": 0.05, "suffix": "", "hint": "仅用于灵魂光带。越大，尾巴越细，宽度越集中在头部。"},
+	{"key": &"soul_core_width", "label": "光带亮芯宽度", "min": 0.0, "max": 0.80, "step": 0.01, "suffix": "", "hint": "仅用于灵魂光带。调整白色亮芯所占比例；设为0关闭亮芯。"},
 	{"key": &"curve_segments", "label": "曲线分段", "min": 4.0, "max": 64.0, "step": 1.0, "suffix": ""},
 	{"key": &"arc_height", "label": "整体弧度", "min": -160.0, "max": 160.0, "step": 1.0, "suffix": " px"},
 	{"key": &"flow_speed", "label": "内部流速", "min": 0.0, "max": 8.0, "step": 0.05, "suffix": ""},
@@ -62,6 +86,8 @@ const _COMMON_DEFAULTS := {
 	"pixel_size": 1.0,
 	"trail_length": 0.50,
 	"trail_softness": 0.035,
+	"soul_taper": 0.75, # 灵魂光带由细尾向宽头过渡的指数
+	"soul_core_width": 0.30, # 灵魂光带白色亮芯的宽度比例
 	"curve_segments": 20.0,
 	"flow_speed": 2.40,
 	"flow_frequency": 6.0,
@@ -117,6 +143,12 @@ static func normalize_profile(profile_id: StringName, source: Dictionary) -> Dic
 	return _clamp_profile(result)
 
 
+static func make_soul_ribbon_profile(profile_id: StringName, source: Dictionary) -> Dictionary:
+	var result := normalize_profile(profile_id, source)
+	result.merge(SOUL_RIBBON_PRESET, true)
+	return _clamp_profile(result)
+
+
 static func _clamp_profile(source: Dictionary) -> Dictionary:
 	var result := source.duplicate(true)
 	var mask_kind := StringName(source.get("mask_kind", result.get("mask_kind", &"energy")))
@@ -130,26 +162,26 @@ static func _clamp_profile(source: Dictionary) -> Dictionary:
 
 
 static func save_profile(profile_id: StringName, profile: Dictionary) -> Error:
-	_ensure_loaded()
-	_profiles[profile_id] = normalize_profile(profile_id, profile)
-	return _write_all_profiles(SAVE_PATH)
+	if profile_id not in PROFILE_IDS: return ERR_INVALID_PARAMETER
+	return save_profiles({profile_id: profile})
 
 
-static func save_profiles(profiles: Dictionary) -> Error:
+static func save_profiles(profiles: Dictionary, path: String = SAVE_PATH) -> Error:
 	_ensure_loaded()
+	var candidate := _profiles.duplicate(true)
 	for profile_id: StringName in PROFILE_IDS:
 		if profiles.has(profile_id):
-			_profiles[profile_id] = normalize_profile(profile_id, profiles[profile_id] as Dictionary)
-	return _write_all_profiles(SAVE_PATH)
+			candidate[profile_id] = normalize_profile(profile_id, profiles[profile_id] as Dictionary)
+	var error := _write_all_profiles(path, candidate)
+	if error == OK: _profiles = candidate
+	return error
 
 
 static func reset_profile(profile_id: StringName) -> Error:
-	_ensure_loaded()
-	_profiles[profile_id] = get_default_profile(profile_id)
-	return _write_all_profiles(SAVE_PATH)
+	return save_profile(profile_id, get_default_profile(profile_id))
 
 
-static func reload(use_saved_file: bool = true) -> void:
+static func reload_profiles(use_saved_file: bool = true) -> void:
 	_loaded = false
 	_profiles.clear()
 	_ensure_loaded(use_saved_file)
@@ -158,6 +190,57 @@ static func reload(use_saved_file: bool = true) -> void:
 static func save_snapshot(path: String) -> Error:
 	_ensure_loaded()
 	return _write_all_profiles(path)
+
+
+static func get_profiles() -> Dictionary:
+	_ensure_loaded()
+	return _profiles.duplicate(true)
+
+
+static func export_profiles(path: String, profiles: Dictionary) -> Error:
+	var validated := _validate_file_profiles(profiles)
+	if not validated.success: return ERR_INVALID_DATA
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null: return FileAccess.get_open_error()
+	file.store_string(JSON.stringify({"format": FILE_FORMAT, "version": FILE_VERSION, "profiles": validated.profiles}, "\t"))
+	file.flush()
+	var error := file.get_error()
+	file.close()
+	return error
+
+
+static func read_profile_file(path: String) -> Dictionary:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null: return {"success": false, "error": "无法打开配置文件：" + error_string(FileAccess.get_open_error())}
+	var parser := JSON.new()
+	var error := parser.parse(file.get_as_text())
+	file.close()
+	if error != OK: return {"success": false, "error": "JSON格式错误（第%d行）" % parser.get_error_line()}
+	var document: Variant = parser.data
+	if not document is Dictionary or document.get("format") != FILE_FORMAT or document.get("version") != FILE_VERSION:
+		return {"success": false, "error": "文件类型或配置版本不受支持"}
+	return _validate_file_profiles(document.get("profiles"))
+
+
+static func _validate_file_profiles(source: Variant) -> Dictionary:
+	if not source is Dictionary or source.size() != PROFILE_IDS.size():
+		return {"success": false, "error": "配置必须包含全部九类攻击特效"}
+	var profiles: Dictionary = {}
+	for id: StringName in PROFILE_IDS:
+		var profile: Variant = source.get(id)
+		if not profile is Dictionary:
+			return {"success": false, "error": "缺少特效类型：" + PROFILE_NAMES[id]}
+		var mask: Variant = profile.get("mask_kind")
+		if not (mask is String or mask is StringName) or StringName(mask) not in MASK_IDS:
+			return {"success": false, "error": PROFILE_NAMES[id] + "的特效样式无效"}
+		for field: Dictionary in NUMERIC_FIELDS:
+			var value: Variant = profile.get(field.key)
+			if not (value is float or value is int) or not is_finite(float(value)) or float(value) < float(field.min) or float(value) > float(field.max):
+				return {"success": false, "error": "%s的%s缺失或超出范围" % [PROFILE_NAMES[id], field.label]}
+			if field.key == &"curve_segments" and float(value) != floor(float(value)):
+				return {"success": false, "error": "曲线分段必须是整数"}
+		profiles[id] = normalize_profile(id, profile)
+	return {"success": true, "profiles": profiles}
 
 
 static func _ensure_loaded(use_saved_file: bool = true) -> void:
@@ -181,11 +264,12 @@ static func _ensure_loaded(use_saved_file: bool = true) -> void:
 		_profiles[profile_id] = normalize_profile(profile_id, loaded_profile)
 
 
-static func _write_all_profiles(path: String) -> Error:
+static func _write_all_profiles(path: String, source: Dictionary = {}) -> Error:
 	var config := ConfigFile.new()
+	var profiles := _profiles if source.is_empty() else source
 	for profile_id: StringName in PROFILE_IDS:
 		var section := String(profile_id)
-		var profile := _profiles[profile_id] as Dictionary
+		var profile := profiles[profile_id] as Dictionary
 		config.set_value(section, "mask_kind", String(profile["mask_kind"]))
 		for field: Dictionary in NUMERIC_FIELDS:
 			var key := String(field["key"])

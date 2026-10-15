@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/recycling_robot.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"recycling_robot"
+display_name = "回收机械人"
+pack_id = &"ironwall_inscription"
+content_effect = &"recycling_robot"
+base_value = 2
+cooldown_seconds = 6.0
+max_health = 2
+armor = 4
+runes = Array[int]([0, 1, 2])
+race_type = 3
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-6, 37)
+effect_text = "一个造物被消灭时，相邻友军获得强化+2。"

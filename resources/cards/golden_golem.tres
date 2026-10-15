@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/golden_golem.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"golden_golem"
+display_name = "黄金魔像"
+pack_id = &"twisted_vein"
+effect_ids = Array[StringName]([&"golden_golem.effect.rush", &"golden_golem.effect.echo"])
+content_effect = &"golden_golem"
+base_value = 6
+cooldown_seconds = 10.0
+max_health = 5
+armor = 10
+runes = Array[int]([0, 1, 2])
+race_type = 3
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(10, 35)
+effect_text = "突击、回响：随机永久清除自身1个纹章，成功清除获得强化10。"

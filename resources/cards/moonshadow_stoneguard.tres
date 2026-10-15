@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/moonshadow_stoneguard.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"moonshadow_stoneguard"
+display_name = "月影石卫"
+pack_id = &"silvermoon_chapter"
+keywords = Array[StringName]([&"dazzling"])
+content_effect = &"moonshadow_stoneguard"
+action_type = 4
+base_value = 5
+cooldown_seconds = 5.0
+max_health = 1
+armor = 7
+runes = Array[int]([0, 1, 2])
+race_type = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-3, 36)
+effect_text = "耀眼。休眠10秒。"

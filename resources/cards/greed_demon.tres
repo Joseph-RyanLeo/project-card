@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/greed_demon.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"greed_demon"
+display_name = "贪魔"
+pack_id = &"twisted_vein"
+content_effect = &"greed_demon"
+action_type = 2
+base_value = 6
+cooldown_seconds = 5.0
+max_health = 8
+runes = Array[int]([0, 1, 2])
+race_type = 6
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-1, 44)
+effect_text = "战斗中，任意一方每获得1金币，此卡本场数值+1。"

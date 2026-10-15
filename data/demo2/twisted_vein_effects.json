@@ -1,0 +1,925 @@
+{
+  "schema_version": 2,
+  "cards": [
+    {
+      "card_id": "miserly_mine_owner",
+      "effects": [
+        {
+          "effect_id": "miserly_mine_owner.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "miserly_mine_owner.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "miserly_mine_owner"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行rush",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "golden_golem",
+      "effects": [
+        {
+          "effect_id": "golden_golem.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "golden_golem.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "golden_golem"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行rush",
+          "questions": []
+        },
+        {
+          "effect_id": "golden_golem.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "golden_golem.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "golden_golem"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行echo",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "rallying_mine_bell",
+      "effects": [
+        {
+          "effect_id": "rallying_mine_bell.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "rallying_mine_bell.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "rallying_mine_bell"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行rush",
+          "questions": []
+        },
+        {
+          "effect_id": "rallying_mine_bell.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "rallying_mine_bell.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "rallying_mine_bell"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行echo",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "mining_disaster_wraith",
+      "effects": [
+        {
+          "effect_id": "mining_disaster_wraith.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "mining_disaster_wraith.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "mining_disaster_wraith"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行echo",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "miser",
+      "effects": [
+        {
+          "effect_id": "miser.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "miser.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "miser"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行echo",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "frenzied_gold_panner",
+      "effects": [
+        {
+          "effect_id": "frenzied_gold_panner.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "frenzied_gold_panner.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "frenzied_gold_panner"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行last_wish",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "ember_spirit",
+      "effects": [
+        {
+          "effect_id": "ember_spirit.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "ember_spirit.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "符文临时覆盖于战后清理，不写永久账本",
+          "end_operation": "清理本场符文覆盖",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "ember_spirit"
+          },
+          "reading": "按2026-10-08用户确认执行：突击：此卡两个元素符文临时变为火符文。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "minecart_soul",
+      "effects": [
+        {
+          "effect_id": "minecart_soul.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "minecart_soul.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "minecart_soul"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行rush",
+          "questions": []
+        },
+        {
+          "effect_id": "minecart_soul.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "minecart_soul.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "minecart_soul"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行last_wish",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "clearing_machine",
+      "effects": [
+        {
+          "effect_id": "clearing_machine.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "clearing_machine.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "clearing_machine"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行last_wish",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "ghostface_beetle",
+      "effects": [
+        {
+          "effect_id": "ghostface_beetle.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "ghostface_beetle.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "ghostface_beetle"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行last_wish",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "mine_wailer",
+      "effects": [
+        {
+          "effect_id": "mine_wailer.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "mine_wailer.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "mine_wailer"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行last_wish",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "ember_residue",
+      "effects": [
+        {
+          "effect_id": "ember_residue.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "ember_residue.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "ember_residue"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行echo",
+          "questions": []
+        },
+        {
+          "effect_id": "ember_residue.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "ember_residue.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "ember_residue"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行last_wish",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "crystal_shell_beetle",
+      "effects": [
+        {
+          "effect_id": "crystal_shell_beetle.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "crystal_shell_beetle.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "遗愿召唤结算完成",
+          "end_operation": "结束本次召唤",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "crystal_shell_beetle"
+          },
+          "reading": "按2026-10-08用户确认执行：遗愿：召唤1张随机元素碎晶。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "mine_lamp_wisp",
+      "effects": [
+        {
+          "effect_id": "mine_lamp_wisp.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "mine_lamp_wisp.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "mine_lamp_wisp"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行last_wish",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "ghost_pick",
+      "effects": [
+        {
+          "effect_id": "ghost_pick.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "ghost_pick.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "ghost_pick"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行echo",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "crystal_shard_pouch",
+      "effects": [
+        {
+          "effect_id": "crystal_shard_pouch.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "crystal_shard_pouch.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "twisted_vein",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "受益单位下一次实际行动消耗；战后清理",
+          "end_operation": "消耗或清理本来源强化",
+          "trigger_limit": {
+            "scope": "battle",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "crystal_shard_pouch"
+          },
+          "reading": "按2026-10-07已确认矿脉规则执行rush",
+          "questions": []
+        }
+      ]
+    }
+  ]
+}

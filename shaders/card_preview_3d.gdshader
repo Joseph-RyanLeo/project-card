@@ -1,14 +1,19 @@
 shader_type canvas_item;
 render_mode unshaded;
 
+#include "res://shaders/pixel_gold_foil.gdshaderinc"
+
 // 把合成后的整张卡当成一个平面做透视和扫光，避免多层节点各自变形。
 uniform bool use_3d = false;
 uniform float fov : hint_range(20.0, 120.0, 1.0) = 72.0;
 uniform float max_tilt_degrees : hint_range(0.0, 24.0, 0.5);
 uniform float inset : hint_range(0.0, 1.0, 0.01);
 uniform vec2 pointer_force = vec2(0.0);
+uniform vec2 visual_offset = vec2(0.0); // 合成后平面的局部视觉位移，默认不偏移；不改变节点命中区域
 
 uniform bool use_flash = false;
+uniform bool use_pack_foil = false; // 包装仅对中央图案三档金色做统一烫金反光
+uniform float pack_foil_strength = 0.85; // 包装烫金光带亮度，与贴纸封皮一致
 uniform int flash_type : hint_range(0, 2) = 0;
 uniform float stripe_spacing : hint_range(1.0, 50.0, 0.5);
 uniform float stripe_width : hint_range(1.0, 20.0, 0.5);
@@ -16,12 +21,14 @@ uniform float flash_intensity : hint_range(0.0, 2.0, 0.05);
 uniform float flash_angle_degrees : hint_range(0.0, 360.0, 1.0) = 50.0;
 
 uniform vec2 card_texture_size_px = vec2(1.0);
+uniform float texture_render_scale = 1.0; // 合成纹理的采样倍率，用于还原透视四边形的原生尺寸
 uniform vec2 mask_origin_px = vec2(0.0);
 uniform vec2 mask_size_px = vec2(1.0);
 
 uniform bool use_normal_texture = false;
 uniform sampler2D normal_texture : hint_normal, filter_linear;
 uniform float normal_light_strength : hint_range(0.0, 1.0, 0.05) = 0.32;
+varying vec4 item_modulate;
 
 
 mat3 inverse_rotation_matrix(vec2 force) {
@@ -40,11 +47,13 @@ mat3 inverse_rotation_matrix(vec2 force) {
 
 
 void vertex() {
+	item_modulate = COLOR;
 	if (use_3d) {
 		float perspective_scale = tan(radians(fov) * 0.5);
-		vec2 texture_size = 1.0 / TEXTURE_PIXEL_SIZE;
+		vec2 texture_size = 1.0 / (TEXTURE_PIXEL_SIZE * texture_render_scale);
 		VERTEX += (UV - vec2(0.5)) * texture_size * perspective_scale * (1.0 - inset);
 	}
+	VERTEX += visual_offset;
 }
 
 
@@ -79,6 +88,9 @@ void fragment() {
 		* step(mask_uv.y, 1.0)
 	);
 	vec3 output_color = source.rgb;
+	if (use_pack_foil) {
+		output_color = pack_gold_foil(source.rgb, sample_uv, pointer_force, pack_foil_strength);
+	}
 	if (use_normal_texture && inside_mask > 0.0) {
 		vec4 packed_normal = texture(normal_texture, clamp(mask_uv, vec2(0.0), vec2(1.0)));
 		vec3 normal_value = normalize(packed_normal.rgb * 2.0 - 1.0);
@@ -115,5 +127,5 @@ void fragment() {
 		}
 	}
 
-	COLOR = vec4(output_color, source.a);
+	COLOR = vec4(output_color, source.a) * item_modulate;
 }

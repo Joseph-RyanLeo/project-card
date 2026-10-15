@@ -182,7 +182,8 @@ func restore_state(state: Dictionary, card_registry: Dictionary = {}) -> bool:
 	if level_cards_value is Dictionary:
 		for side in ["player", "enemy"]:
 			var entries: Variant = level_cards_value.get(side, [])
-			if not entries is Array or entries.size() > RESOURCE_COUNT_MAX:
+			# 0—3只约束自动抽取数量；遭遇和战斗效果还可生成资源，合法总量由格位校验约束。
+			if not entries is Array:
 				return false
 			for saved_card: Variant in entries:
 				var owned := _decode_level_resource(saved_card, card_registry, parsed_level_cards)

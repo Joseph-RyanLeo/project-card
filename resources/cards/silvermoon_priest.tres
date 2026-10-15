@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/silvermoon_priest.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"silvermoon_priest"
+display_name = "银月祭祀"
+pack_id = &"silvermoon_chapter"
+content_effect = &"silvermoon_priest"
+action_type = 2
+base_value = 2
+cooldown_seconds = 5.0
+max_health = 3
+armor = 5
+runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-6, 4)
+effect_text = "启咒：随机链接两名敌军；下一次以其中一名为目标的攻击行动，同时攻击另一名。"

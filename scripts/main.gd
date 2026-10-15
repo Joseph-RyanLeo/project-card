@@ -1,5 +1,11 @@
 extends Control
 
+signal card_pack_presentation_changed(active: bool)
+
+const ShortMazeScript = preload("res://scripts/flow/short_maze_controller.gd")
+@export var short_maze_enabled: bool = false # GameDisplay开启迷宫；Main独立场景保留开发实验入口
+var maze_controller: ShortMazeScript
+
 ## 主场景的流程协调器。
 ##
 ## 这里把收藏、两条战场行、阶段切换和两种拖拽入口连接起来；
@@ -12,13 +18,17 @@ const ShopCardViewScript = preload("res://scripts/ui/shop_card_view.gd")
 const ShopOfferViewScript = preload("res://scripts/ui/shop_offer_view.gd")
 const ShopPackStackViewScript = preload("res://scripts/ui/shop_pack_stack_view.gd")
 const ShopPriceViewScript = preload("res://scripts/ui/shop_price_view.gd")
+const ActionPackArtScript = preload("res://scripts/ui/action_card_pack_art.gd")
+const PackEffectSettings = preload("res://scripts/ui/pack_opening_effect_settings.gd")
+const CardPackOpeningScript = preload("res://scripts/ui/card_pack_opening.gd")
+const StickerPackArtScript = preload("res://scripts/ui/sticker_pack_art.gd")
+const StickerPackOpeningScript = preload("res://scripts/ui/sticker_pack_opening.gd")
 const SHOP_OPEN_OFFSET: float = -380.0 # 商店从屏幕上方落下时的初始纵向位移
 const SHOP_OPEN_OVERSHOOT: float = 12.0 # 下落越过终点后回弹的距离
 const SHOP_OPEN_DURATION: float = 0.24 # 商店下降到越过点的秒数
 const SHOP_REBOUND_DURATION: float = 0.13 # 越过后回弹到原位的秒数
 const SHOP_CLOSE_DURATION: float = 0.22 # 商店回收至屏幕上方的秒数
 const SHOP_INSPECTION_OPEN_SECONDS: float = 0.25 # 商品从陈列位置放大到检视位置的秒数
-const SHOP_PACK_OPEN_HOLD: float = 0.12 # 包装放大后停留再开始溶解的秒数
 const SHOP_PACK_INSPECTION_SCALE: float = 4.0 # 包装检视相对原生商品画布的整数放大倍率
 const SHOP_BACKGROUND_POSITION := Vector2(224, 40) # 商店桌布左上角，使用1280×720逻辑画布坐标
 const SHOP_BACKGROUND_SIZE := Vector2(832, 306) # 商店桌布覆盖的宽高
@@ -26,12 +36,14 @@ const BATTLEFIELD_ROW_SCENE: PackedScene = preload("res://scenes/ui/BattlefieldR
 const COLLECTION_DROP_ZONE_SCRIPT: Script = preload("res://scripts/ui/collection_drop_zone.gd")
 const SPELL_PREPARATION_TRAY_SCRIPT: Script = preload("res://scripts/ui/spell_preparation_tray.gd")
 const DEVELOPER_CONSOLE_SCRIPT: Script = preload("res://scripts/ui/developer_console.gd")
+const RUN_DIAGNOSTIC_SCRIPT = preload("res://scripts/data/run_diagnostic_recorder.gd")
 const ESCAPE_PAUSE_MENU_SCRIPT: Script = preload("res://scripts/ui/escape_pause_menu.gd")
 const BattleSquadState = preload("res://scripts/battle/battle_squad_state.gd")
 const BattleController = preload("res://scripts/battle/battle_controller.gd")
 const BattleRules = preload("res://scripts/battle/battle_rules.gd")
 const BattleElementResolver = preload("res://scripts/battle/battle_element_resolver.gd")
 const BattleLogEntry = preload("res://scripts/battle/battle_log_entry.gd")
+const BattleLogPanelScript = preload("res://scripts/ui/battle_log_panel.gd")
 const BattleFormulaPresenter = preload("res://scripts/battle/battle_formula_presenter.gd")
 const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
 const BattleAttackTrailRenderer = preload("res://scripts/battle/battle_attack_trail_renderer.gd")
@@ -44,6 +56,8 @@ const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 const EmblemLibraryData = preload("res://scripts/data/emblem_library_data.gd")
 const StatusIndicatorStyle = preload("res://scripts/ui/status_indicator_style.gd")
 const RuneRevealCoverStyleScript = preload("res://scripts/ui/rune_reveal_cover_style.gd")
+const EmblemFusionOverlayScript = preload("res://scripts/ui/emblem_fusion_overlay.gd")
+const EmblemRecipeDiscoveryScript = preload("res://scripts/data/emblem_recipe_discovery.gd")
 const EmblemLibraryViewScript = preload("res://scripts/ui/emblem_library_view.gd")
 const CardInspectionOverlayScript = preload("res://scripts/ui/card_inspection_overlay.gd")
 const RunSettlementJournal = preload("res://scripts/data/run_settlement_journal.gd")
@@ -54,6 +68,8 @@ const BattleDiagnosticSerializerScript = preload("res://scripts/battle/battle_di
 const BattleAudioServiceScript = preload("res://scripts/battle/battle_audio_service.gd")
 const RunSaveService = preload("res://scripts/data/run_save_service.gd")
 const OrdinaryShopServiceScript = preload("res://scripts/data/ordinary_shop_service.gd")
+const CardServiceSlotScript = preload("res://scripts/ui/card_service_slot.gd")
+const CardExchangeAnimationScript = preload("res://scripts/ui/card_exchange_animation.gd")
 const ResourceBoardState = preload("res://scripts/data/resource_board_state.gd")
 const RESOURCE_PREPARATION_TRAY_SCRIPT = preload("res://scripts/ui/resource_preparation_tray.gd")
 const PAGE_NUMBER_FONT: Font = preload("res://assets/fonts/pixel_numbers_large.fnt")
@@ -238,8 +254,9 @@ const EFFECT_COLOR_DARK := Color("b05dff") # 暗元素的纯紫色攻击颜色
 const EFFECT_COLOR_FIRE := Color("e51414") # 火元素的纯红色攻击颜色
 const EFFECT_COLOR_WATER := Color("0095ff") # 水元素的纯蓝色攻击颜色
 const EFFECT_COLOR_WOOD := Color("3ac330") # 木元素的纯绿色攻击颜色
-const BATTLE_RESULT_PANEL_POSITION := Vector2(1096, 184) # 战后入口放在战场右侧空白区，不遮挡四排卡牌
-const BATTLE_RESULT_PANEL_SIZE := Vector2(170, 278) # 右侧结算框高度，同时容纳战斗数据导出与重开入口
+const BATTLE_RESULT_PANEL_POSITION := Vector2(460, 144) # 结算页放在1280×720设计画布正中央
+const BATTLE_RESULT_PANEL_SIZE := Vector2(360, 432) # 居中结算页容纳奖励、导出、其他单位统计、查看战场和继续按钮
+const OTHER_BATTLE_STATISTICS_DIALOG_SIZE := Vector2i(700, 400) # 其他单位统计窗尺寸，内容较多时滚动查看
 signal battle_departure_requested(state: BattleSquadState)
 
 enum WorldView { BATTLEFIELDS, COLLECTION }
@@ -262,6 +279,7 @@ var _rune_scrape_last_pointer: Vector2 = Vector2.INF # 连续刮擦的上一画�
 var _rune_scrape_last_inside_surface: bool = false # 只有连续留在检视面内才插值，避免从工具箱跨屏连线
 var _rune_scraper_mode: bool = false # 只有主动进入刮刀模式后才接收刮擦输入
 var _rune_scrape_button_held: bool = false # 左键按住时才沿鼠标路径连续刮擦
+var _rune_scrape_locked_index: int = -1
 var _rune_scrape_sticker_consumed_this_stroke: bool = false # 移除贴纸后要求下一次独立按键再刮底层
 var _rune_scraper_paid_slots: Dictionary = {} # 当前刮刀模式内已付费槽；退出时统一完整揭晓
 var _rune_scraper_drag_data: Dictionary = {} # 刀头相对鼠标的固定命中形状
@@ -313,6 +331,8 @@ var _recent_bookmark_shake_tween: Tween
 var _page_turn_overlay: Control
 var _battle_snapshot: BattlePreparationSnapshot
 var _battle_state_slots: Dictionary = {}
+var _battle_display_refresh_queued := false
+var _battle_log_refresh_queued := false
 var battle_departure_count: int = 0
 var battle_speed_index: int = 1
 var _active_battle_departures: int = 0
@@ -327,6 +347,7 @@ var _next_battle_instance_sequence: int = 1
 var _resume_battle_instance_id: StringName = &"" # 战斗中退出读档后，下一次开战复用原战斗身份
 
 var owned_card_collection := OwnedCardCollection.new()
+var _card_definition_resources: Array[CardData] = [] # 保持只读定义的资源引用，避免每次交易重新从磁盘加载
 @export_range(0, 20, 1) var spell_preparation_capacity: int = 10 # 当前英雄可准备的法术实例上限；英雄容量系统接入前由此处配置
 var prepared_spell_instance_ids: Array[StringName] = []
 var settlement_journal := RunSettlementJournal.new()
@@ -376,6 +397,11 @@ var battle_volume_slider: HSlider
 var battle_audio_service: Variant
 var celestial_indicators: CelestialIndicatorController
 var start_battle_button: Button
+var _viewing_result_battlefield: bool = false
+var _return_to_result_button: Button
+var _other_battle_statistics_button: Button
+var _other_battle_statistics_dialog: AcceptDialog
+var _other_battle_statistics_text: RichTextLabel
 var battle_result_panel: Panel
 var battle_result_label: Label
 var battle_result_summary_label: RichTextLabel
@@ -409,6 +435,8 @@ var recent_left_page_art: TextureRect
 var recent_right_page_art: TextureRect
 var emblem_library: Variant
 var _emblem_library_parent: Control
+var _emblem_fusion_overlay: Control
+var _emblem_recipe_discovery = EmblemRecipeDiscoveryScript.new()
 var _inspection_overlay: Variant
 var _inspection_carry_layer: Control
 var _inspection_card_view: CardView
@@ -422,6 +450,8 @@ var _inspection_effect_layer_was_visible := true
 var _inspection_surface: InspectionCardSurface
 var _inspection_source_view: Control
 var _shop_pack_opening := false
+var _card_pack_opening: CardPackOpeningScript
+var _sticker_pack_opening: StickerPackOpeningScript
 var _click_carry_layer: Control
 var _inspection_statistics_suppression_snapshot: Array[Dictionary] = []
 var _inspection_dim: ColorRect
@@ -465,15 +495,29 @@ var _shop_motion_root: Control
 var ordinary_shop_status: Label
 var ordinary_shop_entry_button: Button
 var continue_run_button: Button
-var claim_random_cards_button: Button
 var debug_new_shop_button: Button
 var _shop_tear_dialog: ConfirmationDialog
-var _shop_sell_dialog: AcceptDialog
+var _shop_card_service_panel: HBoxContainer
+var _shop_service_slot: PanelContainer
+var _shop_card_service_actions: VBoxContainer
+var _shop_service_card_id: StringName = &""
+var _shop_procurement_action: int = -1
+var _shop_procurement_button: Button
+var _shop_action_filters: HBoxContainer
+var _shop_exchange_panel: HBoxContainer
+var _shop_exchange_slots: Array[PanelContainer] = []
+var _shop_exchange_ids: Array[StringName] = []
+var _shop_exchange_confirm: Button
+var _shop_exchange_status: Label
+var _shop_exchange_animation: Control
 var ordinary_shop_open := false
 var _ordinary_shop_previous_world_view: WorldView = WorldView.COLLECTION
 var scraper_count: int = 0
 const DEFAULT_RUN_SAVE_PATH := "user://project_card_run.json"
 var run_save_path: String = DEFAULT_RUN_SAVE_PATH
+var _run_diagnostics: RefCounted
+var _run_diagnostic_dialog: FileDialog
+var _run_diagnostic_pending := false
 
 
 func _build_scene_structure() -> void:
@@ -527,7 +571,9 @@ func _build_ordinary_shop_interface() -> void:
 	ordinary_shop_layer.name = "OrdinaryShopLayer"
 	ordinary_shop_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ordinary_shop_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ordinary_shop_layer.z_index = 250 # 商店位于普通战场上方，资源详情、检视和暂停菜单下方
+	ordinary_shop_layer.theme = Theme.new()
+	ordinary_shop_layer.theme.default_font = BATTLE_LOG_FONT
+	ordinary_shop_layer.z_index = 2500 # 商店覆盖牌型与装备图标，低于资源详情、检视和暂停
 	add_child(ordinary_shop_layer)
 	var shop_backdrop := TextureRect.new()
 	shop_backdrop.name = "ShopTableBackdrop"
@@ -582,15 +628,26 @@ func _build_ordinary_shop_interface() -> void:
 	var heading := HBoxContainer.new()
 	content.add_child(heading)
 	var title := Label.new()
-	title.text = "普通商店 · 灰烬证册"
+	title.text = "普通商店"
+	title.name = "OrdinaryShopTitle"
 	title.add_theme_font_size_override("font_size", 24) # 商店标题字号
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_child(title)
 	var sell_button := Button.new()
 	sell_button.name = "SellCardsButton"
-	sell_button.text = "出售"
-	sell_button.pressed.connect(_open_shop_sell_dialog)
+	sell_button.text = "卡牌服务"
+	sell_button.pressed.connect(_open_shop_card_services)
 	heading.add_child(sell_button)
+	_shop_procurement_button = Button.new()
+	_shop_procurement_button.name = "ActionProcurementButton"
+	_shop_procurement_button.text = "定向采购"
+	_shop_procurement_button.pressed.connect(_toggle_action_procurement)
+	heading.add_child(_shop_procurement_button)
+	var exchange := Button.new()
+	exchange.name = "CardExchangeButton"
+	exchange.text = "置换"
+	exchange.pressed.connect(_open_shop_exchange)
+	heading.add_child(exchange)
 	var refresh_button := Button.new()
 	refresh_button.name = "OrdinaryShopRefreshButton"
 	refresh_button.text = "刷新"
@@ -606,14 +663,6 @@ func _build_ordinary_shop_interface() -> void:
 	continue_run_button.visible = FileAccess.file_exists(run_save_path)
 	continue_run_button.pressed.connect(_continue_saved_run)
 	ordinary_shop_layer.add_child(continue_run_button)
-	claim_random_cards_button = Button.new()
-	claim_random_cards_button.name = "ClaimRandomCardRequestsButton"
-	claim_random_cards_button.text = "领取随机随从"
-	claim_random_cards_button.position = Vector2(1060, 150) # 待领取奖励入口放在继续游戏入口下方
-	claim_random_cards_button.size = Vector2(92, 32) # 奖励入口保持与继续按钮相同的点击尺寸
-	claim_random_cards_button.visible = false
-	claim_random_cards_button.pressed.connect(_claim_pending_random_cards)
-	ordinary_shop_layer.add_child(claim_random_cards_button)
 	debug_new_shop_button = Button.new()
 	debug_new_shop_button.name = "DebugNewShopButton"
 	debug_new_shop_button.text = "新商店"
@@ -636,11 +685,34 @@ func _build_ordinary_shop_interface() -> void:
 	ordinary_shop_offer_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ordinary_shop_offer_list.add_theme_constant_override("separation", 4) # 金币信息与商品陈列之间的间距
 	content.add_child(ordinary_shop_offer_list)
+	_shop_card_service_panel = HBoxContainer.new()
+	_shop_card_service_panel.name = "ShopCardServicePanel"
+	_shop_card_service_panel.add_theme_constant_override("separation", 24) # 卡牌服务选项与右侧空槽之间的间距
+	_shop_card_service_panel.visible = false
+	content.add_child(_shop_card_service_panel)
+	_shop_card_service_actions = VBoxContainer.new()
+	_shop_card_service_actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_shop_card_service_panel.add_child(_shop_card_service_actions)
+	_shop_service_slot = CardServiceSlotScript.new()
+	_shop_service_slot.name = "ShopCardServiceSlot"
+	_shop_service_slot.accepts_card = _can_select_shop_service_card
+	_shop_service_slot.resolve_card_view = _find_service_card_view
+	_shop_service_slot.card_selected.connect(_select_shop_service_card)
+	_shop_service_slot.card_returned.connect(_on_shop_service_card_returned)
+	_shop_card_service_panel.add_child(_shop_service_slot)
+	_build_shop_exchange_panel(content)
 
 
 func _toggle_ordinary_shop() -> void:
+	if maze_controller != null:
+		if ordinary_shop_open:
+			if not maze_controller.leave_shop():
+				return
+		elif maze_controller.run.step != ShortMazeRunState.Step.EVENT or maze_controller.run.get_round_kind() != "shop":
+			return
 	if current_phase != GamePhase.PREPARE or ordinary_shop_service == null:
 		return
+	_close_shop_card_services()
 	ordinary_shop_open = not ordinary_shop_open
 	if ordinary_shop_open:
 		if not ordinary_shop_panel.visible:
@@ -652,7 +724,7 @@ func _toggle_ordinary_shop() -> void:
 		ordinary_shop_panel.visible = true
 	if ordinary_shop_open and ordinary_shop_service.offers.is_empty():
 		_generate_ordinary_shop(false)
-	elif not ordinary_shop_open:
+	elif not ordinary_shop_open and maze_controller == null:
 		var save_error := save_run_to_path(run_save_path)
 		ordinary_shop_status.text = "已保存本局" if save_error == OK else "离店存档失败（错误码 %d）" % save_error
 		play_area_label.text = ordinary_shop_status.text
@@ -661,6 +733,8 @@ func _toggle_ordinary_shop() -> void:
 		_play_shop_open_animation()
 	if is_instance_valid(continue_run_button):
 		continue_run_button.visible = FileAccess.file_exists(run_save_path)
+	if maze_controller != null:
+		maze_controller.refresh()
 
 
 func _play_shop_open_animation() -> void:
@@ -679,15 +753,18 @@ func _play_shop_close_animation() -> void:
 	_shop_open_tween.tween_property(_shop_motion_root, "position:y", SHOP_OPEN_OFFSET, SHOP_CLOSE_DURATION)
 	_shop_open_tween.tween_callback(func():
 		ordinary_shop_panel.visible = false
-		set_world_view(_ordinary_shop_previous_world_view)
+		set_world_view(WorldView.BATTLEFIELDS if maze_controller != null else _ordinary_shop_previous_world_view)
+		if maze_controller != null:
+			maze_controller.refresh()
 	)
 
 
 func _continue_saved_run() -> void:
 	if load_run_from_path(run_save_path):
-		ordinary_shop_open = false
-		ordinary_shop_panel.visible = false
-		ordinary_shop_status.text = "已继续本局"
+		if maze_controller == null:
+			ordinary_shop_open = false
+			ordinary_shop_panel.visible = false
+		ordinary_shop_status.text = "已继续本局；" + maze_controller.shop_entry_message() if maze_controller != null and ordinary_shop_open else "已继续本局"
 	else:
 		ordinary_shop_status.text = "继续游戏失败：本局存档无法读取或校验"
 
@@ -716,6 +793,10 @@ func _get_all_held_stickers() -> Array[Dictionary]:
 			for state: Dictionary in states:
 				if not state.is_empty():
 					result.append(state.duplicate(true))
+	for item: Dictionary in run_reward_state.pending_ground_items:
+		if item.get("item_kind") == "emblem": result.append({"emblem_id": item.get("item_id", "")})
+	for item: Dictionary in run_reward_state.pending_emblem_instances:
+		result.append({"emblem_id": item.get("emblem_id", "")})
 	return result
 
 
@@ -763,9 +844,9 @@ func _start_new_ordinary_shop() -> void:
 	_refresh_ordinary_shop_panel()
 
 
-func _claim_pending_random_cards() -> void:
+func _resolve_pending_random_cards() -> Dictionary:
 	if ordinary_shop_service == null or run_reward_state.pending_random_card_requests.is_empty():
-		return
+		return {"success": true, "cards": []}
 	var all_definitions: Array[CardData] = []
 	for value: Variant in _build_card_definition_registry().values():
 		if value is CardData:
@@ -775,6 +856,7 @@ func _claim_pending_random_cards() -> void:
 	next_rng.state = ordinary_shop_service.rng.state
 	var current_owned := owned_card_collection.get_cards()
 	var pending_cards: Array[CardData] = []
+	var held_counts: Dictionary = ordinary_shop_service.count_owned_cards(current_owned)
 	for request: Dictionary in run_reward_state.pending_random_card_requests:
 		var parameters: Dictionary = request.get("parameters", {}) as Dictionary
 		var requested_type := _random_reward_card_type(parameters)
@@ -782,8 +864,7 @@ func _claim_pending_random_cards() -> void:
 		var minimum_rarity := _random_reward_rarity(parameters.get("minimum_rarity", "I"))
 		var exact_rarity := _random_reward_rarity(parameters.get("rarity", "")) if parameters.has("rarity") else -1
 		if requested_type < 0 or minimum_rarity < 0 or (parameters.has("rarity") and exact_rarity < 0):
-			ordinary_shop_status.text = "随机卡牌请求含有无效筛选条件，原请求已保留"
-			return
+			return {"success": false, "reason": "invalid_random_card_filter"}
 		var held_iv: Dictionary = {}
 		for owned: OwnedCard in current_owned:
 			if owned.card_data.rarity == CardData.Rarity.IV:
@@ -791,9 +872,11 @@ func _claim_pending_random_cards() -> void:
 		for chosen_card: CardData in pending_cards:
 			if chosen_card.rarity == CardData.Rarity.IV:
 				held_iv[chosen_card.id] = true
+		# 无指定主题的奖励复用本局开放卡池；明确主题的特殊奖励仍遵守其自身规则。
+		var reward_pool: Array[CardData] = ordinary_shop_service._eligible_cards(all_definitions, current_owned, held_iv) if requested_pack.is_empty() else all_definitions
 		for _draw: int in int(request.get("amount", 0)):
 			var candidates: Array[CardData] = []
-			for definition: CardData in all_definitions:
+			for definition: CardData in reward_pool:
 				if not definition.is_available or definition.is_derived or definition.card_type != requested_type:
 					continue
 				if not requested_pack.is_empty() and String(definition.pack_id) != requested_pack:
@@ -801,36 +884,44 @@ func _claim_pending_random_cards() -> void:
 				if int(definition.rarity) < minimum_rarity or (exact_rarity >= 0 and int(definition.rarity) != exact_rarity) or (definition.rarity == CardData.Rarity.IV and held_iv.has(definition.id)):
 					continue
 				candidates.append(definition)
-			var selected: CardData = ordinary_shop_service._draw_by_rarity_weights(candidates, next_rng, minimum_rarity)
+			var selected: CardData = ordinary_shop_service._draw_by_rarity_weights(candidates, next_rng, minimum_rarity, held_counts)
 			if selected == null:
-				ordinary_shop_status.text = "当前没有满足该随机随从请求的候选；请求与随机状态均保留"
-				return
+				return {"success": false, "reason": "no_random_card_candidate"}
 			pending_cards.append(selected)
+			held_counts[selected.id] = int(held_counts.get(selected.id, 0)) + 1
 			if selected.rarity == CardData.Rarity.IV:
 				held_iv[selected.id] = true
 	var previous_collection := owned_card_collection.capture_state()
-	var previous_reward := run_reward_state.capture_state()
 	var previous_rng_state: int = ordinary_shop_service.rng.state
 	for card: CardData in pending_cards:
 		if owned_card_collection.create_card(card, next_rng) == null:
 			owned_card_collection.restore_state(previous_collection)
 			ordinary_shop_service.rng.state = previous_rng_state
-			ordinary_shop_status.text = "创建随机卡牌实例失败；原请求已保留"
-			return
+			return {"success": false, "reason": "random_card_creation_failed"}
 	run_reward_state.pending_random_card_requests.clear()
 	ordinary_shop_service.rng.state = next_rng.state
-	var save_error := save_run_to_path(run_save_path)
-	if save_error != OK:
-		owned_card_collection.restore_state(previous_collection)
-		run_reward_state.restore_state(previous_reward)
-		ordinary_shop_service.rng.state = previous_rng_state
-		ordinary_shop_status.text = "保存失败；随机随从请求已回滚并保留"
+	return {"success": true, "cards": _shop_card_names(pending_cards)}
+
+
+func _claim_pending_random_cards() -> void:
+	# 旧存档待解析奖励复用同一个自动入库事务，不再提供商店领取按钮。
+	var before_collection := owned_card_collection.capture_state()
+	var before_reward := run_reward_state.capture_state()
+	var before_rng: int = ordinary_shop_service.rng.state
+	var result := _resolve_pending_random_cards()
+	if not result.success:
+		ordinary_shop_status.text = "随机卡奖励暂未入库：" + String(result.reason)
+		return
+	if result.cards.is_empty(): return
+	if save_run_to_path(run_save_path) != OK:
+		owned_card_collection.restore_state(before_collection)
+		run_reward_state.restore_state(before_reward)
+		ordinary_shop_service.rng.state = before_rng
+		ordinary_shop_status.text = "奖励保存失败，已回退"
 		return
 	_sync_legacy_collection_cards()
 	_build_collection_cards()
-	_refresh_resource_preparation_trays()
-	ordinary_shop_status.text = "已领取随机随从：%s" % "、".join(_shop_card_names(pending_cards))
-	_refresh_ordinary_shop_panel()
+	ordinary_shop_status.text = "战后卡牌已入收藏：" + "、".join(result.cards)
 
 
 func _random_reward_card_type(parameters: Dictionary) -> int:
@@ -850,10 +941,6 @@ func _random_reward_rarity(value: Variant) -> int:
 func _refresh_ordinary_shop_panel() -> void:
 	if not is_instance_valid(ordinary_shop_offer_list) or ordinary_shop_service == null:
 		return
-	if is_instance_valid(claim_random_cards_button):
-		var has_pending_requests := run_reward_state.get_pending_random_card_count() > 0
-		claim_random_cards_button.visible = has_pending_requests
-		claim_random_cards_button.disabled = not has_pending_requests
 	if is_instance_valid(debug_new_shop_button):
 		debug_new_shop_button.visible = OS.is_debug_build()
 	# 只更新成交/替换的商品，原卡面和轮播计时器一直留在树中。
@@ -864,6 +951,18 @@ func _refresh_ordinary_shop_panel() -> void:
 		wallet.name = "ShopWallet"
 		wallet.add_theme_constant_override("separation", 20) # 余额与刷新费用之间的间距
 		ordinary_shop_offer_list.add_child(wallet)
+		_shop_action_filters = HBoxContainer.new()
+		_shop_action_filters.name = "ProcurementActions"
+		_shop_action_filters.add_theme_constant_override("separation", 4) # 五种行动方式采购按钮间距
+		for action: int in CardData.ActionType.size():
+			var button := Button.new()
+			button.name = "ProcurementAction_%d" % action
+			button.text = CardData.get_action_type_name_for(action as CardData.ActionType)
+			button.toggle_mode = true
+			button.add_theme_font_size_override("font_size", 16) # 定向分类按钮字号
+			button.pressed.connect(_select_action_procurement.bind(action))
+			_shop_action_filters.add_child(button)
+		wallet.add_child(_shop_action_filters)
 		display_row = HBoxContainer.new()
 		display_row.name = "ShopDisplayRow"
 		display_row.add_theme_constant_override("separation", 8) # 主商品与服务区的间距
@@ -880,11 +979,17 @@ func _refresh_ordinary_shop_panel() -> void:
 	var wallet_values := [run_reward_state.gold, ordinary_shop_service.refresh_price()]
 	if wallet.get_meta("values", []) != wallet_values:
 		for child: Node in wallet.get_children():
+			if child == _shop_action_filters: continue
 			wallet.remove_child(child)
 			child.queue_free()
 		wallet.add_child(_shop_price([wallet_values[0]]))
 		wallet.add_child(_shop_price([wallet_values[1]], "刷新"))
 		wallet.set_meta("values", wallet_values)
+		wallet.move_child(_shop_action_filters, wallet.get_child_count() - 1)
+	_shop_action_filters.visible = _shop_procurement_action >= 0
+	_shop_procurement_button.text = "普通商品" if _shop_procurement_action >= 0 else "定向采购"
+	for action: int in _shop_action_filters.get_child_count():
+		(_shop_action_filters.get_child(action) as Button).set_pressed_no_signal(action == _shop_procurement_action)
 	var offer_grid := display_row.get_node("OrdinaryShopOfferGrid") as HBoxContainer
 	var services := display_row.get_node("ShopServices") as VBoxContainer
 	var retained: Dictionary = {}
@@ -907,7 +1012,7 @@ func _refresh_ordinary_shop_panel() -> void:
 	var desired_grid: Array[Control] = []
 	for index: int in ordinary_shop_service.offers.size():
 		var offer: Dictionary = ordinary_shop_service.offers[index]
-		if bool(offer.get("sold", false)):
+		if bool(offer.get("sold", false)) or int(offer.get("procurement_action", -1)) != _shop_procurement_action:
 			continue
 		var is_pack: bool = offer.get("kind") in ["card_pack", "sticker_pack"]
 		var tile := retained.get(index) as ShopOfferView
@@ -918,10 +1023,11 @@ func _refresh_ordinary_shop_panel() -> void:
 			tile = _create_shop_offer_tile(index, offer, is_pack, definitions, candidates)
 		else:
 			tile.set_purchase_enabled((offer.get("kind") != "sticker_pack" or _can_accept_shop_sticker_offer(offer)) and (offer.get("kind") != "card_pack" or _can_buy_shop_card_pack(offer, definitions, candidates)))
-			tile.tooltip_text = _ordinary_shop_offer_text(offer)
+			tile.tooltip_text = _ordinary_shop_offer_text(offer, definitions)
 		retained.erase(index)
 		if is_pack:
 			var key := "%s:%s" % [String(offer.get("pack_id", "ash_ledger")), String(offer.get("size", "small"))] if offer.get("kind") == "card_pack" else "sticker_pack"
+			if offer.has("procurement_action"): key += ":%d" % int(offer.procurement_action)
 			if not pack_stacks.has(key):
 				var stack_name := "ShopPackStack_" + key.replace(":", "_")
 				var stack := existing_stacks.get(stack_name) as ShopPackStackView
@@ -985,6 +1091,8 @@ func _create_shop_offer_tile(index: int, offer: Dictionary, stacked: bool, defin
 		art = _create_shop_single_card_view(offer, definitions)
 	elif offer.get("kind") == "sticker_pack":
 		art = _create_shop_sticker_pack_art()
+	elif offer.get("kind") == "card_pack" and offer.has("procurement_action"):
+		art = _create_action_pack_art(int(offer.procurement_action))
 	else:
 		var image := TextureRect.new()
 		image.size = Vector2(99, 136) # 卡包商品保持单卡大小的画布
@@ -992,7 +1100,9 @@ func _create_shop_offer_tile(index: int, offer: Dictionary, stacked: bool, defin
 		image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		image.texture = _ordinary_shop_offer_icon(offer)
-		if offer.get("kind") == "scraper":
+		if offer.get("kind") == "card_pack":
+			image.size = image.texture.get_size() # 卡包1倍画布保留整张原图，不再塞进99×136的卡牌框
+		elif offer.get("kind") == "scraper":
 			image.size = image.texture.get_size() # 刮刀按59×59原像素展示，服务区不旋转、不缩放
 		elif offer.get("kind") == "tear_service":
 			image.size = Vector2(44, 60) # 撕卡服务图标的紧凑显示尺寸
@@ -1002,8 +1112,7 @@ func _create_shop_offer_tile(index: int, offer: Dictionary, stacked: bool, defin
 		and (offer.get("kind") != "card_pack" or _can_buy_shop_card_pack(offer, definitions, candidates))
 	)
 	var service_name := "刮刀" if offer.get("kind") == "scraper" else ("撕卡" if offer.get("kind") == "tear_service" else "")
-	tile.hover_motion = service_name.is_empty()
-	tile.tooltip_text = _ordinary_shop_offer_text(offer)
+	tile.tooltip_text = _ordinary_shop_offer_text(offer, definitions)
 	var prices: Array[int] = [int(offer.get("price", 0))]
 	if offer.get("kind") == "tear_service":
 		var config_prices: Dictionary = ordinary_shop_service.config.get("tear_service", {}).get("prices_by_return_count", {})
@@ -1015,29 +1124,7 @@ func _create_shop_offer_tile(index: int, offer: Dictionary, stacked: bool, defin
 
 
 func _create_shop_sticker_pack_art() -> Control:
-	var pack := Control.new()
-	pack.name = "SealedStickerPack"
-	pack.size = Vector2(99, 136) # 纹章包在商品图片区域占用的尺寸
-	pack.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	var layers := Control.new()
-	layers.size = Vector2(126, 125) # 正式底壳素材的原始画布尺寸
-	layers.scale = Vector2.ONE * (99.0 / 126.0) # 底壳与封皮一起等比缩放到商品宽度
-	layers.position.y = (136.0 - 125.0 * layers.scale.y) * 0.5 # 包装在商品区域内纵向居中
-	pack.add_child(layers)
-	var base := TextureRect.new()
-	base.name = "PackBase"
-	base.texture = preload("res://assets/card_ui/shop/sticker_pack_base.png")
-	base.size = Vector2(126, 125) # 底壳按原始像素画布显示
-	base.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layers.add_child(base)
-	var seal := TextureRect.new()
-	seal.name = "PackSeal"
-	seal.texture = preload("res://assets/card_ui/shop/sticker_pack_seal.png")
-	seal.position = Vector2(17, 6) # 封皮对齐原图底壳内口的位置
-	seal.size = Vector2(91, 92) # 封皮按原始像素尺寸显示
-	seal.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layers.add_child(seal)
-	return pack
+	return StickerPackArtScript.new()
 
 
 func _preview_shop_offer(index: int) -> void:
@@ -1047,7 +1134,7 @@ func _preview_shop_offer(index: int) -> void:
 	if offer.get("kind") == "single_card":
 		_preview_shop_single_card(index)
 	elif offer.get("kind") in ["card_pack", "sticker_pack"] and not bool(offer.get("sold", false)):
-		_open_shop_pack_inspection(offer, _shop_offer_art(index))
+		_open_shop_pack_inspection(offer, _shop_offer_art(index), false, [], index)
 
 
 func _shop_offer_art(index: int) -> Control:
@@ -1055,7 +1142,7 @@ func _shop_offer_art(index: int) -> Control:
 	return tile._visual.get_child(0) as Control if tile != null else null
 
 
-func _open_shop_pack_inspection(offer: Dictionary, source: Control = null, opening: bool = false) -> void:
+func _open_shop_pack_inspection(offer: Dictionary, source: Control = null, opening: bool = false, acquired: Array[OwnedCard] = [], offer_index: int = -1, sticker_ids: Array[StringName] = []) -> void:
 	_finish_rune_scraper_mode()
 	_cancel_click_carry()
 	_inspection_closing = false
@@ -1069,11 +1156,13 @@ func _open_shop_pack_inspection(offer: Dictionary, source: Control = null, openi
 	var art: Control
 	if offer.get("kind") == "sticker_pack":
 		art = _create_shop_sticker_pack_art()
+	elif offer.has("procurement_action"):
+		art = _create_action_pack_art(int(offer.procurement_action))
 	else:
 		var image := TextureRect.new()
 		image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		image.texture = _ordinary_shop_offer_icon(offer)
-		image.size = Vector2(99, 136) # 包装以原生商品尺寸合成，检视表面统一放大
+		image.size = image.texture.get_size() # 检视与商品使用相同的完整1倍包装画布
 		image.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		art = image
@@ -1084,63 +1173,180 @@ func _open_shop_pack_inspection(offer: Dictionary, source: Control = null, openi
 	_inspection_surface.name = "InspectionSurface"
 	_inspection_overlay.add_child(_inspection_surface)
 	var preview_scale := SHOP_PACK_INSPECTION_SCALE
-	_inspection_surface.setup_art(art)
+	var open_seconds: float = PackEffectSettings.get_values().inspect_seconds if offer.get("kind") == "card_pack" else SHOP_INSPECTION_OPEN_SECONDS
+	_inspection_surface.setup_art(art, StickerPackArtScript.FLIP_PADDING if opening and art is StickerPackArtScript else InspectionCardSurface.PADDING, StickerPackArtScript.INSPECTION_RENDER_SCALE if art is StickerPackArtScript else 1.0)
+	if art is StickerPackArtScript:
+		art.configure_inspection(_inspection_surface)
+	else:
+		# 卡包在最终透视取样后计算金色光带，撕包的原生离屏纹理仍可保持静态。
+		_inspection_surface.effect.set_shader_parameter("use_flash", false)
+		_inspection_surface.effect.set_shader_parameter("use_pack_foil", true)
+	# 放大途中保持包装平面稳定，抵达后再恢复鼠标倾斜。
+	_inspection_surface.set_process(false)
 	var target_scale := Vector2.ONE * preview_scale
-	var target_position: Vector2 = ((_inspection_overlay.size - _inspection_surface.size * preview_scale) * 0.5 - Vector2(0, 25)).round() # 居中并给名称留位
+	var target_position: Vector2 = ((_inspection_overlay.size - _inspection_surface.size * preview_scale) * 0.5 - Vector2(0, 0 if offer.get("kind") == "card_pack" else 25)).round() # 卡牌包居中显示完整原图；贴纸包仍给底部名称留位
+	if opening and offer.get("kind") == "card_pack":
+		target_position = CardPackOpeningScript.tear_position_for(_inspection_surface, _inspection_overlay.size, target_scale)
 	_inspection_surface.scale = Vector2.ONE
 	_inspection_surface.position = target_position + _inspection_surface.size * (preview_scale - 1.0) * 0.5
 	if is_instance_valid(source):
 		var origin: Transform2D = _inspection_overlay.get_global_transform_with_canvas().affine_inverse() * source.get_global_transform_with_canvas()
 		_inspection_source_view = source
 		_inspection_surface.scale = origin.get_scale()
-		_inspection_surface.position = origin.origin - origin.basis_xform(_inspection_surface.PADDING)
+		_inspection_surface.position = origin.origin - origin.basis_xform(_inspection_surface.content_padding)
 		_inspection_surface.rotation = origin.get_rotation()
 		source.visible = false
 	_inspection_dim.modulate.a = 0.0
 	_inspection_tween = _inspection_overlay.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_inspection_tween.tween_property(_inspection_surface, "position", target_position, SHOP_INSPECTION_OPEN_SECONDS)
-	_inspection_tween.tween_property(_inspection_surface, "scale", target_scale, SHOP_INSPECTION_OPEN_SECONDS)
-	_inspection_tween.tween_property(_inspection_surface, "rotation", 0.0, SHOP_INSPECTION_OPEN_SECONDS)
-	_inspection_tween.tween_property(_inspection_dim, "modulate:a", 1.0, SHOP_INSPECTION_OPEN_SECONDS)
-	var pack_name := "纹章贴纸包" if offer.get("kind") == "sticker_pack" else "灰烬证册 · %s卡包" % ("大" if offer.get("size") == "large" else "小")
-	var name_label := _make_label(pack_name, Vector2(260, 645), Vector2(760, 34)) # 名称位于4倍包装大图下方并水平居中
+	_inspection_tween.tween_property(_inspection_surface, "position", target_position, open_seconds)
+	_inspection_tween.tween_property(_inspection_surface, "scale", target_scale, open_seconds)
+	_inspection_tween.tween_property(_inspection_surface, "rotation", 0.0, open_seconds)
+	_inspection_tween.tween_property(_inspection_dim, "modulate:a", 1.0, open_seconds)
+	var pack_name := "纹章贴纸包" if offer.get("kind") == "sticker_pack" else "%s · %s卡包" % [CardPackRegistry.get_display_name(StringName(offer.get("pack_id", "ash_ledger"))), "大" if offer.get("size") == "large" else "小"]
+	if offer.has("procurement_action"): pack_name = CardData.get_action_type_name_for(int(offer.procurement_action) as CardData.ActionType) + "定向小包"
+	if not opening and offer.get("kind") == "card_pack":
+		pack_name += " · %d金币" % int(offer.get("price", 0))
+	var name_label := _make_label(pack_name, Vector2(260, 645), Vector2(760, 34)) # 贴纸包名称保持底部居中
 	name_label.name = "InspectionPackName"
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if offer.get("kind") == "card_pack":
+		name_label.position = Vector2(24, 310) # 完整包装占满高度后，名称与价格改放左侧
+		name_label.size = Vector2(300, 100) # 左侧名称区域允许换行，避免覆盖包装
+		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	name_label.add_theme_font_size_override("font_size", 24) # 检视卡包名称的字号
 	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_inspection_overlay.add_child(name_label)
 	name_label.modulate.a = 0.0
-	_inspection_tween.tween_property(name_label, "modulate:a", 1.0, SHOP_INSPECTION_OPEN_SECONDS)
-	if opening:
-		_inspection_surface.set_process(false)
-		_inspection_tween.chain().tween_interval(SHOP_PACK_OPEN_HOLD)
-		_inspection_tween.tween_callback(_dissolve_purchased_shop_pack)
+	_inspection_tween.tween_property(name_label, "modulate:a", 1.0, open_seconds)
+	if offer.get("kind") == "card_pack" and (not opening or not acquired.is_empty()):
+		_card_pack_opening = CardPackOpeningScript.new()
+		add_child(_card_pack_opening)
+		_card_pack_opening.card_requested.connect(_present_opened_pack_card)
+		_card_pack_opening.finished.connect(_finish_opened_card_pack)
+		_card_pack_opening.begin(acquired, self, _inspection_surface)
+		_inspection_overlay.input_handler = _handle_card_pack_opening_input
+		card_pack_presentation_changed.emit(true)
+		_inspection_tween.chain().tween_callback(_card_pack_opening.allow_tearing)
+		if not opening:
+			var purchase := _make_button("InspectionPackPurchase", "购买 · %d金币" % int(offer.get("price", 0)), Vector2(62, 426), Vector2(224, 48), false) # 左侧购买按钮位于卡包名称下方
+			purchase.add_theme_font_size_override("font_size", 22) # 检视购买按钮字号
+			purchase.z_index = 30
+			purchase.disabled = true
+			purchase.pressed.connect(_purchase_inspected_card_pack.bind(offer_index))
+			_inspection_overlay.add_child(purchase)
+			_inspection_tween.tween_callback(func():
+				if is_instance_valid(purchase): purchase.disabled = not _can_purchase_inspected_card_pack(offer_index)
+			)
+	elif opening:
+		_sticker_pack_opening = StickerPackOpeningScript.new()
+		add_child(_sticker_pack_opening)
+		_sticker_pack_opening.surface_changed.connect(func(value: InspectionCardSurface): _inspection_surface = value)
+		_sticker_pack_opening.finished.connect(_finish_opened_sticker_pack)
+		_sticker_pack_opening.begin(art, _inspection_surface, _inspection_overlay, offer, emblem_library, sticker_ids)
+		_sticker_pack_opening.animation = _inspection_tween # 放大途中也复用连点加速，后续Tween由演出接管
+		_inspection_overlay.input_handler = _sticker_pack_opening.handle_input
+		card_pack_presentation_changed.emit(true)
+		_inspection_tween.chain().tween_callback(_sticker_pack_opening.allow_peeling)
+	else:
+		_inspection_tween.chain().tween_callback(func(): _inspection_surface.set_process(true))
 
 
-func _dissolve_purchased_shop_pack() -> void:
-	if not is_instance_valid(_inspection_surface):
+func _can_purchase_inspected_card_pack(index: int) -> bool:
+	if _inspection_closing or not ordinary_shop_open or index < 0 or index >= ordinary_shop_service.offers.size():
+		return false
+	var offer: Dictionary = ordinary_shop_service.offers[index]
+	return not bool(offer.get("sold", false)) and run_reward_state.gold >= int(offer.get("price", 0)) and _can_buy_shop_card_pack(offer)
+
+
+func _purchase_inspected_card_pack(index: int) -> void:
+	if not is_instance_valid(_card_pack_opening) or not _card_pack_opening.cards.is_empty() or _card_pack_opening.phase != CardPackOpeningScript.Phase.SEALED:
 		return
-	# 包装已合成在原生小画布中；复用战斗死亡着色器与时长，不读取屏幕或操作随机流。
-	var dissolve := ShaderMaterial.new()
-	dissolve.shader = SquadView.DEATH_DISSOLVE_SHADER
-	dissolve.set_shader_parameter("dissolve_progress", 0.0)
-	dissolve.set_shader_parameter("edge_progress", 0.0)
-	dissolve.set_shader_parameter("dissolve_fill_color", SquadView.DEATH_DISSOLVE_FILL_COLOR)
-	dissolve.set_shader_parameter("dissolve_outline_color", SquadView.DEATH_DISSOLVE_OUTLINE_COLOR)
-	dissolve.set_shader_parameter("outline_pixels", SquadView.DEATH_DISSOLVE_OUTLINE_PIXELS)
-	_inspection_surface.material = dissolve
-	_inspection_tween = _inspection_overlay.create_tween().set_parallel(true)
-	_inspection_tween.tween_property(dissolve, "shader_parameter/dissolve_progress", 1.0, SquadView.DEATH_DISSOLVE_BODY_SECONDS).from(0.0)
-	_inspection_tween.tween_property(dissolve, "shader_parameter/edge_progress", 1.0, SquadView.DEATH_DISSOLVE_EDGE_SECONDS).from(0.0)
-	_inspection_tween.tween_property(_inspection_dim, "modulate:a", 0.0, SquadView.DEATH_DISSOLVE_EDGE_SECONDS)
-	var name_label := _inspection_overlay.get_node("InspectionPackName") as Label
-	_inspection_tween.tween_property(name_label, "modulate:a", 0.0, SquadView.DEATH_DISSOLVE_EDGE_SECONDS)
-	_inspection_tween.finished.connect(_finish_card_inspection_close)
+	var acquired: Array[OwnedCard] = []
+	if _can_purchase_inspected_card_pack(index):
+		acquired = _buy_shop_card_pack(index, ordinary_shop_service.offers[index])
+	_card_pack_opening.accept_purchase(acquired)
+	if acquired.is_empty():
+		(_inspection_overlay.get_node("InspectionHelp") as Label).text = ordinary_shop_status.text
+		return
+	# 购买成功后保留同一个包装画布，下移到撕口居中；售出商品不再作为回退目标。
+	_inspection_source_view = null
+	_inspection_read_only = false
+	_shop_pack_opening = true
+	(_inspection_overlay.get_node("InspectionPackPurchase") as Button).hide()
+	_card_pack_opening.move_to_tearing_position()
+	_refresh_ordinary_shop_panel()
+
+
+func _handle_card_pack_opening_input(event: InputEvent) -> bool:
+	if not is_instance_valid(_card_pack_opening):
+		return false
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		if _cancel_inspection_carry_from_overlay(): return true
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		if _cancel_inspection_carry_from_overlay(): return true
+	return _card_pack_opening.handle_input(event)
+
+
+func _present_opened_pack_card(owned: OwnedCard) -> void:
+	if not is_instance_valid(_card_pack_opening) or owned not in owned_card_collection.get_cards():
+		return
+	var next_surface: InspectionCardSurface = _card_pack_opening.take_next_surface()
+	if _card_pack_opening.current_index == 0:
+		_close_card_inspection(true, true)
+		_open_card_inspection(owned.card_data, owned, null, false, {}, next_surface)
+	else:
+		# 只有前层实例切换；暗幕、工具箱与已经绘好的卡面保留在同一个检视外壳。
+		_inspection_card_view.set_emblem_drop_handler(Callable())
+		_inspection_surface = next_surface
+		_inspection_card_view = next_surface.card
+		_inspection_card_data = owned.card_data
+		_inspection_owned_card = owned
+		next_surface.name = "InspectionSurface"
+		next_surface.set_process(true)
+		next_surface.mouse_filter = Control.MOUSE_FILTER_STOP
+		next_surface.drop_handler = _handle_inspection_emblem_drop
+		next_surface.tooltip_handler = _inspection_sticker_tooltip
+		_inspection_card_view.set_emblem_drop_handler(_handle_inspection_emblem_drop)
+		_refresh_inspection_markers()
+		_inspection_display_mode_button.text = "显示描述"
+	_shop_pack_opening = true
+	_inspection_overlay.input_handler = _handle_card_pack_opening_input
+	_inspection_surface.gui_input.connect(_on_opened_pack_card_input)
+	_card_pack_opening.show_card(_inspection_surface, _inspection_library_expanded)
+	if _card_pack_opening.current_index > 0:
+		_update_inspection_effect_box(_inspection_surface.position, _inspection_surface.scale)
+		_finish_inspection_library_open()
+
+
+func _on_opened_pack_card_input(event: InputEvent) -> void:
+	if not is_instance_valid(_card_pack_opening) or _inspection_library_expanded or _rune_scraper_mode or not _click_carry_data.is_empty() or get_viewport().gui_is_dragging() or _inspection_placement_in_progress or is_instance_valid(_emblem_fusion_overlay):
+		return
+	if _inspection_has_library_toolbox and is_instance_valid(_inspection_tween) and _inspection_tween.is_running():
+		return
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var point := _inspection_surface.card_point(event.position)
+		if Rect2(Vector2.ZERO, _inspection_card_view.card_size).has_point(point):
+			_card_pack_opening.collect_current()
+			_inspection_surface.accept_event()
+
+
+func _finish_opened_card_pack() -> void:
+	_shop_pack_opening = false
+	_close_card_inspection()
+
+
+func _finish_opened_sticker_pack() -> void:
+	_shop_pack_opening = false
+	_close_card_inspection(true)
 
 
 func _ordinary_shop_offer_icon(offer: Dictionary) -> Texture2D:
 	match String(offer.get("kind", "")):
 		"card_pack":
+			if offer.get("pack_id", "ash_ledger") == "ironwall_inscription":
+				return preload("res://assets/card_ui/shop/ironwall_large.png") if offer.get("size") == "large" else preload("res://assets/card_ui/shop/ironwall_small.png")
+			if offer.get("pack_id", "ash_ledger") == "silvermoon_chapter":
+				return preload("res://assets/card_ui/shop/silvermoon_large.png") if offer.get("size") == "large" else preload("res://assets/card_ui/shop/silvermoon_small.png")
 			return preload("res://assets/card_ui/shop/ash_ledger_large.png") if offer.get("size") == "large" else preload("res://assets/card_ui/shop/ash_ledger_small.png")
 		"sticker_pack": return preload("res://assets/card_ui/shop/sticker_pack_base.png")
 		"tear_service":
@@ -1173,6 +1379,7 @@ func _create_shop_preview_owned(definition: CardData, offer: Dictionary) -> Owne
 	var preview_rng := RandomNumberGenerator.new()
 	preview_rng.seed = int(seed_text)
 	preview_owned.initialize(definition, &"ordinary_shop_preview", -1, preview_rng)
+	if offer.has("resolved_action_type"): preview_owned.set_acquired_action_type(int(offer.resolved_action_type))
 	return preview_owned
 
 
@@ -1187,11 +1394,11 @@ func _preview_shop_single_card(index: int) -> void:
 		return
 	if bool(offer.get("hidden", false)):
 		var public_card := ShopCardViewScript.public_definition(definition, offer)
-		_open_card_inspection(public_card, null, _shop_offer_art(index) as CardView, true, offer)
+		_open_card_inspection(public_card, null, _shop_offer_art(index), true, offer)
 	else:
 		var preview_owned := _create_shop_preview_owned(definition, offer)
 		if preview_owned != null:
-			_open_card_inspection(definition, preview_owned, _shop_offer_art(index) as CardView, true)
+			_open_card_inspection(definition, preview_owned, _shop_offer_art(index), true)
 
 
 func _shop_price(values: Array[int], caption: String = "") -> Control:
@@ -1200,20 +1407,22 @@ func _shop_price(values: Array[int], caption: String = "") -> Control:
 	return price
 
 
-func _ordinary_shop_offer_text(offer: Dictionary) -> String:
+func _ordinary_shop_offer_text(offer: Dictionary, definitions: Dictionary = {}) -> String:
 	var kind := String(offer.get("kind", ""))
 	match kind:
 		"card_pack":
+			if offer.has("procurement_action"): return "%s定向小包：3张 · %d金币" % [CardData.get_action_type_name_for(int(offer.procurement_action) as CardData.ActionType), int(offer.price)]
 			return "%s卡包：%d张 · %d金币%s" % ["大" if offer.get("size") == "large" else "小", int((ordinary_shop_service.config.get("card_pack_sizes", {}) as Dictionary).get(offer.get("size", "small"), 0)), int(offer.get("price", 0)), "（至少一张II级）" if offer.get("size") == "large" else ""]
 		"sticker_pack": return "贴纸包：5枚 · %d金币" % int(offer.get("price", 0))
 		"single_card":
+			if definitions.is_empty(): definitions = _build_card_definition_registry()
 			if bool(offer.get("sold", false)) and ordinary_shop_service.reveal_by_offer.has(String(offer.get("offer_id", ""))):
-				var revealed_card := _build_card_definition_registry().get(StringName(String(ordinary_shop_service.reveal_by_offer[String(offer.get("offer_id", ""))]))) as CardData
+				var revealed_card := definitions.get(StringName(String(ordinary_shop_service.reveal_by_offer[String(offer.get("offer_id", ""))]))) as CardData
 				return "已揭晓：%s" % (revealed_card.display_name if revealed_card != null else "卡牌")
 			if bool(offer.get("hidden", false)):
 				var hint_names := {"rarity": "稀有度", "action_type": "行动方式", "race": "种族", "card_type": "卡牌类型", "spell_trigger_kind": "准备方式", "spell_type": "法术种类", "equipment_type": "装备种类", "resource_type": "资源种类"}
 				return "暗牌（%s：%s）· %d金币" % [hint_names.get(String(offer.get("hint", "")), "提示"), String(offer.get("hint_value", "")), int(offer.get("price", 0))]
-			var card := _build_card_definition_registry().get(StringName(String(offer.get("card_id", "")))) as CardData
+			var card := definitions.get(StringName(String(offer.get("card_id", "")))) as CardData
 			return "%s · %d金币" % [card.display_name if card != null else "明牌", int(offer.get("price", 0))]
 		"scraper": return "刮刀 ×1 · %d金币（现有%d把）" % [int(offer.get("price", 0)), scraper_count]
 		"tear_service":
@@ -1230,27 +1439,32 @@ func _on_ordinary_shop_offer_pressed(index: int) -> void:
 		return
 	var pack_source := _shop_offer_art(index)
 	var before_gold := run_reward_state.gold
+	var acquired: Array[OwnedCard] = []
+	var sticker_ids: Array[StringName] = []
 	match String(offer.get("kind", "")):
-		"card_pack": _buy_shop_card_pack(index, offer)
-		"sticker_pack": _buy_shop_sticker_pack(index, offer)
+		"card_pack": acquired = _buy_shop_card_pack(index, offer)
+		"sticker_pack": sticker_ids = _buy_shop_sticker_pack(index, offer)
 		"single_card": _buy_shop_single_card(index, offer)
 		"scraper": _buy_shop_scraper(offer)
-		"tear_service": _open_shop_tear_selection()
+		"tear_service": _open_shop_card_services()
 	if bool(offer.get("sold", false)) and offer.get("kind") in ["card_pack", "sticker_pack"]:
-		_open_shop_pack_inspection(offer, pack_source, true)
+		_open_shop_pack_inspection(offer, pack_source, true, acquired, -1, sticker_ids)
 	if bool(offer.get("sold", false)) or run_reward_state.gold != before_gold:
 		_refresh_ordinary_shop_panel()
 
 
-func _buy_shop_card_pack(index: int, offer: Dictionary) -> void:
+func _buy_shop_card_pack(index: int, offer: Dictionary) -> Array[OwnedCard]:
 	var price := int(offer.get("price", 0))
 	if run_reward_state.gold < price:
 		ordinary_shop_status.text = "金币不足"
-		return
-	if not _can_buy_shop_card_pack(offer):
+		return []
+	var definitions := _build_card_definition_registry()
+	var catalog: Array[CardData] = []
+	catalog.assign(definitions.values())
+	var candidates: Array[CardData] = ordinary_shop_service._eligible_cards(catalog, owned_card_collection.get_cards())
+	if not _can_buy_shop_card_pack(offer, definitions, candidates):
 		ordinary_shop_status.text = "卡包候选或保底资格已变化；未执行交易"
-		return
-	var candidates: Array[CardData] = ordinary_shop_service._eligible_cards(_get_shop_card_definitions(), owned_card_collection.get_cards())
+		return []
 	var chosen: Array[CardData] = []
 	var used_iv: Dictionary = {}
 	for id_value: Variant in offer.get("cards", []) as Array:
@@ -1261,22 +1475,26 @@ func _buy_shop_card_pack(index: int, offer: Dictionary) -> void:
 				break
 		if chosen_card == null:
 			ordinary_shop_status.text = "卡包候选已失效；未扣金币、抽取或改变卡牌实例序号"
-			return
+			return []
 		chosen.append(chosen_card)
 		if chosen_card.rarity == CardData.Rarity.IV:
 			used_iv[chosen_card.id] = true
 	if chosen.size() != int((ordinary_shop_service.config.get("card_pack_sizes", {}) as Dictionary).get(offer.get("size", "small"), 0)):
 		ordinary_shop_status.text = "卡包内容不完整，未执行交易"
-		return
+		return []
 	var before_collection := owned_card_collection.capture_state()
 	var before_rng: int = ordinary_shop_service.rng.state
 	var before_gold := run_reward_state.gold
+	var acquired_cards: Array[OwnedCard] = []
 	for card: CardData in chosen:
-		if owned_card_collection.create_card(card, ordinary_shop_service.rng) == null:
+		var acquired := owned_card_collection.create_card(card, ordinary_shop_service.rng)
+		if acquired == null:
 			owned_card_collection.restore_state(before_collection)
 			ordinary_shop_service.rng.state = before_rng
 			ordinary_shop_status.text = "卡牌实例创建失败，交易已回滚"
-			return
+			return []
+		if offer.has("procurement_action"): acquired.set_acquired_action_type(int(offer.procurement_action))
+		acquired_cards.append(acquired)
 	run_reward_state.gold -= price
 	ordinary_shop_service.offers[index]["sold"] = true
 	var save_error := save_run_to_path(run_save_path)
@@ -1286,11 +1504,11 @@ func _buy_shop_card_pack(index: int, offer: Dictionary) -> void:
 		ordinary_shop_service.rng.state = before_rng
 		ordinary_shop_service.offers[index].erase("sold")
 		ordinary_shop_status.text = "存档失败，卡包交易已回滚（错误码 %d）" % save_error
-		return
+		return []
 	_sync_legacy_collection_cards()
-	_build_collection_cards()
-	_refresh_resource_preparation_trays()
+	_build_collection_cards(null, null, true)
 	ordinary_shop_status.text = "已开包并获得：%s" % "、".join(_shop_card_names(chosen))
+	return acquired_cards
 
 
 func _buy_shop_single_card(index: int, offer: Dictionary) -> void:
@@ -1310,7 +1528,7 @@ func _buy_shop_single_card(index: int, offer: Dictionary) -> void:
 		ordinary_shop_status.text = "卡牌实例创建失败，未扣款"
 		return
 	if offer.has("resolved_action_type"):
-		purchased_card.resolved_action_type = int(offer["resolved_action_type"])
+		purchased_card.set_acquired_action_type(int(offer["resolved_action_type"]))
 	run_reward_state.gold -= price
 	var hidden := bool(offer.get("hidden", false))
 	ordinary_shop_service.offers[index]["sold"] = true
@@ -1330,15 +1548,15 @@ func _buy_shop_single_card(index: int, offer: Dictionary) -> void:
 	ordinary_shop_status.text = "暗牌揭晓：%s" % definition.display_name if hidden else "已购入：%s" % definition.display_name
 
 
-func _buy_shop_sticker_pack(index: int, offer: Dictionary) -> void:
+func _buy_shop_sticker_pack(index: int, offer: Dictionary) -> Array[StringName]:
 	var raw_stickers := offer.get("stickers", []) as Array
 	if raw_stickers.size() != int((ordinary_shop_service.config.get("sticker_pack", {}) as Dictionary).get("sticker_count", 5)):
 		ordinary_shop_status.text = "贴纸包候选不完整"
-		return
+		return []
 	var price := int(offer.get("price", 0))
 	if run_reward_state.gold < price:
 		ordinary_shop_status.text = "金币不足"
-		return
+		return []
 	var before_inventory: Array[Dictionary] = emblem_library.get_inventory_state()
 	var before_next_id := _next_developer_emblem_instance
 	var before_rng: int = ordinary_shop_service.rng.state
@@ -1348,7 +1566,7 @@ func _buy_shop_sticker_pack(index: int, offer: Dictionary) -> void:
 		var id := StringName(String(sticker.get("id", "")))
 		if id == &"万能贴纸" and _has_universal_sticker_in_collection_or_bag():
 			ordinary_shop_status.text = "万能贴纸唯一性已变化，未执行交易"
-			return
+			return []
 		var state := {"instance_id": "shop_sticker_%06d" % _next_developer_emblem_instance, "emblem_id": id, "temporary": false, "source": "ordinary_shop", "element_sticker": sticker.get("target", "emblem") == "rune"}
 		_next_developer_emblem_instance += 1
 		if id == &"混沌贴纸":
@@ -1358,14 +1576,14 @@ func _buy_shop_sticker_pack(index: int, offer: Dictionary) -> void:
 		_next_developer_emblem_instance = before_next_id
 		ordinary_shop_service.rng.state = before_rng
 		ordinary_shop_status.text = "工具箱空间不足，贴纸包未扣款且未揭晓"
-		return
+		return []
 	for state: Dictionary in states:
 		if not emblem_library.return_sticker(state):
 			emblem_library.restore_inventory_state(before_inventory)
 			_next_developer_emblem_instance = before_next_id
 			ordinary_shop_service.rng.state = before_rng
 			ordinary_shop_status.text = "工具箱接收失败，交易已回滚"
-			return
+			return []
 	run_reward_state.gold -= price
 	ordinary_shop_service.offers[index]["sold"] = true
 	var save_error := save_run_to_path(run_save_path)
@@ -1376,9 +1594,14 @@ func _buy_shop_sticker_pack(index: int, offer: Dictionary) -> void:
 		run_reward_state.gold = before_gold
 		ordinary_shop_service.offers[index].erase("sold")
 		ordinary_shop_status.text = "存档失败，贴纸包交易已回滚"
-		return
+		return []
 	ordinary_shop_status.text = "贴纸包已揭晓并收入工具箱：%s" % "、".join(_shop_sticker_names(states))
 	emblem_library.set_scraper_count(scraper_count)
+
+	var acquired_ids: Array[StringName] = []
+	for state: Dictionary in states:
+		acquired_ids.append(StringName(String(state.instance_id)))
+	return acquired_ids
 
 
 func _buy_shop_scraper(offer: Dictionary) -> void:
@@ -1408,6 +1631,8 @@ func _can_buy_shop_card_pack(offer: Dictionary, definitions: Dictionary = {}, ca
 		var card := definitions.get(StringName(String(card_id_value))) as CardData
 		if card == null or not candidates.has(card) or (card.rarity == CardData.Rarity.IV and used_iv.has(card.id)):
 			return false
+		if offer.has("procurement_action") and not ordinary_shop_service.supports_action(card, int(offer.procurement_action)): return false
+		if not offer.has("procurement_action") and card.pack_id != StringName(offer.get("pack_id", "ash_ledger")): return false
 		selected.append(card)
 		if card.rarity == CardData.Rarity.IV:
 			used_iv[card.id] = true
@@ -1421,17 +1646,14 @@ func _can_buy_shop_card_pack(offer: Dictionary, definitions: Dictionary = {}, ca
 	return true
 
 
-func _open_shop_tear_selection() -> void:
-	var eligible_cards: Array[OwnedCard] = []
-	for owned: OwnedCard in owned_card_collection.get_cards():
-		if _card_has_tearable_stickers(owned):
-			eligible_cards.append(owned)
+func _open_shop_tear_selection(selected_owned: OwnedCard) -> void:
+	var eligible_cards: Array[OwnedCard] = [selected_owned] if _card_has_tearable_stickers(selected_owned) else []
 	if eligible_cards.is_empty():
 		ordinary_shop_status.text = "没有带有可返还贴纸的卡牌"
 		return
 	_shop_tear_dialog = ConfirmationDialog.new()
 	_shop_tear_dialog.title = "撕卡：选择返还贴纸"
-	_shop_tear_dialog.dialog_text = "选择一张卡，再选择1至3枚贴纸。卡牌将被永久销毁，未选中的贴纸也会销毁。"
+	_shop_tear_dialog.dialog_text = "为已拖入的卡牌选择1至3枚贴纸。卡牌将被永久销毁，未选中的贴纸也会销毁。"
 	_shop_tear_dialog.get_ok_button().text = "核对费用与销毁内容"
 	var layout := VBoxContainer.new()
 	layout.add_theme_constant_override("separation", 8) # 撕卡选择器之间的纵向间距
@@ -1548,23 +1770,22 @@ func _confirm_shop_tear_selection(card_picker: OptionButton, pickers: Array[Opti
 
 func _execute_shop_tear(instance_id: StringName, selected_states: Array[Dictionary], price: int) -> void:
 	var owned := owned_card_collection.get_by_instance_id(instance_id)
-	if owned == null or run_reward_state.gold < price or not emblem_library.can_add_stickers(selected_states):
+	var squad := _get_squad_for_owned_instance(instance_id)
+	if not ordinary_shop_open or current_phase != GamePhase.PREPARE or owned == null or run_reward_state.gold < price or not emblem_library.can_add_stickers(selected_states) or (squad != null and squad.get_card_count() > 1):
 		ordinary_shop_status.text = "撕卡条件已变化；没有扣费或销毁卡牌"
 		return
-	var saved_collection := owned_card_collection.capture_state()
-	var saved_inventory: Array[Dictionary] = emblem_library.get_inventory_state()
+	var before := _capture_shop_card_transaction()
+	_return_service_cards()
 	for state: Dictionary in selected_states:
 		var sticker_id := StringName(String(state.get("instance_id", "")))
 		var found := _remove_owned_sticker_instance(owned, sticker_id)
 		if found.is_empty():
-			owned_card_collection.restore_state(saved_collection)
-			emblem_library.restore_inventory_state(saved_inventory)
+			_restore_shop_card_transaction(before)
 			ordinary_shop_status.text = "贴纸实例已变化，交易回滚"
 			return
 	for state: Dictionary in selected_states:
 		if not emblem_library.return_sticker(state):
-			owned_card_collection.restore_state(saved_collection)
-			emblem_library.restore_inventory_state(saved_inventory)
+			_restore_shop_card_transaction(before)
 			ordinary_shop_status.text = "工具箱接收失败，交易回滚"
 			return
 	_remove_owned_instance_from_rows(instance_id)
@@ -1572,11 +1793,16 @@ func _execute_shop_tear(instance_id: StringName, selected_states: Array[Dictiona
 	resource_board_state.deployments.get("player", {}).erase(String(instance_id))
 	owned_card_collection.remove_by_instance_id(instance_id)
 	run_reward_state.gold -= price
+	if save_run_to_path(run_save_path) != OK:
+		_restore_shop_card_transaction(before)
+		ordinary_shop_status.text = "撕卡存档失败，卡牌、贴纸与金币已恢复"
+		return
 	_remove_missing_equipment_from_board()
 	_sync_legacy_collection_cards()
-	_build_collection_cards()
-	_refresh_resource_preparation_trays()
+	_build_collection_cards(null, null, true)
+	_refresh_spell_preparation_tray()
 	ordinary_shop_status.text = "已销毁卡牌并返还贴纸：%s" % "、".join(_shop_sticker_names(selected_states))
+	_refresh_shop_card_services()
 
 
 func _card_has_tearable_stickers(owned: OwnedCard) -> bool:
@@ -1621,31 +1847,295 @@ func _shop_sticker_names(states: Array[Dictionary]) -> PackedStringArray:
 	return names
 
 
-func _open_shop_sell_dialog() -> void:
-	if not ordinary_shop_open:
+func _open_shop_card_services() -> void:
+	if not ordinary_shop_open or current_phase != GamePhase.PREPARE:
 		return
-	_shop_sell_dialog = AcceptDialog.new()
-	_shop_sell_dialog.title = "出售收藏卡牌"
-	_shop_sell_dialog.dialog_text = "选择要出售的卡牌。卡牌附着贴纸随卡销毁；所装备的装备返回收藏。"
-	_shop_sell_dialog.get_ok_button().text = "关闭"
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 4) # 出售卡牌按钮之间的纵向间距
-	_shop_sell_dialog.add_child(list)
+	_close_shop_card_services()
+	ordinary_shop_offer_list.visible = false
+	_shop_card_service_panel.visible = true
+	set_world_view(WorldView.COLLECTION, false)
+	_refresh_shop_card_services()
+	_refresh_drag_availability()
+
+
+func _close_shop_card_services() -> void:
+	_close_shop_exchange()
+	_shop_card_service_panel.visible = false
+	ordinary_shop_offer_list.visible = true
+	_shop_service_card_id = &""
+	_shop_service_slot.show_card(null)
+	_refresh_drag_availability()
+
+
+func _can_select_shop_service_card(data: Dictionary) -> bool:
+	var owned := data.get("owned_card") as OwnedCard
+	return ordinary_shop_open and current_phase == GamePhase.PREPARE and _shop_card_service_panel.is_visible_in_tree() and data.get("kind") in [&"card", &"equipment_card", &"equipment_indicator"] and owned != null and owned_card_collection.get_by_instance_id(owned.instance_id) == owned
+
+
+func _select_shop_service_card(data: Dictionary) -> void:
+	if not _can_select_shop_service_card(data):
+		return
+	if _shop_service_card_id == (data.owned_card as OwnedCard).instance_id:
+		return
+	var entry_position: Vector2 = CardServiceSlotScript.get_entry_position(data)
+	_shop_service_card_id = (data.owned_card as OwnedCard).instance_id
+	_refresh_shop_card_services()
+	_shop_service_slot.animate_entry_from_global_position(entry_position)
+
+func _on_shop_service_card_returned() -> void:
+	_shop_service_card_id = &""
+	_refresh_shop_card_services.call_deferred()
+
+func _find_service_card_view(owned: OwnedCard) -> CardView:
+	for row: BattlefieldRow in [front_row, back_row]:
+		for slot: BoardSlot in row.get_squads():
+			for view: CardView in slot.get_card_views():
+				if view.get_owned_card() == owned: return view
+	var collection_slot := _find_collection_slot_for_owned_card(owned)
+	return collection_slot.get_child(0) as CardView if is_instance_valid(collection_slot) and collection_slot.get_child_count() > 0 else null
+
+func _card_service_slots() -> Array[PanelContainer]:
+	var slots: Array[PanelContainer] = []
+	if is_instance_valid(_shop_service_slot): slots.append(_shop_service_slot)
+	slots.append_array(_shop_exchange_slots)
+	if maze_controller != null and is_instance_valid(maze_controller._enhancement_slot): slots.append(maze_controller._enhancement_slot)
+	return slots
+
+
+func _return_service_cards() -> void:
+	if is_instance_valid(_shop_exchange_animation): _shop_exchange_animation.cancel()
+	for slot: PanelContainer in _card_service_slots(): slot.return_card(false)
+
+
+func _refresh_shop_card_services() -> void:
+	if not is_instance_valid(_shop_card_service_panel):
+		return
+	for child: Node in _shop_card_service_actions.get_children():
+		_shop_card_service_actions.remove_child(child)
+		child.queue_free()
+	var owned := owned_card_collection.get_by_instance_id(_shop_service_card_id)
+	if owned == null: _shop_service_card_id = &""
+	_shop_service_slot.show_card(owned)
+	var hint := Label.new()
+	hint.text = "拖入一张卡牌，再选择服务。" if owned == null else "当前卡牌：" + owned.card_data.display_name
+	_shop_card_service_actions.add_child(hint)
+	var squad := _get_squad_for_owned_instance(_shop_service_card_id)
+	var must_split := squad != null and squad.get_card_count() > 1
+	var sell := Button.new()
+	sell.name = "ServiceSellButton"
+	sell.text = "出售卡牌" if owned == null else "出售卡牌：获得%d金币" % _shop_card_sale_price(owned)
+	sell.disabled = owned == null or must_split
+	sell.pressed.connect(_confirm_shop_sale.bind(_shop_service_card_id))
+	_shop_card_service_actions.add_child(sell)
+	var has_tear_service := false
+	for offer: Dictionary in ordinary_shop_service.offers:
+		if offer.get("kind") == "tear_service":
+			has_tear_service = true
+	var tear := Button.new()
+	tear.name = "ServiceTearButton"
+	tear.text = "撕卡返还贴纸"
+	tear.disabled = not has_tear_service or not _card_has_tearable_stickers(owned) or must_split
+	tear.pressed.connect(_open_shop_tear_selection.bind(owned))
+	_shop_card_service_actions.add_child(tear)
+	var note := Label.new()
+	note.text = "小队成员请先拆成单卡。" if must_split else "出售：贴纸随卡出售，装备返还。\n撕卡：返还选中的贴纸，销毁卡牌与剩余贴纸。"
+	_shop_card_service_actions.add_child(note)
+	var back := Button.new()
+	back.text = "返回商品"
+	back.pressed.connect(_close_shop_card_services)
+	_shop_card_service_actions.add_child(back)
+
+
+func _create_action_pack_art(action: int) -> Control:
+	var art := ActionPackArtScript.new() as Control
+	art.configure(action)
+	return art
+
+
+func _toggle_action_procurement() -> void:
+	if not ordinary_shop_open or current_phase != GamePhase.PREPARE: return
+	_close_shop_card_services()
+	_shop_procurement_action = 0 if _shop_procurement_action < 0 else -1
+	_refresh_ordinary_shop_panel()
+	ordinary_shop_status.text = "选择行动方式采购；商品内容在进店或刷新时固定。" if _shop_procurement_action >= 0 else "普通商品；也可选择定向采购或置换。"
+
+
+func _select_action_procurement(action: int) -> void:
+	_shop_procurement_action = action
+	_refresh_ordinary_shop_panel()
+	ordinary_shop_status.text = CardData.get_action_type_name_for(action as CardData.ActionType) + "定向采购；售罄或旧商店无定向商品时，刷新即可补货。"
+
+
+func _build_shop_exchange_panel(content: Control) -> void:
+	_shop_exchange_panel = HBoxContainer.new()
+	_shop_exchange_panel.name = "ShopExchangePanel"
+	_shop_exchange_panel.add_theme_constant_override("separation", 12) # 置换说明与三个卡槽之间的间距
+	_shop_exchange_panel.visible = false
+	content.add_child(_shop_exchange_panel)
+	var actions := VBoxContainer.new()
+	actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_shop_exchange_panel.add_child(actions)
+	_shop_exchange_status = Label.new()
+	_shop_exchange_status.custom_minimum_size = Vector2(300, 88) # 置换说明预留宽高
+	_shop_exchange_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	actions.add_child(_shop_exchange_status)
+	_shop_exchange_confirm = Button.new()
+	_shop_exchange_confirm.name = "ConfirmCardExchangeButton"
+	_shop_exchange_confirm.text = "确认置换"
+	_shop_exchange_confirm.pressed.connect(_execute_shop_exchange)
+	actions.add_child(_shop_exchange_confirm)
+	var back := Button.new()
+	back.text = "返回商品"
+	back.pressed.connect(_close_shop_card_services)
+	actions.add_child(back)
+	var targets := HBoxContainer.new()
+	targets.add_theme_constant_override("separation", 6) # 三个置换卡槽之间的间距
+	_shop_exchange_panel.add_child(targets)
+	for index: int in int(ordinary_shop_service.config.card_exchange.input_count):
+		_shop_exchange_ids.append(&"")
+		var slot := CardServiceSlotScript.new() as PanelContainer
+		slot.name = "ExchangeSlot_%d" % index
+		slot.accepts_card = _can_select_exchange_card.bind(index)
+		slot.resolve_card_view = _find_service_card_view
+		slot.card_selected.connect(_select_exchange_card.bind(index))
+		slot.card_returned.connect(_on_exchange_card_returned.bind(index))
+		targets.add_child(slot)
+		_shop_exchange_slots.append(slot)
+
+
+func _open_shop_exchange() -> void:
+	if not ordinary_shop_open or current_phase != GamePhase.PREPARE: return
+	_close_shop_card_services()
+	ordinary_shop_offer_list.visible = false
+	_shop_exchange_panel.visible = true
+	set_world_view(WorldView.COLLECTION, false)
+	_refresh_shop_exchange()
+	_refresh_drag_availability()
+
+
+func _close_shop_exchange() -> void:
+	if is_instance_valid(_shop_exchange_animation):
+		_shop_exchange_animation.cancel()
+	if is_instance_valid(_shop_exchange_panel): _shop_exchange_panel.visible = false
+	for index: int in _shop_exchange_slots.size():
+		_shop_exchange_slots[index].return_card(false)
+		_shop_exchange_ids[index] = &""
+
+
+func _can_select_exchange_card(data: Dictionary, index: int) -> bool:
+	var owned := data.get("owned_card") as OwnedCard
+	if not ordinary_shop_open or current_phase != GamePhase.PREPARE or not _shop_exchange_panel.is_visible_in_tree() or owned == null or data.get("kind") != &"card" or owned_card_collection.get_by_instance_id(owned.instance_id) != owned: return false
+	if owned.card_data.card_type != CardData.CardType.MINION or owned.card_data.is_derived or int(owned.card_data.rarity) > _random_reward_rarity(ordinary_shop_service.config.card_exchange.maximum_input_rarity): return false
+	var squad := _get_squad_for_owned_instance(owned.instance_id)
+	if squad != null and squad.get_card_count() > 1: return false
+	for other: int in _shop_exchange_ids.size():
+		if other == index: continue
+		var selected := owned_card_collection.get_by_instance_id(_shop_exchange_ids[other])
+		if selected != null and (selected.instance_id == owned.instance_id or selected.card_data.rarity != owned.card_data.rarity): return false
+	return true
+
+
+func _select_exchange_card(data: Dictionary, index: int) -> void:
+	if not _can_select_exchange_card(data, index): return
+	var entry_position: Vector2 = CardServiceSlotScript.get_entry_position(data)
+	_shop_exchange_ids[index] = (data.owned_card as OwnedCard).instance_id
+	_refresh_shop_exchange()
+	_shop_exchange_slots[index].animate_entry_from_global_position(entry_position)
+
+
+func _on_exchange_card_returned(index: int) -> void:
+	_shop_exchange_ids[index] = &""
+	_refresh_shop_exchange.call_deferred()
+
+
+func _exchange_candidates() -> Array[CardData]:
+	var pool: Array[CardData] = []
+	var rarity := -1
+	var remaining: Array[OwnedCard] = []
 	for owned: OwnedCard in owned_card_collection.get_cards():
-		var button := Button.new()
-		var hosted_squad := _get_squad_for_owned_instance(owned.instance_id)
-		var must_split := hosted_squad != null and hosted_squad.get_card_count() > 1
-		button.text = "%s · %d金币%s" % [owned.card_data.display_name, _shop_card_sale_price(owned), "（请先拆队）" if must_split else ""]
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.disabled = must_split
-		button.tooltip_text = "小队成员必须先拆为单卡" if must_split else ""
-		button.pressed.connect(_confirm_shop_sale.bind(owned.instance_id))
-		list.add_child(button)
-	ordinary_shop_layer.add_child(_shop_sell_dialog)
-	_shop_sell_dialog.confirmed.connect(_shop_sell_dialog.queue_free)
-	_shop_sell_dialog.close_requested.connect(_shop_sell_dialog.queue_free)
-	if DisplayServer.get_name() != "headless":
-		_shop_sell_dialog.popup_centered(Vector2i(520, 520)) # 出售清单窗口的初始宽高
+		if _shop_exchange_ids.has(owned.instance_id):
+			if rarity >= 0 and rarity != int(owned.card_data.rarity): return pool
+			rarity = int(owned.card_data.rarity)
+		else: remaining.append(owned)
+	if rarity < 0 or rarity > _random_reward_rarity(ordinary_shop_service.config.card_exchange.maximum_input_rarity): return pool
+	for definition: CardData in ordinary_shop_service._eligible_cards(_get_shop_card_definitions(), remaining):
+		if definition.card_type == CardData.CardType.MINION and int(definition.rarity) == rarity + 1: pool.append(definition)
+	return pool
+
+
+func _refresh_shop_exchange() -> void:
+	if not is_instance_valid(_shop_exchange_panel): return
+	var selected := 0
+	for index: int in _shop_exchange_ids.size():
+		var owned := owned_card_collection.get_by_instance_id(_shop_exchange_ids[index])
+		if owned == null: _shop_exchange_ids[index] = &""
+		else: selected += 1
+		_shop_exchange_slots[index].show_card(owned)
+	_shop_exchange_confirm.disabled = selected != _shop_exchange_ids.size() or _exchange_candidates().is_empty() or run_reward_state.gold < int(ordinary_shop_service.config.card_exchange.gold_cost)
+	_shop_exchange_status.text = "拖入3张同品级随从（I～III），免费换高一级随机随从。\n原卡、贴纸与成长会消耗；装备归还收藏。\n已放入%d/3张；小队成员请先拆开。" % selected
+	if selected == _shop_exchange_ids.size() and _exchange_candidates().is_empty(): _shop_exchange_status.text += "\n当前没有可获得的高一级随从，不能置换。"
+
+
+func _execute_shop_exchange() -> void:
+	if is_instance_valid(_shop_exchange_animation): return
+	if not ordinary_shop_open or current_phase != GamePhase.PREPARE or not _shop_exchange_panel.is_visible_in_tree() or run_reward_state.gold < int(ordinary_shop_service.config.card_exchange.gold_cost): return
+	for index: int in _shop_exchange_ids.size():
+		var owned := owned_card_collection.get_by_instance_id(_shop_exchange_ids[index])
+		if owned == null or not _can_select_exchange_card({"kind": &"card", "owned_card": owned}, index):
+			_refresh_shop_exchange()
+			return
+	var pool := _exchange_candidates()
+	if pool.is_empty():
+		_refresh_shop_exchange()
+		return
+	var before := _capture_shop_card_transaction()
+	var material_visuals: Array[Dictionary] = []
+	for index: int in _shop_exchange_ids.size():
+		var slot := _shop_exchange_slots[index]
+		var view := slot._card_view as CardView
+		material_visuals.append({"owned_card": owned_card_collection.get_by_instance_id(_shop_exchange_ids[index]), "center": view.get_global_transform_with_canvas() * (view.card_size * 0.5) if is_instance_valid(view) else slot.get_global_rect().get_center(), "scale": view.get_global_transform_with_canvas().get_scale() if is_instance_valid(view) else Vector2.ONE, "rotation": view.rotation if is_instance_valid(view) else 0.0})
+	var remaining: Array[OwnedCard] = []
+	for owned: OwnedCard in owned_card_collection.get_cards():
+		if not _shop_exchange_ids.has(owned.instance_id): remaining.append(owned)
+	var next_rng: RandomNumberGenerator = ordinary_shop_service._copy_rng(ordinary_shop_service.rng)
+	var definition: CardData = ordinary_shop_service.draw_card_candidate(pool, next_rng, ordinary_shop_service.count_owned_cards(remaining))
+	_return_service_cards()
+	for id: StringName in _shop_exchange_ids:
+		_remove_owned_instance_from_rows(id)
+		owned_card_collection.remove_by_instance_id(id)
+	run_reward_state.gold -= int(ordinary_shop_service.config.card_exchange.gold_cost)
+	var awarded := owned_card_collection.create_card(definition, next_rng)
+	ordinary_shop_service.rng.state = next_rng.state
+	if awarded == null or save_run_to_path(run_save_path) != OK:
+		_restore_shop_card_transaction(before)
+		ordinary_shop_status.text = "置换保存失败，三张卡、装备与随机状态已恢复。"
+		return
+	_shop_exchange_ids.fill(&"")
+	_sync_legacy_collection_cards()
+	_build_collection_cards(null, null, true)
+	_refresh_shop_exchange()
+	ordinary_shop_status.text = "置换获得：" + awarded.card_data.display_name
+	_play_shop_exchange_animation(material_visuals, awarded)
+
+
+func _play_shop_exchange_animation(materials: Array[Dictionary], awarded: OwnedCard) -> void:
+	_cancel_click_carry()
+	var view_slot := _find_collection_slot_for_owned_card(awarded)
+	if is_instance_valid(view_slot): view_slot.visible = false
+	_shop_exchange_animation = CardExchangeAnimationScript.new()
+	_shop_exchange_animation.name = "CardExchangeAnimation"
+	add_child(_shop_exchange_animation)
+	_shop_exchange_animation.finished.connect(func():
+		_shop_exchange_animation = null
+		var current_slot := _find_collection_slot_for_owned_card(awarded)
+		if is_instance_valid(current_slot): current_slot.visible = true
+	)
+	_shop_exchange_animation.landed.connect(func():
+		var current_slot := _find_collection_slot_for_owned_card(awarded)
+		if is_instance_valid(current_slot): current_slot.visible = true
+	)
+	var target_card := view_slot.get_child(0) as CardView if is_instance_valid(view_slot) and view_slot.get_child_count() > 0 else null
+	_shop_exchange_animation.play(materials, awarded, get_node("%BookPanel") as Control, target_card)
 
 
 func _shop_card_sale_price(owned: OwnedCard) -> int:
@@ -1698,32 +2188,58 @@ func _confirm_shop_sale(instance_id: StringName) -> void:
 	confirm.canceled.connect(confirm.queue_free)
 	confirm.close_requested.connect(confirm.queue_free)
 	ordinary_shop_layer.add_child(confirm)
-	if is_instance_valid(_shop_sell_dialog):
-		_shop_sell_dialog.hide()
-		_shop_sell_dialog.queue_free()
 	if DisplayServer.get_name() != "headless":
 		confirm.popup_centered(Vector2i(460, 210)) # 出售确认窗口的初始宽高
 
 
 func _execute_shop_sale(instance_id: StringName, expected_value: int) -> void:
+	if not ordinary_shop_open or current_phase != GamePhase.PREPARE:
+		return
 	var owned := owned_card_collection.get_by_instance_id(instance_id)
 	var hosted_squad := _get_squad_for_owned_instance(instance_id)
 	if owned == null or _shop_card_sale_price(owned) != expected_value or (hosted_squad != null and hosted_squad.get_card_count() > 1):
 		ordinary_shop_status.text = "出售条件已变化，没有销毁卡牌"
 		return
+	var before := _capture_shop_card_transaction()
+	_return_service_cards()
 	var sold_value := expected_value
 	_remove_owned_instance_from_rows(instance_id)
 	prepared_spell_instance_ids.erase(instance_id)
 	resource_board_state.deployments.get("player", {}).erase(String(instance_id))
 	owned_card_collection.remove_by_instance_id(instance_id)
 	run_reward_state.add_gold(sold_value)
+	if save_run_to_path(run_save_path) != OK:
+		_restore_shop_card_transaction(before)
+		ordinary_shop_status.text = "出售存档失败，卡牌与金币已恢复"
+		return
 	_remove_missing_equipment_from_board()
 	_sync_legacy_collection_cards()
-	_build_collection_cards()
-	_refresh_resource_preparation_trays()
+	_build_collection_cards(null, null, true)
 	ordinary_shop_status.text = "已出售%s，获得%d金币" % [owned.card_data.display_name, sold_value]
+	_refresh_shop_card_services()
 	_refresh_ordinary_shop_panel()
-	_refresh_resource_preparation_trays()
+	_refresh_spell_preparation_tray()
+
+
+func _capture_shop_card_transaction() -> Dictionary:
+	return {"collection": owned_card_collection.capture_state(), "reward": run_reward_state.capture_state(), "rows": _current_rows_for_save(), "resources": resource_board_state.capture_state(), "spells": prepared_spell_instance_ids.duplicate(), "inventory": emblem_library.get_inventory_state(), "indicators": celestial_indicators.capture_state(), "shop_rng": ordinary_shop_service.rng.state}
+
+
+func _restore_shop_card_transaction(before: Dictionary) -> void:
+	_return_service_cards()
+	ordinary_shop_service.rng.state = int(before.shop_rng)
+	owned_card_collection.restore_state(before.collection)
+	run_reward_state.restore_state(before.reward)
+	emblem_library.restore_inventory_state(before.inventory)
+	celestial_indicators.restore_state(before.indicators)
+	resource_board_state.restore_state(before.resources, _build_card_definition_registry())
+	prepared_spell_instance_ids.assign(before.spells)
+	_restore_row_from_snapshot(front_row, before.rows[&"player_front"])
+	_restore_row_from_snapshot(back_row, before.rows[&"player_back"])
+	_sync_legacy_collection_cards()
+	_build_collection_cards()
+	_refresh_spell_preparation_tray()
+	_refresh_shop_card_services()
 
 
 func _get_squad_for_owned_instance(instance_id: StringName) -> SquadData:
@@ -1785,18 +2301,25 @@ func _can_accept_shop_sticker_offer(offer: Dictionary) -> bool:
 
 
 func _build_escape_pause_menu() -> void:
+	# CanvasLayer 同时把绘制与鼠标命中放到流程面板上方；z_index 只改变绘制顺序。
+	var menu_layer := CanvasLayer.new()
+	menu_layer.name = "EscapeMenuLayer"
+	menu_layer.layer = ESCAPE_PAUSE_MENU_Z_INDEX
+	menu_layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(menu_layer)
+	visibility_changed.connect(func(): menu_layer.visible = is_visible_in_tree())
 	_escape_pause_menu = ESCAPE_PAUSE_MENU_SCRIPT.new() as EscapePauseMenu
 	_escape_pause_menu.name = "EscapePauseMenu"
 	_escape_pause_menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_escape_pause_menu.z_index = ESCAPE_PAUSE_MENU_Z_INDEX
 	_escape_pause_menu.escape_pressed.connect(_on_escape_pause_menu_requested)
 	_escape_pause_menu.tool_requested.connect(_on_escape_menu_tool_requested)
 	_escape_pause_menu.return_requested.connect(_close_escape_pause_menu)
 	_escape_pause_menu.restore_requested.connect(_on_escape_menu_restore_requested)
+	_escape_pause_menu.diagnostic_export_requested.connect(_on_export_run_diagnostics)
 	_escape_pause_menu.target_priority_display_changed.connect(
 		_set_battle_target_priority_display_enabled
 	)
-	add_child(_escape_pause_menu)
+	menu_layer.add_child(_escape_pause_menu)
 
 
 func _build_click_carry_layer() -> void:
@@ -1815,12 +2338,14 @@ func _build_resource_preparation_trays(parent: Control) -> void:
 	player_resource_tray.z_index = 150
 	player_resource_tray.drop_requested.connect(_on_resource_tray_drop_requested.bind("player"))
 	player_resource_tray.click_carry_requested.connect(_on_click_carry_requested)
+	player_resource_tray.inspection_requested.connect(_on_card_inspection_requested)
 	parent.add_child(player_resource_tray)
 	enemy_resource_tray = RESOURCE_PREPARATION_TRAY_SCRIPT.new()
 	enemy_resource_tray.configure(resource_board_state, "enemy")
 	enemy_resource_tray.position = ENEMY_RESOURCE_TRAY_POSITION
 	enemy_resource_tray.z_index = 150
 	enemy_resource_tray.set_drop_enabled(false)
+	enemy_resource_tray.inspection_requested.connect(_on_card_inspection_requested)
 	parent.add_child(enemy_resource_tray)
 
 
@@ -1849,7 +2374,7 @@ func _refresh_resource_preparation_trays() -> void:
 		var player_resource_cards := cards.duplicate()
 		player_resource_cards.append_array(resource_board_state.get_level_resource_cards("player"))
 		player_resource_tray.set_owned_cards(player_resource_cards)
-		player_resource_tray.set_drop_enabled(current_phase == GamePhase.PREPARE)
+		player_resource_tray.set_drop_enabled(current_phase == GamePhase.PREPARE and not _is_card_service_active())
 	if is_instance_valid(enemy_resource_tray):
 		enemy_resource_tray.configure(resource_board_state, "enemy")
 		enemy_resource_tray.set_owned_cards(resource_board_state.get_level_resource_cards("enemy"))
@@ -2097,12 +2622,13 @@ func _build_battle_hud(parent: Control) -> void:
 	seed_random.tooltip_text = "生成一个新的战斗种子"
 	seed_controls.add_child(seed_random)
 
-	var log_panel := PanelContainer.new()
+	var log_panel := BattleLogPanelScript.new()
 	log_panel.name = "BattleLogPanel"
 	log_panel.unique_name_in_owner = true
 	log_panel.position = BATTLE_LOG_POSITION
 	log_panel.size = BATTLE_LOG_SIZE
 	log_panel.custom_minimum_size = BATTLE_LOG_SIZE
+	log_panel.pivot_offset = Vector2(0.0, BATTLE_LOG_SIZE.y) # 固定左下角，让日志向上和向右放大
 	log_panel.z_index = 200
 	log_panel.visible = false
 	log_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -2259,7 +2785,7 @@ func _build_board_section(parent: Control, section_name: String, top: float, ene
 
 
 func _build_battle_result_panel() -> void:
-	# 详细战绩直接覆盖在恢复后的卡牌上，这里只保留不遮挡战场的总结果入口。
+	# 结算与战场共用已提交的数据，切换只改变可见性。
 	var panel := Panel.new()
 	panel.name = "BattleResultPanel"
 	panel.unique_name_in_owner = true
@@ -2275,7 +2801,7 @@ func _build_battle_result_panel() -> void:
 	panel.add_theme_stylebox_override("panel", style)
 	add_child(panel)
 
-	var title := _make_label("战斗结算", Vector2(10, 5), Vector2(150, 30))
+	var title := _make_label("战斗结算", Vector2(10, 5), Vector2(340, 30))
 	title.name = "BattleResultLabel"
 	title.unique_name_in_owner = true
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -2286,23 +2812,23 @@ func _build_battle_result_panel() -> void:
 	placeholder.name = "BattleResultPlaceholder"
 	placeholder.unique_name_in_owner = true
 	placeholder.position = Vector2(10, 36)
-	placeholder.size = Vector2(150, 140)
+	placeholder.size = Vector2(340, 230)
 	placeholder.text = "卡面：本局统计\n永久成长：无\n本场奖励：无"
 	placeholder.fit_content = false
 	placeholder.scroll_active = true
 	placeholder.add_theme_font_override("normal_font", BATTLE_LOG_FONT)
-	placeholder.add_theme_font_size_override("normal_font_size", 11)
+	placeholder.add_theme_font_size_override("normal_font_size", 14) # 中央结算摘要字号
 	placeholder.add_theme_color_override("default_color", Color("e8eee5"))
 	panel.add_child(placeholder)
 	var export_button := _make_button(
 		"ExportBattleDataButton",
 		"导出战斗数据",
-		Vector2(10, 182),
-		Vector2(150, 27),
+		Vector2(10, 274),
+		Vector2(340, 27),
 		true
 	)
 	panel.add_child(export_button)
-	var export_status := _make_label("", Vector2(9, 212), Vector2(152, 30))
+	var export_status := _make_label("", Vector2(10, 304), Vector2(340, 24))
 	export_status.name = "BattleExportStatusLabel"
 	export_status.unique_name_in_owner = true
 	export_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -2313,14 +2839,26 @@ func _build_battle_result_panel() -> void:
 	var restart := _make_button(
 		"RestartBattleButton",
 		"重新开始",
-		Vector2(25, 245),
+		Vector2(120, 394),
 		Vector2(120, 27),
 		true
 	)
 	panel.add_child(restart)
-	var continue_button := _make_button("ContinueNextLevelButton", "继续下一关", Vector2(25, 245), Vector2(120, 27), true)
+	var continue_button := _make_button("ContinueNextLevelButton", "继续下一关", Vector2(120, 394), Vector2(120, 27), true)
 	continue_button.visible = false
 	panel.add_child(continue_button)
+	_other_battle_statistics_button = _make_button("OtherBattleStatisticsButton", "其他单位战斗数据", Vector2(80, 332), Vector2(200, 27), false)
+	_other_battle_statistics_button.visible = false
+	_other_battle_statistics_button.pressed.connect(_show_other_battle_statistics)
+	panel.add_child(_other_battle_statistics_button)
+	var view_button := _make_button("ViewResultBattlefieldButton", "查看战场", Vector2(120, 363), Vector2(120, 27), true)
+	view_button.pressed.connect(_set_result_battlefield_visible.bind(true))
+	panel.add_child(view_button)
+	_return_to_result_button = _make_button("ReturnToResultButton", "返回结算", Vector2(580, 344), Vector2(120, 32), true)
+	_return_to_result_button.z_index = 4000 # 返回按钮位于战场正中央且高于卡牌
+	_return_to_result_button.visible = false
+	_return_to_result_button.pressed.connect(_set_result_battlefield_visible.bind(false))
+	add_child(_return_to_result_button)
 	_assign_runtime_owner(panel)
 	_build_ground_reward_panel()
 
@@ -2431,6 +2969,7 @@ func _show_battle_diagnostic_message(message: String) -> void:
 	if not is_instance_valid(battle_diagnostic_message_dialog):
 		battle_diagnostic_message_dialog = AcceptDialog.new()
 		battle_diagnostic_message_dialog.name = "BattleDiagnosticMessageDialog"
+		battle_diagnostic_message_dialog.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(battle_diagnostic_message_dialog)
 	battle_diagnostic_message_dialog.dialog_text = message
 	battle_diagnostic_message_dialog.popup_centered()
@@ -2443,6 +2982,75 @@ func _refresh_battle_diagnostic_export_button() -> void:
 		_battle_diagnostic_recorder == null
 		or not _battle_diagnostic_recorder.is_complete
 	)
+
+
+func _capture_run_diagnostic_state() -> Dictionary:
+	var cards: Dictionary = {}
+	var encoded := run_save_service._encode_collection_state(owned_card_collection.capture_state())
+	for card: Dictionary in encoded.get("cards", []):
+		cards[String(card.instance_id)] = card
+	var row_visuals: Dictionary = {}
+	for pair: Array in [[front_row, "player_front"], [back_row, "player_back"], [enemy_front_row, "enemy_front"], [enemy_back_row, "enemy_back"]]:
+		var visuals: Array[Dictionary] = []
+		for slot: BoardSlot in pair[0].get_squads():
+			var card_visuals: Array[Dictionary] = []
+			for view: CardView in slot.get_card_views():
+				card_visuals.append({"card_id": String(view.card_data.id) if view.card_data != null else "", "instance_id": String(view.get_owned_card().instance_id) if view.get_owned_card() != null else "", "visible": view.is_visible_in_tree(), "alpha": view.modulate.a})
+			visuals.append({"visible": slot.is_visible_in_tree(), "alpha": slot.modulate.a, "dissolving": slot.is_death_dissolving(), "cards": card_visuals})
+		row_visuals[pair[1]] = visuals
+	return {
+		"cards": cards, "rows": run_save_service._encode_rows(_current_rows_for_save()),
+		"row_visuals": row_visuals, "resources": resource_board_state.capture_state(),
+		"maze": maze_controller.capture_state() if maze_controller != null else {},
+		"context": {"phase": int(current_phase), "view": int(current_world_view), "gold": run_reward_state.gold, "scrapers": scraper_count, "prepared_spells": prepared_spell_instance_ids.duplicate(), "committed_battles": settlement_journal.capture_state(), "shop_open": ordinary_shop_open, "filters": {"rarity": active_rarity_filters.duplicate(), "type": active_card_type_filters.duplicate(), "action": active_action_filters.duplicate(), "element": active_element_filters.duplicate(), "search": search_query}},
+	}
+
+
+func _record_run_diagnostic(kind: String, detail: Dictionary = {}, force: bool = false) -> void:
+	if _run_diagnostics == null: return
+	_run_diagnostics.observe(kind, _capture_run_diagnostic_state(), detail, force)
+
+
+func _queue_run_diagnostic() -> void:
+	if _run_diagnostics == null or _run_diagnostic_pending: return
+	_run_diagnostic_pending = true
+	_flush_run_diagnostic.call_deferred()
+
+
+func _flush_run_diagnostic() -> void:
+	_run_diagnostic_pending = false
+	_record_run_diagnostic("state_changed")
+
+
+func _on_export_run_diagnostics() -> void:
+	if _run_diagnostics == null: return
+	if not is_instance_valid(_run_diagnostic_dialog):
+		_run_diagnostic_dialog = FileDialog.new()
+		_run_diagnostic_dialog.name = "RunDiagnosticSaveDialog"
+		_run_diagnostic_dialog.process_mode = Node.PROCESS_MODE_ALWAYS
+		_run_diagnostic_dialog.title = "导出诊断日志"
+		_run_diagnostic_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+		_run_diagnostic_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_run_diagnostic_dialog.filters = PackedStringArray(["*.json ; JSON 诊断日志"])
+		_run_diagnostic_dialog.overwrite_warning_enabled = true
+		_run_diagnostic_dialog.file_selected.connect(_save_run_diagnostic_file)
+		add_child(_run_diagnostic_dialog)
+		var documents := OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
+		if DirAccess.dir_exists_absolute(documents): _run_diagnostic_dialog.current_dir = documents
+	_run_diagnostic_dialog.current_file = "project-card-diagnostics-%s-v%s.json" % [Time.get_datetime_string_from_system().replace(":", "-"), ProjectSettings.get_setting("application/config/version")]
+	_run_diagnostic_dialog.popup_centered_ratio(0.72)
+
+
+func _save_run_diagnostic_file(path: String) -> void:
+	var output := path if path.to_lower().ends_with(".json") else path + ".json"
+	# 诊断导出只读取状态；不调用本局保存，避免结束正在进行的刮符文或覆盖故障存档。
+	if ProjectSettings.globalize_path(output) in [ProjectSettings.globalize_path(run_save_path), ProjectSettings.globalize_path(run_save_path + ".bak"), ProjectSettings.globalize_path(_run_diagnostics.journal_path), ProjectSettings.globalize_path(_run_diagnostics.journal_path + ".previous"), ProjectSettings.globalize_path(_run_diagnostics.journal_path + ".battle.json")]:
+		_show_battle_diagnostic_message("请选择其他文件名，诊断日志不能覆盖本局存档。")
+		return
+	_record_run_diagnostic("diagnostic_export", {}, true)
+	var document: Dictionary = _run_diagnostics.build_document(_capture_run_diagnostic_state(), run_save_path)
+	var error: Error = _run_diagnostics.save_export(output, document)
+	_show_battle_diagnostic_message("诊断日志已导出：\n%s" % output if error == OK else "诊断日志导出失败：%s" % error_string(error))
 
 
 func _build_collection_section(parent: Control) -> void:
@@ -2679,6 +3287,7 @@ func _build_collection_section(parent: Control) -> void:
 	_emblem_library_parent = section
 	emblem_library.click_carry_requested.connect(_on_click_carry_requested)
 	emblem_library.scraper_action_mode_requested.connect(_toggle_rune_scraper_mode)
+	_emblem_recipe_discovery.load_discoveries()
 	# Control 的命中顺序除了 z_index 也受同层子节点顺序影响；
 	# 把筛选层移动到最后，确保搜索按钮始终在书页和卡牌之上。
 	section.move_child(filter, section.get_child_count() - 1)
@@ -2709,6 +3318,8 @@ func _ready() -> void:
 		or OS.get_environment("PROJECT_CARD_TRACE_BATTLE_PERFORMANCE") == "1"
 	)
 	set_process(true)
+	ordinary_shop_service = OrdinaryShopServiceScript.new()
+	ordinary_shop_service.initialize(Time.get_ticks_usec())
 	if not has_node("WorldContent"):
 		_build_scene_structure()
 	battle_audio_service = BattleAudioServiceScript.new()
@@ -2716,10 +3327,7 @@ func _ready() -> void:
 	add_child(battle_audio_service)
 	_bind_scene_nodes()
 	_initialize_owned_card_collection()
-	ordinary_shop_service = OrdinaryShopServiceScript.new()
-	if ordinary_shop_service.load_config():
-		var shop_seed := Time.get_ticks_usec()
-		ordinary_shop_service.initialize(shop_seed)
+	if not ordinary_shop_service.config.is_empty():
 		scraper_count = int((ordinary_shop_service.config.get("scraper", {}) as Dictionary).get("starting_count", 0))
 		if is_instance_valid(emblem_library):
 			emblem_library.set_scraper_count(scraper_count)
@@ -2730,6 +3338,7 @@ func _ready() -> void:
 		CardView.reset_active_rune_flow()
 	drag_mode_button.toggled.connect(_on_drag_mode_toggled)
 	player_avatar_button.pressed.connect(_on_player_avatar_button_pressed)
+	player_avatar_button.gui_input.connect(_on_hero_avatar_gui_input)
 	search_edit.text_changed.connect(_on_search_text_changed)
 	search_edit.text_submitted.connect(func(_text: String) -> void: apply_search())
 	search_button.pressed.connect(apply_search)
@@ -2748,14 +3357,19 @@ func _ready() -> void:
 	battle_controller.use_projectile_timing = true
 	battle_controller.performance_trace_enabled = _battle_performance_trace_enabled
 	add_child(battle_controller)
-	battle_controller.states_changed.connect(_on_battle_states_changed)
+	battle_controller.battle_initialized.connect(_on_battle_initialized)
+	battle_controller.states_changed.connect(_queue_battle_display_refresh)
+	battle_controller.formation_changed.connect(_sync_battle_formation_positions)
 	battle_controller.projectile_launched.connect(_on_battle_projectile_launched)
 	battle_controller.action_resolved.connect(_on_battle_action_resolved)
 	battle_controller.effect_resolved.connect(_on_battle_effect_resolved)
 	battle_controller.special_effect_resolved.connect(_on_battle_special_effect_resolved)
 	battle_controller.direct_damage_resolved.connect(_on_battle_direct_damage_resolved)
 	battle_controller.squad_defeated.connect(_request_battle_squad_departure)
+	battle_controller.repair_interrupted.connect(_request_battle_squad_departure)
+	battle_controller.wound_gained.connect(_on_battle_wound_gained)
 	battle_controller.squad_revived.connect(_cancel_battle_squad_departure)
+	battle_controller.squad_summoned.connect(_cancel_battle_squad_departure)
 	battle_controller.battle_finished.connect(_on_battle_finished)
 	battle_controller.spell_cast_started.connect(_on_spell_cast_started)
 	battle_controller.spell_cast_finished.connect(_on_spell_cast_finished)
@@ -2778,6 +3392,15 @@ func _ready() -> void:
 	_refresh_preparation_effect_preview.call_deferred()
 	_capture_startup_runtime_snapshot.call_deferred()
 	_refresh_spell_preparation_tray()
+	_run_diagnostics = RUN_DIAGNOSTIC_SCRIPT.new()
+	_run_diagnostics.initialize(run_save_path + ".diagnostics.jsonl")
+	_record_run_diagnostic("session_start", {}, true)
+	if short_maze_enabled:
+		maze_controller = ShortMazeScript.new()
+		add_child(maze_controller)
+		if maze_controller.initialize(self):
+			maze_controller.new_run(Time.get_ticks_usec())
+	_record_run_diagnostic("startup_ready", {}, true)
 
 
 func _capture_startup_runtime_snapshot() -> void:
@@ -2831,6 +3454,7 @@ func _capture_startup_runtime_snapshot() -> void:
 		"battle_effect_layer_visible": battle_effect_layer.visible,
 		"chaos_reroll_day_token": _last_chaos_reroll_day_token,
 		"display_mode": display_mode,
+		"short_maze": maze_controller.capture_state() if maze_controller != null else {},
 	}
 	if is_instance_valid(_escape_pause_menu):
 		_escape_pause_menu.set_restore_available(true)
@@ -2840,11 +3464,19 @@ func _restore_startup_runtime_snapshot() -> bool:
 	if _startup_runtime_snapshot.is_empty():
 		return false
 	var snapshot := _startup_runtime_snapshot
+	if maze_controller != null and not maze_controller.validate_state(snapshot.get("short_maze", {})):
+		return false
 	if not emblem_library.can_restore_inventory_state(snapshot["sticker_inventory"] as Array):
 		return false
 	var snapshot_shop: Dictionary = snapshot.get("ordinary_shop_state", {}) as Dictionary
 	if ordinary_shop_service != null and not ordinary_shop_service.validate_saved_state(snapshot_shop):
 		return false
+	_close_shop_card_services()
+	_return_service_cards()
+	if is_instance_valid(_shop_open_tween): _shop_open_tween.kill()
+	ordinary_shop_open = false
+	ordinary_shop_panel.visible = false
+	_shop_motion_root.position = Vector2.ZERO
 	_cancel_click_carry()
 	if get_viewport().gui_is_dragging():
 		get_viewport().gui_cancel_drag()
@@ -2898,7 +3530,6 @@ func _restore_startup_runtime_snapshot() -> bool:
 	if ordinary_shop_service != null:
 		var shop_snapshot := snapshot.get("ordinary_shop_state", {}) as Dictionary
 		ordinary_shop_service.initialize(int(shop_snapshot.get("rng_state", Time.get_ticks_usec())), shop_snapshot)
-	_refresh_ordinary_shop_panel()
 	_last_chaos_reroll_day_token = snapshot["chaos_reroll_day_token"] as StringName
 	_restore_row_from_snapshot(front_row, (snapshot["rows"] as Dictionary)[&"player_front"])
 	_restore_row_from_snapshot(back_row, (snapshot["rows"] as Dictionary)[&"player_back"])
@@ -2972,10 +3603,15 @@ func _restore_startup_runtime_snapshot() -> bool:
 	var display_shell := get_tree().get_first_node_in_group(&"game_display_shell")
 	if is_instance_valid(display_shell) and display_mode != null:
 		display_shell.call("apply_display_mode", display_mode)
+	if maze_controller != null:
+		maze_controller.restore_state(snapshot.short_maze)
+		maze_controller.restore_ui()
+	_refresh_ordinary_shop_panel()
 	return true
 
 
 func _initialize_owned_card_collection() -> void:
+	if not owned_card_collection.card_removed.is_connected(_on_owned_card_removed): owned_card_collection.card_removed.connect(_on_owned_card_removed)
 	# Main.tscn 目前仍以 CardData 数组提供初始内容；入树时只转换一次，
 	# 此后 OwnedCardCollection 才是可变归属的权威容器。
 	if owned_card_collection.size() > 0:
@@ -3218,7 +3854,11 @@ func _close_escape_pause_menu() -> void:
 
 
 func _on_escape_menu_tool_requested(tool: StringName) -> void:
+	_close_escape_pause_menu()
 	match tool:
+		&"pack_effect_tuner":
+			var display_shell := get_tree().get_first_node_in_group(&"game_display_shell")
+			if is_instance_valid(display_shell): display_shell.open_pack_effect_tuner(self)
 		&"attack_effect_lab":
 			_on_attack_effect_lab_button_pressed()
 		&"card_art_tuner":
@@ -3274,6 +3914,8 @@ func _apply_battle_speed() -> void:
 
 func set_world_view(view: WorldView, animate: bool = true) -> void:
 	current_world_view = view
+	if maze_controller != null:
+		maze_controller.refresh()
 	_turn_player_avatar(0 if view == WorldView.COLLECTION else PLAYER_AVATAR_FRAME_COUNT - 1, animate)
 	var target_y := -WORLD_SECTION_HEIGHT if view == WorldView.COLLECTION else 0.0
 	if _view_tween != null and _view_tween.is_valid():
@@ -3821,12 +4463,14 @@ func _update_page_number_labels() -> void:
 func _record_recently_returned_card(card_data: CardData, owned_card: OwnedCard = null) -> void:
 	if card_data == null:
 		return
+	if owned_card != null:
+		card_data = owned_card.card_data
 	if owned_card == null:
 		for candidate: OwnedCard in owned_card_collection.get_cards():
 			if candidate.card_data == card_data:
 				owned_card = candidate
 				break
-	var old_index := recently_returned_cards.find(card_data)
+	var old_index := recently_returned_owned_cards.find(owned_card) if owned_card != null else recently_returned_cards.find(card_data)
 	if old_index >= 0:
 		recently_returned_cards.remove_at(old_index)
 		if old_index < recently_returned_owned_cards.size():
@@ -4275,6 +4919,8 @@ func _notification(what: int) -> void:
 		return
 	if what == NOTIFICATION_DRAG_BEGIN:
 		var drag_data: Variant = get_viewport().gui_get_drag_data()
+		if drag_data is Dictionary:
+			_update_inspection_fusion_feedback(drag_data)
 		if (
 			drag_data is Dictionary
 			and _is_card_carry_drag(drag_data as Dictionary)
@@ -4289,6 +4935,8 @@ func _notification(what: int) -> void:
 				_native_carry_data
 			)
 	elif what == NOTIFICATION_DRAG_END:
+		_update_inspection_fusion_feedback({})
+		_queue_run_diagnostic()
 		var failed_indicator_drag := _native_carry_data
 		_native_carry_data = {}
 		_set_resource_trays_carry_active(false)
@@ -4305,13 +4953,12 @@ func _notification(what: int) -> void:
 			var drag_visual: CardDragPreview
 			if is_instance_valid(drag_visual_value) and drag_visual_value is CardDragPreview:
 				drag_visual = drag_visual_value as CardDragPreview
-				drag_visual.set_equipment_indicator_mode(false)
 			var preview_offset: Vector2 = failed_indicator_drag.get(
 				"drag_visual_offset",
 				failed_indicator_drag.get("preview_offset", Vector2.ZERO)
 			)
 			var return_global_position := (
-				drag_visual.get_card_global_position()
+				drag_visual.get_equipment_indicator_visual_global_center()
 				if is_instance_valid(drag_visual)
 				else get_viewport().get_mouse_position() - preview_offset
 			)
@@ -4322,6 +4969,8 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
+	if is_instance_valid(_card_pack_opening) and is_instance_valid(_inspection_surface) and is_instance_valid(_inspection_card_view):
+		_inspection_surface.tilt_locked = _card_pack_opening.phase != CardPackOpeningScript.Phase.INSPECTING or _rune_scraper_mode or not _click_carry_data.is_empty() or get_viewport().gui_is_dragging() or _inspection_placement_in_progress or is_instance_valid(_emblem_fusion_overlay)
 	if _rune_scraper_mode and is_instance_valid(_rune_scraper_visual):
 		_rune_scraper_visual.global_position = get_global_mouse_position() - RuneStickerStyle.get_scraper_hit_point() * _rune_scraper_visual.scale
 	# 接收层偶尔漏发 mouse_exited；以最近收到的鼠标坐标逐帧统一确定拖拽目标。
@@ -4347,6 +4996,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var button := event as InputEventMouseButton
+		if button.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+			_record_run_diagnostic("pointer_down" if button.pressed else "pointer_up", {"button": button.button_index, "position": [button.position.x, button.position.y], "click_carry": not _click_carry_data.is_empty(), "native_drag": not _native_carry_data.is_empty(), "scraping": _rune_scraper_mode}, true)
+			_queue_run_diagnostic()
 	if (
 		_rune_scraper_mode
 		and event is InputEventKey
@@ -4406,6 +5060,10 @@ func _input(event: InputEvent) -> void:
 			_native_carry_pointer,
 			_native_carry_data
 		)
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and _native_carry_data.get("kind") == &"equipment_indicator":
+		get_viewport().gui_cancel_drag()
+		get_viewport().set_input_as_handled()
+		return
 	if _click_carry_data.is_empty():
 		return
 
@@ -4479,6 +5137,10 @@ func _update_card_carry_target_impl(
 	pointer_global_position: Vector2,
 	drag_data: Dictionary
 ) -> Dictionary:
+	if is_instance_valid(_click_carry_preview):
+		_click_carry_preview.global_position = pointer_global_position
+	if drag_data.get("source_type") == &"card_service":
+		return {"collection": true, "accepted": collection_drop_zone.get_global_rect().has_point(pointer_global_position)}
 	var is_native_drag := (
 		not _native_carry_data.is_empty()
 		and _is_card_carry_drag(drag_data)
@@ -4492,12 +5154,26 @@ func _update_card_carry_target_impl(
 			return _native_carry_last_target
 		_native_carry_update_frame = frame
 		_native_carry_update_pointer = pointer_global_position
-	if is_instance_valid(_click_carry_preview):
-		_click_carry_preview.global_position = pointer_global_position
 	for row: BattlefieldRow in [front_row, back_row]:
 		row.update_stack_target_feedback_global(pointer_global_position, drag_data)
 
+	if maze_controller != null and maze_controller.is_enhancement_drop_at(pointer_global_position):
+		for row: BattlefieldRow in [front_row, back_row]:
+			row.clear_drop_preview(false)
+		return {"enhancement": true, "accepted": maze_controller.can_select_enhancement_card(drag_data)}
+	for index: int in _shop_exchange_slots.size():
+		var slot := _shop_exchange_slots[index]
+		if slot.is_visible_in_tree() and slot.get_global_rect().has_point(pointer_global_position):
+			for row: BattlefieldRow in [front_row, back_row]: row.clear_drop_preview(false)
+			return {"exchange_slot": index, "accepted": _can_select_exchange_card(drag_data, index)}
+	if is_instance_valid(_shop_service_slot) and _shop_service_slot.is_visible_in_tree() and _shop_service_slot.get_global_rect().has_point(pointer_global_position):
+		for row: BattlefieldRow in [front_row, back_row]:
+			row.clear_drop_preview(false)
+		return {"shop_service": true, "accepted": _can_select_shop_service_card(drag_data)}
 	var target := {"row": null, "collection": false, "spell_preparation": false, "resource_tray": null, "resource_resolution": {}, "accepted": false}
+	if _is_card_service_active():
+		_clear_click_drop_feedback(false)
+		return {"collection": true, "accepted": collection_drop_zone.get_global_rect().has_point(pointer_global_position)}
 	var resource_tray := _find_resource_tray_at(pointer_global_position)
 	if resource_tray != null:
 		for row: BattlefieldRow in [front_row, back_row]: row.clear_drop_preview(false)
@@ -4573,6 +5249,10 @@ func _on_start_battle_button_pressed() -> void:
 
 
 func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
+	if is_instance_valid(_emblem_fusion_overlay):
+		return false
+	if maze_controller != null and not maze_controller.can_start_battle():
+		return false
 	if not run_reward_state.pending_next_level_from_id.is_empty():
 		play_area_label.text = "本关已经结算；请先处理奖励并进入下一关。"
 		return false
@@ -4591,8 +5271,12 @@ func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
 		if random_seed >= 0
 		else clampi(roundi(battle_seed_spin.value), 0, BATTLE_SEED_MAX)
 	)
+	if maze_controller != null:
+		resolved_seed = int(maze_controller.run.selected_path.battle_seed)
 	var battle_instance_id := _take_next_battle_instance_id()
 	_battle_snapshot = _capture_battle_snapshot(battle_instance_id, resolved_seed)
+	if maze_controller != null and not maze_controller.begin_battle():
+		return false
 	_last_battle_settlement_result.clear()
 	_battle_state_slots.clear()
 	_clear_battle_log()
@@ -4616,10 +5300,22 @@ func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
 	player_formation.append_array(_build_battle_formation(back_row, &"player_back"))
 	var enemy_formation := _build_battle_formation(enemy_front_row, &"enemy_front")
 	enemy_formation.append_array(_build_battle_formation(enemy_back_row, &"enemy_back"))
+	var enemy_prepared_spells: Array[OwnedCard] = []
+	if maze_controller != null:
+		enemy_prepared_spells.assign(maze_controller.get_enemy_prepared_spells())
 	current_phase = GamePhase.BATTLE
 	battle_result_panel.visible = false
 	_update_phase_label()
 	battle_seed_spin.value = resolved_seed
+	if maze_controller != null:
+		if save_run_to_path(run_save_path) != OK:
+			maze_controller.rollback_battle()
+			_resume_battle_instance_id = battle_instance_id
+			current_phase = GamePhase.PREPARE
+			_update_phase_label()
+			play_area_label.text = "战前保存失败，尚未开战，请重试。"
+			return false
+		maze_controller.award_opening_gold()
 	battle_controller.start_battle(
 		player_formation,
 		enemy_formation,
@@ -4627,14 +5323,14 @@ func start_battle(random_seed: int = -1, auto_run: bool = true) -> bool:
 		auto_run,
 		battle_instance_id,
 		_get_prepared_spell_instances(),
-		[],
+		enemy_prepared_spells,
 		_get_deployed_resource_cards("player"),
 		_get_deployed_resource_cards("enemy"),
 		_build_reward_card_catalog(),
-		owned_card_collection.get_cards()
+		owned_card_collection.get_cards(),
+		maze_controller.battle_context() if maze_controller != null else {},
+		{"held_stickers": _get_all_held_stickers(), "player_gold": run_reward_state.gold, "mining_totals": run_reward_state.mining_totals.duplicate(), "resource_board": resource_board_state.capture_state(), "card_registry": _build_card_definition_registry()}
 	)
-	_map_battle_states_to_slots(battle_controller.player_states, player_formation)
-	_map_battle_states_to_slots(battle_controller.enemy_states, enemy_formation)
 	_update_battle_timer()
 	_on_battle_states_changed()
 	if battle_controller.current_result == BattleController.Result.NONE:
@@ -4702,6 +5398,9 @@ func restart_battle() -> bool:
 		not settlement_journal.is_committed(_battle_snapshot.battle_instance_id)
 	)
 	_battle_state_slots.clear()
+	if maze_controller != null:
+		maze_controller.rollback_battle()
+		_resume_battle_instance_id = _battle_snapshot.battle_instance_id
 	current_phase = GamePhase.PREPARE
 	battle_result_panel.visible = false
 	battle_result_label.text = "战斗结算"
@@ -4752,7 +5451,8 @@ func _update_phase_label() -> void:
 			phase_label.text = "战斗阶段"
 		GamePhase.RESULT:
 			phase_label.text = "结算阶段"
-	set_world_view(WorldView.COLLECTION if current_phase == GamePhase.PREPARE else WorldView.BATTLEFIELDS)
+	# 迷宫准备阶段返回路径桌面；独立开发场景仍默认显示收藏。
+	set_world_view(WorldView.COLLECTION if current_phase == GamePhase.PREPARE and maze_controller == null else WorldView.BATTLEFIELDS)
 	start_battle_button.visible = current_phase == GamePhase.PREPARE
 	ordinary_shop_entry_button.visible = current_phase == GamePhase.PREPARE
 	ordinary_shop_entry_button.disabled = ordinary_shop_service == null
@@ -4771,7 +5471,13 @@ func _update_phase_label() -> void:
 	# 结算页继续复用本场同一份结构化日志，直到玩家点击重新开始。
 	battle_log_panel.visible = current_phase in [GamePhase.BATTLE, GamePhase.RESULT]
 	var preparing_for_next_level := current_phase == GamePhase.PREPARE and not run_reward_state.pending_next_level_from_id.is_empty()
-	battle_result_panel.visible = current_phase == GamePhase.RESULT or preparing_for_next_level
+	if current_phase != GamePhase.RESULT:
+		_viewing_result_battlefield = false
+		if is_instance_valid(_other_battle_statistics_dialog):
+			_other_battle_statistics_dialog.hide()
+	_other_battle_statistics_button.visible = current_phase == GamePhase.RESULT and not _get_other_battle_states().is_empty()
+	battle_result_panel.visible = (current_phase == GamePhase.RESULT or preparing_for_next_level) and not _viewing_result_battlefield
+	_return_to_result_button.visible = current_phase == GamePhase.RESULT and _viewing_result_battlefield
 	if is_instance_valid(continue_next_level_button):
 		continue_next_level_button.visible = (
 			(current_phase == GamePhase.RESULT and bool(_last_battle_settlement_result.get("success", false)))
@@ -4782,12 +5488,15 @@ func _update_phase_label() -> void:
 	_refresh_battle_diagnostic_export_button()
 	_refresh_drag_availability()
 	_refresh_spell_preparation_tray()
+	if maze_controller != null:
+		maze_controller.refresh()
 
 
 func _capture_battle_snapshot(
 	battle_instance_id: StringName,
 	battle_seed: int
 ) -> BattlePreparationSnapshot:
+	_record_run_diagnostic("battle_snapshot_capture", {"battle_id": String(battle_instance_id), "seed": battle_seed}, true)
 	var snapshot := BattlePreparationSnapshot.new()
 	if not snapshot.initialize(
 		battle_instance_id,
@@ -4821,7 +5530,7 @@ func _refresh_spell_preparation_tray() -> void:
 	var cards := _get_prepared_spell_instances()
 	spell_preparation_tray.set_capacity(spell_preparation_capacity)
 	spell_preparation_tray.set_prepared_cards(cards)
-	spell_preparation_tray.set_drop_enabled(current_phase == GamePhase.PREPARE)
+	spell_preparation_tray.set_drop_enabled(current_phase == GamePhase.PREPARE and not _is_card_service_active())
 	spell_preparation_tray.visible = current_phase != GamePhase.RESULT
 
 
@@ -4854,9 +5563,7 @@ func _is_prepared_spell_drop_valid(owned: OwnedCard, insertion_index: int) -> bo
 		and prepared_spell_instance_ids.size() >= spell_preparation_capacity
 	):
 		return false
-	return _prepared_spell_time_order_is_valid(
-		_prepared_spell_candidate_order(owned, insertion_index)
-	)
+	return insertion_index >= 0
 
 
 func _resolve_prepared_spell_drop_index(owned: OwnedCard, requested_index: int) -> int:
@@ -4873,19 +5580,9 @@ func _resolve_prepared_spell_drop_index(owned: OwnedCard, requested_index: int) 
 	var already_prepared := prepared_spell_instance_ids.has(owned.instance_id)
 	if not already_prepared and prepared_spell_instance_ids.size() >= spell_preparation_capacity:
 		return -1
-	var resolved_index := requested_index
-	if not already_prepared and owned.card_data.get_spell_preparation_column() == 2:
-		var trigger_time := _prepared_spell_time(owned)
-		resolved_index = prepared_spell_instance_ids.size()
-		for index: int in prepared_spell_instance_ids.size():
-			var existing := owned_card_collection.get_by_instance_id(prepared_spell_instance_ids[index])
-			if existing != null and existing.card_data.get_spell_preparation_column() == 2:
-				if _prepared_spell_time(existing) > trigger_time:
-					resolved_index = index
-					break
-	if not _is_prepared_spell_drop_valid(owned, resolved_index):
+	if not _is_prepared_spell_drop_valid(owned, requested_index):
 		return -1
-	return resolved_index
+	return requested_index
 
 
 func _on_spell_preparation_drop_requested(data: Dictionary, insertion_index: int) -> bool:
@@ -4902,7 +5599,7 @@ func _on_spell_preparation_drop_requested(data: Dictionary, insertion_index: int
 		return false
 	var resolved_index := _resolve_prepared_spell_drop_index(owned, insertion_index)
 	if resolved_index < 0:
-		play_area_label.text = "准备类法术按准备秒数升序排列；只能调整相同秒数内的先后"
+		play_area_label.text = "此法术当前不能放入准备栏"
 		return false
 	var candidate_order := _prepared_spell_candidate_order(owned, resolved_index)
 	if is_instance_valid(spell_preparation_tray):
@@ -4929,45 +5626,7 @@ func _normalize_prepared_spell_order() -> void:
 				and owned.card_data.get_spell_preparation_column() == column_index
 			):
 				ordered.append(instance_id)
-	if battle_controller != null:
-		var prepared_start := ordered.size()
-		for index: int in ordered.size():
-			var owned := owned_card_collection.get_by_instance_id(ordered[index])
-			if owned != null and owned.card_data.get_spell_preparation_column() == 2:
-				prepared_start = index
-				break
-		for index: int in range(prepared_start + 1, ordered.size()):
-			var moving_id := ordered[index]
-			var moving := owned_card_collection.get_by_instance_id(moving_id)
-			var moving_time := _prepared_spell_time(moving)
-			var insert_at := index
-			while insert_at > prepared_start:
-				var previous := owned_card_collection.get_by_instance_id(ordered[insert_at - 1])
-				if _prepared_spell_time(previous) <= moving_time:
-					break
-				ordered[insert_at] = ordered[insert_at - 1]
-				insert_at -= 1
-			ordered[insert_at] = moving_id
 	prepared_spell_instance_ids.assign(ordered)
-
-
-func _prepared_spell_time(owned: OwnedCard) -> float:
-	if owned == null or owned.card_data == null or battle_controller == null:
-		return INF
-	return battle_controller.get_elapsed_spell_trigger_seconds(owned.card_data)
-
-
-func _prepared_spell_time_order_is_valid(instance_ids: Array) -> bool:
-	var previous_time := -INF
-	for instance_id_value: Variant in instance_ids:
-		var owned := owned_card_collection.get_by_instance_id(instance_id_value as StringName)
-		if owned == null or owned.card_data.get_spell_preparation_column() != 2:
-			continue
-		var trigger_time := _prepared_spell_time(owned)
-		if trigger_time < previous_time:
-			return false
-		previous_time = trigger_time
-	return true
 
 
 func _duplicate_row_squads(row: BattlefieldRow) -> Array[SquadData]:
@@ -4978,6 +5637,7 @@ func _duplicate_row_squads(row: BattlefieldRow) -> Array[SquadData]:
 
 
 func _restore_battle_snapshot(restore_collection_state: bool = true) -> void:
+	_record_run_diagnostic("battle_restore_begin", {}, true)
 	if _battle_snapshot == null:
 		return
 	if restore_collection_state and not _battle_snapshot.restore_collection(owned_card_collection):
@@ -4987,6 +5647,7 @@ func _restore_battle_snapshot(restore_collection_state: bool = true) -> void:
 		prepared_spell_instance_ids = _battle_snapshot.get_prepared_spell_instance_ids()
 		_refresh_spell_preparation_tray()
 	if not resource_board_state.restore_state(_battle_snapshot.get_resource_board_state(), _build_card_definition_registry()):
+		_record_run_diagnostic("battle_restore_failed", {"reason": "resource_board_restore_failed"}, true)
 		push_error("战斗快照中的资源板无法恢复")
 		return
 	if is_instance_valid(player_resource_tray): player_resource_tray.clear_battle_health()
@@ -4997,6 +5658,7 @@ func _restore_battle_snapshot(restore_collection_state: bool = true) -> void:
 	_restore_row_from_snapshot(back_row, _battle_snapshot.get_row_squads(&"player_back"))
 	_restore_row_from_snapshot(enemy_front_row, _battle_snapshot.get_row_squads(&"enemy_front"))
 	_restore_row_from_snapshot(enemy_back_row, _battle_snapshot.get_row_squads(&"enemy_back"))
+	_record_run_diagnostic("battle_restore_end", {}, true)
 
 
 func _restore_row_from_snapshot(row: BattlefieldRow, snapshot_value: Variant) -> void:
@@ -5008,11 +5670,16 @@ func _restore_row_from_snapshot(row: BattlefieldRow, snapshot_value: Variant) ->
 			var restored_squad := squad.duplicate_squad()
 			var equipped_item := restored_squad.get_equipped_item()
 			if (
-				equipped_item != null
+				row in [front_row, back_row]
+				and equipped_item != null
 				and owned_card_collection.get_by_instance_id(equipped_item.instance_id) == null
 			):
 				restored_squad.unequip_item()
-			row.add_squad(restored_squad, row.get_squad_count())
+			if row in [front_row, back_row]:
+				for card: CardData in restored_squad.horizontal_cards.duplicate():
+					var owned := restored_squad.get_owned_card(card)
+					if owned != null and owned_card_collection.get_by_instance_id(owned.instance_id) == null: restored_squad.remove_card(card)
+			if restored_squad.is_valid(): row.add_squad(restored_squad, row.get_squad_count())
 
 
 func save_run_to_path(path: String) -> Error:
@@ -5065,6 +5732,10 @@ func save_run_to_path(path: String) -> Error:
 	checkpoint["ordinary_shop_state"] = ordinary_shop_service.capture_state() if ordinary_shop_service != null else {}
 	checkpoint["scraper_count"] = scraper_count
 	checkpoint["chaos_reroll_day_token"] = _last_chaos_reroll_day_token
+	if maze_controller != null:
+		checkpoint["short_maze"] = maze_controller.capture_state(use_battle_snapshot)
+		if use_battle_snapshot:
+			checkpoint["reward_state"]["gold"] = maze_controller._before_battle_gold
 	var error := run_save_service.save_checkpoint(path, checkpoint)
 	_last_run_persistence_result = {
 		"success": error == OK,
@@ -5072,6 +5743,7 @@ func save_run_to_path(path: String) -> Error:
 		"path": path,
 		"pending_battle_instance_id": pending_battle_id,
 	}
+	_record_run_diagnostic("save_checkpoint", {"error": error, "saved_rows": checkpoint.get("rows", {}), "used_battle_snapshot": use_battle_snapshot}, true)
 	return error
 
 
@@ -5084,7 +5756,7 @@ func _resource_board_for_save(use_battle_snapshot: bool) -> ResourceBoardState:
 	return resource_board_state
 
 
-func reroll_chaos_stickers_for_new_day(day_token: StringName) -> int:
+func reroll_chaos_stickers_for_new_day(day_token: StringName, source_rng: RandomNumberGenerator = null) -> int:
 	if day_token.is_empty() or day_token == _last_chaos_reroll_day_token:
 		return 0
 	_last_chaos_reroll_day_token = day_token
@@ -5096,7 +5768,7 @@ func reroll_chaos_stickers_for_new_day(day_token: StringName) -> int:
 			if sticker.get("emblem_id", &"") != &"混沌贴纸":
 				continue
 			var next_state := sticker.duplicate(true)
-			next_state["element"] = randi_range(0, 4)
+			next_state["element"] = source_rng.randi_range(0, 4) if source_rng != null else randi_range(0, 4)
 			owned_card.set_rune_sticker(rune_index, next_state)
 			rerolled += 1
 			changed = true
@@ -5106,11 +5778,15 @@ func reroll_chaos_stickers_for_new_day(day_token: StringName) -> int:
 
 
 func load_run_from_path(path: String) -> bool:
+	_record_run_diagnostic("load_checkpoint_begin", {}, true)
 	var load_result := run_save_service.load_checkpoint(path)
 	if not bool(load_result.get("success", false)):
 		_last_run_persistence_result = load_result
 		return false
 	var loaded_checkpoint := load_result.get("checkpoint", {}) as Dictionary
+	if maze_controller != null:
+		if not loaded_checkpoint.get("short_maze") is Dictionary or not maze_controller.validate_state(loaded_checkpoint.short_maze):
+			return false
 	var migration_save_pending := (
 		int(loaded_checkpoint.get("schema_version", 0)) < RunSaveService.SCHEMA_VERSION
 		or int(loaded_checkpoint.get("status_slot_migration_version", 0)) < RunSaveService.STATUS_SLOT_MIGRATION_VERSION
@@ -5165,6 +5841,7 @@ func load_run_from_path(path: String) -> bool:
 	var previous_reward_state := run_reward_state.capture_state()
 	var previous_journal_state := settlement_journal.capture_state()
 	var previous_resource_board_state := resource_board_state.capture_state()
+	_return_service_cards()
 	var restore_result := run_save_service.restore_checkpoint(
 		loaded_checkpoint,
 		owned_card_collection,
@@ -5271,6 +5948,10 @@ func load_run_from_path(path: String) -> bool:
 	ordinary_shop_open = false
 	ordinary_shop_panel.visible = false
 	_refresh_ordinary_shop_panel()
+	if maze_controller != null:
+		maze_controller.restore_state(loaded_checkpoint.short_maze)
+		maze_controller.restore_ui()
+	if not run_reward_state.pending_random_card_requests.is_empty(): _claim_pending_random_cards()
 	var migration_save_error: Error = OK
 	if migration_save_pending:
 		migration_save_error = save_run_to_path(path)
@@ -5288,6 +5969,7 @@ func load_run_from_path(path: String) -> bool:
 		"migration_saved": migration_save_error == OK,
 		"migration_save_error": migration_save_error,
 	}
+	_record_run_diagnostic("load_checkpoint_end", {}, true)
 	return true
 
 
@@ -5311,12 +5993,18 @@ func _snapshot_rows_for_save() -> Dictionary:
 
 func _build_card_definition_registry() -> Dictionary:
 	var registry: Dictionary = {}
-	var directory := DirAccess.open("res://resources/cards")
-	if directory != null:
-		for filename: String in directory.get_files():
-			if filename.get_extension() != "tres": continue
-			var card := load("res://resources/cards/%s" % filename) as CardData
-			if card != null and not card.id.is_empty(): registry[card.id] = card
+	var resource_definitions: Array[CardData] = []
+	# 资源列表保留导出前的名称；普通目录扫描会漏掉被转换为remap的卡牌。
+	var filenames := ResourceLoader.list_directory("res://resources/cards")
+	filenames.sort() # 固定跨平台卡池顺序，使相同随机种子的抽取顺序一致。
+	for filename: String in filenames:
+		if filename.get_extension() != "tres": continue
+		var card := ResourceLoader.load("res://resources/cards/%s" % filename) as CardData
+		if card != null and not card.id.is_empty():
+			registry[card.id] = card
+			resource_definitions.append(card)
+	# 保留资源引用让 Godot 原生缓存继续有效；每次仍扫描目录并重新叠加当前持有实例。
+	_card_definition_resources = resource_definitions
 	for owned_card: OwnedCard in owned_card_collection.get_cards():
 		if owned_card.card_data != null:
 			registry[owned_card.card_data.id] = owned_card.card_data
@@ -5327,7 +6015,8 @@ func _build_card_definition_registry() -> Dictionary:
 				continue
 			for card_data: CardData in squad.horizontal_cards:
 				if card_data != null:
-					registry[card_data.id] = card_data
+					var owner := squad.get_owned_card(card_data)
+					registry[card_data.id] = owner.card_data if owner != null else card_data
 	return registry
 
 
@@ -5355,14 +6044,41 @@ func _map_battle_states_to_slots(
 		_battle_state_slots[states[index]] = formation[index].get("slot")
 
 
+func _on_battle_initialized() -> void:
+	# 开场突击可能立即召唤或发射；先把原阵容映射到已有槽位。
+	var player := _build_battle_formation(front_row, &"player_front")
+	player.append_array(_build_battle_formation(back_row, &"player_back"))
+	var enemy := _build_battle_formation(enemy_front_row, &"enemy_front")
+	enemy.append_array(_build_battle_formation(enemy_back_row, &"enemy_back"))
+	_map_battle_states_to_slots(battle_controller.player_states, player)
+	_map_battle_states_to_slots(battle_controller.enemy_states, enemy)
+
+
+func _queue_battle_display_refresh() -> void:
+	_sync_battle_resource_display()
+	if _battle_display_refresh_queued: return
+	_battle_display_refresh_queued = true
+	_flush_battle_display_refresh.call_deferred()
+
+
+func _flush_battle_display_refresh() -> void:
+	_battle_display_refresh_queued = false
+	_on_battle_states_changed()
+
+
 func _on_battle_states_changed() -> void:
-	if battle_controller == null:
+	if maze_controller != null:
+		maze_controller.update_battle_display()
+	if battle_controller == null or current_phase == GamePhase.RESULT:
 		return
 	var profile_started_usec := Time.get_ticks_usec() if _battle_performance_trace_enabled else 0
 	_update_battle_timer()
 	for state: BattleSquadState in battle_controller.get_all_states():
 		var slot := _battle_state_slots.get(state) as BoardSlot
 		if is_instance_valid(slot):
+			if current_phase == GamePhase.BATTLE and slot.get_squad_data() != state.squad_data: slot.set_squad_data(state.squad_data)
+			elif slot.get_squad_data().get_equipped_item() != state.squad_data.get_equipped_item(): slot.set_squad_data(state.squad_data)
+			if current_phase == GamePhase.BATTLE and state.alive: slot.modulate.a = 0.35 if state.is_banished else 1.0 # 放逐卡面透明度；保留占位并提示暂时离场
 			slot.set_target_priority_display_enabled(_show_battle_target_priority)
 			if current_phase == GamePhase.BATTLE:
 				slot.refresh_celestial_indicators(state.squad_data)
@@ -5381,12 +6097,18 @@ func _on_battle_states_changed() -> void:
 				battle_controller.get_effective_target_weight(state),
 				state.get_masked_wound_indices_by_card()
 			)
-	if is_instance_valid(player_resource_tray):
-		player_resource_tray.set_battle_health(battle_controller.player_resource_states)
-	if is_instance_valid(enemy_resource_tray):
-		enemy_resource_tray.set_battle_health(battle_controller.enemy_resource_states)
+	_sync_battle_resource_display()
 	if profile_started_usec > 0:
 		_battle_trace_state_sync_usec += Time.get_ticks_usec() - profile_started_usec
+
+
+func _sync_battle_resource_display() -> void:
+	if battle_controller == null: return
+	if battle_controller.battle_resource_board != null and current_phase in [GamePhase.BATTLE, GamePhase.RESULT]:
+		for pair: Array in [[player_resource_tray, battle_controller.player_resource_states, "player"], [enemy_resource_tray, battle_controller.enemy_resource_states, "enemy"]]:
+			var tray := pair[0] as ResourcePreparationTray
+			if is_instance_valid(tray):
+				tray.sync_battle_state(battle_controller.battle_resource_board, pair[2], pair[1])
 
 
 func _on_spell_cast_started(
@@ -5553,7 +6275,7 @@ func _handle_battle_projectile_launched(event: BattleEffectEvent) -> void:
 			return
 		var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
 		var from_local := inverse * source_slot.get_global_rect().get_center()
-		var to_local: Vector2 = inverse * target_tray.get_instance_center_global((event.resource_target.get("owned_card") as OwnedCard).instance_id)
+		var to_local: Vector2 = inverse * target_tray.get_resource_center_global(event.resource_target)
 		var visual_kind := _action_visual_kind(event.action_type)
 		var color := _element_attack_color(-1)
 		_play_element_line(
@@ -5571,11 +6293,14 @@ func _handle_battle_projectile_launched(event: BattleEffectEvent) -> void:
 		if is_instance_valid(anchor_slot):
 			visual_source_slot = anchor_slot
 	if not is_instance_valid(visual_source_slot):
-		return
+		visual_source_slot = target_slot
 	if event.is_base_action:
 		visual_source_slot.play_battle_action_lift(battle_controller.battle_speed_multiplier)
 	var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
 	var from_local := inverse * visual_source_slot.get_global_rect().get_center()
+	if event.origin_resource != null:
+		var origin_tray := player_resource_tray if int(event.origin_resource.side) == 0 else enemy_resource_tray
+		from_local = inverse * origin_tray.get_resource_center_global(event.origin_resource)
 	var to_local := inverse * target_slot.get_global_rect().get_center()
 	var points := PackedVector2Array([from_local, to_local])
 	if visual_source_slot == target_slot:
@@ -5620,6 +6345,14 @@ func _on_battle_direct_damage_resolved(
 	slot.show_battle_action("%s -%d" % [source_name, amount], true)
 
 
+func _on_battle_wound_gained(state: BattleSquadState, wound_id: StringName) -> void:
+	var entry := BattleLogEntry.new()
+	entry.group_id = battle_controller._take_group_id()
+	entry.timestamp = battle_controller.elapsed_seconds
+	entry.add_direct_effect_line("%s首次阵亡，获得伤势：%s" % [_format_battle_squad_name(state), String(wound_id)])
+	_append_battle_log_entry(entry)
+
+
 func _format_battle_squad_name(state: BattleSquadState) -> String:
 	if state == null or state.get_effect_source() == null:
 		return "未知目标"
@@ -5648,7 +6381,7 @@ func _append_battle_effect(event: BattleEffectEvent) -> void:
 	if is_new:
 		_append_battle_log_entry(entry)
 	else:
-		_refresh_battle_log_text()
+		_queue_battle_log_refresh()
 
 
 func _on_battle_special_effect_resolved(record: Dictionary) -> void:
@@ -5703,6 +6436,17 @@ func _append_battle_log_entry(entry: BattleLogEntry) -> void:
 	while _battle_log_entries.size() > BATTLE_LOG_MAX_ENTRIES:
 		var removed: BattleLogEntry = _battle_log_entries.pop_front()
 		_battle_log_by_group.erase(removed.group_id)
+	_queue_battle_log_refresh()
+
+
+func _queue_battle_log_refresh() -> void:
+	if _battle_log_refresh_queued: return
+	_battle_log_refresh_queued = true
+	_flush_battle_log_refresh.call_deferred()
+
+
+func _flush_battle_log_refresh() -> void:
+	_battle_log_refresh_queued = false
 	_refresh_battle_log_text()
 
 
@@ -5925,6 +6669,10 @@ func _effect_visual_color(kind: StringName) -> Color:
 
 
 func _request_battle_squad_departure(state: BattleSquadState) -> void:
+	if state.is_repairing:
+		var repair_slot := _battle_state_slots.get(state) as BoardSlot
+		if is_instance_valid(repair_slot): repair_slot.modulate.a = 0.4 # 修复中的阵亡造物保留卡面与占位
+		return
 	# 战斗规则只发出阵亡事实；所有卡牌退场表现仍集中在这个单一入口。
 	battle_departure_count += 1
 	battle_departure_requested.emit(state)
@@ -5965,6 +6713,7 @@ func _cancel_battle_squad_departure(state: BattleSquadState) -> void:
 			return
 		_battle_state_slots[state] = slot
 	if is_instance_valid(slot):
+		slot.modulate.a = 1.0
 		slot.cancel_death_dissolve()
 	_on_battle_states_changed()
 
@@ -6054,12 +6803,16 @@ func _on_battle_finished(result: BattleController.Result) -> void:
 	# Controller 信号连接早于采集器；先在结算改写 OwnedCard 前冻结战斗最终状态。
 	if _battle_diagnostic_recorder != null:
 		_battle_diagnostic_recorder.finish(result)
+		if _run_diagnostics != null:
+			_run_diagnostics.save_last_battle(_battle_diagnostic_recorder.get_record_copy())
+	_record_run_diagnostic("battle_finished", {"result": int(result)}, true)
 	_pending_battle_result = result
 	if _active_battle_departures == 0:
 		_show_battle_result(result)
 
 
 func _show_battle_result(result: BattleController.Result) -> void:
+	_viewing_result_battlefield = false
 	var profile_started_usec := Time.get_ticks_usec() if _battle_performance_trace_enabled else 0
 	_pending_battle_result = BattleController.Result.NONE
 	current_phase = GamePhase.RESULT
@@ -6070,6 +6823,7 @@ func _show_battle_result(result: BattleController.Result) -> void:
 	_sync_battle_pause_owners()
 	_restore_battle_result_layout()
 	_last_battle_settlement_result = settle_current_battle()
+	_record_run_diagnostic("battle_settled", {"result": _last_battle_settlement_result.duplicate(true)}, true)
 	if bool(_last_battle_settlement_result.get("success", false)):
 		run_reward_state.pending_next_level_from_id = resource_board_state.level_id
 		_add_settled_emblem_rewards_to_library()
@@ -6110,6 +6864,11 @@ func _refresh_battle_result_summary() -> void:
 		]
 	)
 
+	var awarded_names: Array = _last_battle_settlement_result.get("random_card_names", [])
+	if not awarded_names.is_empty():
+		battle_result_summary_label.text += "\n已加入收藏：" + "、".join(awarded_names)
+	if maze_controller != null:
+		battle_result_summary_label.text += "\n" + maze_controller.reward_summary()
 	battle_result_summary_label.scroll_to_line(0)
 
 
@@ -6138,6 +6897,7 @@ func _format_battle_result_summary(
 		if stat not in [
 			BattlePermanentGrowthLedger.STAT_BASE_VALUE,
 			BattlePermanentGrowthLedger.STAT_BASE_ARMOR,
+			BattlePermanentGrowthLedger.STAT_MAX_HEALTH,
 		]:
 			continue
 		var key := "%d:%d:%s" % [
@@ -6164,7 +6924,7 @@ func _format_battle_result_summary(
 			var stat_name := (
 				"行动"
 				if total.get("stat") == BattlePermanentGrowthLedger.STAT_BASE_VALUE
-				else "基础护甲"
+				else ("生命" if total.get("stat") == BattlePermanentGrowthLedger.STAT_MAX_HEALTH else "基础护甲")
 			)
 			lines.append("• %s：%s %s" % [
 				String(total.get("card_name", "未知卡牌")),
@@ -6198,7 +6958,7 @@ func _format_battle_result_summary(
 			lines.append("• 金币 %s%d" % ["+" if gold_total > 0 else "", gold_total])
 		if random_card_total > 0:
 			lines.append(
-				"• 随机随从请求已进入待解析队列 +%d" % random_card_total
+				"• 随机卡牌奖励 +%d" % random_card_total
 				if settled
 				else "• 待抽取随从 +%d" % random_card_total
 			)
@@ -6216,6 +6976,7 @@ func settle_current_battle() -> Dictionary:
 			"status": BattleSettlementService.STATUS_FAILED,
 			"reason": "missing_main_battle_context",
 		}
+	var previous_shop_rng: int = ordinary_shop_service.rng.state
 	var result := battle_settlement_service.settle(
 		_battle_snapshot,
 		battle_controller.permanent_growth_ledger.get_entries(),
@@ -6225,8 +6986,14 @@ func settle_current_battle() -> Dictionary:
 		settlement_journal,
 		battle_controller.get_owned_card_change_entries_for_settlement(),
 		_build_card_definition_registry(),
-		resource_board_state
+		resource_board_state,
+		_resolve_pending_random_cards
 	)
+	if not bool(result.get("success", false)):
+		ordinary_shop_service.rng.state = previous_shop_rng
+	if bool(result.get("success", false)) and maze_controller != null:
+		if not maze_controller.settle_battle(battle_controller.current_result in [BattleController.Result.PLAYER_VICTORY, BattleController.Result.DRAW], String(_battle_snapshot.battle_instance_id), battle_controller.hero_runtime):
+			return {"success": false, "status": BattleSettlementService.STATUS_FAILED, "reason": "maze_settlement_failed"}
 	if result.get("status") == BattleSettlementService.STATUS_COMMITTED:
 		run_reward_state.pending_next_level_from_id = resource_board_state.level_id
 		prepared_spell_instance_ids.clear()
@@ -6246,6 +7013,7 @@ func _add_settled_emblem_rewards_to_library() -> void:
 			"emblem_id": entry.get("emblem_id", ""),
 			"temporary": false,
 			"source": entry.get("source", "battle_reward"),
+			"element_sticker": bool(entry.get("element_sticker", false)),
 		}
 		if emblem_library.can_add_sticker(sticker_state):
 			var accepted: bool = emblem_library.return_sticker(sticker_state)
@@ -6254,6 +7022,7 @@ func _add_settled_emblem_rewards_to_library() -> void:
 			run_reward_state.add_ground_item({
 				"ground_id": String(entry.get("emblem_instance_id", "")),
 				"item_kind": "emblem",
+				"element_sticker": bool(entry.get("element_sticker", false)),
 				"item_id": String(entry.get("emblem_id", "")),
 				"instance_id": String(entry.get("emblem_instance_id", "")),
 				"battle_instance_id": String(entry.get("battle_instance_id", "")),
@@ -6288,7 +7057,7 @@ func _refresh_ground_reward_panel() -> void:
 		equip.text = "装备"
 		equip.custom_minimum_size.x = 58
 		equip.tooltip_text = "装备到第一处可用友军纹章槽"
-		equip.disabled = not _find_ground_emblem_slot().get("success", false)
+		equip.disabled = not _find_ground_emblem_slot(item).get("success", false)
 		equip.pressed.connect(_equip_ground_item.bind(item_id))
 		row.add_child(equip)
 		var discard := Button.new()
@@ -6301,6 +7070,8 @@ func _refresh_ground_reward_panel() -> void:
 		continue_next_level_button.disabled = not items.is_empty()
 	if is_instance_valid(start_battle_button):
 		start_battle_button.disabled = not items.is_empty() or current_phase != GamePhase.PREPARE or not run_reward_state.pending_next_level_from_id.is_empty()
+	if maze_controller != null:
+		maze_controller.refresh()
 
 
 func _ground_item_can_enter_toolbox(item: Dictionary) -> bool:
@@ -6310,6 +7081,7 @@ func _ground_item_can_enter_toolbox(item: Dictionary) -> bool:
 		"emblem_id": item.get("item_id", ""),
 		"temporary": false,
 		"source": item.get("source", "ground_reward"),
+		"element_sticker": bool(item.get("element_sticker", false)),
 	})
 
 
@@ -6322,13 +7094,14 @@ func _keep_ground_item(item_id: StringName) -> void:
 			"emblem_id": item.get("item_id", ""),
 			"temporary": false,
 			"source": item.get("source", "ground_reward"),
+		"element_sticker": bool(item.get("element_sticker", false)),
 		}):
 			run_reward_state.remove_ground_item(item_id)
 			_refresh_ground_reward_panel()
 			return
 
 
-func _find_ground_emblem_slot() -> Dictionary:
+func _find_ground_emblem_slot(item: Dictionary = {}) -> Dictionary:
 	for row: BattlefieldRow in [front_row, back_row]:
 		for slot: BoardSlot in row.get_squads():
 			var squad := slot.get_squad_data()
@@ -6336,6 +7109,10 @@ func _find_ground_emblem_slot() -> Dictionary:
 			for card: CardData in squad.horizontal_cards:
 				var owned := squad.get_owned_card(card)
 				if owned == null: continue
+				if bool(item.get("element_sticker", false)):
+					for rune: Dictionary in squad.get_visible_rune_slots():
+						if rune.card == card and owned.rune_stickers[int(rune.rune_index)].is_empty(): return {"success": true, "owned": owned, "slot_index": int(rune.rune_index), "squad_slot": slot, "rune": true}
+					continue
 				for slot_index: int in squad.get_visible_emblem_slot_indices(card):
 					if slot_index >= 0 and slot_index < owned.emblem_slots.size() and owned.emblem_slots[slot_index].is_empty():
 						return {"success": true, "owned": owned, "slot_index": slot_index, "squad_slot": slot}
@@ -6349,11 +7126,18 @@ func _equip_ground_item(item_id: StringName) -> void:
 			item = candidate
 			break
 	if item.is_empty() or String(item.get("item_kind", "")) != "emblem": return
-	var target := _find_ground_emblem_slot()
+	var target := _find_ground_emblem_slot(item)
 	if not bool(target.get("success", false)): return
 	var owned := target.get("owned") as OwnedCard
 	var instance_id := StringName(String(item.get("instance_id", "")))
-	if not owned.set_emblem_slot(int(target.get("slot_index", -1)), {"emblem_id": StringName(String(item.get("item_id", ""))), "instance_id": instance_id, "temporary": false}): return
+	var state := {"emblem_id": StringName(String(item.get("item_id", ""))), "instance_id": instance_id, "temporary": false}
+	if bool(target.get("rune", false)):
+		var element := EmblemLibraryData.get_rune_element(state.emblem_id)
+		if element < 0: element = ordinary_shop_service.rng.randi_range(0, 4) if state.emblem_id == &"混沌贴纸" else 0
+		state["element"] = element
+		state["element_sticker"] = true
+		if not owned.set_rune_sticker(int(target.slot_index), state): return
+	elif not owned.set_emblem_slot(int(target.slot_index), state): return
 	(target.get("squad_slot") as BoardSlot).set_squad_data((target.get("squad_slot") as BoardSlot).get_squad_data())
 	run_reward_state.remove_ground_item(item_id)
 	_refresh_ground_reward_panel()
@@ -6366,6 +7150,9 @@ func _discard_ground_item(item_id: StringName) -> void:
 
 
 func _on_continue_next_level_pressed() -> void:
+	if maze_controller != null:
+		maze_controller.continue_after_battle()
+		return
 	var completed_level := run_reward_state.pending_next_level_from_id
 	var from_result := current_phase == GamePhase.RESULT and bool(_last_battle_settlement_result.get("success", false))
 	if (not from_result and (current_phase != GamePhase.PREPARE or completed_level.is_empty())) or not run_reward_state.pending_ground_items.is_empty():
@@ -6398,11 +7185,24 @@ func _on_developer_console_command_submitted(command: String) -> void:
 	if tokens.is_empty():
 		return
 	if tokens[0].to_lower() == "help":
-		_developer_console.append_output("命令：gold set <非负整数> / 设置金币数 <非负整数>（仅准备阶段）；sticker list/add <贴纸ID>；wound list/add <伤势ID或名称>；resource list/add <资源ID或名称>；resource enemy add <资源ID或名称>")
+		_developer_console.append_output("命令：rare shop（免费开包特效测试商店）；gold set <非负整数> / 设置金币数 <非负整数>（仅准备阶段）；sticker list/add <贴纸ID>；wound list/add <伤势ID或名称>；resource list/add <资源ID或名称>；resource enemy add <资源ID或名称>；card list [筛选词]；card add <卡牌ID或名称> [数量或x数量]（加入真实收藏并保存）")
+		return
+	if tokens.size() == 2 and tokens[0].to_lower() == "rare" and tokens[1].to_lower() == "shop":
+		if current_phase != GamePhase.PREPARE or get_tree().paused or is_instance_valid(_inspection_overlay) or not _click_carry_data.is_empty() or get_viewport().gui_is_dragging():
+			_developer_console.append_output("请在准备阶段结束检视和携带操作后打开 rare shop。")
+			return
+		var display_shell := get_tree().get_first_node_in_group(&"game_display_shell")
+		if is_instance_valid(display_shell) and display_shell.open_rare_shop():
+			_developer_console.set_open(false)
+		else:
+			_developer_console.append_output("请在正式游戏显示界面打开 rare shop，并先退出其他实验室。")
 		return
 	if (tokens[0].to_lower() == "gold" and tokens.size() >= 2 and tokens[1].to_lower() == "set") or tokens[0] == "设置金币数":
 		var amount_token := tokens[2] if tokens[0].to_lower() == "gold" and tokens.size() == 3 else (tokens[1] if tokens[0] == "设置金币数" and tokens.size() == 2 else "")
 		_handle_developer_gold_command(amount_token)
+		return
+	if tokens[0].to_lower() == "card":
+		_handle_developer_card_command(tokens)
 		return
 	if tokens[0].to_lower() == "resource":
 		_handle_developer_resource_command(tokens)
@@ -6469,6 +7269,62 @@ func _handle_developer_gold_command(amount_text: String) -> void:
 		_developer_console.append_output("保存失败（%s），余额已恢复为%s。" % [error_string(save_error), str(previous_gold) + "金币"])
 		return
 	_developer_console.append_output("余额已设置为%d金币并保存。" % requested_gold)
+
+
+func _handle_developer_card_command(tokens: PackedStringArray) -> void:
+	var registry := _build_card_definition_registry()
+	if tokens.size() >= 2 and tokens[1].to_lower() == "list":
+		var query := " ".join(tokens.slice(2)).to_lower()
+		var names: PackedStringArray = []
+		for card: CardData in registry.values():
+			if query.is_empty() or query in String(card.id).to_lower() or query in card.display_name or CardPackRegistry.belongs_to_pack(card, StringName(query)):
+				names.append("%s (%s)" % [card.display_name, card.id])
+		names.sort()
+		_developer_console.append_output("可用卡牌：" + "、".join(names) if not names.is_empty() else "没有匹配的卡牌：" + query)
+		return
+	if tokens.size() not in [3, 4] or tokens[1].to_lower() != "add":
+		_developer_console.append_output("格式：card add <卡牌ID或名称> [数量或x数量]；例：card add 晶壳虫 3；card list twisted_vein")
+		return
+	var amount_text := tokens[3].to_lower().trim_prefix("x") if tokens.size() == 4 else "1"
+	if not amount_text.is_valid_int() or int(amount_text) < 1 or int(amount_text) > 100:
+		_developer_console.append_output("数量须为1至100的整数；例：card add crystal_shell_beetle x3。")
+		return
+	var requested := tokens[2]
+	var definition: CardData = null
+	for card: CardData in registry.values():
+		if String(card.id).to_lower() == requested.to_lower() or card.display_name == requested:
+			definition = card
+			break
+	if definition == null:
+		_developer_console.append_output("找不到卡牌ID或名称：%s；输入 card list <关键词> 查看。" % requested)
+		return
+	if current_phase != GamePhase.PREPARE:
+		_developer_console.append_output("只能在准备阶段加入测试卡牌。")
+		return
+	var count := int(amount_text)
+	if definition.rarity == CardData.Rarity.IV and (count > 1 or owned_card_collection.find_first_by_definition(definition) != null):
+		_developer_console.append_output("IV级同名卡最多持有1张，未添加。")
+		return
+	var previous := owned_card_collection.capture_state()
+	var source_rng := RandomNumberGenerator.new()
+	if maze_controller != null:
+		source_rng = maze_controller.run.rng
+	else:
+		source_rng.randomize()
+	var previous_rng_state := source_rng.state
+	for index: int in count:
+		owned_card_collection.create_card(definition, source_rng)
+	_sync_legacy_collection_cards()
+	var save_error := save_run_to_path(run_save_path)
+	if save_error != OK:
+		owned_card_collection.restore_state(previous)
+		source_rng.state = previous_rng_state
+		_sync_legacy_collection_cards()
+		_developer_console.append_output("保存失败（%s），本次加卡已回退。" % error_string(save_error))
+	else:
+		_developer_console.append_output("已加入真实收藏并保存：%s (%s) ×%d。可用收藏类型／搜索筛选查找。" % [definition.display_name, definition.id, count])
+	_build_collection_cards()
+	_refresh_resource_preparation_trays()
 
 
 func _handle_developer_resource_command(tokens: PackedStringArray) -> void:
@@ -6610,23 +7466,80 @@ func _format_positive_result_amount(amount: float) -> String:
 
 
 func _restore_battle_result_layout() -> void:
-	# 阵亡动画会把槽从行中移除；结算页按战前快照重建，再按稳定排位映射战绩。
+	# 当前排位会被召唤挤动；原小队按战前排位恢复，生成单位在独立统计窗中显示。
 	_restore_battle_snapshot()
 	_battle_state_slots.clear()
 	for state: BattleSquadState in battle_controller.get_all_states():
-		var row := _row_for_battle_key(state.row_key)
+		var row := _row_for_battle_key(state.initial_row_key)
 		if row == null:
 			continue
 		var row_slots := row.get_squads()
-		if state.formation_index < 0 or state.formation_index >= row_slots.size():
+		if state.initial_formation_index < 0 or state.initial_formation_index >= row_slots.size():
 			continue
-		var slot := row_slots[state.formation_index] as BoardSlot
+		var slot := row_slots[state.initial_formation_index] as BoardSlot
 		_battle_state_slots[state] = slot
 		slot.show_battle_result_statistics(
 			state.get_battle_statistics(),
 			not state.alive,
 			state.get_effective_action_type()
 		)
+
+
+func _get_other_battle_states() -> Array[BattleSquadState]:
+	var states: Array[BattleSquadState] = []
+	if battle_controller != null:
+		for state: BattleSquadState in battle_controller.get_all_states():
+			if state.initial_formation_index < 0:
+				states.append(state)
+	return states
+
+
+func _format_other_battle_statistics() -> String:
+	var lines: PackedStringArray = ["战中生成单位的实际生效数据；同名单位分别记录。"]
+	for state: BattleSquadState in _get_other_battle_states():
+		var names: PackedStringArray = []
+		for card: CardData in state.squad_data.horizontal_cards:
+			names.append(card.display_name)
+		var statistics := state.get_battle_statistics()
+		lines.append("\n%s · %s · #%d · %s" % [
+			"我方" if state.side == BattleSquadState.Side.PLAYER else "敌方",
+			"／".join(names), state.runtime_id, "存活" if state.alive else "阵亡",
+		])
+		lines.append("造成伤害 %s　承受伤害 %s　治疗 %s　给予护甲 %s" % [
+			BattleLogEntry.format_number(statistics.damage_dealt),
+			BattleLogEntry.format_number(statistics.damage_taken),
+			BattleLogEntry.format_number(statistics.healing_done),
+			BattleLogEntry.format_number(statistics.armor_granted),
+		])
+		var damage_by_action: Dictionary = statistics.damage_dealt_by_action
+		var damage_parts: PackedStringArray = []
+		for action: int in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]:
+			if float(damage_by_action.get(action, 0.0)) > 0.0:
+				damage_parts.append("%s %s" % [CardData.get_action_type_name_for(action as CardData.ActionType), BattleLogEntry.format_number(damage_by_action[action])])
+		if not damage_parts.is_empty():
+			lines.append("伤害构成：" + "　".join(damage_parts))
+	return "\n".join(lines)
+
+
+func _show_other_battle_statistics() -> void:
+	if current_phase != GamePhase.RESULT or _get_other_battle_states().is_empty():
+		return
+	if not is_instance_valid(_other_battle_statistics_dialog):
+		_other_battle_statistics_dialog = AcceptDialog.new()
+		_other_battle_statistics_dialog.name = "OtherBattleStatisticsDialog"
+		_other_battle_statistics_dialog.title = "其他单位战斗数据"
+		_other_battle_statistics_dialog.process_mode = Node.PROCESS_MODE_ALWAYS
+		_other_battle_statistics_dialog.get_ok_button().text = "关闭"
+		add_child(_other_battle_statistics_dialog)
+		_other_battle_statistics_text = RichTextLabel.new()
+		_other_battle_statistics_text.custom_minimum_size = Vector2(640, 330) # 统计正文最小尺寸，为窗口底部关闭按钮留空间
+		_other_battle_statistics_text.add_theme_font_override("normal_font", BATTLE_LOG_FONT)
+		_other_battle_statistics_text.add_theme_font_size_override("normal_font_size", 14) # 其他单位统计字号
+		_other_battle_statistics_text.scroll_active = true
+		_other_battle_statistics_dialog.add_child(_other_battle_statistics_text)
+	_other_battle_statistics_text.text = _format_other_battle_statistics()
+	_other_battle_statistics_text.scroll_to_line(0)
+	_other_battle_statistics_dialog.popup_centered(OTHER_BATTLE_STATISTICS_DIALOG_SIZE)
 
 
 func _connect_board_rows() -> void:
@@ -6645,6 +7558,7 @@ func _connect_board_rows() -> void:
 
 
 func _on_battlefield_squads_changed() -> void:
+	_queue_run_diagnostic()
 	if _battlefield_clock_check_queued:
 		return
 	_battlefield_clock_check_queued = true
@@ -6653,6 +7567,8 @@ func _on_battlefield_squads_changed() -> void:
 
 func _reset_rune_flow_if_no_battlefield_effects() -> void:
 	_battlefield_clock_check_queued = false
+	if is_instance_valid(celestial_indicators):
+		celestial_indicators._sync_tray()
 	var profile_started_usec := Time.get_ticks_usec() if _equipment_drop_profile_active else 0
 	# 跨排移动会先移除后加入；延迟到事务结束再检查，避免中途误重置。
 	if not _battlefield_has_active_rune_effects():
@@ -6677,8 +7593,14 @@ func _battlefield_has_active_rune_effects() -> bool:
 # --- 收藏视图构建与选中状态 ---
 func _build_collection_cards(
 	entering_card: CardData = null,
-	entry_global_position: Variant = null
+	entry_global_position: Variant = null,
+	reuse_unchanged: bool = false
 ) -> void:
+	# 目标槽暂存的原卡面跨收藏翻页保留；当前页来源只显示不可交互的虚影，真实卡面留在槽内。
+	var held_collection: Dictionary = {}
+	for service: PanelContainer in _card_service_slots():
+		if is_instance_valid(service._card_view) and service._source.get("type") == &"collection":
+			held_collection[service._card_view.get_owned_card()] = service
 	var profile_started_usec := Time.get_ticks_usec() if _equipment_drop_profile_active else 0
 	_clear_page_turn_overlay()
 	current_collection_page = clampi(
@@ -6687,7 +7609,14 @@ func _build_collection_cards(
 		get_collection_spread_count() - 1
 	)
 	_update_collection_book_mode_visuals()
+	# 出售／撕卡只删除目标实例；其他卡面可保留。成长、存档恢复等仍完整刷新。
+	var reusable_slots: Dictionary = {}
 	for child: Node in collection_card_row.get_children():
+		if reuse_unchanged and child.has_meta("owned_card"):
+			var existing_owned := child.get_meta("owned_card") as OwnedCard
+			if existing_owned != null:
+				reusable_slots[existing_owned] = child
+				continue
 		collection_card_row.remove_child(child)
 		child.queue_free()
 
@@ -6697,55 +7626,59 @@ func _build_collection_cards(
 	for filtered_index: int in range(page_start, mini(page_start + COLLECTION_SLOTS_PER_PAGE, filtered_cards.size())):
 		page_cards.append(filtered_cards[filtered_index])
 	for page_index: int in COLLECTION_SLOTS_PER_PAGE:
-		var empty_slot := Control.new()
-		empty_slot.custom_minimum_size = Vector2(127, 158)
-		empty_slot.size = empty_slot.custom_minimum_size
-		empty_slot.position = _collection_slot_position(page_index)
-		empty_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		empty_slot.set_meta("collection_index", -1)
-		collection_card_row.add_child(empty_slot)
 		if page_index >= page_cards.size():
+			var empty_slot := Control.new()
+			empty_slot.custom_minimum_size = Vector2(127, 158)
+			empty_slot.size = empty_slot.custom_minimum_size
+			empty_slot.position = _collection_slot_position(page_index)
+			empty_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			empty_slot.set_meta("collection_index", -1)
+			collection_card_row.add_child(empty_slot)
+			collection_card_row.move_child(empty_slot, page_index)
 			continue
 		var collection_card: CardData = page_cards[page_index]
 		var owned_card := _get_owned_card_for_collection_index(
 			filtered_cards,
 			page_start + page_index
 		)
-		var slot := _create_collection_card_slot(
-			collection_card,
-			(
-				_is_owned_card_deployed(owned_card)
-				or _is_spell_prepared(owned_card)
-				if owned_card != null
-				else _is_card_deployed(collection_card)
-			),
-			true,
-			owned_card
+		var is_ghost := (
+			_is_owned_card_deployed(owned_card) or _is_spell_prepared(owned_card)
+			if owned_card != null else _is_card_deployed(collection_card)
 		)
-		var card_view := slot.get_child(0) as CardView
+		var slot := reusable_slots.get(owned_card) as Control
+		if slot != null and bool(slot.get_meta("is_deployed_ghost", false)) != is_ghost:
+			slot = null
+		if slot == null:
+			slot = _create_collection_card_slot(collection_card, is_ghost, true, owned_card, held_collection.get(owned_card))
+			collection_card_row.add_child(slot)
+		else:
+			reusable_slots.erase(owned_card)
+		var card_view := slot.get_child(0) as CardView if slot.get_child_count() > 0 else null
 		slot.position = _collection_slot_position(page_index)
 		slot.set_meta("collection_index", collection_cards.find(collection_card))
-		collection_card_row.remove_child(empty_slot)
-		empty_slot.queue_free()
-		collection_card_row.add_child(slot)
-		if collection_card == entering_card and entry_global_position is Vector2:
+		collection_card_row.move_child(slot, page_index)
+		if card_view != null and collection_card == entering_card and entry_global_position is Vector2:
 			_animate_collection_card_entry.call_deferred(
 				card_view,
 				entry_global_position as Vector2
 			)
+	for unused: Control in reusable_slots.values():
+		collection_card_row.remove_child(unused)
+		unused.queue_free()
 	if profile_started_usec > 0:
 		_record_equipment_drop_profile_duration(
 			&"collection_rebuild_total",
 			Time.get_ticks_usec() - profile_started_usec
 		)
 	_refresh_resource_preparation_trays()
+	if is_instance_valid(_shop_exchange_panel) and _shop_exchange_panel.visible: _refresh_shop_exchange()
 
 
 func _find_collection_slot_for_owned_card(owned_card: OwnedCard) -> Control:
 	if owned_card == null:
 		return null
-	for slot: Control in _get_collection_card_slots():
-		if slot.get_meta("owned_card", null) == owned_card:
+	for slot: Control in _get_collection_card_slots(true):
+		if slot.has_meta("owned_card") and slot.get_meta("owned_card") == owned_card:
 			return slot
 	return null
 
@@ -6792,7 +7725,8 @@ func _create_collection_card_slot(
 	card_data: CardData,
 	is_deployed_ghost: bool = false,
 	interactive: bool = true,
-	owned_card: OwnedCard = null
+	owned_card: OwnedCard = null,
+	card_service: PanelContainer = null
 ) -> Control:
 	var slot := Control.new()
 	slot.custom_minimum_size = (
@@ -6803,8 +7737,12 @@ func _create_collection_card_slot(
 	slot.set_meta("is_deployed_ghost", is_deployed_ghost)
 	if owned_card != null:
 		slot.set_meta("owned_card", owned_card)
+	if is_instance_valid(card_service):
+		card_service.rebind_collection_source(slot)
+		return slot
 
 	var card_view := CARD_VIEW_SCENE.instantiate() as CardView
+	card_view.show_new_card_marker = true
 	card_view.position = (
 		COLLECTION_CARD_SAFE_PADDING
 		+ Vector2(99, 136)
@@ -6974,6 +7912,11 @@ func open_paused_card_inspection_at(canvas_position: Vector2) -> bool:
 		or is_instance_valid(_inspection_overlay)
 	):
 		return false
+	for node: Node in get_tree().get_nodes_in_group("card_indicator_views"):
+		var indicator := node as Control
+		if indicator == null or not indicator.is_visible_in_tree(): continue
+		var local := indicator.get_global_transform_with_canvas().affine_inverse() * canvas_position
+		if indicator.inspect_at(local): return is_instance_valid(_inspection_overlay)
 	var target_view: CardView
 	for node: Node in get_tree().get_nodes_in_group("card_views"):
 		if not node is CardView:
@@ -7009,6 +7952,7 @@ func _build_inspection_overlay(title_text: String, help_text: String) -> void:
 	_inspection_overlay.z_index = 4000
 	_inspection_overlay.cancel_carry_if_active = _cancel_inspection_carry_from_overlay
 	_inspection_overlay.close_requested.connect(_close_card_inspection)
+	_inspection_overlay.pointer_position = get_viewport().get_mouse_position()
 	add_child(_inspection_overlay)
 
 	var dim := ColorRect.new()
@@ -7036,6 +7980,7 @@ func _build_inspection_overlay(title_text: String, help_text: String) -> void:
 		Vector2(24, 42),
 		Vector2(680, 22)
 	)
+	help.name = "InspectionHelp"
 	help.add_theme_font_size_override("font_size", 10)
 	help.add_theme_color_override("font_color", Color("d9e5df"))
 	help.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -7044,9 +7989,10 @@ func _build_inspection_overlay(title_text: String, help_text: String) -> void:
 
 
 
-func _open_card_inspection(card_data: CardData, owned_card: OwnedCard, source_view: CardView = null, read_only: bool = false, hidden_offer: Dictionary = {}) -> void:
+func _open_card_inspection(card_data: CardData, owned_card: OwnedCard, source_view: Control = null, read_only: bool = false, hidden_offer: Dictionary = {}, prepared_surface: InspectionCardSurface = null) -> void:
 	_finish_rune_scraper_mode()
 	_cancel_click_carry()
+	var source_card := source_view.card as CardView if source_view is InspectionCardSurface else source_view as CardView
 	_inspection_closing = false
 	_inspection_previous_tree_paused = get_tree().paused
 	if (
@@ -7065,10 +8011,11 @@ func _open_card_inspection(card_data: CardData, owned_card: OwnedCard, source_vi
 	_inspection_has_library_toolbox = (
 		not read_only
 		and card_data != null
-		and card_data.card_type == CardData.CardType.MINION
+		and (card_data.card_type == CardData.CardType.MINION or is_instance_valid(_card_pack_opening))
 		and is_instance_valid(emblem_library)
 		and _emblem_library_parent != null
 	)
+	var retain_library := is_instance_valid(_card_pack_opening) and _inspection_library_transform_saved
 	_inspection_read_only = read_only
 	if _inspection_has_library_toolbox:
 		_inspection_library_expanded = _last_minion_inspection_library_expanded
@@ -7077,19 +8024,22 @@ func _open_card_inspection(card_data: CardData, owned_card: OwnedCard, source_vi
 		("商店卡牌只读；" if read_only else ("准备阶段：拖动纹章到卡牌上的金色2×2点；" if current_phase == GamePhase.PREPARE else "战斗检视为只读；")) + "点击暗幕、右键或按 Esc 关闭"
 	)
 
-	_inspection_card_view = (SHOP_CARD_VIEW_SCENE if not hidden_offer.is_empty() else CARD_VIEW_SCENE).instantiate() as CardView
+	_inspection_card_view = prepared_surface.card if prepared_surface != null else (SHOP_CARD_VIEW_SCENE if not hidden_offer.is_empty() else CARD_VIEW_SCENE).instantiate() as CardView
 	_inspection_card_view.name = "InspectionCard"
 	_inspection_card_view.position = Vector2.ZERO
 	_inspection_card_view.pivot_offset = Vector2.ZERO
 	_inspection_card_view.scale = Vector2.ONE
 	_inspection_card_view.z_index = 25
-	_inspection_card_view.set_card_data(card_data)
-	_inspection_card_view.set_owned_card(owned_card)
+	if prepared_surface == null:
+		_inspection_card_view.set_card_data(card_data)
+		_inspection_card_view.set_owned_card(owned_card)
+	if is_instance_valid(source_card):
+		_inspection_card_view.set_effect_row(source_card.get_effect_row())
 	if not hidden_offer.is_empty():
 		_inspection_card_view.configure_hidden(card_data, hidden_offer)
 	var inspection_squad := _find_squad_for_owned_card(owned_card)
-	if inspection_squad != null:
-		_inspection_card_view.set_squad_attribute_preview_from_squad(inspection_squad)
+	if owned_card != null:
+		_inspection_card_view.set_squad_attribute_preview_from_squad(inspection_squad if inspection_squad != null else SquadData.from_owned_card(owned_card))
 	var inspection_battle_state := _find_battle_state_for_squad(inspection_squad)
 	if inspection_battle_state != null:
 		_inspection_card_view.set_battle_action_type(
@@ -7119,15 +8069,26 @@ func _open_card_inspection(card_data: CardData, owned_card: OwnedCard, source_vi
 	_inspection_card_view.set_emblem_drop_handler(
 		Callable(self, "_handle_inspection_emblem_drop")
 	)
-	_inspection_overlay.add_child(_inspection_card_view)
-	if not hidden_offer.is_empty() and source_view is ShopCardView:
-		_inspection_card_view.continue_carousel_from(source_view)
+	if prepared_surface == null:
+		_inspection_overlay.add_child(_inspection_card_view)
+	else:
+		_inspection_card_view.position = prepared_surface.content_padding
+	if not hidden_offer.is_empty() and source_card is ShopCardView:
+		_inspection_card_view.continue_carousel_from(source_card)
 	_refresh_inspection_markers()
-	_inspection_surface = preload("res://scripts/ui/inspection_card_surface.gd").new() as InspectionCardSurface
+	if prepared_surface == null:
+		_inspection_surface = preload("res://scripts/ui/inspection_card_surface.gd").new() as InspectionCardSurface
+		_inspection_overlay.add_child(_inspection_surface)
+		_inspection_surface.setup(_inspection_card_view, _handle_inspection_emblem_drop, _inspection_sticker_tooltip)
+	else:
+		_inspection_surface = prepared_surface
+		_inspection_surface.reparent(_inspection_overlay)
+		_inspection_surface.set_process(true)
+		_inspection_surface.drop_handler = _handle_inspection_emblem_drop
+		_inspection_surface.tooltip_handler = _inspection_sticker_tooltip
+		_inspection_surface.mouse_filter = Control.MOUSE_FILTER_STOP
 	_inspection_surface.name = "InspectionSurface"
-	_inspection_overlay.add_child(_inspection_surface)
-	_inspection_surface.setup(_inspection_card_view, _handle_inspection_emblem_drop, _inspection_sticker_tooltip)
-	if _inspection_has_library_toolbox:
+	if _inspection_has_library_toolbox and not retain_library:
 		_inspection_library_original_parent = emblem_library.get_parent() as Control
 		# Control 没有 Node2D 的 global_scale/global_rotation；保存画布变换后，
 		# 在新父节点下用 position/scale/rotation 分解回合法的 Control 属性。
@@ -7149,67 +8110,51 @@ func _open_card_inspection(card_data: CardData, owned_card: OwnedCard, source_vi
 	_inspection_surface.position = target_position
 	if is_instance_valid(source_view):
 		var source_transform: Transform2D = _inspection_overlay.get_global_transform_with_canvas().affine_inverse() * source_view.get_global_transform_with_canvas()
+		if source_view is InspectionCardSurface:
+			source_transform.origin += source_transform.basis_xform(source_view.content_padding)
 		_inspection_surface.scale = source_transform.get_scale()
-		_inspection_surface.position = source_transform.origin - source_transform.basis_xform(_inspection_surface.PADDING)
+		_inspection_surface.position = source_transform.origin - source_transform.basis_xform(_inspection_surface.content_padding)
 		_inspection_surface.rotation = source_transform.get_rotation()
 		_inspection_source_view = source_view
 		source_view.visible = false
 		_set_inspection_source_statistics_suppressed(true)
 	if _inspection_has_library_toolbox:
 		target_position = _inspection_card_position(_inspection_library_expanded, target_scale)
-	var effect_box: PanelContainer = null
-	if card_data != null and card_data.effect_text.length() > 36:
-		effect_box = PanelContainer.new()
-		effect_box.name = "InspectionEffectSideBox"
-		effect_box.size = INSPECTION_EFFECT_BOX_SIZE
-		effect_box.position = Vector2(
-			target_position.x + _inspection_surface.size.x * target_scale.x + 24.0,
-			INSPECTION_EFFECT_BOX_TOP
-		)
-		var effect_style := StyleBoxFlat.new()
-		effect_style.bg_color = Color(0.055, 0.07, 0.075, 0.96)
-		effect_style.border_color = Color("d1aa58")
-		effect_style.set_border_width_all(1)
-		effect_box.add_theme_stylebox_override("panel", effect_style)
-		var effect_label := Label.new()
-		effect_label.text = CardView.format_gold_symbols(card_data.effect_text)
-		effect_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		effect_label.add_theme_font_override("font", preload("res://assets/fonts/chill_7.ttf"))
-		effect_label.add_theme_font_size_override("font_size", 12)
-		effect_label.add_theme_color_override("font_color", Color.WHITE)
-		effect_label.add_theme_color_override("font_outline_color", Color(0.03, 0.025, 0.02, 0.95))
-		effect_label.add_theme_constant_override("outline_size", 2)
-		effect_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		effect_box.add_child(effect_label)
-		effect_box.z_index = 24
-		_inspection_overlay.add_child(effect_box)
-	_inspection_dim.modulate.a = 0.0
+	var effect_box := _update_inspection_effect_box(target_position, target_scale)
+	if not is_instance_valid(_card_pack_opening):
+		_inspection_dim.modulate.a = 0.0
 	_inspection_tween = _inspection_overlay.create_tween().set_parallel(true)
 	_inspection_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_inspection_tween.tween_property(_inspection_surface, "position", target_position, 0.25)
-	_inspection_tween.tween_property(_inspection_surface, "scale", target_scale, 0.25)
-	_inspection_tween.tween_property(_inspection_surface, "rotation", 0.0, 0.25)
-	_inspection_tween.tween_property(_inspection_dim, "modulate:a", 1.0, 0.25)
+	# 首次抽出时由开包控制器统一移动整叠，避免检视放大与抽出 Tween 争写卡面位置。
+	if prepared_surface == null or _card_pack_opening.current_index > 0:
+		_inspection_tween.tween_property(_inspection_surface, "position", target_position, 0.25)
+		_inspection_tween.tween_property(_inspection_surface, "scale", target_scale, 0.25)
+		_inspection_tween.tween_property(_inspection_surface, "rotation", 0.0, 0.25)
+	if not is_instance_valid(_card_pack_opening):
+		_inspection_tween.tween_property(_inspection_dim, "modulate:a", 1.0, 0.25)
 	if is_instance_valid(effect_box):
 		effect_box.modulate.a = 0.0
 		_inspection_tween.tween_property(effect_box, "modulate:a", 1.0, 0.25)
 
 	if _inspection_has_library_toolbox:
+		var library_canvas_transform: Transform2D = emblem_library.get_global_transform_with_canvas()
 		if emblem_library.get_parent() != null:
 			emblem_library.get_parent().remove_child(emblem_library)
 		_inspection_overlay.add_child(emblem_library)
 		emblem_library.z_index = 15
-		emblem_library.set_inspect_mode(true)
+		if not retain_library:
+			emblem_library.set_inspect_mode(true)
 		emblem_library.set_drag_enabled(false)
 		_set_control_transform_from_canvas(
 			emblem_library as Control,
 			_inspection_overlay as Control,
-			_inspection_library_original_canvas_transform
+			library_canvas_transform
 		)
 		var library_target_position := _inspection_library_position(_inspection_library_expanded)
-		_inspection_tween.tween_property(emblem_library, "position", library_target_position, 0.25)
-		_inspection_tween.tween_property(emblem_library, "scale", Vector2.ONE * INSPECTION_LIBRARY_SCALE, 0.25)
-		_inspection_tween.tween_property(emblem_library, "rotation", 0.0, 0.25)
+		if not retain_library:
+			_inspection_tween.tween_property(emblem_library, "position", library_target_position, 0.25)
+			_inspection_tween.tween_property(emblem_library, "scale", Vector2.ONE * INSPECTION_LIBRARY_SCALE, 0.25)
+			_inspection_tween.tween_property(emblem_library, "rotation", 0.0, 0.25)
 		_inspection_tween.tween_callback(_finish_inspection_library_open).set_delay(0.25)
 		_inspection_library_toggle = _make_button(
 			"InspectionLibraryToggle",
@@ -7255,6 +8200,41 @@ func _open_card_inspection(card_data: CardData, owned_card: OwnedCard, source_vi
 	_refresh_drag_availability()
 
 
+func _update_inspection_effect_box(target_position: Vector2, target_scale: Vector2) -> PanelContainer:
+	var previous: Node = _inspection_overlay.get_node_or_null("InspectionEffectSideBox")
+	if previous != null:
+		_inspection_overlay.remove_child(previous)
+		previous.queue_free()
+	var effect_box: PanelContainer = null
+	var inspection_effect_text := _inspection_card_view._get_instance_effect_text()
+	if _inspection_card_data != null and inspection_effect_text.length() > 36:
+		effect_box = PanelContainer.new()
+		effect_box.name = "InspectionEffectSideBox"
+		effect_box.size = INSPECTION_EFFECT_BOX_SIZE
+		effect_box.position = Vector2(
+			target_position.x + _inspection_surface.size.x * target_scale.x + 24.0,
+			INSPECTION_EFFECT_BOX_TOP
+		)
+		var effect_style := StyleBoxFlat.new()
+		effect_style.bg_color = Color(0.055, 0.07, 0.075, 0.96)
+		effect_style.border_color = Color("d1aa58")
+		effect_style.set_border_width_all(1)
+		effect_box.add_theme_stylebox_override("panel", effect_style)
+		var effect_label := Label.new()
+		effect_label.text = CardView.format_gold_symbols(inspection_effect_text)
+		effect_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		effect_label.add_theme_font_override("font", preload("res://assets/fonts/chill_7.ttf"))
+		effect_label.add_theme_font_size_override("font_size", 12)
+		effect_label.add_theme_color_override("font_color", Color.WHITE)
+		effect_label.add_theme_color_override("font_outline_color", Color(0.03, 0.025, 0.02, 0.95))
+		effect_label.add_theme_constant_override("outline_size", 2)
+		effect_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		effect_box.add_child(effect_label)
+		effect_box.z_index = 24
+		_inspection_overlay.add_child(effect_box)
+	return effect_box
+
+
 func _toggle_inspection_display_mode() -> void:
 	if not is_instance_valid(_inspection_card_view):
 		return
@@ -7268,7 +8248,13 @@ func _toggle_inspection_display_mode() -> void:
 func _finish_inspection_library_open() -> void:
 	if _inspection_closing or not is_instance_valid(emblem_library):
 		return
-	emblem_library.set_drag_enabled(current_phase == GamePhase.PREPARE)
+	emblem_library.set_drag_enabled(_inspection_tools_enabled())
+	if is_instance_valid(_card_pack_opening):
+		_card_pack_opening.update_inspection_help(_inspection_library_expanded)
+
+
+func _inspection_tools_enabled() -> bool:
+	return not is_instance_valid(_emblem_fusion_overlay) and current_phase == GamePhase.PREPARE and not _inspection_closing and not _inspection_read_only and _inspection_has_library_toolbox and _inspection_card_data != null and _inspection_card_data.card_type == CardData.CardType.MINION
 
 
 func _inspection_library_position(expanded: bool) -> Vector2:
@@ -7288,7 +8274,7 @@ func _inspection_card_position(expanded: bool, card_scale: Vector2 = Vector2.ZER
 		return centered
 	# 只按卡面真实可见框留位；合成表面的透明内边距可以压到工具箱上方。
 	var visible_card_left: float = 32.0 + emblem_library.size.x * INSPECTION_LIBRARY_SCALE + INSPECTION_LIBRARY_GAP
-	return Vector2(visible_card_left - _inspection_surface.PADDING.x * layout_scale.x, centered.y)
+	return Vector2(visible_card_left - _inspection_surface.content_padding.x * layout_scale.x, centered.y)
 
 
 func _toggle_inspection_library() -> void:
@@ -7331,14 +8317,21 @@ func _on_inspection_dim_gui_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-func _close_card_inspection(immediate: bool = false) -> void:
+func _close_card_inspection(immediate: bool = false, preserve_pack_sequence: bool = false) -> void:
+	if is_instance_valid(_emblem_fusion_overlay):
+		if not immediate:
+			_emblem_fusion_overlay.cancel()
+			return
+		_emblem_fusion_overlay.finish_immediately()
 	if not is_instance_valid(_inspection_overlay) or _inspection_closing or (_shop_pack_opening and not immediate):
 		return
 	_finish_rune_scraper_mode()
 	_inspection_closing = true
-	if _inspection_source_view is ShopCardView and _inspection_card_view is ShopCardView:
-		_inspection_card_view._carousel_timer.paused = true
-		_inspection_source_view.continue_carousel_from(_inspection_card_view)
+	if is_instance_valid(_inspection_source_view):
+		var source_card := _inspection_source_view.card as CardView if _inspection_source_view is InspectionCardSurface else _inspection_source_view as CardView
+		if source_card is ShopCardView and is_instance_valid(_inspection_card_view) and _inspection_card_view is ShopCardView:
+			_inspection_card_view._carousel_timer.paused = true
+			source_card.continue_carousel_from(_inspection_card_view)
 	if _inspection_has_library_toolbox:
 		_last_minion_inspection_library_expanded = _inspection_library_expanded
 	_finish_inspection_placement_animation()
@@ -7349,12 +8342,14 @@ func _close_card_inspection(immediate: bool = false) -> void:
 	if is_instance_valid(_inspection_surface):
 		_inspection_surface.clear_drop_preview()
 		_inspection_surface.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		if _inspection_overlay.has_node("InspectionPackName"):
+			_inspection_surface.set_process(false)
 	if is_instance_valid(_inspection_dim):
 		_inspection_dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	if _inspection_has_library_toolbox and is_instance_valid(emblem_library):
 		emblem_library.set_drag_enabled(false)
 	if immediate:
-		_finish_card_inspection_close()
+		_finish_card_inspection_close(preserve_pack_sequence)
 		return
 	if not is_instance_valid(_inspection_surface):
 		_finish_card_inspection_close()
@@ -7367,20 +8362,27 @@ func _close_card_inspection(immediate: bool = false) -> void:
 			_inspection_overlay.get_global_transform_with_canvas().affine_inverse()
 			* _inspection_source_view.get_global_transform_with_canvas()
 		)
+		if _inspection_source_view is InspectionCardSurface:
+			source_transform.origin += source_transform.basis_xform(_inspection_source_view.content_padding)
 		target_scale = source_transform.get_scale()
 		target_rotation = source_transform.get_rotation()
-		target_position = source_transform.origin - source_transform.basis_xform(_inspection_surface.PADDING)
+		target_position = source_transform.origin - source_transform.basis_xform(_inspection_surface.content_padding)
 	else:
 		var current_center := _inspection_surface.position + _inspection_surface.size * _inspection_surface.scale * 0.5
 		target_position = current_center - _inspection_surface.size * target_scale * 0.5
+	var close_seconds: float = PackEffectSettings.get_values().return_seconds if _inspection_overlay.has_node("InspectionPackName") else 0.2 # 包装回店可调，其他卡牌使用原检视时长
 	_inspection_tween = _inspection_overlay.create_tween().set_parallel(true)
 	_inspection_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	_inspection_tween.tween_property(_inspection_surface, "position", target_position, 0.2)
-	_inspection_tween.tween_property(_inspection_surface, "scale", target_scale, 0.2)
-	_inspection_tween.tween_property(_inspection_surface, "rotation", target_rotation, 0.2)
+	_inspection_tween.tween_property(_inspection_surface, "position", target_position, close_seconds)
+	_inspection_tween.tween_property(_inspection_surface, "scale", target_scale, close_seconds)
+	_inspection_tween.tween_property(_inspection_surface, "rotation", target_rotation, close_seconds)
 	var pack_name := _inspection_overlay.get_node_or_null("InspectionPackName") as Label
 	if pack_name != null:
-		_inspection_tween.tween_property(pack_name, "modulate:a", 0.0, 0.2)
+		_inspection_tween.tween_property(pack_name, "modulate:a", 0.0, close_seconds)
+		_inspection_tween.tween_method(func(value: Vector2):
+			_inspection_surface.force = value
+			_inspection_surface.effect.set_shader_parameter("pointer_force", value)
+		, _inspection_surface.force, Vector2.ZERO, close_seconds)
 	var original_local_transform := Transform2D.IDENTITY
 	if is_instance_valid(emblem_library) and emblem_library.get_parent() == _inspection_overlay and _inspection_library_transform_saved:
 		original_local_transform = (
@@ -7391,43 +8393,63 @@ func _close_card_inspection(immediate: bool = false) -> void:
 			emblem_library,
 			"position",
 			original_local_transform.origin,
-			0.2
+			close_seconds
 		)
 	if is_instance_valid(emblem_library) and emblem_library.get_parent() == _inspection_overlay:
 		_inspection_tween.tween_property(
 			emblem_library,
 			"scale",
 			original_local_transform.get_scale(),
-			0.2
+			close_seconds
 		)
 		_inspection_tween.tween_property(
 			emblem_library,
 			"rotation",
 			original_local_transform.get_rotation(),
-			0.2
+			close_seconds
 		)
 	if is_instance_valid(_inspection_dim):
-		_inspection_tween.tween_property(_inspection_dim, "modulate:a", 0.0, 0.2)
+		_inspection_tween.tween_property(_inspection_dim, "modulate:a", 0.0, close_seconds)
 	_inspection_tween.finished.connect(_finish_card_inspection_close)
 
 
-func _finish_card_inspection_close() -> void:
+func _finish_card_inspection_close(preserve_pack_sequence: bool = false) -> void:
 	if not is_instance_valid(_inspection_overlay):
 		return
+	if is_instance_valid(_sticker_pack_opening):
+		_sticker_pack_opening.cancel()
+		_sticker_pack_opening.queue_free()
+		_sticker_pack_opening = null
+		card_pack_presentation_changed.emit(false)
+	if not preserve_pack_sequence and is_instance_valid(_card_pack_opening):
+		_card_pack_opening.cancel()
+		_card_pack_opening.queue_free()
+		_card_pack_opening = null
+		card_pack_presentation_changed.emit(false)
 	if is_instance_valid(_inspection_source_view):
 		_set_inspection_source_statistics_suppressed(false)
 		_inspection_source_view.visible = true
+		if _inspection_source_view.has_meta("inspection_hover_owner"):
+			var hover_owner := _inspection_source_view.get_meta("inspection_hover_owner") as Control
+			if is_instance_valid(hover_owner):
+				# 等检视遮罩退场后，按真实鼠标位置保留或收起来源弹窗。
+				hover_owner.call_deferred("finish_hover_inspection", _inspection_source_view, _inspection_overlay.pointer_position)
 	_inspection_source_view = null
 	_shop_pack_opening = false
 	if is_instance_valid(_inspection_card_view):
 		_inspection_card_view.set_emblem_drop_handler(Callable())
 	if emblem_library != null and emblem_library.get_parent() == _inspection_overlay:
+		var library_canvas_transform: Transform2D = emblem_library.get_global_transform_with_canvas()
 		_inspection_overlay.remove_child(emblem_library)
 		var restore_parent := _inspection_library_original_parent if _inspection_library_original_parent != null else _emblem_library_parent
+		if preserve_pack_sequence:
+			restore_parent = self
 		if restore_parent != null:
 			restore_parent.add_child(emblem_library)
-		emblem_library.set_inspect_mode(false)
-		if _inspection_library_transform_saved:
+		if preserve_pack_sequence:
+			_set_control_transform_from_canvas(emblem_library, self, library_canvas_transform)
+		elif _inspection_library_transform_saved:
+			emblem_library.set_inspect_mode(false)
 			emblem_library.position = _inspection_library_original_layout.get("position", TOOLBOX_POSITION)
 			emblem_library.size = _inspection_library_original_layout.get("size", Vector2(124, 280))
 			emblem_library.scale = _inspection_library_original_layout.get("scale", Vector2.ONE)
@@ -7440,6 +8462,7 @@ func _finish_card_inspection_close() -> void:
 			emblem_library.set_scroll_position(_inspection_library_original_scroll)
 			emblem_library.z_index = _inspection_library_original_z_index
 		else:
+			emblem_library.set_inspect_mode(false)
 			emblem_library.position = TOOLBOX_POSITION
 			emblem_library.z_index = -48
 		emblem_library.set_drag_enabled(false)
@@ -7465,15 +8488,105 @@ func _finish_card_inspection_close() -> void:
 	_inspection_library_expanded = false
 	_inspection_has_library_toolbox = false
 	_inspection_read_only = false
-	_inspection_library_original_parent = null
-	_inspection_library_original_layout.clear()
-	_inspection_library_transform_saved = false
+	if not preserve_pack_sequence:
+		_inspection_library_original_parent = null
+		_inspection_library_original_layout.clear()
+		_inspection_library_transform_saved = false
 	_inspection_tween = null
 	_inspection_closing = false
 	_refresh_drag_availability()
 
 
+func _update_inspection_fusion_feedback(data: Dictionary) -> void:
+	if not is_instance_valid(_inspection_surface):
+		return
+	var rects: Array[Rect2] = []
+	var raw: Dictionary = data.get("definition", {}).get("returned_state", {})
+	var source: Dictionary = emblem_library.get_inventory_item(StringName(String(raw.get("instance_id", ""))))
+	if _inspection_tools_enabled() and data.get("kind") == &"emblem_library" and EmblemStickerInventory.is_fusion_material(source):
+		for slot_index: int in _inspection_owned_card.emblem_slots.size():
+			var target := _inspection_owned_card.emblem_slots[slot_index]
+			if EmblemStickerInventory.is_fusion_material(target) and not EmblemFusionRecipes.resolve(StringName(String(source.emblem_id)), StringName(String(target.emblem_id))).is_empty():
+				rects.append(_get_emblem_slot_rect(slot_index))
+	_inspection_surface.set_fusion_targets(rects)
+
+
+func _begin_emblem_fusion(source_id: StringName, slot_index: int, drag_data: Dictionary, pointer: Vector2) -> bool:
+	if not _inspection_tools_enabled() or get_tree().paused or is_instance_valid(_emblem_fusion_overlay):
+		return false
+	var source: Dictionary = emblem_library.get_inventory_item(source_id)
+	var owned := _inspection_owned_card
+	if slot_index < 0 or slot_index >= owned.emblem_slots.size():
+		return false
+	var target := owned.emblem_slots[slot_index]
+	var target_id := StringName(String(target.get("instance_id", "")))
+	if target_id.is_empty() or source_id == target_id or not EmblemStickerInventory.is_fusion_material(source) or not EmblemStickerInventory.is_fusion_material(target):
+		return false
+	var recipe := EmblemFusionRecipes.resolve(StringName(String(source.emblem_id)), StringName(String(target.emblem_id)))
+	if recipe.is_empty():
+		return false
+	var target_rect: Rect2 = _inspection_surface.card_canvas_rect(_get_emblem_slot_rect(slot_index))
+	var source_rect: Rect2 = emblem_library.get_item_canvas_rect(source_id)
+	var hand_rect := Rect2(pointer + (drag_data.get("preview_offset", Vector2.ZERO) as Vector2), (drag_data.get("preview_size", Vector2(14, 14)) as Vector2) * (drag_data.get("preview_scale", Vector2.ONE) as Vector2))
+	var known: bool = _emblem_recipe_discovery.is_known(String(recipe.id))
+	_emblem_recipe_discovery.encounter(String(recipe.id))
+	_emblem_fusion_overlay = EmblemFusionOverlayScript.new()
+	_emblem_fusion_overlay.name = "EmblemFusionOverlay"
+	add_child(_emblem_fusion_overlay)
+	var hidden_material_ids: Array[StringName] = [source_id]
+	emblem_library.set_fusion_busy(true, hidden_material_ids)
+	emblem_library.clear_sticker_move_preview()
+	_inspection_card_view.set_fusion_hidden_emblem_slot(slot_index)
+	_inspection_surface.clear_drop_preview()
+	_inspection_surface.set_fusion_targets([])
+	_inspection_surface.tilt_locked = true
+	_inspection_surface.set_process(false) # 演出期间冻结当前倾斜，原纹章锚点不会移走
+	_emblem_fusion_overlay.finished.connect(_finish_emblem_fusion)
+	_emblem_fusion_overlay.landed.connect(_on_emblem_fusion_landed)
+	_emblem_fusion_overlay.begin(StringName(String(target.emblem_id)), StringName(String(source.emblem_id)), recipe.result, known, target_rect, source_rect, hand_rect, _commit_emblem_fusion.bind(source_id, owned, slot_index, target_id, recipe), _inspection_surface, emblem_library)
+	return true
+
+
+func _commit_emblem_fusion(source_id: StringName, owned: OwnedCard, slot_index: int, target_id: StringName, recipe: Dictionary) -> bool:
+	if current_phase != GamePhase.PREPARE or not is_instance_valid(_emblem_fusion_overlay) or owned != _inspection_owned_card or slot_index < 0 or slot_index >= owned.emblem_slots.size():
+		return false
+	var source: Dictionary = emblem_library.get_inventory_item(source_id)
+	var target := owned.emblem_slots[slot_index]
+	var current := EmblemFusionRecipes.resolve(StringName(String(source.get("emblem_id", ""))), StringName(String(target.get("emblem_id", ""))))
+	if current.get("id", "") != recipe.id or StringName(String(target.get("instance_id", ""))) != target_id:
+		return false
+	var result: Dictionary = emblem_library.commit_fusion_onto_card(source_id, owned, slot_index, target_id)
+	if result.is_empty():
+		return false
+	_refresh_owned_card_status_visuals(owned)
+	_refresh_inspection_markers()
+	var discovery_saved: bool = _emblem_recipe_discovery.discover(String(recipe.id))
+	play_area_label.text = "已合成%s%s" % [String(result.emblem_id), "" if discovery_saved else "（配方发现写入失败，本局仍可查看）"]
+	_record_run_diagnostic("emblem_fusion", {"recipe": recipe.id, "source": String(source_id), "target": String(target_id), "result": String(result.emblem_id)})
+	return true
+
+
+func _on_emblem_fusion_landed() -> void:
+	if is_instance_valid(_inspection_card_view):
+		_inspection_card_view.set_fusion_hidden_emblem_slot(-1)
+
+
+func _finish_emblem_fusion() -> void:
+	_emblem_fusion_overlay = null
+	if is_instance_valid(emblem_library):
+		emblem_library.set_fusion_busy(false)
+	if is_instance_valid(_inspection_card_view):
+		_inspection_card_view.set_fusion_hidden_emblem_slot(-1)
+	if is_instance_valid(_inspection_surface):
+		_inspection_surface.tilt_locked = false
+		_inspection_surface.set_process(true)
+	_refresh_drag_availability()
+
+
 func _cancel_inspection_carry_from_overlay() -> bool:
+	if is_instance_valid(_emblem_fusion_overlay):
+		_emblem_fusion_overlay.cancel()
+		return true
 	if _rune_scraper_mode:
 		_finish_rune_scraper_mode()
 		return true
@@ -7517,6 +8630,7 @@ func _resolve_inspection_drop_target(
 		_inspection_read_only
 		or
 		_inspection_placement_in_progress
+		or is_instance_valid(_emblem_fusion_overlay)
 		or current_phase != GamePhase.PREPARE
 		or card_view != _inspection_card_view
 		or _inspection_owned_card == null
@@ -7565,6 +8679,13 @@ func _resolve_inspection_drop_target(
 		):
 			return {}
 		return {"kind": "rune", "rune_index": rune_index, "id": emblem_id, "definition": definition, "inventory_state": inventory_state}
+	for slot_index: int in _inspection_owned_card.emblem_slots.size():
+		var attached := _inspection_owned_card.emblem_slots[slot_index]
+		if not EmblemStickerInventory.is_fusion_material(attached) or not _get_emblem_slot_rect(slot_index).has_point(at_position):
+			continue
+		var recipe := EmblemFusionRecipes.resolve(emblem_id, StringName(String(attached.emblem_id)))
+		if not recipe.is_empty():
+			return {"kind": "fusion", "slot_index": slot_index, "id": emblem_id, "definition": definition, "inventory_state": inventory_state}
 	var emblem_slot := _find_empty_emblem_slot_at(at_position)
 	return {"kind": "emblem", "slot_index": emblem_slot, "id": emblem_id, "definition": definition, "inventory_state": inventory_state} if emblem_slot >= 0 else {}
 
@@ -7582,6 +8703,8 @@ func _drop_emblem_on_inspection_card(
 	if target.is_empty() or not data is Dictionary:
 		return false
 	var drag_data := data as Dictionary
+	if target.kind == "fusion":
+		return _begin_emblem_fusion(StringName(String(target.inventory_state.instance_id)), int(target.slot_index), drag_data, _inspection_surface.card_canvas_point(at_position))
 	var is_wound: bool = target.kind == "wound"
 	var emblem_id := target.id as StringName
 	var definition := target.definition as Dictionary
@@ -7636,6 +8759,8 @@ func _animate_inspection_item_drop(
 	var target := _resolve_inspection_drop_target(card_view, at_position, drag_data)
 	if target.is_empty():
 		return false
+	if target.kind == "fusion":
+		return _drop_emblem_on_inspection_card(card_view, at_position, drag_data, false, target)
 	var landing := _get_inspection_drop_preview(card_view, at_position, drag_data, target)
 	var texture := landing.get("texture") as Texture2D
 	if texture == null or not is_instance_valid(_inspection_carry_layer):
@@ -7741,6 +8866,7 @@ func _inspection_rune_at(point: Vector2) -> int:
 
 
 func _begin_rune_scrape_stroke(pointer: Vector2) -> void:
+	_rune_scrape_locked_index = -1
 	_rune_scrape_last_pointer = pointer
 	_rune_scrape_sticker_consumed_this_stroke = false
 	# 拾起刮刀时不连线；必须先在检视卡面内收到一次移动事件才开始路径。
@@ -7748,6 +8874,7 @@ func _begin_rune_scrape_stroke(pointer: Vector2) -> void:
 
 
 func _end_rune_scrape_stroke() -> void:
+	_rune_scrape_locked_index = -1
 	_rune_scrape_last_pointer = Vector2.INF
 	_rune_scrape_last_inside_surface = false
 
@@ -7805,7 +8932,7 @@ func _apply_rune_scrape_sample(
 	var blade_bounds := Rect2(bounds_min, bounds_max - bounds_min)
 	var card_view := _inspection_card_view
 	var owned := _inspection_owned_card
-	var removable := _find_removable_sticker(blade_bounds.get_center(), blade_bounds)
+	var removable := _find_removable_sticker(blade_bounds.get_center(), blade_bounds) if _rune_scrape_locked_index < 0 else {}
 	if not removable.is_empty() and scraper_count > 0:
 		var removed := false
 		match String(removable.get("kind", "")):
@@ -7821,6 +8948,8 @@ func _apply_rune_scrape_sample(
 			_rune_scrape_sticker_consumed_this_stroke = true
 		return
 	for rune_index: int in owned.card_data.runes.size():
+		if _rune_scrape_locked_index >= 0 and rune_index != _rune_scrape_locked_index:
+			continue
 		if (
 			rune_index >= owned.rune_revealed.size()
 			or owned.rune_revealed[rune_index]
@@ -7867,6 +8996,7 @@ func _apply_rune_scrape_sample(
 				scraper_count += 1
 				emblem_library.set_scraper_count(scraper_count)
 			continue
+		_rune_scrape_locked_index = rune_index
 		if RuneRevealCoverStyleScript.is_complete(owned.get_rune_scraped_pixel_count(rune_index)):
 			owned.rune_revealed[rune_index] = true
 			owned.rune_scrape_masks[rune_index] = ""
@@ -8069,6 +9199,8 @@ func _get_inspection_drop_preview(
 		target = _resolve_inspection_drop_target(card_view, point, data)
 	if target.is_empty() or not data is Dictionary:
 		return {}
+	if target.kind == "fusion":
+		return {}
 	var emblem_id := target.id as StringName
 	if target.kind == "wound":
 		var wound_rect := _get_status_slot_rect(target.slot_index, CardSlotLayout.Kind.WOUND)
@@ -8134,25 +9266,25 @@ func _refresh_inspection_markers() -> void:
 	for row: BattlefieldRow in [front_row, back_row, enemy_front_row, enemy_back_row]:
 		for slot: BoardSlot in row.get_squads():
 			var squad := slot.get_squad_data()
-			if squad != null and squad.get_owned_card(_inspection_card_data) == _inspection_owned_card:
+			if squad != null and squad.get_card_data_for_owned_instance(_inspection_owned_card.instance_id) != null:
 				inspection_squad = squad
 	var pattern := inspection_squad.get_rune_pattern_result()
 	var visible_slots := inspection_squad.get_visible_rune_slots()
 	var highlighted: Array[int] = []
 	for index: int in pattern.participating_indices:
-		if visible_slots[index].card == _inspection_card_data:
+		if inspection_squad.get_owned_card(visible_slots[index].card) == _inspection_owned_card:
 			highlighted.append(int(visible_slots[index].rune_index))
 	_inspection_card_view.set_rune_pattern_highlights(highlighted)
 
 
 func _refresh_owned_card_status_visuals(owned_card: OwnedCard) -> void:
+	_queue_run_diagnostic()
 	if owned_card == null:
 		return
 	var attached_squad := _find_squad_for_owned_card(owned_card)
 	if is_instance_valid(_inspection_card_view) and _inspection_owned_card == owned_card:
 		_inspection_card_view.set_owned_card(owned_card)
-		if attached_squad != null:
-			_inspection_card_view.set_squad_attribute_preview_from_squad(attached_squad)
+		_inspection_card_view.set_squad_attribute_preview_from_squad(attached_squad if attached_squad != null else SquadData.from_owned_card(owned_card), true)
 	for slot: Control in _get_collection_card_slots():
 		if slot.get_meta("owned_card", null) != owned_card:
 			continue
@@ -8208,7 +9340,9 @@ func _on_click_carry_requested(
 	drag_data: Dictionary,
 	pointer_global_position: Vector2
 ) -> void:
-	if drag_data.get("kind") == &"celestial_indicator":
+	if is_instance_valid(_emblem_fusion_overlay):
+		return
+	if drag_data.get("kind") in [&"celestial_indicator", &"sentry_indicator"]:
 		celestial_indicators.begin_click_carry(drag_data, pointer_global_position)
 		return
 	if (
@@ -8280,7 +9414,10 @@ func _create_click_carry_preview(
 func _ghost_click_carry_source() -> void:
 	assert(_is_card_drag_data(_click_carry_data), "只有卡牌来源能进入卡牌虚化与来源恢复")
 	var source_type := _click_carry_data.get("source_type") as StringName
-	if source_type == &"collection":
+	if source_type == &"card_service":
+		var service := _click_carry_data.get("source_slot") as Control
+		service._card_view.modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA
+	elif source_type == &"collection":
 		var source_slot := _click_carry_data.get("source_slot") as Control
 		if (
 			is_instance_valid(source_slot)
@@ -8322,6 +9459,7 @@ func _update_click_carry_impl(pointer_global_position: Vector2) -> void:
 		return
 
 	if _is_inspection_item_drag(_click_carry_data):
+		_update_inspection_fusion_feedback(_click_carry_data)
 		if is_instance_valid(_click_carry_preview):
 			_position_inspection_item_preview(
 				_click_carry_preview,
@@ -8446,6 +9584,26 @@ func _commit_click_carry(pointer_global_position: Vector2) -> void:
 	)
 	var committed := false
 	var target_row := target.get("row") as BattlefieldRow
+	if _click_carry_data.get("source_type") == &"card_service":
+		if target.get("accepted", false): (_click_carry_data.source_slot as Control).return_card()
+		_finish_click_carry(bool(target.get("accepted", false)))
+		get_viewport().set_input_as_handled()
+		return
+	if bool(target.get("enhancement", false)):
+		maze_controller.select_enhancement_card(_click_carry_data)
+		_finish_click_carry(true)
+		get_viewport().set_input_as_handled()
+		return
+	if target.has("exchange_slot"):
+		if target.get("accepted", false): _select_exchange_card(_click_carry_data, int(target.exchange_slot))
+		_finish_click_carry(bool(target.get("accepted", false)))
+		get_viewport().set_input_as_handled()
+		return
+	if bool(target.get("shop_service", false)):
+		_select_shop_service_card(_click_carry_data)
+		_finish_click_carry(true)
+		get_viewport().set_input_as_handled()
+		return
 	var resource_tray := target.get("resource_tray") as ResourcePreparationTray
 	if resource_tray != null and bool(target.get("accepted", false)):
 		committed = _commit_resource_preparation_drop(_click_carry_data, target.get("resource_resolution", {}) as Dictionary)
@@ -8495,7 +9653,7 @@ func _finish_click_carry(committed: bool) -> void:
 		not committed
 		and drag_data.get("kind") == &"equipment_indicator"
 	)
-	if drag_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
+	if drag_data.get("kind") in [&"equipment_card", &"equipment_indicator"] and not should_return_failed_indicator:
 		_set_equipment_drag_visual_mode(drag_data, false)
 	var return_global_position: Variant = null
 	if (
@@ -8504,10 +9662,11 @@ func _finish_click_carry(committed: bool) -> void:
 	):
 		var drag_visual := _click_carry_preview as CardDragPreview
 		if drag_visual != null:
-			return_global_position = drag_visual.get_card_global_position()
+			return_global_position = drag_visual.get_equipment_indicator_visual_global_center() if should_return_failed_indicator else drag_visual.get_card_global_position()
 	_clear_click_drop_feedback()
 	if is_instance_valid(emblem_library):
 		emblem_library.clear_sticker_move_preview()
+		_update_inspection_fusion_feedback({})
 	if is_instance_valid(_inspection_surface):
 		_inspection_surface.clear_drop_preview()
 	for row: BattlefieldRow in [front_row, back_row]:
@@ -8524,7 +9683,12 @@ func _finish_click_carry(committed: bool) -> void:
 		push_error("点击携带结束时收到不符合卡牌拖拽契约的数据")
 		return
 	var source_type := drag_data.get("source_type") as StringName
-	if source_type == &"collection":
+	if source_type == &"card_service":
+		var service := drag_data.get("source_slot") as Control
+		if is_instance_valid(service) and is_instance_valid(service._card_view):
+			service._card_view.modulate.a = 1.0
+			if not committed and return_global_position is Vector2: _animate_collection_card_entry.call_deferred(service._card_view, return_global_position)
+	elif source_type == &"collection":
 		var source_slot := drag_data.get("source_slot") as Control
 		if (
 			is_instance_valid(source_slot)
@@ -8578,6 +9742,7 @@ func _clear_click_drop_feedback(clear_stack_feedback: bool = true) -> void:
 func _find_board_row_at(
 	pointer_global_position: Vector2
 ) -> BattlefieldRow:
+	if _is_card_service_active(): return null
 	for row: BattlefieldRow in [front_row, back_row]:
 		var local_position := _to_row_drop_position(
 			row,
@@ -8633,6 +9798,9 @@ func _on_collection_card_dropped(
 	drag_data: Dictionary,
 	card_global_position: Vector2
 ) -> void:
+	if drag_data.get("source_type") == &"card_service":
+		(drag_data.source_slot as Control).return_card()
+		return
 	if drag_data.get("source_type") == &"resource_preparation":
 		var owned_resource := drag_data.get("owned_card") as OwnedCard
 		if owned_resource != null and not resource_board_state.is_level_resource("player", String(owned_resource.instance_id)):
@@ -8922,9 +10090,16 @@ func _return_failed_equipment_indicator_drag(
 	drag_data: Dictionary,
 	entry_global_position: Vector2
 ) -> bool:
-	# 指示物一旦离开合法卡面就已经显示为完整装备牌；松在任何无效区域，
-	# 都按“卸下”处理，而不是把它弹回原随从。
-	return _unequip_indicator_to_collection(drag_data, entry_global_position)
+	var source_slot := drag_data.get("source_slot") as BoardSlot
+	var owned := drag_data.get("owned_card") as OwnedCard
+	if not is_instance_valid(source_slot) or source_slot.get_squad_data().get_equipped_item() != owned:
+		return false
+	var view := source_slot.get_equipment_indicator()
+	if not is_instance_valid(view):
+		return false
+	view.visible = true
+	view.play_return_feedback(entry_global_position)
+	return true
 
 
 func _unequip_indicator_to_collection(
@@ -8961,7 +10136,7 @@ func _unequip_indicator_to_collection(
 	return true
 
 
-func _get_collection_card_slots() -> Array[Control]:
+func _get_collection_card_slots(include_empty: bool = false) -> Array[Control]:
 	var slots: Array[Control] = []
 	var children: Array = (
 		_page_turn_overlay.get_meta("target_slots", [])
@@ -8972,7 +10147,7 @@ func _get_collection_card_slots() -> Array[Control]:
 		var slot := child as Control
 		if (
 			slot != null
-			and slot.get_child_count() > 0
+			and (include_empty or slot.get_child_count() > 0)
 			and not slot.is_queued_for_deletion()
 		):
 			slots.append(slot)
@@ -9007,8 +10182,8 @@ func _transfer_card(
 			# 旧测试/旧调用点没有实例字段时，从权威收藏补齐；真实CardView会直接携带实例。
 			owned_card = owned_card_collection.find_first_by_definition(card_data)
 		if (
-			not collection_cards.has(card_data)
-			or owned_card == null
+			owned_card == null
+			or not collection_cards.has(owned_card.card_data)
 			or owned_card_collection.get_by_instance_id(owned_card.instance_id) != owned_card
 			or _is_owned_card_deployed(owned_card)
 		):
@@ -9037,7 +10212,7 @@ func _transfer_card(
 		var returned_equipment_entries: Array[Dictionary] = []
 		var moving_whole_single := source_squad.get_card_count() == 1
 		if target_type == &"collection":
-			var returns_new_owned_card := not collection_cards.has(card_data)
+			var returns_new_owned_card := source_squad.get_owned_card(card_data) == null and not collection_cards.has(card_data)
 			if returns_new_owned_card and collection_cards.size() >= COLLECTION_MAX_CARDS:
 				return false
 		elif (
@@ -9055,8 +10230,8 @@ func _transfer_card(
 			if not returned_entry.is_empty():
 				returned_equipment_entries.append(returned_entry)
 		if target_type == &"collection":
-			var returned_card := card_data
 			var returned_owned_card := source_squad.get_owned_card(card_data)
+			var returned_card := returned_owned_card.card_data if returned_owned_card != null else card_data
 			var returns_new_owned_card := not collection_cards.has(returned_card)
 			if not source_row.remove_card_from_squad(source_slot, card_data):
 				return false
@@ -9141,6 +10316,7 @@ func _transfer_drop_intent(
 	if current_phase != GamePhase.PREPARE or target_row == null:
 		return false
 	var intent := drag_data.get("drop_intent") as Dictionary
+	_record_run_diagnostic("card_drop_requested", {"instance_id": String((drag_data.get("owned_card") as OwnedCard).instance_id) if drag_data.get("owned_card") is OwnedCard else "", "source": String(drag_data.get("source_type", "")), "operation": String(intent.get("operation", "")) if intent != null else "", "row": target_row.row_title}, true)
 	if intent == null or intent.is_empty():
 		return false
 	var kind := drag_data.get("kind") as StringName
@@ -9196,8 +10372,8 @@ func _transfer_drop_intent(
 			# 兼容旧拖拽字典，同时保证进入小队后仍绑定到唯一OwnedCard。
 			owned_card = owned_card_collection.find_first_by_definition(card_data)
 		if (
-			not collection_cards.has(card_data)
-			or owned_card == null
+			owned_card == null
+			or not collection_cards.has(owned_card.card_data)
 			or owned_card_collection.get_by_instance_id(owned_card.instance_id) != owned_card
 			or _is_owned_card_deployed(owned_card)
 		):
@@ -9422,7 +10598,7 @@ func _transfer_squad_to_collection(
 		return false
 	var missing_cards: Array[CardData] = []
 	for card_data: CardData in source_squad.horizontal_cards:
-		if not collection_cards.has(card_data):
+		if source_squad.get_owned_card(card_data) == null and not collection_cards.has(card_data):
 			missing_cards.append(card_data)
 	if collection_cards.size() + missing_cards.size() > COLLECTION_MAX_CARDS:
 		return false
@@ -9453,7 +10629,7 @@ func _is_card_drag_data(data: Variant) -> bool:
 		return false
 
 	var drag_data := data as Dictionary
-	if drag_data.get("source_type") not in [&"collection", &"board", &"spell_preparation", &"resource_preparation"]:
+	if drag_data.get("source_type") not in [&"collection", &"board", &"spell_preparation", &"resource_preparation", &"card_service"]:
 		return false
 	if drag_data.get("kind") == &"card":
 		return drag_data.get("card_data") is CardData
@@ -9474,18 +10650,26 @@ func _is_inspection_item_drag(data: Variant) -> bool:
 	]
 
 
+func _is_card_service_active() -> bool:
+	return (
+		(is_instance_valid(_shop_exchange_panel) and _shop_exchange_panel.is_visible_in_tree())
+		or (is_instance_valid(_shop_card_service_panel) and _shop_card_service_panel.is_visible_in_tree())
+		or (maze_controller != null and is_instance_valid(maze_controller._enhancement_slot) and maze_controller._enhancement_slot.is_visible_in_tree())
+	)
+
+
 func _refresh_drag_availability() -> void:
 	var drag_enabled := current_phase == GamePhase.PREPARE
+	var deployment_enabled := drag_enabled and not _is_card_service_active()
 	if is_instance_valid(spell_preparation_tray):
-		spell_preparation_tray.set_drop_enabled(drag_enabled)
+		spell_preparation_tray.set_drop_enabled(deployment_enabled)
 	if is_instance_valid(player_resource_tray):
-		player_resource_tray.set_drop_enabled(drag_enabled)
+		player_resource_tray.set_drop_enabled(deployment_enabled)
 	if emblem_library != null:
-		emblem_library.set_drag_enabled(
-			drag_enabled and is_instance_valid(_inspection_overlay)
-		)
+		emblem_library.set_drag_enabled(_inspection_tools_enabled())
 	for row: BattlefieldRow in [front_row, back_row]:
 		row.set_drag_enabled(drag_enabled)
+		row.set_drop_enabled(deployment_enabled)
 
 	for collection_slot: Control in _get_collection_card_slots():
 		var is_deployed_ghost := bool(
@@ -9493,7 +10677,7 @@ func _refresh_drag_availability() -> void:
 		)
 		for child: Node in collection_slot.get_children():
 			var card_view := child as CardView
-			if card_view != null:
+			if card_view != null and not card_view.is_snapshot_mode():
 				card_view.configure_drag_source(
 					drag_enabled and not is_deployed_ghost,
 					&"collection",
@@ -9508,23 +10692,22 @@ func _animate_collection_card_entry(
 	card_view_value: Variant,
 	entry_global_position: Vector2
 ) -> void:
-	await get_tree().process_frame
-	if not is_instance_valid(card_view_value):
-		return
-
+	if not is_instance_valid(card_view_value): return
 	var card_view := card_view_value as CardView
-	if card_view == null or card_view.is_queued_for_deletion():
-		return
-
-	# 点击携带和原生长按拖拽都进入这里；回位期间只临时提升真实卡牌，
-	# 收藏视口本身始终不裁切，避免一次失败回位永久改变后续悬停表现。
+	if card_view == null or card_view.is_queued_for_deletion(): return
 	var resting_z_index := card_view.z_index
+	var parent := card_view.get_parent()
+	# 原生拖拽恢复透明度和容器排版之间，真实卡先停在松手位置，
+	# 避免先显示收藏原位一帧，然后才从释放点开始回位。
 	card_view.set_resting_z_index(CardDragPreview.DRAG_PREVIEW_Z_INDEX)
+	card_view.set_as_top_level(true)
+	card_view.position = entry_global_position
+	await get_tree().process_frame
+	if not is_instance_valid(card_view) or card_view.is_queued_for_deletion() or card_view.get_parent() != parent: return
+	card_view.set_as_top_level(false)
 	card_view.animate_from_global_position(entry_global_position)
-	# 层级跟随真实动画状态，不能用独立计时器猜测 Tween 的结束帧。
 	while is_instance_valid(card_view) and card_view.is_layout_animating():
 		await get_tree().process_frame
-
 	if is_instance_valid(card_view) and not card_view.is_queued_for_deletion():
 		card_view.set_resting_z_index(resting_z_index)
 
@@ -9554,3 +10737,65 @@ func _select_card(card_data: CardData) -> void:
 		return
 
 	play_area_label.text = "当前选中：%s。准备阶段可按住卡牌拖动放置" % selected_card.display_name
+
+
+func _on_hero_avatar_gui_input(event: InputEvent) -> void:
+	if maze_controller == null or not event is InputEventMouseButton:
+		return
+	var button := event as InputEventMouseButton
+	if button.button_index != MOUSE_BUTTON_RIGHT or not button.pressed:
+		return
+	var dialog := AcceptDialog.new()
+	dialog.title = "英雄当前状态"
+	dialog.dialog_text = maze_controller.hero_description()
+	dialog.get_ok_button().text = "关闭"
+	add_child(dialog)
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.close_requested.connect(dialog.queue_free)
+	dialog.popup_centered(Vector2i(560, 320)) # 英雄等级经验与已选强化的提示窗尺寸
+	player_avatar_button.accept_event()
+
+
+func _set_result_battlefield_visible(show_battlefield: bool) -> void:
+	if current_phase != GamePhase.RESULT:
+		return
+	_viewing_result_battlefield = show_battlefield
+	battle_result_panel.visible = not show_battlefield
+	_return_to_result_button.visible = show_battlefield
+	if maze_controller != null:
+		maze_controller.refresh()
+
+
+func _sync_battle_formation_positions() -> void:
+	var ordered := battle_controller.get_all_states()
+	ordered.sort_custom(func(a: BattleSquadState, b: BattleSquadState) -> bool: return a.formation_index < b.formation_index)
+	var rows: Array[BattlefieldRow] = [front_row, back_row, enemy_front_row, enemy_back_row]
+	var changed_rows: Dictionary = {}
+	for state: BattleSquadState in ordered:
+		if not state.alive: continue
+		var slot := _battle_state_slots.get(state) as BoardSlot
+		var row := _row_for_battle_key(state.row_key)
+		if not is_instance_valid(slot) or row == null: continue
+		if slot.get_parent() != row.squad_row or row.get_slot_index(slot) != state.formation_index:
+			changed_rows[row] = true
+			for previous_row: BattlefieldRow in rows:
+				if slot.get_parent() == previous_row.squad_row: changed_rows[previous_row] = true
+	if changed_rows.is_empty(): return
+	# 一次换位只捕获每个受影响排一次；跨排起点必须在 reparent 之前保留。
+	var previous_positions: Dictionary = {}
+	for row: BattlefieldRow in changed_rows:
+		previous_positions.merge(row._capture_visible_slot_positions())
+	for state: BattleSquadState in ordered:
+		if not state.alive: continue
+		var slot := _battle_state_slots.get(state) as BoardSlot
+		var row := _row_for_battle_key(state.row_key)
+		if not is_instance_valid(slot) or row == null: continue
+		if slot.get_parent() != row.squad_row: slot.reparent(row.squad_row)
+		row.move_squad_slot(slot, state.formation_index, false)
+	# 复用排节点已有的动画事务，同帧多次换位保留最早的视觉起点。
+	for row: BattlefieldRow in changed_rows:
+		row._animate_layout_next_frame(previous_positions)
+
+
+func _on_owned_card_removed(instance_id: StringName) -> void:
+	prepared_spell_instance_ids.erase(instance_id)

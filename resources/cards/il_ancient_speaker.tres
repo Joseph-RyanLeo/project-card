@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/il_ancient_speaker.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"il_ancient_speaker"
+display_name = "“古语者”伊尔"
+pack_id = &"silvermoon_chapter"
+effect_ids = Array[StringName]([&"il_ancient_speaker.effect.rush"])
+keywords = Array[StringName]([&"balance"])
+content_effect = &"il_ancient_speaker"
+action_type = 4
+acquisition_action_types = Array[int]([4, 2])
+base_value = 3
+cooldown_seconds = 2.0
+armor = 10
+runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(5, 31)
+effect_text = "均衡。突击：双方各小队光每净多1枚，永久+2生命；暗每净多1枚，永久+1数值。"

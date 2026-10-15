@@ -43,7 +43,7 @@ func _test_effect_test_card_library() -> void:
 			valid_count += 1
 			for definition: BattleEffectDefinition in definitions:
 				triggers[definition.trigger] = true
-	_expect(valid_count == BattleLabEffectLibrary.PRESETS.size() - 1, "合成测试卡与灰烬真实卡全部生成严格效果定义")
+	_expect(valid_count == BattleLabEffectLibrary.PRESETS.size() - 2, "除需真实拥有实例的刻匠跨战斗进度外，全部本场效果生成严格定义")
 	_expect(
 		triggers.has(BattleEffectDefinition.Trigger.RUSH)
 		and triggers.has(BattleEffectDefinition.Trigger.CONTINUOUS)
@@ -92,7 +92,7 @@ func _test_visual_lab_flow() -> void:
 	_expect(
 		((lab._side_controls["player"] as Dictionary)["slot"] as OptionButton).item_count == 6
 		and ((lab._side_controls["player"] as Dictionary)["race"] as OptionButton).item_count == CardData.RaceType.size(),
-		"双方编辑器提供六个小队槽与完整种族选择"
+		"编辑器提供六个小队槽与完整种族选择"
 	)
 	_expect(
 		not lab.player_drawer.visible
@@ -169,6 +169,7 @@ func _test_visual_lab_flow() -> void:
 		spec["position"] = index
 		spec["name"] = "人类%d" % (index + 1)
 		spec["health"] = 6
+		spec["runes"] = [] # 隔离乡邻加成，避免预设的光水符文额外增加生命
 		spec["race"] = CardData.RaceType.HUMAN
 	aura_scenario.player_squads[0]["name"] = "民兵指挥官"
 	aura_scenario.player_squads[0]["effect_card"] = "militia_commander"
@@ -180,13 +181,13 @@ func _test_visual_lab_flow() -> void:
 	for state: BattleSquadState in lab.battle_controller.player_states:
 		aura_healths.append(state.displayed_health)
 	_expect(
-		aura_healths == [8, 10, 8]
+		aura_healths == [7, 7, 7]
 		and not lab.battle_controller.is_running()
 		and lab.battle_controller.run_reward_ledger.get_entries().is_empty(),
-		"配置预览只结算持续光环：三个相邻人类立即显示8/10/8生命，不触发突击奖励"
+		"配置预览只结算持续光环：中间Ⅰ级满足乡邻后，同族立即显示7/7/7生命，不触发突击奖励"
 	)
 	var middle_slot := lab._battle_state_slots[lab.battle_controller.player_states[1]] as BoardSlot
-	_expect(middle_slot.get_primary_card_view().health_label.text == "10", "民兵指挥官生命光环直接显示在战场卡面")
+	_expect(middle_slot.get_primary_card_view().health_label.text == "7", "指挥官授予的乡邻生命加成显示在战场卡面")
 
 	((lab._side_controls["player"] as Dictionary)["slot"] as OptionButton).select(2)
 	lab._on_slot_selected(2, "player")
@@ -198,7 +199,7 @@ func _test_visual_lab_flow() -> void:
 	aura_healths.clear()
 	for state: BattleSquadState in lab.battle_controller.player_states:
 		aura_healths.append(state.displayed_health)
-	_expect(aura_healths == [8, 8, 6], "把第三张牌改为精灵后，种族邻接光环立即移除旧加成并重新计算")
+	_expect(aura_healths == [6, 6, 6], "把第三张牌改为精灵后，种族邻接光环立即移除旧加成并重新计算")
 
 	lab.scenario = BattleLabScenario.create_default()
 	lab._load_scenario_into_controls()

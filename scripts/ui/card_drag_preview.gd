@@ -40,6 +40,7 @@ var _shadow_rest_position: Vector2 = Vector2.ZERO
 var _visual_lag: Vector2 = Vector2.ZERO
 var _previous_root_global_position: Vector2 = Vector2.ZERO
 var _tracking_started: bool = false
+var _last_card_global_position := Vector2.ZERO
 var _equipment_indicator_visual: TextureRect
 var _equipment_indicator_shadow: TextureRect
 var _equipment_indicator_mode: bool = false
@@ -253,6 +254,7 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(_card_visual):
 		return
 
+	get_card_global_position()
 	if not _tracking_started:
 		_previous_root_global_position = global_position
 		_tracking_started = true
@@ -276,18 +278,18 @@ func _process(delta: float) -> void:
 		rotation_weight
 	)
 	_update_visual_transform(next_rotation)
+	get_card_global_position()
 
 # 以下位置查询给战场判定使用，返回的是当前屏幕上真实看到的拖动卡牌。
-func get_card_global_position() -> Vector2:
-	if (
-		is_instance_valid(_card_visual)
-		and is_instance_valid(_snapshot_visual)
-	):
-		return (
+func get_card_global_position(last_visible: bool = false) -> Vector2:
+	# DRAG_END前Godot可能已把预览根节点归零或移出画布，节点仍有效。
+	# 结束通知使用最后一帧的可见坐标；拖动和成功落点读取实时变换。
+	if not last_visible and is_instance_valid(_card_visual) and _card_visual.is_inside_tree() and is_instance_valid(_snapshot_visual):
+		_last_card_global_position = (
 			_card_visual.get_global_transform_with_canvas()
 			* _snapshot_visual.get_card_origin_in_texture()
 		)
-	return global_position
+	return _last_card_global_position
 
 
 func get_card_global_corners() -> PackedVector2Array:

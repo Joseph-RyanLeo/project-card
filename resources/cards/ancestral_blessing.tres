@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"ancestral_blessing"
+display_name = "先祖庇佑"
+pack_id = &"ironwall_inscription"
+content_effect = &"ancestral_blessing"
+card_type = 2
+rarity = 2
+effect_text = "本场获胜后，曾登场并阵亡的非召唤友军永久数值+1、生命+1。"
+spell_type = 0
+spell_trigger_kind = 1

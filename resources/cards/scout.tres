@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/scout.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"scout"
+display_name = "侦查员"
+pack_id = &"ironwall_inscription"
+effect_ids = Array[StringName]([&"scout.effect.echo"])
+content_effect = &"scout"
+action_type = 1
+base_value = 2
+cooldown_seconds = 4.0
+max_health = 2
+armor = 2
+runes = Array[int]([0, 1, 2])
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-8, 24)
+effect_text = "回响：相邻远程友军获得强化+1。"

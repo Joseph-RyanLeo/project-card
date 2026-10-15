@@ -2,7 +2,7 @@
 class_name CardArtTuner
 extends Control
 
-## 卡面立绘取景的编辑器/运行时辅助工具。
+## 自动发现卡牌、筛选卡包与类型、编辑基础资料及立绘的辅助工具。
 ## 所有交互先修改预览副本；只有显式点击保存才会写回 .tres 资源。
 
 const MAIN_SCENE_PATH := "res://scenes/Main.tscn"
@@ -16,97 +16,33 @@ const PREVIEW_PROJECTION_INSET: float = 0.0 # 透视补偿内缩量；0 保持�
 const PREVIEW_FLASH_SPACING: float = 7.0 # 扫光条纹密度；越大，同屏出现的光带越多
 const PREVIEW_FLASH_WIDTH: float = 2.4 # 扫光指数；越大光带越窄，越小光带越宽
 const PREVIEW_FLASH_INTENSITY: float = 0.32 # 扫光叠加亮度；建议在 0.2～0.6 之间微调
-const CARD_RESOURCE_PATHS := [
-	"res://resources/cards/ember_squire.tres",
-	"res://resources/cards/tide_archer.tres",
-	"res://resources/cards/spark_mage.tres",
-	"res://resources/cards/old_wolf_kaspar.tres",
-	"res://resources/cards/anvil_margaret.tres",
-	"res://resources/cards/town_priest.tres",
-	"res://resources/cards/diplomat.tres",
-	"res://resources/cards/recruiter.tres",
-	"res://resources/cards/elegy_poet.tres",
-	"res://resources/cards/war_drum_musician.tres",
-	"res://resources/cards/javelin_skirmisher.tres",
-	"res://resources/cards/militia.tres",
-	"res://resources/cards/militia_commander.tres",
-	"res://resources/cards/mudleg_brothers.tres",
-	"res://resources/cards/fireman.tres",
-	"res://resources/cards/musketeer.tres",
-	"res://resources/cards/berserker_vanguard.tres",
-	"res://resources/cards/shieldwall_private.tres",
-	"res://resources/cards/rune_engraver.tres",
-	"res://resources/cards/timid_infantry.tres",
-	"res://resources/cards/baggage_muleteer.tres",
-	"res://resources/cards/heavy_knight.tres",
-	"res://resources/cards/armorsmith.tres",
-	"res://resources/cards/field_medic.tres",
-	"res://resources/cards/frostfang_blade.tres",
-	"res://resources/cards/azure_hunt_bow.tres",
-	"res://resources/cards/mana_tonic.tres",
-	"res://resources/cards/glacial_crossbow.tres",
-	"res://resources/cards/emberbrand_sword.tres",
-	"res://resources/cards/sapphire_plate.tres",
-	"res://resources/cards/seastone_ring.tres",
-	"res://resources/cards/tidecaller_scepter.tres",
-	"res://resources/cards/restoration_flask.tres",
-	"res://resources/cards/stormstring_bow.tres",
-	"res://resources/cards/inferno_edge.tres",
-	"res://resources/cards/royal_aegis.tres",
-	"res://resources/cards/starsea_ring.tres",
-	"res://resources/cards/void_orb_scepter.tres",
-	"res://resources/cards/bloodrage_elixir.tres",
-	"res://resources/cards/ash_war_banner.tres",
-	"res://resources/cards/ash_war_shield.tres",
-	"res://resources/cards/rally_horn.tres",
-	"res://resources/cards/coarse_bandage.tres",
-	"res://resources/cards/recruitment_ledger.tres",
-	"res://resources/cards/blessing_sacred_shield.tres",
-	"res://resources/cards/blessing_strength.tres",
-	"res://resources/cards/blessing_vitality.tres",
-	"res://resources/cards/summon_undead_army.tres",
-	"res://resources/cards/summon_resurrection.tres",
-	"res://resources/cards/summon_scarab_swarm.tres",
-	"res://resources/cards/damage_fireball.tres",
-	"res://resources/cards/damage_sandstorm.tres",
-	"res://resources/cards/damage_ice_cone.tres",
-	"res://resources/cards/support_healing_aura.tres",
-	"res://resources/cards/support_repulsion_aura.tres",
-	"res://resources/cards/disruption_counterspell.tres",
-	"res://resources/cards/disruption_rust_blade.tres",
-	"res://resources/cards/disruption_discordant_wave.tres",
-	"res://resources/cards/battle_fury.tres",
-	"res://resources/cards/side_by_side.tres",
-	"res://resources/cards/return_to_battlefield.tres",
-	"res://resources/cards/volley_order.tres",
-	"res://resources/cards/fire_element_shard.tres",
-	"res://resources/cards/light_element_shard.tres",
-	"res://resources/cards/dark_element_shard.tres",
-	"res://resources/cards/water_element_shard.tres",
-	"res://resources/cards/wood_element_shard.tres",
-	"res://resources/cards/rainbow_gold_ore.tres",
-	"res://resources/cards/crystallized_remains.tres",
-	"res://resources/cards/stone_of_greed.tres",
-	"res://resources/cards/abandoned_toolbox.tres",
-	"res://resources/cards/mining_pick.tres",
-]
+const CARD_RESOURCE_DIRECTORY := "res://resources/cards"
+const ALL_PACK_ID: StringName = &"__all_packs__"
+const ALL_CARD_TYPES: int = -2 # 全部种类的选项ID；避开OptionButton把-1解释为自动编号
 const SELECTABLE_CARD_TYPES := [
-	CardData.CardType.MINION,
-	CardData.CardType.EQUIPMENT,
-	CardData.CardType.SPELL,
-	CardData.CardType.RESOURCE,
-] # 调整器按随从、装备、法术、资源分组；资源复用既有筛选和预览
+	CardData.CardType.MINION, CardData.CardType.EQUIPMENT,
+	CardData.CardType.SPELL, CardData.CardType.RESOURCE,
+]
 
-# 资源列表是工具可选择的卡牌白名单，避免误写其他 Resource。
+signal card_resource_saved(resource: CardData)
+
+# 原资源与每张卡的预览草稿分开，切换筛选时不丢失尚未保存的编辑。
+var _catalog: Array[CardData] = []
+var _drafts: Dictionary = {}
+var _preview_data: CardData
+var _active_pack_id: StringName = ALL_PACK_ID
 
 @export_group("Card Art Preview")
 @export var card_data: CardData:
 	# 检查器切换卡牌时，同时重置预览偏移并刷新运行时控件。
 	set(value):
 		_card_data = value
-		_preview_art_offset = (
-			value.art_offset if value != null else Vector2i.ZERO
-		)
+		if value != null:
+			var key := _draft_key(value)
+			if not _drafts.has(key): _drafts[key] = value.duplicate() as CardData
+			_preview_data = _drafts[key]
+		else: _preview_data = null
+		_preview_art_offset = _preview_data.art_offset if _preview_data != null else Vector2i.ZERO
 		_sync_runtime_controls()
 		_queue_preview_refresh()
 		notify_property_list_changed()
@@ -117,16 +53,17 @@ const SELECTABLE_CARD_TYPES := [
 	# 临时预览值与 card_data.art_offset 分离，保存前不会修改真实资源。
 	set(value):
 		_preview_art_offset = value
+		if _preview_data != null: _preview_data.art_offset = value
 		_sync_offset_controls()
 		_queue_preview_refresh()
 	get:
 		return _preview_art_offset
 
-@export_tool_button("保存偏移到卡牌资源", "Save")
-var save_offset_button: Callable = _save_offset_to_resource
+@export_tool_button("保存卡牌修改", "Save")
+var save_card_button: Callable = _save_card_to_resource
 
 @export_tool_button("从卡牌资源重新载入", "Reload")
-var reload_offset_button: Callable = _reload_offset_from_resource
+var reload_card_button: Callable = _reload_card_from_resource
 
 @export_tool_button("预览偏移归零", "Clear")
 var reset_offset_button: Callable = _reset_preview_offset
@@ -136,7 +73,7 @@ var _preview_art_offset: Vector2i = Vector2i.ZERO
 var _refresh_queued: bool = false
 var _preview_effect_material: ShaderMaterial
 var _preview_pointer_force := Vector2.ZERO
-var _active_selector_card_type: CardData.CardType = CardData.CardType.MINION
+var _active_selector_card_type: int = -1
 
 @onready var preview_card: CardView = %PreviewCard
 @onready var preview_viewport: SubViewport = %PreviewViewport
@@ -144,6 +81,16 @@ var _active_selector_card_type: CardData.CardType = CardData.CardType.MINION
 @onready var status_label: Label = %StatusLabel
 @onready var card_type_selector: OptionButton = %CardTypeSelector
 @onready var card_selector: ItemList = %CardSelector
+@onready var pack_selector: OptionButton = %PackSelector
+@onready var search_input: LineEdit = %SearchInput
+@onready var refresh_catalog_button: Button = %RefreshCatalogButton
+@onready var name_input: LineEdit = %NameInput
+@onready var value_spin_box: SpinBox = %ValueSpinBox
+@onready var health_spin_box: SpinBox = %HealthSpinBox
+@onready var armor_spin_box: SpinBox = %ArmorSpinBox
+@onready var value_title: Label = %ValueTitle
+@onready var health_title: Label = %HealthTitle
+@onready var armor_title: Label = %ArmorTitle
 @onready var offset_x_spin_box: SpinBox = %OffsetXSpinBox
 @onready var offset_y_spin_box: SpinBox = %OffsetYSpinBox
 @onready var back_button: Button = %BackButton
@@ -165,12 +112,9 @@ func _ready() -> void:
 	# 4 倍并应用 Shader，保证边框、立绘、文字不会分别产生不同透视。
 	preview_card.pivot_offset = Vector2.ZERO
 	_setup_effect_preview()
-	_active_selector_card_type = (
-		card_data.card_type
-		if card_data != null
-		else CardData.CardType.MINION
-	)
+	_reload_catalog()
 	_populate_card_type_selector()
+	_populate_pack_selector()
 	_populate_card_selector()
 	_populate_effect_controls()
 	_sync_effect_controls_to_material()
@@ -203,6 +147,9 @@ func _input(event: InputEvent) -> void:
 	# 运行调整器时方向键与四个 1px 按钮共用同一事务入口；
 	# @tool 编辑器预览不截获编辑器自身的方向键。
 	if Engine.is_editor_hint() or not (event is InputEventKey):
+		return
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus is LineEdit or focus is TextEdit or focus is SpinBox or focus is ItemList or focus is OptionButton:
 		return
 	var key_event := event as InputEventKey
 	if not key_event.pressed:
@@ -278,34 +225,138 @@ func _sync_effect_controls_to_material() -> void:
 	_on_flash_type_selected(flash_type_selector.selected)
 
 
+static func discover_card_resource_paths(directory: String = CARD_RESOURCE_DIRECTORY) -> Array[String]:
+	# ResourceLoader保留导出前的资源名，导出后转换为remap也能扫描；子目录同样自动收录。
+	var result: Array[String] = []
+	var filenames := ResourceLoader.list_directory(directory)
+	filenames.sort()
+	for filename: String in filenames:
+		var path := directory.path_join(filename)
+		if filename.ends_with("/"): result.append_array(discover_card_resource_paths(path))
+		elif filename.get_extension() == "tres" and ResourceLoader.load(path) is CardData: result.append(path)
+	return result
+
+
+func _reload_catalog() -> void:
+	_catalog.clear()
+	for path: String in discover_card_resource_paths(): _catalog.append(load(path) as CardData)
+	_catalog.sort_custom(func(a: CardData, b: CardData) -> bool:
+		if a.pack_id != b.pack_id: return String(a.pack_id) < String(b.pack_id)
+		if a.card_type != b.card_type: return a.card_type < b.card_type
+		if a.rarity != b.rarity: return a.rarity < b.rarity
+		return String(a.id) < String(b.id))
+
+
 func _populate_card_type_selector() -> void:
 	card_type_selector.clear()
-	for selectable_type: CardData.CardType in SELECTABLE_CARD_TYPES:
-		card_type_selector.add_item(
-			["随从", "装备", "法术", "资源"][selectable_type],
-			selectable_type
-		)
+	card_type_selector.add_item("全部种类", ALL_CARD_TYPES)
+	for selectable_type: int in SELECTABLE_CARD_TYPES:
+		card_type_selector.add_item(["随从", "装备", "法术", "资源"][selectable_type], selectable_type)
 	_sync_card_type_selector()
 
 
+func _populate_pack_selector() -> void:
+	pack_selector.clear()
+	pack_selector.add_item("全部卡包")
+	pack_selector.set_item_metadata(0, ALL_PACK_ID)
+	var packs: Array[StringName] = []
+	for card: CardData in _catalog:
+		if not packs.has(card.pack_id): packs.append(card.pack_id)
+	packs.sort()
+	for pack_id: StringName in packs:
+		pack_selector.add_item(CardPackRegistry.get_display_name(pack_id) if not pack_id.is_empty() else "未指定卡包")
+		pack_selector.set_item_metadata(pack_selector.item_count - 1, pack_id)
+	var selected := 0
+	for index: int in pack_selector.item_count:
+		if pack_selector.get_item_metadata(index) == _active_pack_id: selected = index
+	pack_selector.select(selected)
+	_active_pack_id = pack_selector.get_item_metadata(selected)
+
+
 func _populate_card_selector() -> void:
-	# 固定高度 ItemList 自带滚动条；metadata 继续保存真实资源路径。
 	card_selector.clear()
-	for resource_path: String in CARD_RESOURCE_PATHS:
-		var available_card := load(resource_path) as CardData
-		if (
-			available_card == null
-			or available_card.card_type != _active_selector_card_type
-		):
-			continue
-		card_selector.add_item(available_card.display_name)
-		var item_index := card_selector.item_count - 1
-		card_selector.set_item_metadata(item_index, resource_path)
+	var query := search_input.text.strip_edges().to_lower()
+	for available_card: CardData in _catalog:
+		if _active_selector_card_type >= 0 and available_card.card_type != _active_selector_card_type: continue
+		if _active_pack_id != ALL_PACK_ID and available_card.pack_id != _active_pack_id: continue
+		var preview := _drafts.get(_draft_key(available_card), available_card) as CardData
+		if not query.is_empty() and not query in (preview.display_name + " " + String(available_card.id)).to_lower(): continue
+		var suffix := " · 衍生" if available_card.is_derived else (" · 停用" if not available_card.is_available else "")
+		card_selector.add_item(preview.display_name + (" *" if _has_unsaved_changes(available_card) else "") + suffix)
+		card_selector.set_item_metadata(card_selector.item_count - 1, available_card.resource_path)
+	var current_index := -1
+	for index: int in card_selector.item_count:
+		if card_data != null and card_selector.get_item_metadata(index) == card_data.resource_path: current_index = index
+	if current_index >= 0: card_selector.select(current_index)
+	elif card_selector.item_count > 0: _on_card_selected(0)
+	else: card_data = null
+
+
+func _on_pack_selected(index: int) -> void:
+	_active_pack_id = pack_selector.get_item_metadata(index)
+	_populate_card_selector()
+	_queue_preview_refresh()
+
+
+func _on_search_changed(_query: String) -> void:
+	_populate_card_selector()
+	_queue_preview_refresh()
+
+
+func _on_refresh_catalog_pressed() -> void:
+	_reload_catalog()
+	_populate_pack_selector()
+	_populate_card_selector()
+	_queue_preview_refresh()
+
+
+func _draft_key(card: CardData) -> String:
+	return card.resource_path if not card.resource_path.is_empty() else "instance:%d" % card.get_instance_id()
+
+
+func _editable_fields(card: CardData) -> Array[StringName]:
+	var fields: Array[StringName] = [&"display_name", &"art_offset"]
+	match card.card_type:
+		CardData.CardType.MINION: fields.append_array([&"base_value", &"max_health", &"armor"])
+		CardData.CardType.EQUIPMENT: fields.append_array([&"equipment_action_delta", &"equipment_health_delta", &"equipment_armor_delta"])
+		CardData.CardType.RESOURCE: fields.append_array([&"max_health", &"armor"])
+	return fields
+
+
+func _has_unsaved_changes(source: CardData) -> bool:
+	var draft := _drafts.get(_draft_key(source)) as CardData
+	if draft == null: return false
+	for field: StringName in _editable_fields(source):
+		if draft.get(field) != source.get(field): return true
+	return false
+
+
+func _on_name_changed(value: String) -> void:
+	if _preview_data == null: return
+	_preview_data.display_name = value
+	_queue_preview_refresh()
+
+
+func _on_stat_changed(value: float, stat: StringName) -> void:
+	if _preview_data == null: return
+	var field := stat
+	if _preview_data.card_type == CardData.CardType.EQUIPMENT:
+		field = {&"base_value": &"equipment_action_delta", &"max_health": &"equipment_health_delta", &"armor": &"equipment_armor_delta"}[stat]
+	if not _editable_fields(_preview_data).has(field): return
+	_preview_data.set(field, roundi(value))
+	_queue_preview_refresh()
 
 
 func _connect_runtime_controls() -> void:
 	# bind() 把方向参数预先绑定到四个按钮，共用一个微调函数。
 	card_type_selector.item_selected.connect(_on_card_type_selected)
+	pack_selector.item_selected.connect(_on_pack_selected)
+	search_input.text_changed.connect(_on_search_changed)
+	refresh_catalog_button.pressed.connect(_on_refresh_catalog_pressed)
+	name_input.text_changed.connect(_on_name_changed)
+	value_spin_box.value_changed.connect(_on_stat_changed.bind(&"base_value"))
+	health_spin_box.value_changed.connect(_on_stat_changed.bind(&"max_health"))
+	armor_spin_box.value_changed.connect(_on_stat_changed.bind(&"armor"))
 	card_selector.item_selected.connect(_on_card_selected)
 	offset_x_spin_box.value_changed.connect(_on_offset_x_changed)
 	offset_y_spin_box.value_changed.connect(_on_offset_y_changed)
@@ -314,8 +365,8 @@ func _connect_runtime_controls() -> void:
 	nudge_right_button.pressed.connect(_nudge_preview.bind(Vector2i.RIGHT))
 	nudge_up_button.pressed.connect(_nudge_preview.bind(Vector2i.UP))
 	nudge_down_button.pressed.connect(_nudge_preview.bind(Vector2i.DOWN))
-	save_button.pressed.connect(_save_offset_to_resource)
-	reload_button.pressed.connect(_reload_offset_from_resource)
+	save_button.pressed.connect(_save_card_to_resource)
+	reload_button.pressed.connect(_reload_card_from_resource)
 	reset_button.pressed.connect(_reset_preview_offset)
 	use_3d_check.toggled.connect(_on_use_3d_toggled)
 	use_flash_check.toggled.connect(_on_use_flash_toggled)
@@ -327,15 +378,12 @@ func _sync_runtime_controls() -> void:
 		return
 	_sync_card_selector()
 	_sync_offset_controls()
+	_sync_card_fields()
 
 
 func _sync_card_selector() -> void:
 	if not is_instance_valid(card_selector) or card_data == null:
 		return
-	if card_data.card_type != _active_selector_card_type:
-		_active_selector_card_type = card_data.card_type
-		_sync_card_type_selector()
-		_populate_card_selector()
 	for item_index: int in card_selector.item_count:
 		if card_selector.get_item_metadata(item_index) == card_data.resource_path:
 			card_selector.select(item_index)
@@ -347,7 +395,7 @@ func _sync_card_type_selector() -> void:
 	if not is_instance_valid(card_type_selector):
 		return
 	for item_index: int in card_type_selector.item_count:
-		if card_type_selector.get_item_id(item_index) == _active_selector_card_type:
+		if card_type_selector.get_item_id(item_index) == (ALL_CARD_TYPES if _active_selector_card_type < 0 else _active_selector_card_type):
 			card_type_selector.select(item_index)
 			return
 
@@ -375,9 +423,32 @@ func _on_card_selected(item_index: int) -> void:
 
 func _on_card_type_selected(item_index: int) -> void:
 	_active_selector_card_type = card_type_selector.get_item_id(item_index)
+	if _active_selector_card_type == ALL_CARD_TYPES: _active_selector_card_type = -1
 	_populate_card_selector()
-	if card_selector.item_count > 0:
-		_on_card_selected(0)
+	_queue_preview_refresh()
+
+
+func _sync_card_fields() -> void:
+	if not is_instance_valid(name_input): return
+	name_input.set_block_signals(true)
+	name_input.text = _preview_data.display_name if _preview_data != null else ""
+	name_input.editable = _preview_data != null
+	name_input.set_block_signals(false)
+	var equipment := _preview_data != null and _preview_data.card_type == CardData.CardType.EQUIPMENT
+	value_title.text = "数值修正" if equipment else "数值"
+	health_title.text = "生命修正" if equipment else "生命值"
+	armor_title.text = "护甲修正" if equipment else "护甲"
+	for entry: Array in [[value_spin_box, &"base_value", &"equipment_action_delta", -99, CardData.MAXIMUM_BASE_VALUE], [health_spin_box, &"max_health", &"equipment_health_delta", -99, CardData.MAXIMUM_HEALTH], [armor_spin_box, &"armor", &"equipment_armor_delta", 0, CardData.MAXIMUM_ARMOR]]:
+		var spin: SpinBox = entry[0]
+		var field: StringName = entry[2] if equipment else entry[1]
+		spin.set_block_signals(true)
+		spin.min_value = entry[3] if equipment else 0
+		spin.max_value = 99 if equipment else entry[4]
+		spin.editable = _preview_data != null and _editable_fields(_preview_data).has(field)
+		spin.value = _preview_data.get(field) if spin.editable else 0
+		spin.tooltip_text = "法术数值由各自效果定义，不使用这组基础属性。" if _preview_data != null and _preview_data.card_type == CardData.CardType.SPELL else ""
+		spin.set_block_signals(false)
+	save_button.disabled = _preview_data == null
 
 
 func _on_offset_x_changed(value: float) -> void:
@@ -438,12 +509,11 @@ func _refresh_preview() -> void:
 
 	if card_data == null:
 		preview_card.set_card_data(null)
-		status_label.text = "请在检查器中选择一张 CardData 资源。"
+		status_label.text = "当前筛选没有卡牌。可更换卡包、种类或搜索条件。"
 		return
 
-	# 预览只操作副本。拖动数值时不会提前修改真正的 .tres 文件。
-	var preview_data := card_data.duplicate(true) as CardData
-	preview_data.art_offset = preview_art_offset
+	# 每张卡保留独立草稿，刷新只重画草稿，不改写真实资源。
+	var preview_data := _preview_data
 	preview_card.set_card_data(preview_data)
 	preview_card.configure_drag_source(false)
 	_refresh_effect_textures(preview_data)
@@ -452,11 +522,12 @@ func _refresh_preview() -> void:
 		if preview_data.art_normal_texture != null
 		else "法线增强：未提供（不影响 3D / 扫光）"
 	)
-	status_label.text = "%s  |  当前预览偏移：%s  |  %s" % [
-		card_data.display_name,
-		preview_art_offset,
-		normal_status,
+	status_label.text = "%s · %s · %s | 偏移 %s | %s" % [
+		preview_data.display_name, CardPackRegistry.get_display_name(card_data.pack_id) if not card_data.pack_id.is_empty() else "未指定卡包",
+		card_data.get_card_type_name(), preview_art_offset,
+		"有未保存修改" if _has_unsaved_changes(card_data) else normal_status,
 	]
+	_update_current_list_label()
 
 
 func _refresh_effect_textures(preview_data: CardData) -> void:
@@ -484,35 +555,55 @@ func _refresh_effect_textures(preview_data: CardData) -> void:
 		)
 
 
-func _save_offset_to_resource() -> void:
-	# 这是本工具唯一允许写入真实卡牌资源的入口。
-	if card_data == null:
-		_set_status("没有可保存的 CardData。")
-		return
-	if card_data.resource_path.is_empty():
-		_set_status("该 CardData 没有独立资源路径，无法保存。")
-		return
+func _update_current_list_label() -> void:
+	if card_data == null: return
+	for index: int in card_selector.item_count:
+		if card_selector.get_item_metadata(index) == card_data.resource_path:
+			var suffix := " · 衍生" if card_data.is_derived else (" · 停用" if not card_data.is_available else "")
+			card_selector.set_item_text(index, _preview_data.display_name + (" *" if _has_unsaved_changes(card_data) else "") + suffix)
+			return
 
-	card_data.art_offset = preview_art_offset
+
+func _save_card_to_resource() -> void:
+	if card_data == null or card_data.resource_path.is_empty():
+		_set_status("请选择有独立资源文件的卡牌。")
+		return
+	if _preview_data.display_name.strip_edges().is_empty():
+		_set_status("卡牌名称不能为空；尚未保存。")
+		return
+	# 先读磁盘最新定义，仅叠加本次真正改动的字段，保留效果ID、关键词与其他资料。
+	var saved := ResourceLoader.load(card_data.resource_path, "", ResourceLoader.CACHE_MODE_IGNORE) as CardData
+	if saved == null:
+		_set_status("无法读取卡牌资源，尚未保存。")
+		return
+	for field: StringName in _editable_fields(card_data):
+		if _preview_data.get(field) != card_data.get(field): saved.set(field, _preview_data.get(field))
+	var error := ResourceSaver.save(saved, card_data.resource_path)
+	if error != OK:
+		_set_status("保存失败（错误码%d）；预览草稿仍保留。" % error)
+		return
+	for property: Dictionary in saved.get_property_list():
+		if int(property.usage) & PROPERTY_USAGE_SCRIPT_VARIABLE: card_data.set(property.name, saved.get(property.name))
 	card_data.emit_changed()
-	var error := ResourceSaver.save(card_data, card_data.resource_path)
-	if error == OK:
-		_refresh_preview()
-		_set_status("已保存：%s  偏移 %s" % [
-			card_data.display_name,
-			preview_art_offset,
-		])
-	else:
-		_set_status("保存失败，错误码：%d" % error)
+	_drafts.erase(_draft_key(card_data))
+	card_data = _card_data
+	card_resource_saved.emit(card_data)
+	_refresh_preview()
+	_set_status("已保存：%s（名称、适用属性及取景；ID保持不变）" % card_data.display_name)
 
 
-func _reload_offset_from_resource() -> void:
-	if card_data == null:
-		_set_status("没有可重新载入的 CardData。")
+func _reload_card_from_resource() -> void:
+	if card_data == null: return
+	var loaded := ResourceLoader.load(card_data.resource_path, "", ResourceLoader.CACHE_MODE_IGNORE) as CardData if not card_data.resource_path.is_empty() else card_data
+	if loaded == null:
+		_set_status("无法重新读取资源，草稿仍保留。")
 		return
-
-	preview_art_offset = card_data.art_offset
-	_set_status("已恢复资源中的偏移：%s" % preview_art_offset)
+	for property: Dictionary in loaded.get_property_list():
+		if int(property.usage) & PROPERTY_USAGE_SCRIPT_VARIABLE: card_data.set(property.name, loaded.get(property.name))
+	_drafts.erase(_draft_key(card_data))
+	card_data = _card_data
+	_refresh_preview()
+	_set_status("已从资源重新载入，放弃当前卡牌未保存修改。")
 
 
 func _reset_preview_offset() -> void:

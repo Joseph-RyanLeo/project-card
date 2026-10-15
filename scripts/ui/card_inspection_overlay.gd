@@ -6,6 +6,8 @@ extends Control
 
 signal close_requested
 var cancel_carry_if_active: Callable
+var input_handler: Callable
+var pointer_position := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -14,7 +16,12 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion or event is InputEventMouseButton:
+		pointer_position = event.position
 	if get_viewport().is_input_handled():
+		return
+	if input_handler.is_valid() and bool(input_handler.call(event)):
+		get_viewport().set_input_as_handled()
 		return
 	# 在卡面或按钮消费鼠标/键盘事件前关闭，避免检视中控件吞掉 Escape 与右键。
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:

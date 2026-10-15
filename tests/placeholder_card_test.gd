@@ -5,6 +5,7 @@ extends SceneTree
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/Main.tscn")
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
+const CardArtTuner = preload("res://scripts/tools/card_art_tuner.gd")
 const TUNER_SCENE: PackedScene = preload("res://scenes/tools/CardArtTuner.tscn")
 const SpellPreparationIconStyle = preload("res://scripts/ui/spell_preparation_icon_style.gd")
 const PLACEHOLDER_PATHS := [
@@ -231,17 +232,19 @@ func _test_tuner() -> void:
 	var tuner := TUNER_SCENE.instantiate()
 	root.add_child(tuner)
 	await process_frame
-	var group_counts: Array[int] = []
+	var seen_paths: Dictionary = {}
 	for item_index: int in tuner.card_type_selector.item_count:
+		var type_id: int = tuner.card_type_selector.get_item_id(item_index)
+		if type_id == CardArtTuner.ALL_CARD_TYPES: continue
 		tuner.card_type_selector.select(item_index)
-		tuner.card_type_selector.emit_signal("item_selected", item_index)
+		tuner.card_type_selector.item_selected.emit(item_index)
 		await process_frame
-		group_counts.append(tuner.card_selector.item_count)
-	_expect(
-		group_counts == [24, 18, 20]
-		and group_counts.reduce(func(sum: int, count: int) -> int: return sum + count, 0) == 62,
-		"CardArtTuner 以随从/法术/装备滚动分组覆盖新增正式法术"
-	)
+		for index: int in tuner.card_selector.item_count:
+			var path := String(tuner.card_selector.get_item_metadata(index))
+			var card := load(path) as CardData
+			_expect(card != null and card.card_type == type_id, "调整器类型筛选不混入其他种类")
+			seen_paths[path] = true
+	_expect(seen_paths.size() == CardArtTuner.discover_card_resource_paths().size(), "四种筛选共同覆盖全部自动发现的卡牌")
 	var expected_formal_spell_paths := [
 		"res://resources/cards/battle_fury.tres",
 		"res://resources/cards/side_by_side.tres",
@@ -249,8 +252,10 @@ func _test_tuner() -> void:
 		"res://resources/cards/volley_order.tres",
 	]
 	var spell_tuner_paths: Array[String] = []
-	tuner.card_type_selector.select(1)
-	tuner.card_type_selector.emit_signal("item_selected", 1)
+	for index: int in tuner.card_type_selector.item_count:
+		if tuner.card_type_selector.get_item_id(index) == CardData.CardType.SPELL:
+			tuner.card_type_selector.select(index)
+			tuner.card_type_selector.item_selected.emit(index)
 	await process_frame
 	for item_index: int in tuner.card_selector.item_count:
 		spell_tuner_paths.append(str(tuner.card_selector.get_item_metadata(item_index)))

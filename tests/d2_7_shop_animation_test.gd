@@ -4,6 +4,7 @@ extends "res://tests/d2_7_shop_presentation_test.gd"
 func _run() -> void:
 	create_timer(60.0).timeout.connect(func(): push_error("商店动画验收超时"); quit(1))
 	shell = DISPLAY.instantiate()
+	shell.get_node("RenderContainer/InternalViewport/DesignCanvas/Main").short_maze_enabled = false
 	root.add_child(shell)
 	shell.apply_display_mode(DisplayScript.DisplayMode.WINDOW_2K if OS.get_cmdline_user_args().has("2k") else DisplayScript.DisplayMode.WINDOW_720P)
 	await create_timer(0.7).timeout
@@ -39,7 +40,7 @@ func _run() -> void:
 	main._refresh_ordinary_shop_panel()
 	await create_timer(1.2).timeout
 	var dark_tile := _tile(1) as ShopOfferView
-	var dark := dark_tile._visual.get_child(0) as ShopCardView
+	var dark := dark_tile._hover_surface.card as ShopCardView
 	var timer := dark._carousel_timer
 	check(dark._carousel_index > 0, "暗单轮播已经离开初始形态")
 	main.run_reward_state.gold = 0
@@ -101,12 +102,31 @@ func _run() -> void:
 		main._on_ordinary_shop_offer_pressed(index)
 		await key(KEY_ESCAPE)
 		check(main._shop_pack_opening and is_instance_valid(main._inspection_overlay), "开包期间重复购买与关闭不会中断或二次结算")
-		await create_timer(0.43).timeout
-		var material: ShaderMaterial = main._inspection_surface.material
-		check(material.shader.resource_path == "res://shaders/card_death_dissolve.gdshader" and float(material.get_shader_parameter("dissolve_progress")) > 0.0, "放大后复用战斗死亡噪声溶解材质")
-		await capture("opening-" + str(index))
-		await create_timer(0.65).timeout
-		check(not is_instance_valid(main._inspection_overlay) and not main._shop_pack_opening and main.ordinary_shop_open, "包装溶解结束自动回到商店")
+		if index == 0:
+			await create_timer(0.35).timeout
+			check(main._card_pack_opening.phase == CardPackOpening.Phase.SEALED, "卡包放大后等待玩家撕开")
+			await click(Vector2(640, 340), MOUSE_BUTTON_RIGHT)
+			await create_timer(1.7).timeout
+			var sequence: CardPackOpening = main._card_pack_opening
+			for card_index: int in sequence.cards.size():
+				check(main._inspection_owned_card == sequence.cards[card_index], "揭卡绑定本次购买的实际实例")
+				await click(main._inspection_surface.get_global_rect().get_center())
+				await create_timer(1.05).timeout
+		else:
+			await create_timer(0.35).timeout
+			var sequence = main._sticker_pack_opening
+			check(sequence != null and sequence.phase == sequence.Phase.SEALED, "贴纸包等待揭开上半封皮")
+			await click(main._inspection_surface.get_global_rect().get_center(), MOUSE_BUTTON_RIGHT)
+			await create_timer(1.5).timeout
+			check(sequence.phase == sequence.Phase.REVEALED, "贴纸包卷起封皮并抽出整张贴纸")
+			await capture("opening-" + str(index))
+			await click(main._inspection_surface.get_global_rect().get_center())
+			await create_timer(0.07).timeout
+			await click(Vector2(640, 340))
+			var deadline := Time.get_ticks_msec() + 5000
+			while is_instance_valid(main._inspection_overlay) and Time.get_ticks_msec() < deadline:
+				await process_frame
+		check(not is_instance_valid(main._inspection_overlay) and not main._shop_pack_opening and main.ordinary_shop_open, "开包结束自动回到商店")
 		check(main.run_reward_state.gold == gold_before - int(offer.price), "开包结束没有额外扣款")
 		check(main.owned_card_collection.get_cards().size() == card_count + (offer.cards.size() if index == 0 else 0) and main.emblem_library.get_inventory_state().size() == sticker_count + (offer.stickers.size() if index == 2 else 0), "开包奖励只入库一次")
 	check(is_zero_approx(dark_tile._reflow_offset), "补位动画结束回到逻辑位置")

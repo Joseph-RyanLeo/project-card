@@ -195,10 +195,12 @@ var _drag_enabled: bool = false
 var _drag_source_type: StringName
 var _drag_source_row: Node
 var _drag_source_slot: Control
+var _effect_row: StringName = &"" # 检视和快照保存来源排；场上卡实时读取所属排
 var _collection_source_ghosted: bool = false
 var _left_button_pressed: bool = false
 var _active_drag_preview_offset: Vector2 = Vector2.ZERO
 var _active_drag_visual: CardDragPreview
+var _active_drag_last_position := Vector2.INF
 var _layout_tween: Tween
 var _hover_punch_tween: Tween
 var _shadow_tween: Tween
@@ -210,6 +212,10 @@ var _mouse_hovered: bool = false
 var _snapshot_mode: bool = false
 var _interaction_shadow: Panel
 var _status_slot_layer: Control
+var _new_card_dot: Control
+var _stat_pulse_tweens: Dictionary = {}
+const STAT_PULSE_SCALE: float = 1.28 # 检视中数值变化时放大的倍率
+const STAT_CHANGE_SECONDS: float = 0.64 # 检视数字滚动与放大缩回共同使用的总时长
 var _owned_card: OwnedCard
 var _emblem_drop_handler: Callable
 var _external_lift: float = 0.0
@@ -218,8 +224,10 @@ var _resting_z_index: int = 0
 var _highlighted_rune_indices: Array[int] = []
 var _battle_masked_rune_indices: Array[int] = [] # 仅在本场战斗隐藏的符文槽，不修改CardData
 var _battle_rune_element_overrides: Dictionary = {} # 本场临时有效元素，不写回OwnedCard
+var _fusion_hidden_emblem_slot := -1
 var _battle_spent_emblem_slots: Array[int] = [] # 已消耗的盾牌Ⅲ实例，仅改变本场视觉
 var _battle_masked_wound_slots: Array[int] = [] # 本场被随军医者等效果临时遮蔽的伤势槽，只暗淡显示
+var show_new_card_marker: bool = false
 var _status_slot_signature: Array = []
 var _has_status_slot_signature: bool = false
 var _rune_highlight_is_preview: bool = false
@@ -248,6 +256,7 @@ var _squad_armor_preview_target: int = -1
 var _target_priority_preview: int = -1 # 战斗中使用控制器的实际抽选权重；负数退回卡牌基础权重
 var _battle_target_weight_display_enabled: bool = false
 var _squad_cooldown_preview: float = -1.0 # 负值使用自身基础冷却，非负值显示装备热诚修正后的战前行动间隔
+var _squad_cooldown_preview_target: float = -1.0
 
 # 所有真实卡共享一条静态时间轴；新加入的符文等到下一轮再同步开始。
 static var _active_rune_flow_epoch_msec: int = -1
@@ -298,6 +307,7 @@ func _ready() -> void:
 		mouse_exited.connect(_on_mouse_exited)
 	set_process(false)
 	_refresh()
+	_refresh_new_card_dot()
 
 
 func _process(_delta: float) -> void:
@@ -381,6 +391,9 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 	var preview_root := create_drag_visual(drag_data)
 	drag_data["drag_visual"] = preview_root
 	_active_drag_visual = preview_root
+	_active_drag_last_position = Vector2.INF
+	# 原生预览可能先释放，再广播DRAG_END；离树前把最后可见位置交回来源。
+	preview_root.tree_exiting.connect(func(): _active_drag_last_position = preview_root.get_card_global_position(true))
 	set_drag_preview(preview_root)
 	return drag_data
 
@@ -403,10 +416,10 @@ func _build_drag_data(at_position: Vector2) -> Dictionary:
 		"kind": (
 			&"equipment_card"
 			if card_data.card_type == CardData.CardType.EQUIPMENT
-			and _drag_source_type == &"collection"
+			and _drag_source_type in [&"collection", &"card_service"]
 			else &"card"
 		),
-		"card_data": card_data,
+		"card_data": owned_card.get_battlefield_card() if owned_card != null and _drag_source_type == &"collection" and card_data.card_type == CardData.CardType.MINION else card_data,
 		"owned_card": owned_card,
 		"source_type": _drag_source_type,
 		"source_row": _drag_source_row,
@@ -558,9 +571,9 @@ func _notification(what: int) -> void:
 			not get_viewport().gui_is_drag_successful()
 		)
 		var return_global_position := (
-			_active_drag_visual.get_card_global_position()
+			_active_drag_visual.get_card_global_position(true)
 			if is_instance_valid(_active_drag_visual)
-			else (
+			else _active_drag_last_position if _active_drag_last_position.is_finite() else (
 				get_viewport().get_mouse_position()
 				- _active_drag_preview_offset
 			)
@@ -575,6 +588,7 @@ func _notification(what: int) -> void:
 			)
 		_active_drag_preview_offset = Vector2.ZERO
 		_active_drag_visual = null
+		_active_drag_last_position = Vector2.INF
 
 
 # --- 拖拽来源配置、悬停反馈与卡牌布局动画 ---
@@ -584,6 +598,7 @@ func configure_drag_source(
 	source_row: Node = null,
 	source_slot: Control = null
 ) -> void:
+	if has_meta("card_service_slot") and source_type != &"card_service": return
 	_drag_enabled = enabled
 	_drag_source_type = source_type
 	_drag_source_row = source_row
@@ -597,6 +612,7 @@ func configure_drag_source(
 
 func set_snapshot_mode(value: bool) -> void:
 	_snapshot_mode = value
+	_refresh_new_card_dot()
 	pivot_offset = Vector2.ZERO if _snapshot_mode else card_size * 0.5
 	if _snapshot_mode:
 		_reset_interaction_visual()
@@ -608,6 +624,11 @@ func is_snapshot_mode() -> bool:
 
 
 func _on_mouse_entered() -> void:
+	if show_new_card_marker and _owned_card != null and _owned_card.is_new and not _snapshot_mode:
+		_owned_card.is_new = false
+		for view: Node in get_tree().get_nodes_in_group("card_views"):
+			if view.get_owned_card() == _owned_card:
+				view._refresh_new_card_dot()
 	show_pointer_hover_feedback(true)
 	_refresh_priority_label()
 	_schedule_hover_effect_display()
@@ -624,6 +645,10 @@ func show_pointer_hover_feedback(play_rotation_punch: bool = false) -> void:
 			else HOVER_Z_OFFSET
 		)
 		z_index = _resting_z_index + hover_z_offset
+		if _drag_source_type == &"card_service":
+			# 服务槽固定展示一张原卡面，悬停不再附加偏移阴影或旋转。
+			_set_interaction_shadow_visible(false)
+			return
 		_set_interaction_shadow_visible(true)
 		_animate_shadow_offset(RESTING_SHADOW_OFFSET)
 		_set_collection_hover_lift(true)
@@ -665,7 +690,7 @@ func _reset_interaction_visual() -> void:
 
 func _set_collection_hover_lift(value: bool) -> void:
 	# 战场卡的抽出距离由 SquadView 决定；CardView 只直接控制收藏。
-	if _drag_source_type == &"collection":
+	if _drag_source_type == &"collection" and not is_set_as_top_level() and not is_layout_animating():
 		set_external_lift(COLLECTION_HOVER_LIFT_OFFSET if value else 0.0)
 
 
@@ -772,6 +797,7 @@ func animate_from_global_position(previous_global_position: Vector2) -> void:
 		_layout_resting_position + Vector2(0.0, -_external_lift),
 		LAYOUT_TWEEN_DURATION
 	)
+	_layout_tween.tween_callback(func(): _set_collection_hover_lift.call_deferred(_mouse_hovered))
 
 
 func set_external_lift(pixels: float) -> void:
@@ -822,34 +848,40 @@ func set_squad_attribute_preview(
 	action_value: int = -1,
 	max_health: int = -1,
 	base_armor: int = -1,
-	action_interval: float = -1.0
+	action_interval: float = -1.0,
+	pulse_changes: bool = false
 ) -> void:
 	if (
 		_squad_action_preview_target == action_value
 		and _squad_health_preview_target == max_health
 		and _squad_armor_preview_target == base_armor
-		and is_equal_approx(_squad_cooldown_preview, action_interval)
+		and is_equal_approx(_squad_cooldown_preview_target, action_interval)
 	):
 		return
 	_set_squad_preview_number(&"squad_preview_action", action_value, _squad_action_preview_target, func(value: float) -> void:
 		_squad_action_preview = roundi(value)
 		if is_node_ready():
 			_refresh_action_value_text()
-	)
+	, value_label if pulse_changes else null)
 	_set_squad_preview_number(&"squad_preview_health", max_health, _squad_health_preview_target, func(value: float) -> void:
 		_squad_health_preview = roundi(value)
 		if is_node_ready():
 			_refresh_vitals_text()
-	)
+	, health_label if pulse_changes else null)
 	_set_squad_preview_number(&"squad_preview_armor", base_armor, _squad_armor_preview_target, func(value: float) -> void:
 		_squad_armor_preview = roundi(value)
 		if is_node_ready():
 			_refresh_vitals_text()
-	)
+	, armor_label if pulse_changes else null)
+	_set_squad_preview_number(&"squad_preview_cooldown", action_interval, _squad_cooldown_preview_target, func(value: float) -> void:
+		_squad_cooldown_preview = value
+		if is_node_ready():
+			_refresh_cooldown_text()
+	, cooldown_label if pulse_changes else null)
 	_squad_action_preview_target = action_value
 	_squad_health_preview_target = max_health
 	_squad_armor_preview_target = base_armor
-	_squad_cooldown_preview = action_interval
+	_squad_cooldown_preview_target = action_interval
 	if is_node_ready() and card_data != null:
 		_refresh_action_value_text()
 		_refresh_vitals_text()
@@ -858,9 +890,10 @@ func set_squad_attribute_preview(
 
 func _set_squad_preview_number(
 	key: StringName,
-	target_value: int,
-	previous_target: int,
-	apply_value: Callable
+	target_value: float,
+	previous_target: float,
+	apply_value: Callable,
+	pulse_label: Control = null
 ) -> void:
 	if target_value < 0:
 		_kill_battle_number_tween(key)
@@ -876,23 +909,26 @@ func _set_squad_preview_number(
 	match key:
 		&"squad_preview_health": current_value = float(_squad_health_preview)
 		&"squad_preview_armor": current_value = float(_squad_armor_preview)
-	_animate_battle_number(key, current_value, float(target_value), apply_value)
+		&"squad_preview_cooldown": current_value = _squad_cooldown_preview
+	_animate_battle_number(key, current_value, target_value, apply_value, pulse_label)
 
 
-func set_squad_attribute_preview_from_squad(squad: SquadData) -> void:
+func set_squad_attribute_preview_from_squad(squad: SquadData, pulse_changes: bool = false) -> void:
 	var action_source := squad.get_action_source() if squad != null else null
+	var member := squad.get_card_data_for_owned_instance(_owned_card.instance_id) if squad != null and _owned_card != null else card_data
 	set_squad_attribute_preview(
 		squad.get_effective_action_base_value()
-		if squad != null and card_data == action_source else -1,
+		if squad != null and member == action_source else -1,
 		squad.get_effective_max_health()
-		if squad != null and card_data == squad.get_vitals_source() else -1,
+		if squad != null and member == squad.get_vitals_source() else -1,
 		squad.get_effective_base_armor()
-		if squad != null and card_data == squad.get_vitals_source() else -1,
+		if squad != null and member == squad.get_vitals_source() else -1,
 		BattleRules.get_action_interval(
 			action_source.cooldown_seconds,
 			squad.get_equipment_zeal_delta() + squad.get_emblem_zeal_delta()
 		)
-		if action_source != null and card_data == action_source else -1.0
+		if action_source != null and member == action_source else -1.0,
+		pulse_changes
 	)
 
 
@@ -1003,6 +1039,9 @@ func set_owned_card(value: OwnedCard) -> void:
 		_battle_masked_wound_slots.clear()
 	_owned_card = value
 	if is_node_ready():
+		_refresh_new_card_dot()
+		if card_data != null and card_data.card_type == CardData.CardType.MINION:
+			action_icon.texture = _get_action_texture(_get_display_action_type())
 		_refresh_action_value_text()
 		_refresh_vitals_text()
 		_refresh_cooldown_text()
@@ -1282,6 +1321,7 @@ func copy_runtime_display_state_from(source: CardView) -> void:
 		return
 	# 颤动快照必须复制玩家此刻看见的数值，而不是重新读取 CardData 基础值。
 	# 不复制 Tween 本身，快照只冻结创建瞬间的显示状态，随后随目标整体颤动。
+	_effect_row = source.get_effect_row()
 	_battle_vitals_active = source._battle_vitals_active
 	_battle_current_health = source._battle_current_health
 	_battle_current_armor = source._battle_current_armor
@@ -1296,6 +1336,7 @@ func copy_runtime_display_state_from(source: CardView) -> void:
 	_squad_action_preview_target = source._squad_action_preview_target
 	_squad_health_preview_target = source._squad_health_preview_target
 	_squad_armor_preview_target = source._squad_armor_preview_target
+	_squad_cooldown_preview_target = source._squad_cooldown_preview_target
 	_squad_cooldown_preview = source._squad_cooldown_preview
 	_battle_masked_rune_indices.assign(source._battle_masked_rune_indices)
 	_battle_rune_element_overrides = source._battle_rune_element_overrides.duplicate(true)
@@ -1336,6 +1377,7 @@ func set_battle_vitals(current_health: int, current_armor: int) -> void:
 
 
 func clear_battle_vitals() -> void:
+	if not _battle_vitals_active: return
 	_kill_battle_number_tween(&"health")
 	_kill_battle_number_tween(&"armor")
 	_battle_number_targets.erase(&"health")
@@ -1374,6 +1416,7 @@ func set_battle_remaining_cooldown(remaining_cooldown: float) -> void:
 
 
 func clear_battle_remaining_cooldown() -> void:
+	if not _battle_cooldown_active: return
 	_kill_battle_number_tween(&"cooldown")
 	_battle_number_targets.erase(&"cooldown")
 	_battle_cooldown_active = false
@@ -1406,6 +1449,7 @@ func set_battle_action_value(action_value: int) -> void:
 
 
 func clear_battle_action_value() -> void:
+	if not _battle_action_value_active: return
 	_kill_battle_number_tween(&"action_value")
 	_battle_number_targets.erase(&"action_value")
 	_battle_action_value_active = false
@@ -1414,6 +1458,7 @@ func clear_battle_action_value() -> void:
 
 
 func set_battle_action_type(action_type: CardData.ActionType) -> void:
+	if _battle_action_type_override == int(action_type): return
 	_battle_action_type_override = int(action_type)
 	if is_node_ready() and card_data != null:
 		action_icon.texture = _get_action_texture(action_type)
@@ -1422,26 +1467,30 @@ func set_battle_action_type(action_type: CardData.ActionType) -> void:
 
 
 func clear_battle_action_type() -> void:
+	if _battle_action_type_override == -1: return
 	_battle_action_type_override = -1
 	if is_node_ready() and card_data != null:
-		action_icon.texture = _get_action_texture(card_data.action_type)
+		action_icon.texture = _get_action_texture(_get_display_action_type())
 		_refresh_priority_label()
-		_apply_action_layout(card_data.action_type)
+		_apply_action_layout(_get_display_action_type())
 
 
 func set_battle_target_weight(target_weight: int) -> void:
+	if _target_priority_preview == target_weight: return
 	_target_priority_preview = target_weight
 	if is_node_ready():
 		_refresh_priority_label()
 
 
 func clear_battle_target_weight() -> void:
+	if _target_priority_preview == -1: return
 	_target_priority_preview = -1
 	if is_node_ready():
 		_refresh_priority_label()
 
 
 func set_battle_target_weight_display_enabled(enabled: bool) -> void:
+	if _battle_target_weight_display_enabled == enabled: return
 	_battle_target_weight_display_enabled = enabled
 	if is_node_ready():
 		_refresh_priority_label()
@@ -1469,7 +1518,7 @@ func _get_display_action_type() -> CardData.ActionType:
 	return (
 		_battle_action_type_override as CardData.ActionType
 		if _battle_action_type_override >= 0
-		else card_data.action_type
+		else (_owned_card.resolved_action_type as CardData.ActionType if _owned_card != null and _owned_card.resolved_action_type >= 0 else card_data.action_type)
 	)
 
 
@@ -1477,7 +1526,8 @@ func _animate_battle_number(
 	key: StringName,
 	from_value: float,
 	to_value: float,
-	apply_value: Callable
+	apply_value: Callable,
+	pulse_label: Control = null
 ) -> void:
 	if not _set_battle_number_target(key, to_value):
 		return
@@ -1485,12 +1535,23 @@ func _animate_battle_number(
 	if is_equal_approx(from_value, to_value):
 		apply_value.call(to_value)
 		return
-	var tween := create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	var duration := STAT_CHANGE_SECONDS if pulse_label != null else BATTLE_NUMBER_TWEEN_DURATION
+	var tween := create_tween()
+	if pulse_label != null:
+		tween.set_parallel(true).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	else:
+		tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_battle_number_tweens[key] = tween
-	tween.tween_method(apply_value, from_value, to_value, BATTLE_NUMBER_TWEEN_DURATION)
+	tween.tween_method(apply_value, from_value, to_value, duration)
+	if pulse_label != null:
+		pulse_label.pivot_offset = pulse_label.size * 0.5
+		_stat_pulse_tweens[key] = tween
+		tween.tween_property(pulse_label, "scale", Vector2.ONE * STAT_PULSE_SCALE, duration * 0.5)
+		tween.tween_property(pulse_label, "scale", Vector2.ONE, duration * 0.5).set_delay(duration * 0.5)
 	tween.finished.connect(func() -> void:
 		if _battle_number_tweens.get(key) == tween:
 			_battle_number_tweens.erase(key)
+			_stat_pulse_tweens.erase(key)
 	)
 
 
@@ -1509,6 +1570,7 @@ func _kill_battle_number_tween(key: StringName) -> void:
 	if tween != null and tween.is_valid():
 		tween.kill()
 	_battle_number_tweens.erase(key)
+	_stat_pulse_tweens.erase(key)
 
 
 func set_rune_pattern_highlights(
@@ -1677,6 +1739,7 @@ func _refresh_status_slots() -> void:
 		_owned_card.emblem_slots.duplicate(true) if _owned_card != null else [],
 		_owned_card.wound_slots.duplicate(true) if _owned_card != null else [],
 		_battle_spent_emblem_slots.duplicate(),
+		_fusion_hidden_emblem_slot,
 		_battle_masked_wound_slots.duplicate(),
 	]
 	if _has_status_slot_signature and _status_slot_signature == signature:
@@ -1719,7 +1782,7 @@ func _refresh_status_slots() -> void:
 			"status_id": status_id,
 			"texture": texture,
 			"position": definition["position"],
-			"alpha": 0.45 if kind == CardSlotLayout.Kind.EMBLEM and storage_index in _battle_spent_emblem_slots else (0.35 if kind == CardSlotLayout.Kind.WOUND and storage_index in _battle_masked_wound_slots else 1.0),
+			"alpha": 0.0 if kind == CardSlotLayout.Kind.EMBLEM and storage_index == _fusion_hidden_emblem_slot else (0.45 if kind == CardSlotLayout.Kind.EMBLEM and storage_index in _battle_spent_emblem_slots else (0.35 if kind == CardSlotLayout.Kind.WOUND and storage_index in _battle_masked_wound_slots else 1.0)),
 		}
 	for child: Node in _status_slot_layer.get_children():
 		if not wanted_slots.has(String(child.name)):
@@ -1740,9 +1803,21 @@ func _refresh_status_slots() -> void:
 	_status_slot_layer.visible = true
 
 
+func set_fusion_hidden_emblem_slot(slot_index: int) -> void:
+	_fusion_hidden_emblem_slot = slot_index
+	_refresh_status_slots()
+
+
 func _refresh_action_value_text() -> void:
 	if card_data == null:
 		value_label.text = ""
+		return
+	if card_data.card_type in [CardData.CardType.SPELL, CardData.CardType.RESOURCE]:
+		value_label.text = ""
+		return
+	if card_data.card_type == CardData.CardType.EQUIPMENT:
+		value_label.text = str(absi(card_data.equipment_action_delta + roundi(_owned_card.get_permanent_growth(&"base_value")) if _owned_card != null else card_data.equipment_action_delta))
+		_set_control_rect(value_label, _get_action_value_position(value_label.text), value_label.get_rendered_size())
 		return
 	value_label.text = str(
 		_battle_action_value
@@ -1752,7 +1827,7 @@ func _refresh_action_value_text() -> void:
 			if card_data.card_type == CardData.CardType.MINION and _squad_action_preview >= 0
 			else (
 				_owned_card.get_effective_base_value()
-				if _owned_card != null and _owned_card.card_data == card_data
+				if _owned_card != null and (_owned_card.card_data == card_data or _owned_card.get_battlefield_card() == card_data)
 				else card_data.base_value
 			)
 		)
@@ -1766,7 +1841,7 @@ func _refresh_vitals_text() -> void:
 		armor_label.text = ""
 		return
 	if card_data.card_type == CardData.CardType.SPELL:
-		health_label.text = str(_get_display_spell_durability())
+		health_label.text = "∞" if card_data.spell_durability_unlimited else str(_get_display_spell_durability())
 		_layout_vitals_numbers()
 		armor_label.text = ""
 		return
@@ -1782,7 +1857,7 @@ func _refresh_vitals_text() -> void:
 		return
 	var health_value := card_data.max_health
 	var armor_value := card_data.armor
-	if _owned_card != null and _owned_card.card_data == card_data:
+	if _owned_card != null and (_owned_card.card_data == card_data or _owned_card.get_battlefield_card() == card_data):
 		health_value = _owned_card.get_effective_max_health()
 		armor_value = _owned_card.get_effective_base_armor()
 	if _squad_health_preview >= 0:
@@ -1814,7 +1889,7 @@ func _refresh_cooldown_text() -> void:
 			seconds = _battle_remaining_cooldown
 		elif _squad_cooldown_preview >= 0.0:
 			seconds = _squad_cooldown_preview
-		elif _owned_card != null and _owned_card.card_data == card_data:
+		elif _owned_card != null and (_owned_card.card_data == card_data or _owned_card.get_battlefield_card() == card_data):
 			seconds = BattleRules.get_action_interval(
 				card_data.cooldown_seconds,
 				_owned_card.get_status_zeal()
@@ -1854,7 +1929,7 @@ func _refresh_bottom_text() -> void:
 	if card_data == null:
 		return
 	_stop_effect_transition()
-	effect_text_label.text = format_gold_symbols(card_data.effect_text)
+	effect_text_label.text = format_gold_symbols(_get_instance_effect_text())
 	if card_data.card_type != CardData.CardType.MINION:
 		showing_effect = false
 		rune_row.visible = false
@@ -1874,7 +1949,7 @@ func _animate_effect_transition() -> void:
 	_stop_effect_transition()
 	rune_row.visible = true
 	effect_text_label.visible = true
-	effect_text_label.text = format_gold_symbols(card_data.effect_text)
+	effect_text_label.text = format_gold_symbols(_get_instance_effect_text())
 	var target_rune_alpha := effect_rune_dim_alpha if showing_effect else 1.0
 	var target_text_alpha := 1.0 if showing_effect else 0.0
 	_effect_transition_tween = create_tween()
@@ -2074,6 +2149,10 @@ func _refresh_race_icon() -> void:
 		race_icon.visible = false
 		return
 
+	if card_data.race_type == CardData.RaceType.NONE:
+		race_icon.texture = null
+		race_icon.visible = false
+		return
 	var race_key := card_data.get_race_asset_key()
 	var rarity_key := card_data.get_rarity_asset_key()
 	var texture_path := (
@@ -2156,7 +2235,7 @@ func _refresh_card_type_visuals() -> void:
 	elif card_data.card_type == CardData.CardType.EQUIPMENT:
 		action_icon.texture = (
 			EQUIPMENT_ACTION_INCREASE_TEXTURE
-			if card_data.equipment_action_delta >= 0
+			if card_data.equipment_action_delta + (_owned_card.get_permanent_growth(&"base_value") if _owned_card != null else 0) >= 0
 			else EQUIPMENT_ACTION_DECREASE_TEXTURE
 		)
 		_set_control_rect(
@@ -2164,14 +2243,8 @@ func _refresh_card_type_visuals() -> void:
 			EQUIPMENT_ACTION_POSITION,
 			EQUIPMENT_ACTION_SIZE
 		)
-		value_label.text = str(absi(card_data.equipment_action_delta))
-		_set_control_rect(
-			value_label,
-			_get_action_value_position(value_label.text),
-			value_label.get_rendered_size()
-		)
 	else:
-		_apply_action_layout(card_data.action_type)
+		_apply_action_layout(_get_display_action_type())
 		priority_label.visible = false
 
 
@@ -2863,12 +2936,12 @@ func _layout_vitals_numbers() -> void:
 		else:
 			health_value = (
 				_owned_card.get_effective_max_health()
-				if _owned_card != null and _owned_card.card_data == card_data
+				if _owned_card != null and (_owned_card.card_data == card_data or _owned_card.get_battlefield_card() == card_data)
 				else card_data.max_health
 			)
 			armor_value = (
 				_owned_card.get_effective_base_armor()
-				if _owned_card != null and _owned_card.card_data == card_data
+				if _owned_card != null and (_owned_card.card_data == card_data or _owned_card.get_battlefield_card() == card_data)
 				else card_data.armor
 			)
 			if _squad_health_preview >= 0:
@@ -2891,7 +2964,7 @@ func _layout_vitals_numbers() -> void:
 
 
 func _get_display_spell_durability() -> int:
-	if _owned_card != null and _owned_card.card_data == card_data and _owned_card.spell_durability >= 0:
+	if _owned_card != null and (_owned_card.card_data == card_data or _owned_card.get_battlefield_card() == card_data) and _owned_card.spell_durability >= 0:
 		return _owned_card.spell_durability
 	return int(card_data.rarity) + 1
 
@@ -2910,3 +2983,50 @@ func _ignore_mouse_on_children(node: Node) -> void:
 			control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 		_ignore_mouse_on_children(child)
+
+
+func _refresh_new_card_dot() -> void:
+	if not is_instance_valid(_new_card_dot):
+		var dot := Panel.new()
+		dot.position = Vector2(91, 3) # 新卡绿点位于卡牌右上角
+		dot.size = Vector2(5, 5) # 绿点像素尺寸
+		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		dot.z_index = 90 # 绿点显示在卡框之上
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color("52e879") # 新获得卡牌的绿色标识
+		style.set_corner_radius_all(3) # 绿点圆角半径
+		dot.add_theme_stylebox_override("panel", style)
+		add_child(dot)
+		_new_card_dot = dot
+	_new_card_dot.visible = show_new_card_marker and _owned_card != null and _owned_card.is_new and not _snapshot_mode
+
+
+func get_displayed_stat_texts() -> Array[String]:
+	return [value_label.text, health_label.text, armor_label.text, cooldown_label.text]
+
+
+func set_effect_row(row: StringName) -> void:
+	_effect_row = row
+	refresh_effect_text()
+
+
+func get_effect_row() -> StringName:
+	# 装备弹窗在独立详情层，使用承载小队；普通卡沿父节点找到当前排。
+	# 换排会 reparent，因此不读取可能仍指向旧排的拖拽配置。
+	var ancestor: Node = _drag_source_slot if is_instance_valid(_drag_source_slot) else self
+	while ancestor != null:
+		if ancestor.has_method("get_card_effect_row"):
+			return ancestor.call("get_card_effect_row")
+		ancestor = ancestor.get_parent()
+	return _effect_row
+
+
+func refresh_effect_text() -> void:
+	if is_node_ready() and card_data != null:
+		var text := format_gold_symbols(_get_instance_effect_text())
+		if effect_text_label.text != text: effect_text_label.text = text
+
+
+func _get_instance_effect_text() -> String:
+	if card_data == null: return ""
+	return _owned_card.get_effect_text_for_row(get_effect_row()) if _owned_card != null else card_data.get_effect_text_for_row(get_effect_row())

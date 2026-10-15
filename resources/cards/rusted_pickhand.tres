@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/rusted_pickhand.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"rusted_pickhand"
+display_name = "锈蚀镐手"
+pack_id = &"twisted_vein"
+keywords = Array[StringName]([&"mining"])
+content_effect = &"rusted_pickhand"
+base_value = 2
+cooldown_seconds = 6.0
+max_health = 3
+armor = 2
+runes = Array[int]([0, 1, 2])
+race_type = 5
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-7, 4)
+effect_text = "开采。攻击命中随从时，目标基础护甲永久-1。"

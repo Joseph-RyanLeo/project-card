@@ -11,6 +11,8 @@ signal squad_clicked(squad_view: SquadView, card_data: CardData)
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 signal card_inspection_requested(card_view: CardView, card_data: CardData, owned_card: OwnedCard)
 
+const StatusIndicatorStyle = preload("res://scripts/ui/status_indicator_style.gd")
+const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const EQUIPMENT_INDICATOR_SCRIPT: Script = preload(
@@ -70,7 +72,7 @@ const DEATH_DISSOLVE_OUTLINE_PIXELS: float = 1.0 # 死亡侵蚀实色描边固�
 const BATTLE_RESULT_CARD_MODULATE := Color(0.30, 0.30, 0.30, 1.0) # 战后卡面进一步压暗，统计图标本身不受影响
 const BATTLE_RESULT_CONTENT_WIDTH: float = 82.0 # 原生图标与卢恩数字在卡面中央占用的宽度
 const BATTLE_RESULT_ROW_HEIGHT: float = 30.0 # 兼容治疗图标原生 28px 高度的统计行高
-const BATTLE_RESULT_OVERLAY_Z_INDEX: int = 3500 # 结算信息高于卡牌内容、低于暂停菜单
+const BATTLE_RESULT_OVERLAY_Z_INDEX: int = 2000 # 战后统计盖住卡牌，但低于2400层的路径／天赋面板与商店、检视
 const BATTLE_RESULT_DEATH_SIZE := Vector2(10.0, 10.0) # 用户提供骷髅图标保持原生像素尺寸
 
 var squad_data: SquadData
@@ -235,6 +237,8 @@ func set_battle_status(
 	var vitals_source := display_data.get_vitals_source()
 	_target_priority_weight = target_weight
 	for card_view: CardView in get_card_views():
+		if not card_view.card_data.front_effect_text.is_empty() or not card_view.card_data.back_effect_text.is_empty():
+			card_view.refresh_effect_text()
 		card_view.set_battle_target_weight_display_enabled(_show_target_priority)
 		var masked_indices: Array[int] = []
 		masked_indices.assign(masked_runes_by_card.get(card_view.card_data, []))
@@ -279,6 +283,8 @@ func set_battle_status(
 
 
 func set_target_priority_display_enabled(enabled: bool) -> void:
+	if _show_target_priority == enabled:
+		return
 	_show_target_priority = enabled
 	for card_view: CardView in get_card_views():
 		card_view.set_battle_target_weight_display_enabled(enabled)
@@ -653,6 +659,7 @@ func configure_drag_source(enabled: bool, source_row: Node = null) -> void:
 	_source_row = source_row
 	for card_data: CardData in _card_views:
 		var card_view := _card_views[card_data] as CardView
+		if card_view.has_meta("card_service_slot"): continue
 		card_view.configure_drag_source(_drag_enabled, &"board", source_row, self)
 	if is_instance_valid(_equipment_indicator):
 		_equipment_indicator.call(
@@ -819,7 +826,8 @@ func _refresh() -> void:
 	var display_data := get_current_visual_squad_data()
 	if display_data.horizontal_cards.is_empty():
 		for card_view: CardView in _card_views.values():
-			card_view.visible = false
+			if not card_view.has_meta("card_service_slot"):
+				card_view.visible = false
 		visible = false
 		return
 	visible = true
@@ -868,6 +876,7 @@ func _refresh() -> void:
 	for horizontal_index: int in display_data.horizontal_cards.size():
 		var card_data := display_data.horizontal_cards[horizontal_index]
 		var card_view := get_card_view(card_data)
+		if card_view.has_meta("card_service_slot"): continue
 		card_view.visible = true
 		card_view.set_layout_position(
 			Vector2(x_positions[horizontal_index], 0.0)
@@ -876,6 +885,7 @@ func _refresh() -> void:
 			card_view.set_card_data(card_data)
 		if not created_cards.has(card_data):
 			card_view.set_owned_card(display_data.get_owned_card(card_data))
+		card_view.set_battle_target_weight_display_enabled(_show_target_priority)
 		card_view.set_squad_attribute_preview_from_squad(display_data)
 		card_view.set_rune_pattern_highlights(
 			_get_card_highlight_indices(highlighted_runes_by_card, card_data),
@@ -899,7 +909,7 @@ func _refresh() -> void:
 	for layer_index: int in display_data.layer_cards.size():
 		var layer_card := display_data.layer_cards[layer_index]
 		var layer_view := get_card_view(layer_card)
-		if layer_view != null:
+		if layer_view != null and not layer_view.has_meta("card_service_slot"):
 			# 每张卡内部还有卡框、名字、属性等 0～20 的相对层级。
 			# 整卡之间拉开固定大间隔，才能保证下层卡的任何子节点都不会穿过上层卡。
 			layer_view.set_resting_z_index(
@@ -911,7 +921,7 @@ func _refresh() -> void:
 	var draw_child_index: int = 0
 	for layer_index: int in range(display_data.layer_cards.size() - 1, -1, -1):
 		var ordered_view := get_card_view(display_data.layer_cards[layer_index])
-		if ordered_view != null:
+		if ordered_view != null and not ordered_view.has_meta("card_service_slot"):
 			card_visual_layer.move_child(ordered_view, draw_child_index)
 			draw_child_index += 1
 	if _stack_target_feedback_strength > 0.0:
@@ -938,6 +948,7 @@ func _refresh_equipment_indicator(data: SquadData) -> void:
 	if not is_instance_valid(_equipment_indicator):
 		_equipment_indicator = EQUIPMENT_INDICATOR_SCRIPT.new() as Control
 		_equipment_indicator.name = "EquipmentIndicator"
+		_equipment_indicator.connect("inspection_requested", _on_card_inspection_requested)
 		card_visual_layer.add_child(_equipment_indicator)
 		_equipment_indicator.connect(
 			"click_carry_requested",
@@ -1092,6 +1103,9 @@ func _get_visible_battle_result_entries() -> Array[Dictionary]:
 			"texture": BATTLE_RESULT_ACTION_TEXTURES[action_type],
 			"value": action_damage,
 		})
+	var poison_damage := float(damage_by_action.get(&"poison", 0.0))
+	if poison_damage > 0.000001:
+		entries.append({"kind": &"poison_damage", "texture": StatusIndicatorStyle.get_texture(CardSlotLayout.Kind.WOUND, &"中毒Ⅰ"), "value": poison_damage})
 	# 兼容尚未带分项字段的旧统计数据；新战斗只走上面的逐行动类型记录。
 	if damage_by_action.is_empty() and damage_dealt > 0.000001:
 		var damage_texture_index := clampi(int(_battle_result_action_type), 0, 2)
@@ -1253,7 +1267,8 @@ func _sync_card_views(data: SquadData) -> Array[CardData]:
 		created_cards.append(card_data)
 
 	for stored_view: CardView in _card_views.values():
-		stored_view.visible = false
+		if not stored_view.has_meta("card_service_slot"):
+			stored_view.visible = false
 	return created_cards
 
 
@@ -1408,6 +1423,8 @@ func _create_squad_shadow() -> void:
 
 
 func _on_card_clicked(_ignored: CardData, clicked_card: CardData) -> void:
+	var clicked_view := get_card_view(clicked_card)
+	if clicked_view != null and clicked_view.has_meta("card_service_slot"): return
 	_last_clicked_card = clicked_card
 	squad_clicked.emit(self, clicked_card)
 
@@ -1427,6 +1444,8 @@ func _on_card_click_carry_requested(data: Dictionary, pointer_global_position: V
 
 
 func _on_card_mouse_entered(card_data: CardData) -> void:
+	var view := get_card_view(card_data)
+	if view != null and view.has_meta("card_service_slot"): return
 	if not _drag_enabled or is_preview():
 		return
 	_hovered_card = card_data
@@ -1524,5 +1543,6 @@ func _apply_squad_lift_position() -> void:
 	squad_lift_layer.position = Vector2.ZERO
 	var lift := SQUAD_LIFT_OFFSET if _squad_feedback_active else 0.0
 	for card_view: CardView in get_card_views():
+		if card_view.has_meta("card_service_slot"): continue
 		card_view.set_external_lift(lift)
 	_sync_equipment_indicator_hover_offset()

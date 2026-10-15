@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/augustus_ironwall.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"augustus_ironwall"
+display_name = "奥古斯都·铁壁"
+pack_id = &"ironwall_inscription"
+content_effect = &"augustus_ironwall"
+base_value = 5
+cooldown_seconds = 5.0
+armor = 10
+runes = Array[int]([0, 1, 2])
+race_type = 2
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(4, 18)
+effect_text = "获得时获得两张专属法术；它们生效时，所有友军获得保护2。"

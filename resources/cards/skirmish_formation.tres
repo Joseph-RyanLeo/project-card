@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"skirmish_formation"
+display_name = "散兵阵"
+pack_id = &"ironwall_inscription"
+content_effect = &"skirmish_formation"
+card_type = 2
+rarity = 3
+effect_text = "开战时：若我方全为单兵，所有友军本场热诚+4。"
+is_derived = true
+spell_type = 0
+spell_trigger_kind = 1
+spell_durability_unlimited = true

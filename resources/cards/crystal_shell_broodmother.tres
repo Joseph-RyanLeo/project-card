@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/crystal_shell_broodmother.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"crystal_shell_broodmother"
+display_name = "晶壳巢母"
+pack_id = &"twisted_vein"
+content_effect = &"crystal_shell_broodmother"
+action_type = 1
+base_value = 3
+cooldown_seconds = 4.0
+max_health = 4
+armor = 5
+runes = Array[int]([0, 1, 2])
+race_type = 7
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(1, 12)
+effect_text = "友军每触发1次开采，召唤1只晶壳虫。"

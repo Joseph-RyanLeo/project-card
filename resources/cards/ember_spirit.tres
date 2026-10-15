@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/ember_spirit.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"ember_spirit"
+display_name = "余火精灵"
+pack_id = &"twisted_vein"
+effect_ids = Array[StringName]([&"ember_spirit.effect.rush"])
+content_effect = &"ember_spirit"
+base_value = 4
+cooldown_seconds = 5.0
+runes = Array[int]([0, 1, 2])
+race_type = 4
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-5, 1)
+effect_text = "突击：此卡两个元素符文临时变为火符文。"

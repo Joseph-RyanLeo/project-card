@@ -62,6 +62,8 @@ func _on_battle_initialized() -> void:
 		"settings": {
 			"use_projectile_timing": _controller.use_projectile_timing,
 			"battle_speed_multiplier": _controller.battle_speed_multiplier,
+			"attack_effect_profiles": BattleAttackEffectProfiles.get_profiles(),
+			"attack_effect_file_version": BattleAttackEffectProfiles.FILE_VERSION,
 			"settings_capture_status": "captured_from_BattleController_at_initialization",
 		},
 		"initial_random_state": {
@@ -118,6 +120,7 @@ func _on_effect_resolved(event: BattleEffectEvent) -> void:
 		"element_type": event.element_type,
 		"element_count": event.element_count,
 		"qualifier": event.log_qualifier,
+		"sentry_absorption": {"amount": event.sentry_absorbed, "remaining_capacity": event.sentry_remaining, "region": event.sentry_region},
 		"visual_kind": String(event.visual_kind),
 		"is_base_action": event.is_base_action,
 		"is_continuous": event.is_continuous,
@@ -225,6 +228,8 @@ func finish(result: BattleController.Result) -> void:
 	is_complete = true
 	var status := record.capture_status as Dictionary
 	status["complete"] = true
+	status["trace_detail"] = "full" if _controller.effect_runtime.full_trace_enabled else "changes_and_failures"
+	status["filtered_trace_counts"] = _controller.effect_runtime.filtered_trace_counts.duplicate()
 	recording_completed.emit()
 
 
@@ -340,6 +345,9 @@ func _snapshot_state(state: BattleSquadState) -> Dictionary:
 		"vitals": _snapshot_vitals(state),
 		"battle_status": {
 			"alive": state.alive,
+			"effective_dazzling": _controller.has_effective_dazzling(state) if is_instance_valid(_controller) else false,
+			"effective_shadow": state.has_effective_shadow(),
+			"runtime_keywords": _string_array(state.runtime_keyword_sources.keys()),
 			"buff_stacks": _string_key_dictionary(state.buff_stacks),
 			"active_injury_ids": _string_array(state.battle_active_injury_ids),
 			"injury_levels": _string_key_dictionary(state.battle_injury_levels),

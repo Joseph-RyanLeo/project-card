@@ -42,6 +42,7 @@ enum RaceType {
 	DEMON,
 	BEAST,
 	PLANT,
+	NONE,
 }
 
 enum Rarity {
@@ -85,7 +86,7 @@ enum EquipmentType {
 
 const MAXIMUM_BASE_VALUE: int = 99 # 卡面基础行动数值上限；牌型倍率后的最终结果不受此上限限制
 const MINIMUM_COOLDOWN_SECONDS: float = 0.5 # 卡牌可配置的最低基础冷却秒数
-const MAXIMUM_COOLDOWN_SECONDS: float = 9.9 # 卡牌可配置及显示的最高基础冷却秒数
+const MAXIMUM_COOLDOWN_SECONDS: float = 99.0 # 卡牌可配置及显示的最高基础冷却秒数
 const MAXIMUM_HEALTH: int = 999 # 最大生命与战斗当前生命的统一上限
 const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上限
 
@@ -97,6 +98,10 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export var is_available: bool = true # 是否进入当前可用卡池；停用卡仍可保留资源与美术
 @export var effect_ids: Array[StringName] = [] # 绑定到通用效果目录的原子效果 ID
 @export var keywords: Array[StringName] = [] # 卡牌关键词；由对应权威规则读取，不在这里直接运行战斗结算
+@export var content_effect: StringName = &"" # 已实现内容运行时的效果键；复杂连锁集中执行
+@export var mining_uses: int = 0 # 有限开采次数；无限开采由有效内容效果提供
+@export var spell_durability_unlimited: bool = false # 无限耐久法术正常准备、保存，但战后不扣耐久
+@export var equipment_durability: int = 0 # 装备跨战耐久；0表示无整局次数限制
 @export var deferred_effect_hooks: Dictionary = {} # 尚未实现系统的严格后续钩子；运行时不得提前触发
 @export var is_derived: bool = false # 是否为战斗衍生卡；死亡触发与奖励池会读取
 @export var card_type: CardType = CardType.MINION # 卡牌大类，当前 Demo 主要使用随从
@@ -124,11 +129,12 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export var rarity: Rarity = Rarity.I # 卡框、种族图标配色与稀有度显示
 @export var spell_type: SpellType = SpellType.ENHANCE # 法术中央类型图标与搜索名称
 @export var spell_trigger_kind: SpellTriggerKind = SpellTriggerKind.UNASSIGNED # 法术启动类别；旧占位卡待确认后再分配
+@export var spell_preparation_seconds: float = -1.0 # 准备类进入读秒位置后所需秒数；-1表示尚未设计，不参与读秒
 @export var equipment_type: EquipmentType = EquipmentType.RANGED_WEAPON # 装备中央类型图标与搜索名称
 @export var resource_type: ResourceType = ResourceType.MINERAL # 资源卡立绘下部的种类图标
 @export_range(-99, 99, 1) var equipment_action_delta: int = 0 # 装备对基础行动数值的临时占位变化量
 @export_range(-99, 99, 1) var equipment_zeal_delta: int = 0 # 装备提供的带正负号热诚层数；每层按现有战斗规则改变5%冷却速度
-@export_range(0, 99, 1) var equipment_health_delta: int = 0 # 装备对生命值的临时占位加成
+@export_range(-99, 99, 1) var equipment_health_delta: int = 0 # 装备对生命值的临时占位加成
 @export_range(0, 99, 1) var equipment_armor_delta: int = 0 # 装备对护甲值的临时占位加成
 @export_range(-1, 8, 1) var wound_slot_count: int = -1 # -1按稀有度取默认伤势槽数；非负值用于明确覆盖
 @export_range(-1, 8, 1) var emblem_slot_count: int = -1 # -1按稀有度取默认纹章槽数；非负值用于明确覆盖
@@ -139,7 +145,17 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export var art_texture: Texture2D # 卡牌人物立绘
 @export var art_normal_texture: Texture2D # 可选立绘法线贴图；为空时预览仍保留 3D 与整卡扫光
 @export var art_offset: Vector2i = Vector2i.ZERO # 立绘在裁切窗口内的像素偏移
-@export_multiline var effect_text: String = "" # 右键切换后显示的效果说明
+@export_multiline var effect_text: String = "" # 收藏、商店等非战场的效果说明
+@export_multiline var front_effect_text: String = "" # 前排效果说明；空文本沿用通用说明
+@export_multiline var back_effect_text: String = "" # 后排效果说明；空文本沿用通用说明
+
+
+func get_effect_text_for_row(row: StringName = &"") -> String:
+	if row == &"front" or String(row).ends_with("_front"):
+		return front_effect_text if not front_effect_text.is_empty() else effect_text
+	if row == &"back" or String(row).ends_with("_back"):
+		return back_effect_text if not back_effect_text.is_empty() else effect_text
+	return effect_text
 
 
 func get_action_type_name() -> String:
@@ -217,15 +233,15 @@ func get_base_target_priority() -> int:
 static func get_base_target_priority_for_action(value: ActionType) -> int:
 	match value:
 		ActionType.MELEE:
-			return 4
+			return 8
 		ActionType.RANGED:
-			return 2
+			return 4
 		ActionType.MAGIC:
-			return 3
+			return 6
 		ActionType.HEAL:
-			return 1
+			return 2
 		ActionType.DEFENSE:
-			return 5
+			return 10
 		_:
 			return 1
 
@@ -258,6 +274,7 @@ func get_race_asset_key() -> String:
 		"demon",
 		"beast",
 		"plant",
+		"",
 	][race_type]
 
 
@@ -277,6 +294,7 @@ func get_race_name() -> String:
 		"魔族",
 		"野兽",
 		"植物",
+		"无",
 	][race_type]
 
 

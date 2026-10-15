@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/moon_dancer.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"moon_dancer"
+display_name = "月之舞者"
+pack_id = &"silvermoon_chapter"
+effect_ids = Array[StringName]([&"moon_dancer.effect.echo"])
+content_effect = &"moon_dancer"
+action_type = 1
+base_value = 3
+cooldown_seconds = 5.0
+max_health = 2
+armor = 3
+runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(2, 20)
+effect_text = "回响：与相邻友军换位。友军位移后，此卡本场数值+1（单卡冷却0.1秒）。"

@@ -1,6 +1,6 @@
 extends SceneTree
 
-## D2-4 第二小步：验证不依赖战后写回/资源系统的真实随从战中事件链。
+## D2-4 随从战中事件链；相关平衡用例随当前设计更新。
 
 const BattleControllerScript = preload("res://scripts/battle/battle_controller.gd")
 const BattlePermanentGrowthLedger = preload("res://scripts/battle/battle_permanent_growth_ledger.gd")
@@ -19,6 +19,11 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	if "--poet-only" in OS.get_cmdline_user_args():
+		_test_other_and_adjacent_ally_death_events()
+		print("悲歌诗人专项：%d失败" % failures)
+		quit(failures)
+		return
 	_test_action_multiplier_and_continuous_recheck()
 	_test_fireman_rush_health_growth()
 	_test_armor_gain_and_echo_events()
@@ -36,7 +41,7 @@ func _run() -> void:
 	_test_baggage_muleteer_pending_gold()
 	_test_field_medic_temporary_injury_mask()
 	_test_berserker_pending_base_value_growth()
-	_test_armorsmith_pending_armor_growth()
+	_test_armorsmith_mining_armor()
 	if failures == 0:
 		print("D2-4 combat effect wiring checks passed.")
 	else:
@@ -138,23 +143,24 @@ func _test_armor_gain_and_echo_events() -> void:
 
 func _test_other_and_adjacent_ally_death_events() -> void:
 	var controller := _controller_with(
-		[
-			_entry(_card("elegy_poet"), &"player_front", 0),
-			_entry(_card("militia"), &"player_front", 1),
-		],
-		[_entry(_plain_enemy(), &"enemy_front", 0)],
-		24105
+		[_entry(_card("ember_squire"), &"player_front", 0), _entry(_card("elegy_poet"), &"player_front", 1), _entry(_card("ember_squire"), &"player_front", 2), _entry(_card("militia"), &"player_back", 0), _entry(_card("booby_mine"), &"player_back", 1)],
+		[_entry(_plain_enemy(), &"enemy_front", 0)], 24105
 	)
-	var poet := controller.player_states[0]
-	var victim := controller.player_states[1]
-	victim.current_health = 0.0
+	var poet := controller.player_states[1]
+	controller.player_states[3].current_health = 0.0
 	controller._finalize_batch()
-	_expect(
-		poet.modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE) == 1.0
-		and poet.modifiers.get_additive(BattleModifier.Stat.BASE_ARMOR) == 1.0
-		and is_equal_approx(float(poet.current_armor), 4.0),
-		"非衍生友军死亡后，悲歌诗人的数值与护甲两步共用一次死亡事件"
-	)
+	_expect(controller.player_states[0].get_zeal_layers() == 1 and controller.player_states[2].get_zeal_layers() == 1, "其他非衍生友军死亡后，诗人左右友军获得热诚+1")
+	_expect(poet.modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE) == 0 and poet.modifiers.get_additive(BattleModifier.Stat.BASE_ARMOR) == 0, "悲歌诗人不再获得旧数值与护甲成长")
+	var derived_state := controller.player_states[4]
+	derived_state.current_health = 0
+	controller._finalize_batch()
+	_expect(controller.player_states[0].get_zeal_layers() == 2 and controller.player_states[2].get_zeal_layers() == 2, "衍生物友军死亡也给诗人相邻友军热诚+1")
+	poet.current_health = 0
+	controller._finalize_batch()
+	_expect(controller.player_states[0].get_zeal_layers() == 2 and controller.player_states[2].get_zeal_layers() == 2, "沿用已确认边界：诗人自身死亡不触发")
+	controller.player_states[0].current_health = 0
+	controller._finalize_batch()
+	_expect(controller.player_states[2].get_zeal_layers() == 2, "诗人死亡后不继续监听友军死亡")
 	_dispose(controller)
 
 
@@ -265,7 +271,7 @@ func _test_other_ally_action_reinforcement() -> void:
 	for _index: int in 6:
 		controller.effect_runtime.notify_action_after(ally)
 		controller.effect_runtime.process_due(controller.elapsed_seconds)
-	_expect(timid.modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT) == 5.0, "胆怯的步兵只累计其他友军行动且本效果封顶5强化")
+	_expect(timid.modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT) == 6.0, "胆怯的步兵累计同排其他友军的6次行动，不再封顶5强化")
 	controller.effect_runtime.notify_action_after(timid)
 	controller.effect_runtime.process_due(controller.elapsed_seconds)
 	_expect(timid.modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT) == 0.0, "胆怯的步兵自身行动后消费并清空本效果强化")
@@ -1019,23 +1025,8 @@ func _test_baggage_muleteer_pending_gold() -> void:
 		24119
 	)
 	var entries := controller.run_reward_ledger.get_entries()
-	var base_amount := 0
-	var neighbor_amount := 0
-	for entry: Dictionary in entries:
-		if entry.get("effect_id") == &"baggage_muleteer.effect.01":
-			base_amount += int(entry.get("amount", 0))
-		elif entry.get("effect_id") == &"baggage_muleteer.effect.02":
-			neighbor_amount += int(entry.get("amount", 0))
-	_expect(
-		entries.size() == 2
-		and base_amount == 1
-		and neighbor_amount == 4
-		and controller.run_reward_ledger.get_total(
-			BattleRunRewardLedger.KIND_GOLD,
-			BattleSquadState.Side.PLAYER
-		) == 5,
-		"辎重驮夫记录基础1金币，乡邻2金币可被一只老狼额外执行为4，合计待结算5金币"
-	)
+	_expect(entries.size() == 1 and entries[0].effect_id == &"baggage_muleteer.effect.01" and controller.run_reward_ledger.get_total(BattleRunRewardLedger.KIND_GOLD, BattleSquadState.Side.PLAYER) == 1, "辎重驮夫只记录突击1金币，老狼不额外增加金币")
+	_expect(controller.twisted_vein.mining_events == 0, "开场没有资源时乡邻开采无效，不产生虚假开采事件")
 	_dispose(controller)
 
 
@@ -1139,48 +1130,18 @@ func _test_field_medic_temporary_injury_mask() -> void:
 	_dispose(live_controller)
 
 
-func _test_armorsmith_pending_armor_growth() -> void:
-	var armorsmith := _card("armorsmith")
-	var armor_provider := CardData.new()
-	armor_provider.id = &"growth_armor_provider"
-	armor_provider.display_name = "成长护甲来源"
-	armor_provider.max_health = 20
-	armor_provider.armor = 5
-	var source_squad := SquadData.from_cards([armorsmith, armor_provider])
-	source_squad.layer_cards.assign([armorsmith, armor_provider])
-	var controller := _controller_with(
-		[
-			{"squad_data": source_squad, "row_key": &"player_front", "formation_index": 0},
-			_entry(_card("militia"), &"player_front", 1),
-		],
-		[_entry(_plain_enemy(), &"enemy_front", 0)],
-		24117
-	)
-	var smith_state := controller.player_states[0]
-	var adjacent := controller.player_states[1]
-	adjacent.current_health = 0.0
+func _test_armorsmith_mining_armor() -> void:
+	var controller := _controller_with([_entry(_card("armorsmith"), &"player_front", 0), _entry(_card("ember_squire"), &"player_front", 1)], [_entry(_plain_enemy(), &"enemy_front", 0)], 24117)
+	var smith := controller.player_states[0]
+	var miner := controller.player_states[1]
+	var armor_before := smith.current_armor
+	var resource: RefCounted = controller.spawn_content_resource(_card("water_element_shard"), 0)
+	controller._apply_effect_event(controller.make_mining_event(miner, resource))
+	_expect(smith.current_armor == armor_before + 1, "铸甲师响应相邻友军成功开采，前排自身护甲+1")
+	var growth_count := controller.permanent_growth_ledger.get_entries().size()
+	miner.current_health = 0.0
 	controller._finalize_batch()
-	var entries := controller.permanent_growth_ledger.get_entries()
-	var entry: Dictionary = entries[0] if entries.size() == 1 else {}
-	_expect(
-		entries.size() == 1
-		and entry.get("card_data") == armor_provider
-		and entry.get("stat") == BattlePermanentGrowthLedger.STAT_BASE_ARMOR
-		and entry.get("owner_kind") == BattleEffectDefinition.OwnerKind.ARMOR_PROVIDER_CARD
-		and is_equal_approx(float(entry.get("amount", 0.0)), 1.0),
-		"铸甲师把永久护甲成长归给触发当时实际提供护甲的单卡"
-	)
-	_expect(
-		is_equal_approx(smith_state.current_armor, 9.0)
-		and armor_provider.armor == 5,
-		"铸甲师同步增加本场当前护甲，但不直接写回CardData"
-	)
-	controller.effect_runtime.emit_trigger(
-		BattleEffectDefinition.Trigger.ADJACENT_ALLY_DESTROYED,
-		{"actor": adjacent}
-	)
-	controller.effect_runtime.process_due(controller.elapsed_seconds)
-	_expect(controller.permanent_growth_ledger.get_entries().size() == 1, "铸甲师复活或后续相邻阵亡不会重置每场一次限制")
+	_expect(controller.permanent_growth_ledger.get_entries().size() == growth_count, "相邻阵亡不再产生铸甲师永久护甲成长")
 	_dispose(controller)
 
 

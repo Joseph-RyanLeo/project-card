@@ -5,6 +5,7 @@ extends RefCounted
 ## 随机随从请求先原样进入待解析队列；D2-7 拥有正式卡池与唯一性规则后再决定结果，
 ## 不能在当前阶段用一个临时随机 CardData 冒充真实奖励。
 
+var mining_totals: Array[int] = [0, 0] # 本局双方成功开采独立累计，战后提交、战中退出回滚
 var gold: int = 0
 var pending_random_card_requests: Array[Dictionary] = []
 var pending_emblem_instances: Array[Dictionary] = []
@@ -84,6 +85,7 @@ func enqueue_emblem_instance(entry: Dictionary) -> bool:
 		"emblem_instance_id": instance_id,
 		"emblem_id": emblem_id,
 		"source": parameters.get("source", ""),
+		"element_sticker": bool(parameters.get("element_sticker", false)),
 	})
 	return true
 
@@ -108,6 +110,7 @@ func get_emblem_instances_for_battle(battle_instance_id: StringName) -> Array[Di
 
 func capture_state() -> Dictionary:
 	return {
+		"mining_totals": mining_totals.duplicate(),
 		"gold": gold,
 		"pending_random_card_requests": pending_random_card_requests.duplicate(true),
 		"pending_emblem_instances": pending_emblem_instances.duplicate(true),
@@ -117,6 +120,7 @@ func capture_state() -> Dictionary:
 
 
 func restore_state(snapshot: Dictionary) -> void:
+	mining_totals.assign(snapshot.get("mining_totals", [0, 0]))
 	gold = int(snapshot.get("gold", 0))
 	pending_random_card_requests.assign(
 		(snapshot.get("pending_random_card_requests", []) as Array).duplicate(true)

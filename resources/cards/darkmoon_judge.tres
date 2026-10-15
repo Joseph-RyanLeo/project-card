@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/darkmoon_judge.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"darkmoon_judge"
+display_name = "暗月审判者"
+pack_id = &"silvermoon_chapter"
+effect_ids = Array[StringName]([&"darkmoon_judge.effect.echo"])
+content_effect = &"darkmoon_judge"
+base_value = 5
+cooldown_seconds = 5.0
+max_health = 7
+armor = 3
+runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-3, 38)
+effect_text = "回响：对所有当前生命值低于此卡的随从施加1层疲劳。"

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/twilight_guard.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"twilight_guard"
+display_name = "晨昏守卫"
+pack_id = &"silvermoon_chapter"
+keywords = Array[StringName]([&"balance"])
+content_effect = &"twilight_guard"
+action_type = 4
+acquisition_action_types = Array[int]([4, 3])
+base_value = 2
+cooldown_seconds = 7.0
+max_health = 5
+armor = 1
+runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-11, 28)
+effect_text = "均衡。前排时耀眼并反伤。后排时会保护后排。"
+front_effect_text = "均衡。前排时，耀眼，向攻击自身的敌人造成2点伤害。"
+back_effect_text = "均衡。后排时，所有后排友军受到攻击时投掷1d10=10时无效此次攻击。"

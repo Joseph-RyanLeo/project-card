@@ -30,7 +30,7 @@ static func get_default_counts(rarity: CardData.Rarity) -> Vector2i:
 		CardData.Rarity.IV:
 			return Vector2i(4, 4)
 		CardData.Rarity.V:
-			return Vector2i(3, 5)
+			return Vector2i(4, 4)
 	return Vector2i.ZERO
 
 

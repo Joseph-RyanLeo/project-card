@@ -100,6 +100,7 @@ func _test_battle_rules() -> void:
 
 func _test_main_drag_and_save() -> void:
 	var main = load("res://scenes/Main.tscn").instantiate()
+	main.run_save_path = "/private/tmp/project-card-celestial-test-run.json"
 	root.add_child(main)
 	await process_frame
 	await process_frame

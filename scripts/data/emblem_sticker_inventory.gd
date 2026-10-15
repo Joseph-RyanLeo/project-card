@@ -91,6 +91,33 @@ func can_move(instance_id: StringName, target: Vector2i) -> bool:
 	return false
 
 
+func fuse_onto_card(source_id: StringName, owned: OwnedCard, slot_index: int, target_id: StringName) -> Dictionary:
+	if owned == null or not owned.is_valid() or slot_index < 0 or slot_index >= owned.emblem_slots.size():
+		return {}
+	var source := get_item(source_id)
+	var target := owned.emblem_slots[slot_index]
+	if source_id == target_id or StringName(String(target.get("instance_id", ""))) != target_id or not is_fusion_material(source) or not is_fusion_material(target):
+		return {}
+	var recipe := EmblemFusionRecipes.resolve(StringName(String(source.emblem_id)), StringName(String(target.emblem_id)))
+	if recipe.is_empty():
+		return {}
+	# 结果是全新附着实例，只占原卡槽，不继承材料格位或累计成长。
+	var result := {
+		"instance_id": StringName("fusion_%s_%d" % [String(target_id), Time.get_ticks_usec()]),
+		"emblem_id": recipe.result, "kind": "emblem", "element_sticker": false,
+		"temporary": false, "source": "emblem_fusion",
+	}
+	# 两步都已完成身份和边界校验，且不等待帧／不触发信号，提交期间无其他输入介入。
+	if not owned.set_emblem_slot(slot_index, result):
+		return {}
+	remove(source_id)
+	return result.duplicate(true)
+
+
+static func is_fusion_material(state: Dictionary) -> bool:
+	return not state.is_empty() and String(state.get("kind", "emblem")) == "emblem" and not bool(state.get("element_sticker", false)) and not String(state.get("emblem_id", "")).is_empty()
+
+
 func cell_for_local_position(point: Vector2) -> Vector2i:
 	var cell := Vector2i(roundi(point.x / CELL_STEP.x), roundi(point.y / CELL_STEP.y))
 	if cell.x < 0 or cell.y < 0 or cell.x >= COLUMN_COUNT or cell.y >= ROW_COUNT:

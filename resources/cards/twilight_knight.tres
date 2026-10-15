@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/twilight_knight.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"twilight_knight"
+display_name = "晨昏骑士"
+pack_id = &"silvermoon_chapter"
+effect_ids = Array[StringName]([&"twilight_knight.effect.rush"])
+keywords = Array[StringName]([&"balance", &"rush"])
+content_effect = &"twilight_knight"
+acquisition_action_types = Array[int]([0, 2])
+base_value = 8
+cooldown_seconds = 5.0
+max_health = 7
+armor = 3
+runes = Array[int]([0, 1, 2])
+rarity = 2
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-13, 29)
+effect_text = "均衡。前排：突击眩晕敌人。后排：突击使敌人疲劳。换排时重新触发突击。"
+front_effect_text = "均衡。前排时，突击：眩晕随机3名敌人1秒。换排时重新触发所有突击。"
+back_effect_text = "均衡。后排时，突击：对3名敌人施加1层疲劳。换排时重新触发所有突击。"

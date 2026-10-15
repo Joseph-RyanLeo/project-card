@@ -1,0 +1,814 @@
+{
+  "_说明": "2026-10-07扭曲矿脉测试遭遇：暂用于覆盖36张卡，不作为最终难度。字符串代表单卡；对象cards为左右顺序，top为顶牌索引，layout控制双卡间距，equipment为独立装备位。spells走敌方准备法术，resources添加到合法敌方资源板；衍生碎晶虫仅在后段用于专项覆盖。previous_formations仅接受已保存的旧路径。",
+  "enemies": [
+    {
+      "path_id": "enemy_1_0",
+      "kind": "battle",
+      "hint": "矿道里传来碎壳声与矿车轰鸣。",
+      "first_day": 1,
+      "last_day": 1,
+      "front": [
+        "guard_remains",
+        "crystal_shell_beetle"
+      ],
+      "back": [
+        {
+          "cards": [
+            "minecart_soul"
+          ],
+          "equipment": "mining_pick"
+        }
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "militia",
+            "militia"
+          ],
+          "back": [],
+          "hint": "道路被步兵守住，旗帜后方隐约有人影。"
+        },
+        {
+          "front": [
+            "militia",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ],
+          "hint": "道路被步兵守住，旗帜后方隐约有人影。"
+        }
+      ],
+      "spells": [],
+      "resources": [
+        "abandoned_toolbox"
+      ]
+    },
+    {
+      "path_id": "enemy_1_1",
+      "kind": "battle",
+      "hint": "锈蚀矿镐旁，鬼火照亮一张怪脸。",
+      "first_day": 1,
+      "last_day": 1,
+      "front": [
+        "rusted_pickhand",
+        "ghostface_beetle"
+      ],
+      "back": [
+        "mine_lamp_wisp"
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "timid_infantry",
+            "militia"
+          ],
+          "back": [],
+          "hint": "前方传来金属与长兵器的碰撞声。"
+        },
+        {
+          "front": [
+            "shieldwall_private",
+            "militia"
+          ],
+          "back": [
+            "javelin_skirmisher"
+          ],
+          "hint": "前方传来金属与长兵器的碰撞声。"
+        }
+      ],
+      "spells": [],
+      "resources": [
+        "stone_of_greed"
+      ]
+    },
+    {
+      "path_id": "enemy_1_2",
+      "kind": "battle",
+      "hint": "落石缝里，余烬与爬虫正在蠕动。",
+      "first_day": 1,
+      "last_day": 1,
+      "front": [
+        "ember_residue",
+        "subterranean_blindfish"
+      ],
+      "back": [
+        "rockwall_tongue_lizard"
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "javelin_skirmisher"
+          ],
+          "back": [
+            "militia"
+          ],
+          "hint": "远处的号令声伴随着一阵脚步声。"
+        },
+        {
+          "front": [
+            "javelin_skirmisher",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ],
+          "hint": "远处的号令声伴随着一阵脚步声。"
+        }
+      ],
+      "spells": [],
+      "resources": [
+        "crystallized_remains"
+      ]
+    },
+    {
+      "path_id": "enemy_2_0",
+      "kind": "battle",
+      "hint": "晶壳群聚在护甲碎片与矿铃之间。",
+      "first_day": 2,
+      "last_day": 3,
+      "front": [
+        {
+          "cards": [
+            "crystal_shell_beetle",
+            "guard_remains"
+          ],
+          "layout": "compact",
+          "top": 0,
+          "equipment": "dwarven_mining_helmet"
+        },
+        "crystal_skin_sentry"
+      ],
+      "back": [
+        "ember_spirit",
+        "rallying_mine_bell"
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "militia",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ],
+          "hint": "道路被步兵守住，旗帜后方隐约有人影。"
+        },
+        {
+          "front": [
+            "shieldwall_private",
+            "militia",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ],
+          "hint": "道路被步兵守住，旗帜后方隐约有人影。"
+        }
+      ],
+      "spells": [
+        "soul_of_forging"
+      ],
+      "resources": [
+        "rainbow_gold_ore"
+      ]
+    },
+    {
+      "path_id": "enemy_2_1",
+      "kind": "battle",
+      "hint": "淘金者身后传来祈祷和窃笑声。",
+      "first_day": 2,
+      "last_day": 3,
+      "front": [
+        "frenzied_gold_panner",
+        {
+          "cards": [
+            "minecart_soul"
+          ],
+          "equipment": "ghost_pick"
+        },
+        "ghostface_beetle"
+      ],
+      "back": [
+        "greedy_acolyte",
+        "miser"
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "militia",
+            "armorsmith"
+          ],
+          "back": [
+            "musketeer"
+          ],
+          "hint": "前方传来金属与长兵器的碰撞声。"
+        },
+        {
+          "front": [
+            "militia",
+            "armorsmith",
+            "shieldwall_private"
+          ],
+          "back": [
+            "musketeer"
+          ],
+          "hint": "前方传来金属与长兵器的碰撞声。"
+        }
+      ],
+      "spells": [],
+      "resources": [
+        "stone_of_greed"
+      ]
+    },
+    {
+      "path_id": "enemy_2_2",
+      "kind": "battle",
+      "hint": "清障机碾过废弃工具与哀嚎声。",
+      "first_day": 2,
+      "last_day": 3,
+      "front": [
+        "clearing_machine",
+        "subterranean_blindfish",
+        "mine_wailer"
+      ],
+      "back": [
+        {
+          "cards": [
+            "rusted_pickhand"
+          ],
+          "equipment": "crystal_shard_pouch"
+        }
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "javelin_skirmisher",
+            "javelin_skirmisher"
+          ],
+          "back": [
+            "timid_infantry"
+          ],
+          "hint": "远处的号令声伴随着一阵脚步声。"
+        },
+        {
+          "front": [
+            "javelin_skirmisher",
+            "javelin_skirmisher",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ],
+          "hint": "远处的号令声伴随着一阵脚步声。"
+        }
+      ],
+      "spells": [
+        "mine_collapse"
+      ],
+      "resources": [
+        "abandoned_toolbox"
+      ]
+    },
+    {
+      "path_id": "enemy_4_0",
+      "kind": "battle",
+      "hint": "巢母的虫群追逐金光，矿铃不时响起。",
+      "first_day": 4,
+      "last_day": 7,
+      "front": [
+        "crystal_shell_broodmother",
+        {
+          "cards": [
+            "crystal_shard_beetle",
+            "guard_remains"
+          ],
+          "layout": "compact",
+          "top": 0
+        },
+        "crystal_skin_sentry"
+      ],
+      "back": [
+        {
+          "cards": [
+            "gold_sprite"
+          ],
+          "equipment": "portable_mine_lamp"
+        },
+        "rallying_mine_bell"
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "shieldwall_private",
+            "militia",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ],
+          "hint": "道路被步兵守住，旗帜后方隐约有人影。"
+        },
+        {
+          "front": [
+            "shieldwall_private",
+            "heavy_knight",
+            "militia"
+          ],
+          "back": [
+            "musketeer",
+            "field_medic"
+          ],
+          "hint": "道路被步兵守住，旗帜后方隐约有人影。"
+        }
+      ],
+      "spells": [
+        "soul_of_forging"
+      ],
+      "resources": [
+        "crystallized_remains"
+      ]
+    },
+    {
+      "path_id": "enemy_4_1",
+      "kind": "battle",
+      "hint": "矿主与信徒守着一堆亮闪闪的财富。",
+      "first_day": 4,
+      "last_day": 7,
+      "front": [
+        "miserly_mine_owner",
+        "frenzied_gold_panner",
+        {
+          "cards": [
+            "minecart_soul"
+          ],
+          "equipment": "ghost_pick"
+        }
+      ],
+      "back": [
+        "greed_demon",
+        "greedy_acolyte"
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "heavy_knight",
+            "javelin_skirmisher"
+          ],
+          "back": [
+            "musketeer",
+            "field_medic"
+          ],
+          "hint": "前方传来金属与长兵器的碰撞声。"
+        },
+        {
+          "front": [
+            "heavy_knight",
+            "javelin_skirmisher",
+            "shieldwall_private"
+          ],
+          "back": [
+            "musketeer",
+            "field_medic"
+          ],
+          "hint": "前方传来金属与长兵器的碰撞声。"
+        }
+      ],
+      "spells": [
+        "giant_boulder"
+      ],
+      "resources": [
+        "rainbow_gold_ore"
+      ]
+    },
+    {
+      "path_id": "enemy_4_2",
+      "kind": "battle",
+      "hint": "怨灵穿过矿道，落石与余火躁动不安。",
+      "first_day": 4,
+      "last_day": 7,
+      "front": [
+        "mining_disaster_wraith",
+        "clearing_machine",
+        "rockwall_tongue_lizard"
+      ],
+      "back": [
+        "ember_spirit",
+        "miser",
+        "mine_wailer"
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "armorsmith",
+            "militia",
+            "militia"
+          ],
+          "back": [
+            "militia_commander"
+          ],
+          "hint": "远处的号令声伴随着一阵脚步声。"
+        },
+        {
+          "front": [
+            "armorsmith",
+            "shieldwall_private",
+            "militia"
+          ],
+          "back": [
+            "militia_commander",
+            "musketeer"
+          ],
+          "hint": "远处的号令声伴随着一阵脚步声。"
+        }
+      ],
+      "spells": [
+        "mine_collapse"
+      ],
+      "resources": [
+        "stone_of_greed"
+      ]
+    },
+    {
+      "path_id": "enemy_8_0",
+      "kind": "battle",
+      "hint": "黄金魔像挡住出口，巢母与矿铃聚起虫群。",
+      "first_day": 8,
+      "last_day": 8,
+      "front": [
+        {
+          "cards": [
+            "golden_golem"
+          ],
+          "equipment": "dwarven_mining_helmet"
+        },
+        "crystal_shell_broodmother",
+        {
+          "cards": [
+            "crystal_shard_beetle",
+            "crystal_shell_beetle"
+          ],
+          "layout": "compact",
+          "top": 0
+        }
+      ],
+      "back": [
+        "gold_sprite",
+        "rallying_mine_bell",
+        "greedy_acolyte"
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "heavy_knight",
+            "heavy_knight",
+            "militia"
+          ],
+          "back": [
+            "militia_commander",
+            "field_medic"
+          ],
+          "hint": "道路被步兵守住，旗帜后方隐约有人影。"
+        },
+        {
+          "front": [
+            "heavy_knight",
+            "heavy_knight",
+            "shieldwall_private",
+            "militia"
+          ],
+          "back": [
+            "militia_commander",
+            "field_medic"
+          ],
+          "hint": "道路被步兵守住，旗帜后方隐约有人影。"
+        }
+      ],
+      "spells": [
+        "soul_of_forging",
+        "giant_boulder"
+      ],
+      "resources": [
+        "rainbow_gold_ore"
+      ]
+    },
+    {
+      "path_id": "enemy_8_1",
+      "kind": "battle",
+      "hint": "矿主护住最后的财富，贪魔藏在其后。",
+      "first_day": 8,
+      "last_day": 8,
+      "front": [
+        "miserly_mine_owner",
+        "frenzied_gold_panner",
+        {
+          "cards": [
+            "crystal_skin_sentry"
+          ],
+          "equipment": "crystal_shard_pouch"
+        }
+      ],
+      "back": [
+        "greed_demon",
+        "miser",
+        "mine_lamp_wisp"
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "heavy_knight",
+            "heavy_knight",
+            "shieldwall_private"
+          ],
+          "back": [
+            "musketeer",
+            "musketeer"
+          ],
+          "hint": "前方传来金属与长兵器的碰撞声。"
+        },
+        {
+          "front": [
+            "heavy_knight",
+            "heavy_knight",
+            "shieldwall_private",
+            "militia"
+          ],
+          "back": [
+            "musketeer",
+            "musketeer"
+          ],
+          "hint": "前方传来金属与长兵器的碰撞声。"
+        }
+      ],
+      "spells": [
+        "mine_collapse",
+        "giant_boulder"
+      ],
+      "resources": [
+        "abandoned_toolbox"
+      ]
+    },
+    {
+      "path_id": "enemy_8_2",
+      "kind": "battle",
+      "hint": "矿难幽影与清障机封住深处的矿道。",
+      "first_day": 8,
+      "last_day": 8,
+      "front": [
+        "mining_disaster_wraith",
+        {
+          "cards": [
+            "rusted_pickhand",
+            "guard_remains"
+          ],
+          "layout": "compact",
+          "top": 0,
+          "equipment": "mining_pick"
+        },
+        "clearing_machine"
+      ],
+      "back": [
+        "greedy_acolyte",
+        "ember_spirit",
+        {
+          "cards": [
+            "minecart_soul"
+          ],
+          "equipment": "portable_mine_lamp"
+        }
+      ],
+      "previous_formations": [
+        {
+          "front": [
+            "old_wolf_kaspar",
+            "militia",
+            "militia"
+          ],
+          "back": [
+            "militia_commander",
+            "musketeer"
+          ],
+          "hint": "远处的号令声伴随着一阵脚步声。"
+        },
+        {
+          "front": [
+            "old_wolf_kaspar",
+            "shieldwall_private",
+            "militia",
+            "militia"
+          ],
+          "back": [
+            "militia_commander",
+            "musketeer"
+          ],
+          "hint": "远处的号令声伴随着一阵脚步声。"
+        }
+      ],
+      "spells": [
+        "soul_of_forging",
+        "mine_collapse"
+      ],
+      "resources": [
+        "crystallized_remains"
+      ]
+    }
+  ],
+  "shops": [
+    {
+      "path_id": "merchant_0",
+      "kind": "shop",
+      "hint": "商人正在铺开货物。"
+    },
+    {
+      "path_id": "merchant_1",
+      "kind": "shop",
+      "hint": "旅商的马车停在路边。"
+    },
+    {
+      "path_id": "merchant_2",
+      "kind": "shop",
+      "hint": "集市角落传来招呼声。"
+    }
+  ],
+  "free_events": [
+    {
+      "path_id": "loose_coins",
+      "kind": "free_event",
+      "hint": "草丛间有什么闪了一下。",
+      "name": "路边零钱",
+      "reward": "gold",
+      "amount": 3,
+      "cost": 0
+    },
+    {
+      "path_id": "lost_seal",
+      "kind": "free_event",
+      "hint": "路边躺着一枚磨损的印章。",
+      "name": "遗失印章",
+      "reward": "emblem",
+      "amount": 1,
+      "cost": 0
+    },
+    {
+      "path_id": "old_medicine",
+      "kind": "free_event",
+      "hint": "古旧药匣散发出刺鼻的气味。",
+      "name": "古旧药匣",
+      "reward": "wound",
+      "amount": 1,
+      "cost": 0
+    },
+    {
+      "path_id": "new_recruit",
+      "kind": "free_event",
+      "hint": "一个年轻人举手请求同行。",
+      "name": "新兵同行",
+      "reward": "minion",
+      "amount": 1,
+      "cost": 0
+    },
+    {
+      "path_id": "old_supply",
+      "kind": "free_event",
+      "hint": "破车下露出一角封好的补给。",
+      "name": "旧日补给",
+      "reward": "pack",
+      "amount": 1,
+      "cost": 0
+    }
+  ],
+  "paid_events": [
+    {
+      "path_id": "vital_training",
+      "kind": "paid_event",
+      "hint": "营地的医师正在准备调养药剂。",
+      "name": "体魄调养",
+      "reward": "enhance_card",
+      "options": [
+        {
+          "cost": 0,
+          "max_health": 2
+        },
+        {
+          "cost": 4,
+          "max_health": 2,
+          "base_armor": 2
+        },
+        {
+          "cost": 8,
+          "max_health": 2,
+          "base_armor": 2,
+          "base_value": 1
+        }
+      ]
+    },
+    {
+      "path_id": "armor_training",
+      "kind": "paid_event",
+      "hint": "铁匠邀请你打磨随从的护甲。",
+      "name": "护甲打磨",
+      "reward": "enhance_card",
+      "options": [
+        {
+          "cost": 0,
+          "base_armor": 2
+        },
+        {
+          "cost": 4,
+          "max_health": 2,
+          "base_armor": 2
+        },
+        {
+          "cost": 8,
+          "max_health": 2,
+          "base_armor": 2,
+          "base_value": 1
+        }
+      ]
+    },
+    {
+      "path_id": "balanced_training",
+      "kind": "paid_event",
+      "hint": "教官正在安排一场均衡的训练。",
+      "name": "均衡训练",
+      "reward": "enhance_card",
+      "options": [
+        {
+          "cost": 0,
+          "max_health": 2
+        },
+        {
+          "cost": 4,
+          "max_health": 3,
+          "base_armor": 1
+        },
+        {
+          "cost": 8,
+          "max_health": 3,
+          "base_armor": 1,
+          "base_value": 1
+        }
+      ]
+    },
+    {
+      "path_id": "endurance_training",
+      "kind": "paid_event",
+      "hint": "远行者分享着保存体力的诀窍。",
+      "name": "耐力锻炼",
+      "reward": "enhance_card",
+      "options": [
+        {
+          "cost": 0,
+          "max_health": 2
+        },
+        {
+          "cost": 4,
+          "max_health": 4
+        },
+        {
+          "cost": 8,
+          "max_health": 4,
+          "base_armor": 2
+        }
+      ]
+    },
+    {
+      "path_id": "shield_training",
+      "kind": "paid_event",
+      "hint": "盾卫正在演练稳固的守势。",
+      "name": "守势演练",
+      "reward": "enhance_card",
+      "options": [
+        {
+          "cost": 0,
+          "base_armor": 2
+        },
+        {
+          "cost": 4,
+          "base_armor": 4
+        },
+        {
+          "cost": 8,
+          "max_health": 2,
+          "base_armor": 4
+        }
+      ]
+    }
+  ],
+  "floor": 1,
+  "enemy_rune_reveals_by_floor": {
+    "1": 1,
+    "2": 2,
+    "3": 3
+  },
+  "enemy_emblems_by_day": [
+    0,
+    0,
+    1,
+    1,
+    2,
+    2,
+    3,
+    3
+  ]
+}

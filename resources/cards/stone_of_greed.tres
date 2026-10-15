@@ -8,24 +8,6 @@ script = ExtResource("1_card_data")
 id = &"stone_of_greed"
 display_name = "贪欲之石"
 pack_id = &"labyrinth"
-deferred_effect_hooks = {
-"harvest_roll": {
-"equal_10": {
-"amount": 10,
-"operation": "gain_gold"
-},
-"greater_than_5": {
-"amount": 3,
-"operation": "gain_gold"
-},
-"less_than_6": {
-"amount": 2,
-"operation": "lose_gold"
-},
-"precedence": "equal_10_only",
-"roll": "1d10"
-}
-}
 card_type = 3
 max_health = 3
 art_texture = ExtResource("2_art")

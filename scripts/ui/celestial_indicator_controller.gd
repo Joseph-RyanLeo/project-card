@@ -1,9 +1,9 @@
 class_name CelestialIndicatorController
 extends Control
 
-## 日月星的库存与准备操作入口；场上归属保存在 SquadData，战斗只使用阵容副本。
+## 指示物共用点按与原生拖动的投放入口；日月星归属小队，哨位归属区域。
 const BOARD_TEXTURE: Texture2D = preload("res://assets/card_ui/celestial/source/indicator_tray_board.png")
-const TRAY_POSITION := Vector2(872, 500) # 指示物板继续位于人物图标下方，独立于法术板移动
+const TRAY_POSITION := Vector2(1080, 860) # 指示物板固定在大世界收藏段右侧，随WorldContent切换视角
 const TRAY_SIZE := Vector2(195, 195) # 指示物板按用户原图195×195像素显示
 const TRAY_PADDING := Vector2(20, 42) # 指示物在新卡板内的首格左上角
 const TRAY_ITEM_GAP: float = 52.0 # 指示物库存格横向中心间距
@@ -37,12 +37,12 @@ func initialize(owner_main: Node) -> void:
 	_tray_board.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_tray_board.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_tray_board.z_index = -1
-	main.player_avatar_button.get_parent().add_child(_tray_board)
+	main.world_content.add_child(_tray_board)
 	_tray = Control.new()
 	_tray.position = TRAY_POSITION
 	_tray.size = TRAY_SIZE
 	_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	main.player_avatar_button.get_parent().add_child(_tray)
+	main.world_content.add_child(_tray)
 	# 当前开发场景提供各一枚用于操作；不作为正式英雄初始库存规则。
 	for kind: int in CelestialIndicator.Kind.values():
 		var item := CelestialIndicator.new()
@@ -138,7 +138,6 @@ func _process(_delta: float) -> void:
 			cancel_carry()
 		return
 	_tray_board.visible = true
-	_sync_tray()
 	for row: BattlefieldRow in _rows():
 		for slot: BoardSlot in row.get_squads():
 			for attachment: Dictionary in slot.get_squad_data().indicator_attachments:
@@ -164,7 +163,7 @@ func _notification(what: int) -> void:
 		return
 	if what == NOTIFICATION_DRAG_BEGIN:
 		var value: Variant = get_viewport().gui_get_drag_data()
-		if value is Dictionary and value.get("kind") == &"celestial_indicator":
+		if value is Dictionary and value.get("kind") in [&"celestial_indicator", &"sentry_indicator"]:
 			_data = value
 			_native = true
 			_native_pointer = get_viewport().get_mouse_position()
@@ -172,12 +171,19 @@ func _notification(what: int) -> void:
 			mouse_filter = Control.MOUSE_FILTER_STOP
 	elif what == NOTIFICATION_DRAG_END and _native:
 		if not _data.is_empty():
-			finish_drop()
+			_end_carry(get_viewport().gui_is_drag_successful())
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_native = false
 
 func _input(event: InputEvent) -> void:
 	if _data.is_empty():
+		return
+	if (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT) or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
+		var was_native := _native
+		cancel_carry()
+		if was_native and get_viewport().gui_is_dragging():
+			get_viewport().gui_cancel_drag()
+		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventMouseMotion:
 		if _native:
@@ -186,19 +192,15 @@ func _input(event: InputEvent) -> void:
 		_preview.global_position = event.position
 	elif _native and event is InputEventMouseButton:
 		_native_pointer = event.position
-	elif event is InputEventMouseButton and event.pressed:
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			finish_drop()
-			get_viewport().set_input_as_handled()
-		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			cancel_carry()
-			get_viewport().set_input_as_handled()
-	elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		cancel_carry()
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		finish_drop(event.position)
 		get_viewport().set_input_as_handled()
 
 func _can_drop_data(_point: Vector2, value: Variant) -> bool:
-	return value is Dictionary and value.get("kind") == &"celestial_indicator"
+	if _data.is_empty() or not value is Dictionary or value.get("kind") not in [&"celestial_indicator", &"sentry_indicator"]:
+		return false
+	# 使用同一Viewport中输入事件记录的指针；GUI预检和提交不能另取一套坐标。
+	return not _resolve_drop_target(_get_carry_pointer_position()).is_empty()
 
 func _drop_data(_point: Vector2, _value: Variant) -> void:
 	finish_drop()
@@ -241,6 +243,25 @@ func _default_tray_position(index: int) -> Vector2:
 	)
 
 
+func get_inventory_host() -> Control:
+	return _tray
+
+
+func get_inventory_slot_position(index: int) -> Vector2:
+	# 哨位复用卡板格子，避开日月星当前实际占用的位置。
+	var available: Array[Vector2] = []
+	for slot_index: int in range(9):
+		var point := _default_tray_position(slot_index)
+		var occupied := false
+		for view: Control in _tray_views.values():
+			if not view.is_queued_for_deletion() and Rect2(view.position, view.size).intersects(Rect2(point, Vector2(44, 49))):
+				occupied = true
+				break
+		if not occupied:
+			available.append(point)
+	return available[index] if index < available.size() else _default_tray_position(index)
+
+
 func _clamp_tray_position(item: CelestialIndicator, point: Vector2) -> Vector2:
 	var size := CelestialIndicatorStyle.get_texture(item.kind).get_size()
 	return Vector2(
@@ -262,10 +283,11 @@ func _find_tray_target(center: Vector2, item: CelestialIndicator) -> Dictionary:
 
 
 func _get_carry_center() -> Vector2:
-	if not _native and is_instance_valid(_preview):
+	if is_instance_valid(_preview):
 		return _preview.get_visual_center()
-	var texture_size := CelestialIndicatorStyle.get_texture((_data["indicator"] as CelestialIndicator).kind).get_size()
-	var grab := _data.get("grab", texture_size * 0.5) as Vector2
+	var texture: Texture2D = _data.get("texture") if _data.has("texture") else CelestialIndicatorStyle.get_texture((_data["indicator"] as CelestialIndicator).kind)
+	var texture_size := texture.get_size()
+	var grab := _data.get("lifted_grab", texture_size * 0.5) as Vector2
 	var scale := _data.get("scale", Vector2.ONE) as Vector2
 	return _native_pointer + (texture_size * 0.5 - grab) * scale
 
@@ -273,17 +295,39 @@ func _get_carry_center() -> Vector2:
 func _get_carry_pointer_position() -> Vector2:
 	return _native_pointer if _native else _preview.global_position
 
-func finish_drop() -> void:
+func _resolve_drop_target(pointer: Vector2) -> Dictionary:
+	# 两种手势都先解析同一个合法目标，预检期间不改变归属或存档。
+	if _data.is_empty() or main.current_phase != main.GamePhase.PREPARE:
+		return {}
+	if _data.get("kind") == &"sentry_indicator":
+		return main.maze_controller.resolve_sentry_drop(String(_data.instance_id), pointer) if main.maze_controller != null else {}
+	var item := _data["indicator"] as CelestialIndicator
+	var center := _get_carry_center()
+	var target := _find_target(center, item, pointer)
+	return target if not target.is_empty() else _find_tray_target(center, item)
+
+func finish_drop(pointer: Vector2 = Vector2.INF) -> void:
 	if _data.is_empty():
 		return
+	if pointer.is_finite():
+		if _native:
+			_native_pointer = pointer
+		else:
+			_preview.global_position = pointer
+	else:
+		pointer = _get_carry_pointer_position()
+	var target := _resolve_drop_target(pointer)
+	if target.is_empty():
+		_end_carry(false)
+		return
+	if _data.get("kind") == &"sentry_indicator":
+		var id := String(_data.instance_id)
+		var committed: bool = main.maze_controller.drop_sentry_at(id, pointer)
+		_end_carry(committed)
+		return
 	var item := _data["indicator"] as CelestialIndicator
-	var center := _get_carry_center() if not _data.is_empty() else get_viewport().get_mouse_position()
-	var target := _find_target(
-		center,
-		item,
-		_get_carry_pointer_position()
-	) if main.current_phase == main.GamePhase.PREPARE else {}
-	var tray_target := _find_tray_target(center, item) if main.current_phase == main.GamePhase.PREPARE else {}
+	var center := _get_carry_center()
+	var slot := target.get("slot") as BoardSlot
 	var old_slot := _data.get("source_slot") as BoardSlot
 	var order := next_attachment_order
 	if is_instance_valid(old_slot):
@@ -293,37 +337,37 @@ func finish_drop() -> void:
 		old_slot.get_squad_data().detach_indicator(item.instance_id)
 		old_slot.set_squad_data(old_slot.get_squad_data())
 	_last_positions[item.instance_id] = center
-	if not target.is_empty():
-		var slot := target["slot"] as BoardSlot
+	if is_instance_valid(slot):
 		slot.get_squad_data().attach_indicator(item, target["position"], order)
 		next_attachment_order += 1
 		slot.set_squad_data(slot.get_squad_data())
 		slot.get_celestial_indicator(item.instance_id).play_drop_feedback(center)
-	elif not tray_target.is_empty():
-		_tray_positions[item.instance_id] = tray_target["position"]
-	var source_view := _data.get("source_view") as Control
-	if is_instance_valid(source_view) and not source_view.is_queued_for_deletion():
-		source_view.visible = true
-	if not _native and is_instance_valid(_preview):
-		_preview.queue_free()
-	_data = {}
-	_preview = null
+	else:
+		_tray_positions[item.instance_id] = target["position"]
+	_end_carry(true)
 	_sync_tray()
-	if target.is_empty() and _tray_views.has(item.instance_id):
+	if not is_instance_valid(slot) and _tray_views.has(item.instance_id):
 		var tray_view := _tray_views[item.instance_id] as CelestialIndicatorView
 		tray_view.position = _tray_positions.get(item.instance_id, tray_view.position) as Vector2
 		tray_view.play_drop_feedback(center)
 	main._on_battlefield_squads_changed()
 
-func cancel_carry() -> void:
+func _end_carry(committed: bool) -> void:
+	var center := _get_carry_center() if not _data.is_empty() else Vector2.INF
 	var view := _data.get("source_view") as Control
 	if is_instance_valid(view) and not view.is_queued_for_deletion():
 		view.visible = true
+		if not committed and center.is_finite():
+			view.play_return_feedback.call_deferred(center)
 	if not _native and is_instance_valid(_preview):
 		_preview.queue_free()
 	_preview = null
 	_data = {}
+	_native = false
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+func cancel_carry() -> void:
+	_end_carry(false)
 
 func animate_star_transfer(item: CelestialIndicator, source: BattleSquadState, target: BattleSquadState) -> void:
 	var source_slot := main._battle_state_slots.get(source) as BoardSlot

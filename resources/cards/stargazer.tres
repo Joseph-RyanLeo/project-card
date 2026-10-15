@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/stargazer.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"stargazer"
+display_name = "观星者"
+pack_id = &"silvermoon_chapter"
+effect_ids = Array[StringName]([&"stargazer.effect.rush"])
+content_effect = &"stargazer"
+action_type = 3
+base_value = 2
+cooldown_seconds = 6.0
+max_health = 3
+armor = 3
+runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(11, 23)
+effect_text = "突击：获得预言胜利与失败预言各1张，加入收藏。"

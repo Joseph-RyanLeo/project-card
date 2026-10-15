@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/shadowstep_assassin.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"shadowstep_assassin"
+display_name = "影步刺客"
+pack_id = &"silvermoon_chapter"
+content_effect = &"shadowstep_assassin"
+base_value = 3
+cooldown_seconds = 4.0
+max_health = 2
+runes = Array[int]([0, 1, 2])
+race_type = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(1, 31)
+effect_text = "荣耀：获得保护1。"

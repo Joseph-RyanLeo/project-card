@@ -174,7 +174,7 @@ static func _build_card(spec: Dictionary, stable_id: String) -> CardData:
 		BattleRules.MAXIMUM_ACTION_INTERVAL_SECONDS
 	)
 	card.cooldown_seconds = requested_cooldown
-	# CardData继续遵守正式卡牌9.9秒上限；该元数据只让实验室配置预览显示其运行时测试值。
+	# 正式卡牌和实验室共用99秒上限；元数据保留现有实验室预览入口。
 	card.set_meta("battle_lab_cooldown_seconds", requested_cooldown)
 	card.max_health = int(spec.get("health", 100))
 	card.armor = int(spec.get("armor", 0))

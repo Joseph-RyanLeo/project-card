@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/damage_fireball.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"nightfall"
+display_name = "黑夜"
+pack_id = &"silvermoon_chapter"
+content_effect = &"nightfall"
+card_type = 2
+rarity = 0
+effect_text = "准备10秒：疲劳风暴提前10秒。"
+spell_type = 4
+spell_trigger_kind = 3
+spell_preparation_seconds = 10.0
+art_texture = ExtResource("2_art")
+base_value = 0
+max_health = 0
+armor = 0
+race_type = 9

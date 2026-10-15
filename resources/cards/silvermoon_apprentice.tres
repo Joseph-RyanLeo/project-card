@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/silvermoon_apprentice.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"silvermoon_apprentice"
+display_name = "银月学徒"
+pack_id = &"silvermoon_chapter"
+effect_ids = Array[StringName]([&"silvermoon_apprentice.effect.rush"])
+content_effect = &"silvermoon_apprentice"
+action_type = 2
+cooldown_seconds = 4.0
+max_health = 2
+runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(11, 28)
+effect_text = "突击：全队每有1光符文永久+1生命，每有1暗符文获得强化2。"

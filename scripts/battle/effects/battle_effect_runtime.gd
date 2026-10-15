@@ -15,6 +15,9 @@ var queue := BattleEventQueue.new()
 var bindings: Array[BattleEffectBinding] = []
 var active_instances: Array[BattleEffectInstance] = []
 var traces: Array[BattleEffectTraceEntry] = []
+var full_trace_enabled := false # 开启完整条件追踪；默认只记录执行变化和失败原因
+var filtered_trace_counts: Dictionary = {}
+var _continuous_recheck_inputs: Array = []
 
 var _random := RandomNumberGenerator.new()
 var _next_binding_id: int = 1
@@ -30,6 +33,9 @@ func initialize(value: Node, battle_seed: int) -> void:
 	bindings.clear()
 	active_instances.clear()
 	traces.clear()
+	filtered_trace_counts.clear()
+	_continuous_recheck_inputs.clear()
+	full_trace_enabled = full_trace_enabled or "--trace-battle-effects" in OS.get_cmdline_user_args()
 	_next_binding_id = 1
 	_next_instance_id = 1
 	_counter_values.clear()
@@ -172,6 +178,11 @@ func notify_battle_end(parent: BattleRuntimeEvent = null) -> void:
 
 
 func recheck_continuous_conditions(parent: BattleRuntimeEvent = null) -> BattleRuntimeEvent:
+	# 比较条件依赖的事实；每次命中仍即时检查，但相同事实不重复排入整场效果。
+	var inputs := _capture_continuous_inputs()
+	if inputs == _continuous_recheck_inputs:
+		return null
+	_continuous_recheck_inputs = inputs
 	var instances := active_instances.duplicate()
 	for instance_value: Variant in instances:
 		var instance := instance_value as BattleEffectInstance
@@ -195,6 +206,49 @@ func recheck_continuous_conditions(parent: BattleRuntimeEvent = null) -> BattleR
 			_mark_end_condition(instance, invalid_condition, event)
 	# 持续定义在条件恢复后可以重新安装；叠加规则会阻止重复发放。
 	return emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS, {}, parent)
+
+
+func _capture_continuous_inputs() -> Array:
+	var inputs: Array = []
+	var reads_health := false
+	var reads_armor := false
+	var reads_max_health := false
+	var reads_runes := false
+	var reads_counters := false
+	for binding: BattleEffectBinding in bindings:
+		inputs.append([binding.binding_id, binding.enabled])
+		var definition := binding.definition
+		if definition == null:
+			continue
+		reads_counters = reads_counters or definition.conditions.has(BattleEffectDefinition.Condition.PER_BATTLE_COUNT_BELOW_LIMIT)
+		if definition.trigger != BattleEffectDefinition.Trigger.CONTINUOUS:
+			continue
+		var value := definition.value
+		reads_health = reads_health or (value.kind == BattleEffectValue.Kind.READ_STAT and value.stat == &"current_health")
+		reads_armor = reads_armor or (value.kind == BattleEffectValue.Kind.READ_STAT and value.stat == &"current_armor") or value.kind == BattleEffectValue.Kind.FORMULA
+		reads_max_health = reads_max_health or value.kind == BattleEffectValue.Kind.HEALTH_FRACTION
+		reads_runes = reads_runes or definition.target == BattleEffectDefinition.Target.SOURCE_ACTIVE_RUNE or (value.kind == BattleEffectValue.Kind.COUNT_SCALED and value.query == &"all_active_fire_runes_both_sides")
+	for instance: BattleEffectInstance in active_instances:
+		if instance.active:
+			inputs.append([instance.instance_id, instance.end_satisfied.duplicate()])
+	for state: BattleSquadState in controller.get_all_states():
+		var squad := state.squad_data
+		var source := state.get_effect_source()
+		inputs.append([
+			state.runtime_id, state.side, state.row_key, state.formation_index,
+			state.alive, state.is_banished, state.current_health > 0.0, state.current_armor > 0.0,
+			source, source.race_type if source != null else -1, source.rarity if source != null else -1, source.is_available if source != null else false,
+			state.has_effective_shadow(), state.has_runtime_keyword(&"silenced"), state.runtime_race_sources.duplicate(),
+			squad.get_card_count() if squad != null else 0,
+			squad.get_equipped_item() if squad != null else null,
+			state.has_unmasked_active_injury(),
+		])
+		if reads_health: inputs.append(state.current_health)
+		if reads_armor: inputs.append(state.current_armor)
+		if reads_max_health: inputs.append(state.get_max_health())
+		if reads_runes: inputs.append(state.get_active_runes())
+	if reads_counters: inputs.append(_counter_values.duplicate(true))
+	return inputs
 
 
 func get_trace_signatures() -> Array[String]:
@@ -267,6 +321,7 @@ func _handle_trigger(event: BattleRuntimeEvent) -> void:
 			continue
 		if only_binding_id > 0 and binding.binding_id != only_binding_id:
 			continue
+		if binding.source != null and binding.source.state != null and binding.source.state.is_banished: continue
 		if not _binding_matches_event_actor(binding, event):
 			continue
 		var effect_tag := StringName("effect:%s" % binding.definition.effect_id)
@@ -303,7 +358,8 @@ func _handle_select_targets(event: BattleRuntimeEvent) -> void:
 		if accumulated_loss < threshold:
 			_trace(event, definition, event.source, null, &"select", &"threshold_not_met", "累计条件尚未达到，不消耗本场次数")
 			return
-	if not _reserve_trigger_limit(definition, event.source, event.root_event_id):
+	var retrigger_rush := definition.trigger == BattleEffectDefinition.Trigger.RUSH and bool(event.payload.get("retrigger_rush", false))
+	if not retrigger_rush and not _reserve_trigger_limit(definition, event.source, event.root_event_id):
 		_trace(event, definition, event.source, null, &"select", &"limit_reached", "共享次数额度已用尽")
 		return
 	var candidates := _resolve_targets(definition, event.source, event)
@@ -360,8 +416,7 @@ func _handle_apply_operation(event: BattleRuntimeEvent) -> void:
 			&"extra_execution",
 			"使%s额外执行一次" % definition.effect_id
 		)
-	# 当前灰烬乡邻效果均为加法数值；把各次执行聚合为同一来源实例，
-	# 才能同时满足“老狼可额外执行”与“同名来源本身不叠加”。
+	# 聚合老狼的额外执行：持续加值使用同一来源，立即开采则使用汇总次数。
 	var single_value := _resolve_value(definition, event.source, target, event)
 	var value := single_value * float(execution_count)
 	var contribution_sources: Array[Dictionary] = [
@@ -450,6 +505,14 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 	var definition := instance.definition
 	var target := instance.target
 	match definition.operation:
+		BattleEffectDefinition.Operation.MINE:
+			controller.execute_effect_mining(target, maxi(roundi(instance.applied_value), 0))
+		BattleEffectDefinition.Operation.IRONWALL:
+			return controller.ironwall.execute_trigger(instance.source.state, StringName(definition.parameters.get("content_effect", "")), definition.trigger, definition.source_owner == BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE, event.payload)
+		BattleEffectDefinition.Operation.SILVERMOON:
+			return controller.silvermoon.execute_trigger(instance.source.state, StringName(definition.parameters.get("content_effect", "")), definition.trigger, definition.source_owner == BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE, event.payload)
+		BattleEffectDefinition.Operation.TWISTED_VEIN:
+			return controller.twisted_vein.execute_trigger(instance.source.state, StringName(definition.parameters.get("content_effect", "")), definition.trigger, definition.source_owner == BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE)
 		BattleEffectDefinition.Operation.ADD_ZEAL:
 			_add_modifier(instance, BattleModifier.Stat.ZEAL, BattleModifier.Mode.ADD, instance.applied_value)
 		BattleEffectDefinition.Operation.ADD_ATTRIBUTE:
@@ -457,6 +520,7 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 			var stat := BattleModifier.Stat.ACTION_VALUE
 			if stat_name == "max_health": stat = BattleModifier.Stat.MAX_HEALTH
 			elif stat_name == "base_armor": stat = BattleModifier.Stat.BASE_ARMOR
+			elif stat_name == "healing_received": stat = BattleModifier.Stat.HEALING_RECEIVED
 			_add_modifier(instance, stat, BattleModifier.Mode.ADD, instance.applied_value)
 			if stat == BattleModifier.Stat.MAX_HEALTH and bool(definition.parameters.get("increase_current_health", false)):
 				target.current_health = minf(target.current_health + instance.applied_value, float(target.get_max_health()))
@@ -474,8 +538,14 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 		BattleEffectDefinition.Operation.SET_MINIMUM_HEALTH:
 			_add_modifier(instance, BattleModifier.Stat.MINIMUM_HEALTH, BattleModifier.Mode.SET_MINIMUM, instance.applied_value)
 		BattleEffectDefinition.Operation.GAIN_ARMOR:
-			var armor_amount := instance.applied_value * target.modifiers.get_multiplier(BattleModifier.Stat.ARMOR_GAIN)
-			armor_amount += target.modifiers.get_additive(BattleModifier.Stat.ARMOR_GAIN)
+			var armor_multiplier := target.modifiers.get_multiplier(BattleModifier.Stat.ARMOR_GAIN)
+			var armor_addition := target.modifiers.get_additive(BattleModifier.Stat.ARMOR_GAIN)
+			# 直接护甲追加（如盾墙的+1）保留最后相加；普通获得复用护甲拦截器。
+			if bool(definition.parameters.get("apply_armor_gain_modifiers", false)):
+				var adjustments := resolve_armor_gain_modifiers(target)
+				armor_multiplier *= float(adjustments.multiplier)
+				armor_addition += float(adjustments.addition)
+			var armor_amount := instance.applied_value * armor_multiplier + armor_addition
 			var effective_armor := target.apply_armor_exact(maxf(armor_amount, 0.0), instance.source.state)
 			_emit_direct_effect_resolved(instance, "armor", armor_amount, effective_armor)
 			emit_trigger(
@@ -905,6 +975,10 @@ func _resolve_targets(
 		BattleEffectDefinition.Target.SOURCE_ACTIVE_RUNE:
 			if source_state != null and source_state.has_active_rune_slots():
 				result.append(source_state)
+		BattleEffectDefinition.Target.FRONT_ROW_FRIENDLY_UNITS:
+			if source_state != null:
+				for state: BattleSquadState in controller.get_living_states(source_state.side):
+					if not controller.is_back_row(state.row_key) and not state.has_effective_shadow(): result.append(state)
 		BattleEffectDefinition.Target.ALL_FRIENDLY_COMBAT_UNITS:
 			if source_state != null: result.assign(controller.get_living_states(source_state.side))
 		BattleEffectDefinition.Target.ADJACENT_FRIENDLY_UNITS, BattleEffectDefinition.Target.SAME_ROW_FRIENDLY_UNITS, BattleEffectDefinition.Target.SELF_AND_ADJACENT_HUMAN_UNITS:
@@ -970,7 +1044,7 @@ func _is_target_still_legal(
 		return target == source.state and target.has_active_rune_slots() and _all_conditions_pass(definition, source, target, event)
 	if definition.trigger == BattleEffectDefinition.Trigger.SOURCE_HEALTH_LOST_ACCUMULATED:
 		return target == source.state and _all_conditions_pass(definition, source, target, event)
-	if not target.alive or target.current_health <= 0.0:
+	if not target.alive or target.current_health <= 0.0 or target.is_banished:
 		return false
 	return _all_conditions_pass(definition, source, target, event)
 
@@ -1020,6 +1094,8 @@ func _condition_passes(
 			return source.is_alive()
 		BattleEffectDefinition.Condition.TARGET_HAS_ARMOR:
 			return target != null and target.current_armor > 0.0
+		BattleEffectDefinition.Condition.TARGET_HAS_EQUIPMENT:
+			return target != null and target.squad_data != null and target.squad_data.get_equipped_item() != null
 		BattleEffectDefinition.Condition.TARGET_IS_HUMAN:
 			return _is_human(target)
 		BattleEffectDefinition.Condition.TARGET_IS_NON_ELF:
@@ -1030,6 +1106,9 @@ func _condition_passes(
 			return _has_living_same_race_neighbors_on_both_sides(source.state)
 		BattleEffectDefinition.Condition.PER_BATTLE_COUNT_BELOW_LIMIT:
 			return _counter_below_limit(definition, source, event.root_event_id)
+		BattleEffectDefinition.Condition.EVENT_ACTOR_IN_SAME_ROW:
+			var actor := event.payload.get("actor") as BattleSquadState
+			return actor != null and source.state != null and actor.row_key == source.state.row_key
 		BattleEffectDefinition.Condition.EVENT_ACTOR_IS_OTHER_ALLY:
 			var actor := event.payload.get("actor") as BattleSquadState
 			return actor != null and source.state != null and actor != source.state and actor.side == source.state.side
@@ -1084,12 +1163,15 @@ func _resolve_value(
 	return 0.0
 
 
-func _resolve_count_query(query: StringName, _source: BattleEffectOwnerRef, target: BattleSquadState) -> int:
-	if query == &"target_adjacent_friendly_humans":
+func _resolve_count_query(query: StringName, source: BattleEffectOwnerRef, target: BattleSquadState) -> int:
+	if query == &"friendly_tier_i_neighbor_holders_matching_target_race":
+		var commander := source.state
+		if not source.is_alive() or source.card_data == null or not source.card_data.is_available or commander.has_effective_shadow() or commander.has_runtime_keyword(&"silenced"): return 0
 		var count := 0
-		for state: BattleSquadState in controller.get_living_states(target.side):
-			if state.row_key == target.row_key and abs(state.formation_index - target.formation_index) == 1 and _is_human(state):
-				count += 1
+		for holder: BattleSquadState in controller.get_living_states(commander.side):
+			var card := holder.get_effect_source()
+			if holder.current_health <= 0.0 or card == null or card.rarity != CardData.Rarity.I or not card.is_available or holder.has_effective_shadow() or holder.has_runtime_keyword(&"silenced"): continue
+			if target.has_effective_race(card.race_type) and _has_living_same_race_neighbors_on_both_sides(holder): count += 1
 		return count
 	if query == &"all_active_fire_runes_both_sides":
 		var count := 0
@@ -1157,7 +1239,7 @@ func _find_active_source_instance(
 
 
 func _has_living_same_race_neighbors_on_both_sides(source_state: BattleSquadState) -> bool:
-	if source_state == null or not source_state.alive:
+	if source_state == null or not source_state.alive or source_state.current_health <= 0.0:
 		return false
 	var source_card := source_state.get_effect_source()
 	if source_card == null:
@@ -1165,7 +1247,7 @@ func _has_living_same_race_neighbors_on_both_sides(source_state: BattleSquadStat
 	var has_left := false
 	var has_right := false
 	for state: BattleSquadState in controller.get_living_states(source_state.side):
-		if state == source_state or state.row_key != source_state.row_key:
+		if state == source_state or state.current_health <= 0.0 or state.row_key != source_state.row_key:
 			continue
 		if source_card == null or not state.has_effective_race(source_card.race_type):
 			continue
@@ -1182,6 +1264,7 @@ func _binding_matches_event_actor(binding: BattleEffectBinding, event: BattleRun
 		# 遗愿必须明确携带这次真正阵亡的单位；缺少 actor 时不能广播触发。
 		return actor != null and binding.source != null and binding.source.state == actor
 	if event.trigger in [
+		BattleEffectDefinition.Trigger.RUSH,
 		BattleEffectDefinition.Trigger.ECHO,
 		BattleEffectDefinition.Trigger.AFTER_BASIC_HEAL,
 		BattleEffectDefinition.Trigger.SOURCE_ARMOR_GAINED,
@@ -1197,6 +1280,8 @@ func _binding_matches_event_actor(binding: BattleEffectBinding, event: BattleRun
 			and binding.source.state != null
 			and binding.source.state.side == int(event.payload.get("winner_side", -1))
 		)
+	if event.trigger == BattleEffectDefinition.Trigger.ADJACENT_ALLY_MINED:
+		return actor != null and binding.source != null and event.payload.get("adjacent_allies", []).has(binding.source.state)
 	if event.trigger == BattleEffectDefinition.Trigger.ADJACENT_ALLY_DESTROYED:
 		return (
 			actor != null
@@ -1259,6 +1344,8 @@ func _trigger_display_name(trigger: BattleEffectDefinition.Trigger) -> String:
 			return "突击"
 		BattleEffectDefinition.Trigger.ECHO:
 			return "回响"
+		BattleEffectDefinition.Trigger.ADJACENT_ALLY_MINED:
+			return "相邻友军开采后"
 		BattleEffectDefinition.Trigger.CONTINUOUS:
 			return "持续"
 		BattleEffectDefinition.Trigger.LAST_WISH:
@@ -1310,6 +1397,14 @@ func _trace(
 	result: StringName,
 	detail: String
 ) -> void:
+	if not full_trace_enabled and (
+		(phase == &"condition" and result == &"passed")
+		or (phase == &"stack" and result == &"already_active")
+		or (phase == &"select" and result == &"selected" and definition != null and definition.trigger == BattleEffectDefinition.Trigger.CONTINUOUS)
+	):
+		var key := "%s:%s" % [phase, result]
+		filtered_trace_counts[key] = int(filtered_trace_counts.get(key, 0)) + 1
+		return
 	var entry := BattleEffectTraceEntry.new()
 	entry.logical_time_us = event.logical_time_us if event != null else _current_time_us()
 	entry.event_id = event.event_id if event != null else 0

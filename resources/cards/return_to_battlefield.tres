@@ -14,5 +14,6 @@ card_type = 2
 rarity = 1
 spell_type = 1
 spell_trigger_kind = 3
+spell_preparation_seconds = 10.0
 art_texture = ExtResource("2_art")
-effect_text = "15秒后：最近被消灭的非衍生友军以50%生命重新入场。"
+effect_text = "准备10秒：最近被消灭的非衍生友军以50%生命重新入场。"

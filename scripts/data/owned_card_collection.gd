@@ -7,6 +7,8 @@ extends RefCounted
 const INSTANCE_ID_PREFIX: String = "run_card_"
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
 
+signal card_removed(instance_id: StringName)
+
 var _cards: Array[OwnedCard] = []
 var _next_instance_sequence: int = 1
 
@@ -21,7 +23,9 @@ func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null
 		_cards.size(),
 		instance_rng
 	)
+	_assign_member_identity(owned_card, _cards)
 	_cards.append(owned_card)
+	_grant_acquisition_cards(owned_card, instance_rng)
 	return owned_card
 
 
@@ -32,6 +36,7 @@ func add_existing(owned_card: OwnedCard) -> bool:
 		or get_by_instance_id(owned_card.instance_id) != null
 	):
 		return false
+	_assign_member_identity(owned_card, _cards)
 	_cards.append(owned_card)
 	_next_instance_sequence = maxi(
 		_next_instance_sequence,
@@ -56,6 +61,9 @@ func remove_by_instance_id(instance_id: StringName) -> OwnedCard:
 			continue
 		var removed := _cards[card_index]
 		_cards.remove_at(card_index)
+		card_removed.emit(instance_id)
+		for companion: OwnedCard in get_cards():
+			if companion.companion_source_id == instance_id: remove_by_instance_id(companion.instance_id)
 		return removed
 	return null
 
@@ -115,6 +123,7 @@ func restore_state(snapshot: Dictionary) -> bool:
 			return false
 		if owned_card == null:
 			return false
+		_assign_member_identity(owned_card, restored_cards)
 		restored_cards.append(owned_card)
 		seen_ids[instance_id] = true
 	_cards.assign(restored_cards)
@@ -136,3 +145,36 @@ func _extract_sequence(instance_id: StringName) -> int:
 	if not text.begins_with(INSTANCE_ID_PREFIX):
 		return 0
 	return int(text.trim_prefix(INSTANCE_ID_PREFIX))
+
+
+func _assign_member_identity(owned_card: OwnedCard, existing_cards: Array[OwnedCard]) -> void:
+	# 队列/层级以资源引用定位队员，同名实例出现引用冲突时才复制只读定义。
+	# 共享card_data和所有可变实例状态保持原归属，读档同样经过此入口。
+	for existing: OwnedCard in existing_cards:
+		if existing.get_battlefield_card() == owned_card.get_battlefield_card():
+			owned_card._battlefield_card = owned_card.card_data.duplicate() as CardData
+			return
+
+
+func _grant_acquisition_cards(owned: OwnedCard, rng: RandomNumberGenerator) -> void:
+	if owned.card_data.content_effect == &"augustus_ironwall":
+		for id: String in ["skirmish_formation", "rally_formation"]:
+			var companion := create_card(load("res://resources/cards/%s.tres" % id), rng)
+			companion.companion_source_id = owned.instance_id
+	elif owned.card_data.content_effect == &"gunsmith_master":
+		var candidates: Array[CardData] = []
+		var filenames := ResourceLoader.list_directory("res://resources/cards")
+		filenames.sort()
+		for filename: String in filenames:
+			if filename.get_extension() != "tres": continue
+			var card := load("res://resources/cards/" + filename) as CardData
+			if card == null or not card.is_available or card.is_derived or card.get_effective_faction() == CardFaction.Id.LABYRINTH: continue
+			if card.card_type == CardData.CardType.EQUIPMENT and card.equipment_type == CardData.EquipmentType.RANGED_WEAPON and card.rarity <= CardData.Rarity.II: candidates.append(card)
+		if candidates.is_empty(): return
+		var source := rng
+		if source == null:
+			source = RandomNumberGenerator.new()
+			source.randomize()
+		var selector := OrdinaryShopService.new()
+		selector.load_config()
+		create_card(selector.draw_card_candidate(candidates, source, selector.count_owned_cards(_cards)), source)

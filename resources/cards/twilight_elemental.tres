@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/silvermoon_chapter/twilight_elemental.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"twilight_elemental"
+display_name = "晨昏元素"
+pack_id = &"silvermoon_chapter"
+keywords = Array[StringName]([&"balance"])
+content_effect = &"twilight_elemental"
+action_type = 2
+base_value = 2
+cooldown_seconds = 5.0
+max_health = 7
+runes = Array[int]([0, 1, 2])
+race_type = 4
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(4, 19)
+effect_text = "均衡。前排时增强前期战力。后排时减少疲劳伤害。"
+front_effect_text = "均衡。前排时，战斗开始前10秒热诚+10。"
+back_effect_text = "均衡。后排时，受到的疲劳伤害减半。"

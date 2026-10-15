@@ -11,6 +11,7 @@ config_version=5
 [application]
 
 config/name="Project Card"
+config/version="0.2.83"
 run/main_scene="res://scenes/GameDisplay.tscn"
 config/features=PackedStringArray("4.7")
 config/icon="res://icon.svg"

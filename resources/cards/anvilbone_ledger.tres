@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/anvilbone_ledger.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"anvilbone_ledger"
+display_name = "砧骨铁册"
+pack_id = &"ironwall_inscription"
+effect_ids = Array[StringName]([&"anvilbone_ledger.effect.last_wish"])
+content_effect = &"anvilbone_ledger"
+card_type = 1
+rarity = 3
+equipment_type = 4
+equipment_action_delta = 2
+equipment_armor_delta = 10
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(1, 3)
+effect_text = "获胜且存活后永久数值+1、生命+2。遗愿：击杀者受到的下3次行动伤害翻倍。"

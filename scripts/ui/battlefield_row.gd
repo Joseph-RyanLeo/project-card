@@ -48,6 +48,7 @@ const RESERVATION_SWAP_HYSTERESIS: float = 0.5 # 留空换边时过滤亚像素�
 @onready var placement_overlay: Control = %PlacementOverlay
 
 var _drag_enabled: bool = false
+var _drop_enabled: bool = true
 var _prefer_minion: bool = true
 # 目标虚影描述放下结果；reservation 则是唯一一块随拖动位置换位的空间预算。
 var _preview_slot: BoardSlot
@@ -67,6 +68,7 @@ var _layout_transaction_revision: int = 0
 var _hidden_source_slot: BoardSlot
 var _active_drag_preview_offset: Vector2 = Vector2.ZERO
 var _active_drag_visual: CardDragPreview
+var _active_drag_last_position := Vector2.INF
 var _active_stack_feedback_drag_data: Dictionary = {}
 var _merge_preview_anchor_card: CardData
 var _merge_preview_alignment_revision: int = 0
@@ -259,9 +261,10 @@ func move_squad_slot(
 	insert_index: int,
 	animate: bool = true
 ) -> void:
-	if get_slot_index(slot) < 0:
+	var current_index := get_slot_index(slot)
+	if current_index < 0 or current_index == clampi(insert_index, 0, _get_real_slots().size() - 1):
 		return
-	var previous_positions := _capture_visible_slot_positions()
+	var previous_positions := _capture_visible_slot_positions() if animate else {}
 	_place_card_slot(slot, insert_index)
 	if animate:
 		_animate_layout_next_frame(previous_positions)
@@ -285,6 +288,13 @@ func set_drag_enabled(value: bool) -> void:
 		_finish_card_drag()
 
 
+func set_drop_enabled(value: bool) -> void:
+	_drop_enabled = value
+	if not value:
+		clear_drop_preview(false)
+		stop_stack_target_feedback()
+
+
 func set_prefer_minion(value: bool) -> void:
 	_prefer_minion = value
 	for slot: BoardSlot in _get_real_slots():
@@ -293,7 +303,7 @@ func set_prefer_minion(value: bool) -> void:
 
 # --- 放置预览与提交入口 ---
 func can_receive_card_drag(data: Variant) -> bool:
-	return _drag_enabled and _is_drag_data(data)
+	return _drag_enabled and _drop_enabled and _is_drag_data(data)
 
 
 func preview_card_drop(
@@ -1410,9 +1420,9 @@ func _notification(what: int) -> void:
 		var return_global_position: Variant = null
 		if is_instance_valid(_hidden_source_slot) and not get_viewport().gui_is_drag_successful():
 			return_global_position = (
-				_active_drag_visual.get_card_global_position()
+				_active_drag_visual.get_card_global_position(true)
 				if is_instance_valid(_active_drag_visual)
-				else get_viewport().get_mouse_position() - _active_drag_preview_offset
+				else _active_drag_last_position if _active_drag_last_position.is_finite() else get_viewport().get_mouse_position() - _active_drag_preview_offset
 			)
 		_finish_card_drag(return_global_position)
 
@@ -1422,7 +1432,7 @@ func _begin_card_drag(data: Variant) -> void:
 	# 原生拖拽开始后，旧鼠标目标可能收不到 mouse_exited。
 	# 无论来源位于收藏还是战场，都先清掉本行遗留的悬停视觉。
 	reset_all_hover_feedback()
-	if not can_receive_card_drag(data):
+	if not _drag_enabled or not _is_drag_data(data):
 		return
 	var drag_data := data as Dictionary
 	if drag_data.get("source_type") != &"board" or drag_data.get("source_row") != self:
@@ -1440,6 +1450,9 @@ func _begin_card_drag(data: Variant) -> void:
 		drag_data.get("preview_offset", Vector2.ZERO)
 	)
 	_active_drag_visual = drag_data.get("drag_visual") as CardDragPreview
+	if is_instance_valid(_active_drag_visual):
+		var visual := _active_drag_visual
+		visual.tree_exiting.connect(func(): _active_drag_last_position = visual.get_card_global_position(true))
 	if drag_data.get("kind") == &"squad":
 		_hidden_source_slot.visible = false
 	else:
@@ -1452,6 +1465,7 @@ func _finish_card_drag(return_global_position: Variant = null) -> void:
 	_restore_hidden_source_slot(return_global_position)
 	_active_drag_preview_offset = Vector2.ZERO
 	_active_drag_visual = null
+	_active_drag_last_position = Vector2.INF
 
 
 func _restore_hidden_source_slot(return_global_position: Variant = null) -> void:
@@ -2095,3 +2109,7 @@ func _is_drag_data(data: Variant) -> bool:
 	if drag_data.get("kind") == &"squad":
 		return drag_data.get("squad_data") is SquadData
 	return false
+
+
+func get_card_effect_row() -> StringName:
+	return &"back" if row_title.ends_with("后排") else &"front"

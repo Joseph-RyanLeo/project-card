@@ -19,4 +19,4 @@ race_type = 1
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-1, 28)
-effect_text = "治疗后，遮蔽目标1处伤势5秒。"
+effect_text = "治疗行动会临时遮蔽目标一处伤势，持续至战斗结束。"

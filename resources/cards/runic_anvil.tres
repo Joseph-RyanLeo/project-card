@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/ironwall_inscription/runic_anvil.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"runic_anvil"
+display_name = "符文铁砧"
+pack_id = &"ironwall_inscription"
+content_effect = &"runic_anvil"
+card_type = 1
+rarity = 1
+equipment_type = 1
+equipment_action_delta = 2
+equipment_zeal_delta = -3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-7, -3)
+effect_text = "行动命中主目标后：目标眩晕2秒，并获得5护甲。"

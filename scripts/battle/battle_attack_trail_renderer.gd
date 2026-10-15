@@ -39,6 +39,9 @@ static func play(
 	var material := ShaderMaterial.new()
 	material.shader = BATTLE_ENERGY_BEAM_SHADER
 	var mask_kind := profile["mask_kind"] as StringName
+	material.set_shader_parameter("soul_ribbon", mask_kind == &"soul_ribbon")
+	material.set_shader_parameter("soul_taper", float(profile.get("soul_taper", 0.75)))
+	material.set_shader_parameter("soul_core_width", float(profile.get("soul_core_width", 0.30)))
 	material.set_shader_parameter("trail_mask", get_mask_texture(mask_kind))
 	# 宽能量原图的头在左侧；沿攻击路径绘制时翻转采样，让素材头部朝向目标。
 	material.set_shader_parameter("flip_mask_x", mask_kind == &"energy")
@@ -76,6 +79,7 @@ static func play(
 		+ float(profile["trail_softness"])
 	)
 	var impact_progress := nearest_polyline_progress(path_points, control_points[-1])
+	material.set_shader_parameter("impact_progress", impact_progress)
 	if logical_impact_delay >= 0.0 and float(profile["duration"]) > 0.0:
 		var logical_time_progress := clampf(
 			logical_impact_delay / float(profile["duration"]),
@@ -190,7 +194,8 @@ static func sample_curve(
 	if direct_delta.length() < 1.0:
 		return PackedVector2Array([start, finish])
 	var direction := direct_delta.normalized()
-	var end_padding := float(profile["end_padding"])
+	# 灵魂光带的尾迹被终点吸收，路径必须精确结束在目标中心。
+	var end_padding := 0.0 if profile["mask_kind"] == &"soul_ribbon" else float(profile["end_padding"])
 	start -= direction * end_padding
 	finish += direction * end_padding
 	var control := (start + finish) * 0.5
@@ -198,7 +203,11 @@ static func sample_curve(
 		control = control_points[1]
 	else:
 		var normal := Vector2(-direction.y, direction.x)
-		var maximum_arc := direct_delta.length() * 0.32
+		var is_soul: bool = profile["mask_kind"] == &"soul_ribbon"
+		# 光带把控制点靠近发射端，形成先弯出、再向目标拉长的轮廓。
+		if is_soul:
+			control = start.lerp(finish, 0.20)
+		var maximum_arc := direct_delta.length() * (0.65 if is_soul else 0.32)
 		control += normal * clampf(float(profile["arc_height"]), -maximum_arc, maximum_arc)
 	var segment_count := maxi(roundi(float(profile["curve_segments"])), 4)
 	var sampled := PackedVector2Array()

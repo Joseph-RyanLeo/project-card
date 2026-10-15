@@ -6,6 +6,9 @@ extends RefCounted
 ## D2-5 在正常战后结合收藏、唯一性与本局卡池消费每条记录一次；中途重试
 ## 不会提前污染真实本局数据，也不会因结算界面读取这些记录而重复发放。
 
+const KIND_MINING_COUNT: StringName = &"mining_count"
+const KIND_PLAYER_THEFT: StringName = &"player_theft"
+const KIND_PLAYER_REFUND: StringName = &"player_refund"
 const KIND_GOLD: StringName = &"gold"
 const KIND_RANDOM_CARD_REQUEST: StringName = &"random_card_request"
 const KIND_RANDOM_EMBLEM_INSTANCE: StringName = &"random_emblem_instance"
@@ -34,7 +37,7 @@ func record(
 		owner == null
 		or owner.state == null
 		or owner.owner_kind != BattleEffectDefinition.OwnerKind.OWNING_PLAYER
-		or kind not in [KIND_GOLD, KIND_RANDOM_CARD_REQUEST, KIND_RANDOM_EMBLEM_INSTANCE, KIND_OWNED_CARD_AWARD, KIND_GOLD_DELTA]
+		or kind not in [KIND_GOLD, KIND_RANDOM_CARD_REQUEST, KIND_RANDOM_EMBLEM_INSTANCE, KIND_OWNED_CARD_AWARD, KIND_GOLD_DELTA, KIND_MINING_COUNT, KIND_PLAYER_THEFT, KIND_PLAYER_REFUND]
 		or amount <= 0
 	):
 		return false
@@ -69,3 +72,7 @@ func get_total(kind: StringName, side: int) -> int:
 		if entry.get("kind") == kind and int(entry.get("side", -1)) == side:
 			result += int(entry.get("amount", 0))
 	return result
+
+
+func record_player_refund(amount: int, battle_id: StringName) -> void:
+	_entries.append({"entry_id": StringName("%s:reward:%d" % [battle_id, _entries.size()]), "battle_instance_id": battle_id, "kind": KIND_PLAYER_REFUND, "side": BattleSquadState.Side.PLAYER, "amount": amount, "parameters": {}})

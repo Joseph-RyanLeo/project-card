@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/subterranean_blindfish.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"subterranean_blindfish"
+display_name = "地底盲鱼"
+pack_id = &"twisted_vein"
+content_effect = &"subterranean_blindfish"
+cooldown_seconds = 4.0
+max_health = 3
+armor = 2
+runes = Array[int]([0, 1, 2])
+race_type = 7
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(4, 13)
+effect_text = "攻击行动命中时，目标本场受击优先级+2。"

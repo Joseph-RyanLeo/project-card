@@ -1,0 +1,117 @@
+tests
+Godot Engine v4.7.2.stable.steam.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+[godot_ai game_helper] registered mcp capture (debugger active=false, logger=true)
+银月之章：464条断言，0失败
+
+
+integration
+Godot Engine v4.7.2.stable.steam.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+[godot_ai game_helper] registered mcp capture (debugger active=false, logger=true)
+银月主游戏集成：11条断言，0失败
+
+
+mine
+Godot Engine v4.7.2.stable.steam.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+[godot_ai game_helper] registered mcp capture (debugger active=false, logger=true)
+扭曲矿脉：272条断言，0失败
+
+
+hero
+Godot Engine v4.7.2.stable.steam.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+[godot_ai game_helper] registered mcp capture (debugger active=false, logger=true)
+D2-8 哨位战斗：103断言，0失败
+
+
+spells
+Godot Engine v4.7.2.stable.steam.ed1daf0bf - https://godotengine.org
+
+ERROR: Condition "ret != noErr" is true. Returning: ""
+   at: get_system_ca_certificates (platform/macos/os_macos.mm:1035)
+[godot_ai game_helper] registered mcp capture (debugger active=false, logger=true)
+PASS: 四张正式法术按各OwnedCard剩余耐久定位桃心数字，同名实例互不共用耐久
+PASS: 同一布局修正不改变真实随从、装备和资源卡的生命／护甲数字位置
+PASS: 法术板使用原比例原尺寸素材，位于种子下方并把背景绘制在战场底板后
+PASS: 移动音量滑条仍实际更新全局 Master 总线音量
+PASS: 准备法术按启动类别与品级显示对应图标素材
+PASS: 翻页快照只把已准备的OwnedCard实例保持虚影，同名未准备副本仍为实体
+PASS: 翻页前真实收藏卡位显示已准备法术虚影
+PASS: 已准备法术所在展开页启动翻页
+PASS: 翻页动画中的固定页与活动页快照继续显示同一法术实例虚影
+PASS: 动画未结束时快速再次翻页被阻止
+PASS: 可向反方向翻回法术所在展开页
+PASS: 反向翻页动画快照仍按OwnedCard准备状态显示虚影
+PASS: 翻页结束后重建的真实收藏卡仍保持已准备虚影
+PASS: 搜索筛选重建收藏页后已准备法术仍按实例显示虚影
+PASS: 刷新准备状态会复用同一实例的图标节点
+PASS: 准备顺序重排后仍以第三个真实OwnedCard实例驱动悬停卡面
+PASS: 条件法术指针横穿到准备列时仍在条件列显示黄色位置条和目标虚影
+PASS: 横穿列后的实际提交顺序与预览索引一致，放下后清理目标预留位
+PASS: 向下插入时后方图标让出完整42像素目标虚影，预览不修改实际顺序
+PASS: 提交后目标虚影清除，下方图标恢复21像素半重叠布局
+PASS: 同列向下拖动按移除源卡后的最终顺序预览并提交，不发生二次索引偏移
+PASS: 滚动到条件列中段时仍按可见指针行命中，内容高度保留最后一张完整图标
+PASS: 两张同定义法术卡的桃心分别显示OwnedCard耐久且不修改共享卡牌定义
+PASS: 準備類按效果定義中的秒數排序，时序读取8秒与15秒效果参数
+PASS: 跨准备秒数排序明确提示并拒绝，原存储顺序不变
+PASS: 准备栏达到容量后拒绝新的法术实例
+PASS: 标题区等非槽位位置拒绝法术投放
+PASS: 同类排序按OwnedCard实例区分并平滑复用原图标
+PASS: 取回副本后原准备实例图标仍保留身份
+PASS: 点按携带在释放位置衔接卡牌到图标的渐变动画
+PASS: 卡牌渐隐完成后目标法术图标恢复完整不透明度
+PASS: 法术图标过渡结束后清理临时动画状态
+PASS: 真实准备栏按法术实例接收拖放并保留唯一实例ID
+PASS: 准备栏法术拖回收藏会解除准备状态
+PASS: 准备顺序可写入真实本局JSON存档
+PASS: 准备快照可带入正式战斗入口
+PASS: 即时法术开场阶段保持战斗时钟为0
+PASS: 开场卡面演出期间行动冷却与战斗计时未推进
+PASS: 开场演出完成后继续战斗，但开场期间不消费战斗秒数
+PASS: 重开战斗可恢复战前准备快照
+PASS: 重开保留法术准备顺序且未提前扣耐久
+PASS: 普通即时法术动画不接管战斗暂停
+PASS: 关闭只读检视只释放检视暂停，不解除玩家手动暂停
+PASS: 特殊法术暂停接口与手动暂停分别持有暂停状态
+PASS: 最后一个暂停持有者释放后战斗恢复
+PASS: 真实Main场景可以读回准备法术存档
+PASS: 读档恢复同一OwnedCard实例及准备顺序
+PASS: 读档后的准备顺序可以再次进入战斗
+PASS: 正常结算对准备法术扣1次耐久并清空准备栏，重复提交不重扣
+PASS: 真实主场景启动带重返战场的战斗
+PASS: 真实死亡后卡面完成退场并从战场槽映射中移除
+PASS: 第15秒真实复活重新创建並映射卡面，恢复50%生命
+PASS: 重新入场的小队冷却到期后正常行动并重置冷却
+PASS: 即时卡面与施法效果串行完成，开场阶段结束时战斗时间仍是0
+PASS: 并肩作战只在施法时友军仍有乡邻时把攻击伤害降低1
+PASS: 双方开场即时法术按玩家先手逐张交替，效果归属各自队伍
+PASS: 战斗怒火在致死写入前把全体友军生命下限设为1，启咒记录不重复
+PASS: 被阻止的生命伤害不会在保护结束时追溯结算
+PASS: 战斗怒火5秒到期后不追溯旧伤害，新的致死伤害正常生效
+PASS: 齐射令第8秒只尝试一次远程立即行动，并消耗强化、重置冷却
+PASS: 重返战场在第15秒复活最近死亡非衍生友军至50%生命
+PASS: 齐射令第8秒没有合法目标时消耗机会且稍后不补放
+PASS: 重返战场第15秒无目标时消耗机会，之后出现死亡目标也不重试
+PASS: 重返战场原位被占用时改放到同排右侧
+PASS: 整排无复活空间时消耗本次机会而不超容量复活
+D2-6B spell preparation and release checks passed.
+
+
+visual
+Godot Engine v4.7.2.stable.steam.ed1daf0bf - https://godotengine.org
+OpenGL API 4.1 Metal - 90.5 - Compatibility - Using Device: Apple - Apple M4
+
+[godot_ai game_helper] registered mcp capture (debugger active=false, logger=true)
+银月37张卡面验收图保存：0
+银月效果卡面与卡包验收图保存：0

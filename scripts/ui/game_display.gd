@@ -19,6 +19,8 @@ const INTEGER_SCALE_EPSILON: float = 0.0001 # 判断客户区是否为等比整�
 const CARD_ART_TUNER_SCENE: PackedScene = preload("res://scenes/tools/CardArtTuner.tscn")
 const BATTLE_LAB_SCENE: PackedScene = preload("res://scenes/tools/BattleLab.tscn")
 const ATTACK_EFFECT_LAB_SCENE: PackedScene = preload("res://scenes/tools/AttackEffectLab.tscn")
+const PACK_EFFECT_TUNER_SCENE: PackedScene = preload("res://scenes/tools/PackEffectTuner.tscn")
+const RARE_SHOP_LAB_SCENE: PackedScene = preload("res://scenes/tools/RareShopLab.tscn")
 const WINDOW_MODE_TRANSITION_MAX_FRAMES: int = 60 # 等待 macOS 退出全屏的最长帧数
 const WINDOW_SIZE_BY_MODE := {
 	DisplayMode.WINDOW_720P: Vector2i(1280, 720),
@@ -45,6 +47,13 @@ var _window_transition_in_progress: bool = false
 var _card_art_tuner: CardArtTuner
 var _battle_lab: BattleLab
 var _attack_effect_lab: AttackEffectLab
+var _pack_effect_tuner: Control
+var _tuner_source: Control
+var _tuner_previous_process_mode: Node.ProcessMode
+var _tuner_previous_escape_input: bool
+var _rare_shop: Variant
+var _rare_shop_previous_main_process_mode: Node.ProcessMode
+var _rare_shop_previous_escape_input: bool
 
 
 func _enter_tree() -> void:
@@ -61,6 +70,7 @@ func _ready() -> void:
 	if not resized.is_connected(_on_root_control_resized):
 		resized.connect(_on_root_control_resized)
 	_setup_display_mode_option()
+	main_screen.card_pack_presentation_changed.connect(_on_card_pack_presentation_changed)
 	var window := get_window()
 	if not window.size_changed.is_connected(_on_root_window_size_changed):
 		window.size_changed.connect(_on_root_window_size_changed)
@@ -72,6 +82,11 @@ func _ready() -> void:
 		_select_option_without_signal(current_display_mode)
 	else:
 		apply_display_mode(DisplayMode.WINDOW_1080P)
+
+
+func _on_card_pack_presentation_changed(active: bool) -> void:
+	# 完整4倍包装的封口靠近窗口顶部，外层倍率菜单不能挡住撕包输入。
+	display_mode_option.get_parent().visible = not active
 
 
 func _input(event: InputEvent) -> void:
@@ -249,9 +264,21 @@ func open_card_art_tuner() -> void:
 		return
 	_card_art_tuner = CARD_ART_TUNER_SCENE.instantiate() as CardArtTuner
 	_card_art_tuner.name = "CardArtTuner"
+	_card_art_tuner.card_resource_saved.connect(_on_card_resource_saved)
 	design_canvas.add_child(_card_art_tuner)
 	_card_art_tuner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	main_screen.visible = false
+
+
+func _on_card_resource_saved(card: CardData) -> void:
+	# 保存后更新现有卡面；准备态重算预览，不重建正在进行的战斗。
+	for view: CardView in get_tree().get_nodes_in_group(&"card_views"):
+		if not main_screen.is_ancestor_of(view) or view.card_data == null or view.card_data.id != card.id: continue
+		if view.card_data != card:
+			view.card_data.display_name = card.display_name
+		view.set_card_data(view.card_data)
+	if main_screen.current_phase == main_screen.GamePhase.PREPARE:
+		main_screen._refresh_preparation_effect_preview()
 
 
 func close_card_art_tuner() -> void:
@@ -307,6 +334,67 @@ func close_attack_effect_lab() -> void:
 
 func is_attack_effect_lab_open() -> bool:
 	return is_instance_valid(_attack_effect_lab)
+
+
+func open_pack_effect_tuner(source: Control = null) -> void:
+	if is_pack_effect_tuner_open() or is_card_art_tuner_open() or is_battle_lab_open() or is_attack_effect_lab_open(): return
+	_tuner_source = source if is_instance_valid(source) else main_screen
+	_tuner_previous_process_mode = _tuner_source.process_mode
+	_tuner_previous_escape_input = _tuner_source._escape_pause_menu.is_processing_input()
+	_tuner_source._escape_pause_menu.set_process_input(false)
+	_tuner_source.process_mode = Node.PROCESS_MODE_DISABLED
+	_tuner_source.hide()
+	_pack_effect_tuner = PACK_EFFECT_TUNER_SCENE.instantiate()
+	_pack_effect_tuner.close_requested.connect(close_pack_effect_tuner, CONNECT_DEFERRED)
+	design_canvas.add_child(_pack_effect_tuner)
+	_pack_effect_tuner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_on_card_pack_presentation_changed(true)
+
+
+func close_pack_effect_tuner() -> void:
+	if not is_pack_effect_tuner_open(): return
+	_pack_effect_tuner.prepare_close()
+	design_canvas.remove_child(_pack_effect_tuner)
+	_pack_effect_tuner.queue_free()
+	_pack_effect_tuner = null
+	_tuner_source.process_mode = _tuner_previous_process_mode
+	_tuner_source._escape_pause_menu.set_process_input(_tuner_previous_escape_input)
+	_tuner_source.show()
+	_tuner_source = null
+	_on_card_pack_presentation_changed(false)
+
+
+func is_pack_effect_tuner_open() -> bool:
+	return is_instance_valid(_pack_effect_tuner)
+
+
+func open_rare_shop() -> bool:
+	if is_instance_valid(_rare_shop): return true
+	if is_card_art_tuner_open() or is_battle_lab_open() or is_attack_effect_lab_open() or is_pack_effect_tuner_open(): return false
+	_rare_shop_previous_main_process_mode = main_screen.process_mode
+	_rare_shop_previous_escape_input = main_screen._escape_pause_menu.is_processing_input()
+	main_screen._developer_console.set_open(false)
+	main_screen._escape_pause_menu.set_process_input(false)
+	main_screen.process_mode = Node.PROCESS_MODE_DISABLED
+	main_screen.hide()
+	_rare_shop = RARE_SHOP_LAB_SCENE.instantiate()
+	_rare_shop.close_requested.connect(close_rare_shop, CONNECT_DEFERRED) # 等当前输入回调完成，再移除测试界面
+	_rare_shop.card_pack_presentation_changed.connect(_on_card_pack_presentation_changed)
+	design_canvas.add_child(_rare_shop)
+	_rare_shop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	return true
+
+
+func close_rare_shop() -> void:
+	if not is_instance_valid(_rare_shop): return
+	_rare_shop._close_card_inspection(true)
+	design_canvas.remove_child(_rare_shop)
+	_rare_shop.queue_free()
+	_rare_shop = null
+	_on_card_pack_presentation_changed(false)
+	main_screen.process_mode = _rare_shop_previous_main_process_mode
+	main_screen._escape_pause_menu.set_process_input(_rare_shop_previous_escape_input)
+	main_screen.show()
 
 
 func _get_windowed_mode_for_size(window_size: Vector2i) -> DisplayMode:

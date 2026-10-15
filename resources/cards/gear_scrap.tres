@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"gear_scrap"
+display_name = "齿轮废料"
+pack_id = &"ironwall_inscription"
+content_effect = &"gear_scrap"
+card_type = 3
+rarity = 0
+effect_text = "收获：为随机一名无装备友军提供一件本场临时装备。"
+is_derived = true
+resource_type = 2
+max_health = 2
+armor = 0

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/twisted_vein/greedy_acolyte.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"greedy_acolyte"
+display_name = "贪婪信徒"
+pack_id = &"twisted_vein"
+keywords = Array[StringName]([&"forbid_stacking"])
+content_effect = &"greedy_acolyte"
+action_type = 3
+base_value = 8
+cooldown_seconds = 5.0
+max_health = 5
+armor = 5
+runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 1
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-5, 31)
+effect_text = "无法堆叠。休眠30秒；任意随从获得金币时，立即为其治疗1次。"
