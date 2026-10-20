@@ -1,7 +1,7 @@
 class_name EmblemStickerInventory
 extends RefCounted
 
-## 单枚贴纸的固定容量背包；显示节点不负责判定实例是否仍被拥有。
+## 工具箱格位与临时掉落共用实例身份；掉落贴纸不占格，可互相重叠。
 
 const COLUMN_COUNT := 4
 const ROW_COUNT := 7
@@ -38,6 +38,18 @@ func add(state: Dictionary) -> bool:
 		return false
 	var candidate := state.duplicate(true)
 	var span := _span_for(candidate)
+	if is_dropped(candidate):
+		var point: Variant = candidate.get("drop_position", [0.0, 0.0])
+		if not point is Array or point.size() != 2:
+			return false
+		for component: Variant in point:
+			if not (component is float or component is int) or not is_finite(float(component)):
+				return false
+		candidate.erase("grid_x")
+		candidate.erase("grid_y")
+		candidate.erase("grid_span")
+		_items.append(candidate)
+		return true
 	var requested := Vector2i(int(candidate.get("grid_x", -1)), int(candidate.get("grid_y", -1)))
 	var has_saved_cell := candidate.has("grid_x") or candidate.has("grid_y")
 	if has_saved_cell:
@@ -78,6 +90,9 @@ func move(instance_id: StringName, target: Vector2i) -> bool:
 			continue
 		if not _can_place(_items, item, target, instance_id):
 			return false
+		_items[index].erase("storage")
+		_items[index].erase("drop_position")
+		_items[index]["grid_span"] = _span_for(item)
 		_items[index]["grid_x"] = target.x
 		_items[index]["grid_y"] = target.y
 		return true
@@ -162,6 +177,8 @@ func _can_place(
 	if target.x < 0 or target.y < 0 or target.x + span > COLUMN_COUNT or target.y + span > ROW_COUNT:
 		return false
 	for existing: Dictionary in items:
+		if is_dropped(existing):
+			continue
 		if StringName(String(existing.get("instance_id", ""))) == ignored_instance_id:
 			continue
 		var other_span := _span_for(existing)
@@ -178,3 +195,105 @@ func _can_place(
 
 func _is_cell(cell: Vector2i) -> bool:
 	return cell.x >= 0 and cell.y >= 0 and cell.x < COLUMN_COUNT and cell.y < ROW_COUNT
+
+
+static func is_dropped(state: Dictionary) -> bool:
+	return state.get("storage", "grid") == "drop"
+
+
+func free_cell_count() -> int:
+	var occupied := 0
+	for item: Dictionary in _items:
+		if not is_dropped(item): occupied += _span_for(item) * _span_for(item)
+	return COLUMN_COUNT * ROW_COUNT - occupied
+
+
+func move_to_drop(instance_id: StringName, point: Vector2) -> bool:
+	if not point.is_finite(): return false
+	for item: Dictionary in _items:
+		if StringName(String(item.instance_id)) != instance_id: continue
+		item["storage"] = "drop"
+		item["drop_position"] = [point.x, point.y]
+		item.erase("grid_x")
+		item.erase("grid_y")
+		item.erase("grid_span")
+		return true
+	return false
+
+
+func discard_dropped() -> void:
+	_items = _items.filter(func(item: Dictionary): return not is_dropped(item))
+
+
+func receive(states: Array[Dictionary], rarities: Dictionary) -> bool:
+	# 先在副本中试放；输入无效时不改变任何真实实例。
+	var trial := EmblemStickerInventory.new()
+	trial.restore(get_items())
+	var direct := true
+	for state: Dictionary in states:
+		if not _is_valid_identity(state) or trial._contains_instance(state.get("instance_id", "")):
+			return false
+		var clean := _without_placement(state)
+		if not trial.add(clean):
+			direct = false
+			clean["storage"] = "drop"
+			trial.add(clean)
+	if direct:
+		_items = trial._items
+		return true
+	var has_element := states.any(func(item: Dictionary): return bool(item.get("element_sticker", false)))
+	if free_cell_count() >= 8 and has_element:
+		# 先保留全部旧库存，再逐枚尝试新贴纸；不把旧贴纸挤出工具箱。
+		var accepted: Array[Dictionary] = []
+		var dropped: Array[Dictionary] = []
+		for item: Dictionary in _items:
+			(dropped if is_dropped(item) else accepted).append(item.duplicate(true))
+		var pending := states.duplicate(true)
+		pending.sort_custom(_comes_before.bind(rarities))
+		for state: Dictionary in pending:
+			var packed: Variant = _pack_sorted(accepted + [state], rarities)
+			if packed != null:
+				accepted.assign(packed)
+			else:
+				var overflow := _without_placement(state)
+				overflow["storage"] = "drop"
+				dropped.append(overflow)
+		var organized := _pack_sorted(accepted, rarities) as Array
+		trial.restore(organized + dropped)
+	# 新掉落位置稳定分散，之后玩家可自由摆放并叠在同一处。
+	var drop_index := 0
+	for item: Dictionary in trial._items:
+		if not is_dropped(item): continue
+		if not item.has("drop_position"):
+			item["drop_position"] = [float((drop_index * 11) % 48), float((drop_index * 7) % 10)]
+		drop_index += 1
+	_items = trial._items
+	return true
+
+
+func _without_placement(state: Dictionary) -> Dictionary:
+	var clean := state.duplicate(true)
+	for key: String in ["grid_x", "grid_y", "grid_span", "storage", "drop_position"]: clean.erase(key)
+	return clean
+
+
+func _pack_sorted(states: Array, rarities: Dictionary) -> Variant:
+	var ordered := states.duplicate(true)
+	ordered.sort_custom(_comes_before.bind(rarities))
+	var packed := EmblemStickerInventory.new()
+	for state: Dictionary in ordered:
+		if not packed.add(_without_placement(state)): return null
+	return packed.get_items()
+
+
+func _comes_before(a: Dictionary, b: Dictionary, rarities: Dictionary) -> bool:
+	var a_element := bool(a.get("element_sticker", false))
+	var b_element := bool(b.get("element_sticker", false))
+	if a_element != b_element: return a_element
+	var a_id := String(a.get("wound_id", a.get("emblem_id", "")))
+	var b_id := String(b.get("wound_id", b.get("emblem_id", "")))
+	var a_rarity := int(rarities.get(a_id, -1))
+	var b_rarity := int(rarities.get(b_id, -1))
+	if a_rarity != b_rarity: return a_rarity > b_rarity
+	if a_id != b_id: return a_id < b_id
+	return String(a.instance_id) < String(b.instance_id)

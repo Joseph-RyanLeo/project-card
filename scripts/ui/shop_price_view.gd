@@ -1,11 +1,11 @@
 extends HBoxContainer
 
 ## 商店金额独立绘制，不把25像素图片混入正文的字体度量。
-const COIN: Texture2D = preload("res://assets/ui/currency/gold_coin.png")
+const COIN: Texture2D = preload("res://assets/ui/shop_event_20261020/price_coin.png")
 const RuneNumber = preload("res://scripts/ui/rune_number_display.gd")
-const NUMBER_SCALE := 2.0 # 大号14像素卢恩数字以整数2倍显示，接近25像素金币高度
+const NUMBER_SCALE := 1.0 # 新棋盘价格使用14像素原生数字，与新金币素材一致
 const GAP := 5 # 金币、数字及文字之间的像素间距
-const TEXT_SIZE := 20 # 商店金额旁的简短说明字号
+const TEXT_SIZE := 14 # 商店金额旁的简短说明字号
 
 func configure(values: Array[int], caption: String = "") -> void:
 	name = "ShopPrice"

@@ -3,18 +3,19 @@ extends RefCounted
 
 ## 图4固定栏位的轴向六边格纯数据几何，保持形状平移不变。
 
-const BOARD_SIZE := Vector2i(170, 160) # 图4固定栏位尺寸
-const COLUMN_COUNT := 6 # 原图固定列数
+const VERSION: int = 2 # 1为旧27格，2为当前19格蜂窝
+const BOARD_SIZE := Vector2i(143, 160) # 图4固定栏位尺寸
+const COLUMN_COUNT := 5 # 原图固定列数
 const COLUMN_STEP := 27 # 相邻列格心横向距离（像素）
 const ROW_STEP := 32 # 同列格心纵向距离（像素）
-const HEX_ORIGIN := Vector2i(17, 32) # 轴向坐标(0,0)格心（像素）
+const HEX_ORIGIN := Vector2i(17, 48) # 轴向坐标(0,0)格心（像素）
 const AXIAL_NEIGHBORS: Array[Vector2i] = [Vector2i(0, -1), Vector2i(0, 1), Vector2i(1, 0), Vector2i(1, 1), Vector2i(-1, 0), Vector2i(-1, -1)]
 
-static func valid_cells() -> Array[Vector2i]:
+static func valid_cells(version: int = VERSION) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
-	for q in COLUMN_COUNT:
-		var first_r := floori(float(q) / 2.0)
-		var count := 5 if q % 2 == 1 else 4
+	for q in (6 if version == 1 else COLUMN_COUNT):
+		var first_r := floori(float(q) / 2.0) if version == 1 else maxi(q - 2, 0)
+		var count := (5 if q % 2 == 1 else 4) if version == 1 else 5 - absi(q - 2)
 		for row in count:
 			cells.append(Vector2i(q, first_r + row))
 	return cells
@@ -22,8 +23,8 @@ static func valid_cells() -> Array[Vector2i]:
 static func center(cell: Vector2i) -> Vector2:
 	return Vector2(HEX_ORIGIN.x + 27 * cell.x, HEX_ORIGIN.y + 32 * cell.y - 16 * cell.x)
 
-static func is_valid_cell(cell: Vector2i) -> bool:
-	return valid_cells().has(cell)
+static func is_valid_cell(cell: Vector2i, version: int = VERSION) -> bool:
+	return valid_cells(version).has(cell)
 
 static func neighbors(cell: Vector2i) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
@@ -94,12 +95,12 @@ static func is_connected_shape(shape: Array[Vector2i]) -> bool:
 				pending.append(adjacent)
 	return reached.size() == shape.size()
 
-static func can_place(shape: Array[Vector2i], anchor: Vector2i, occupied: Dictionary, disabled: Dictionary) -> bool:
+static func can_place(shape: Array[Vector2i], anchor: Vector2i, occupied: Dictionary, disabled: Dictionary, version: int = VERSION) -> bool:
 	if not is_connected_shape(shape): return false
 	var seen: Dictionary = {}
 	for offset in shape:
 		var cell := anchor + offset
-		if not is_valid_cell(cell) or seen.has(cell) or occupied.has(cell) or disabled.has(cell): return false
+		if not is_valid_cell(cell, version) or seen.has(cell) or occupied.has(cell) or disabled.has(cell): return false
 		seen[cell] = true
 	return true
 

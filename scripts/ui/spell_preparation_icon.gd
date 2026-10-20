@@ -12,6 +12,7 @@ var owned_card: OwnedCard
 var tray: Control
 var _drag_enabled: bool = true
 var _left_button_pressed: bool = false
+var _remaining_label: Label
 
 
 func _ready() -> void:
@@ -21,19 +22,35 @@ func _ready() -> void:
 	focus_mode = Control.FOCUS_NONE
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	size = ICON_SIZE
+	_remaining_label = Label.new()
+	_remaining_label.position = Vector2(0, 27) # 战斗准备读秒位于令牌底部
+	_remaining_label.size = Vector2(42, 14) # 读秒覆盖范围
+	_remaining_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_remaining_label.add_theme_font_override("font", preload("res://assets/fonts/chill_7.ttf"))
+	_remaining_label.add_theme_font_size_override("font_size", 9) # 准备法术剩余秒数字号
+	_remaining_label.add_theme_constant_override("outline_size", 2) # 数字描边保证在底座上清晰
+	_remaining_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_remaining_label)
 
 
 func configure(card: OwnedCard, host: Control) -> void:
 	owned_card = card
 	tray = host
+	set_battle_status(-1.0, false)
 	if owned_card == null or owned_card.card_data == null:
 		texture_normal = null
 		tooltip_text = ""
 		return
 	var trigger_kind := owned_card.card_data.spell_trigger_kind
 	var source_column: int = SpellPreparationIconStyle.source_column_for_trigger(trigger_kind)
-	texture_normal = SpellPreparationIconStyle.get_texture(source_column, owned_card.card_data.rarity)
+	texture_normal = SpellPreparationIconStyle.get_texture(source_column, owned_card.card_data.rarity, owned_card.card_data.get_effective_faction())
 	tooltip_text = ""
+
+
+func set_battle_status(remaining: float, spent: bool) -> void:
+	modulate.a = 0.45 if spent else 1.0 # 已释放的法术降低亮度，保留本场队列位置
+	if is_instance_valid(_remaining_label):
+		_remaining_label.text = "%.1f" % remaining if remaining >= 0.0 and not spent else ""
 
 
 func set_drag_enabled(enabled: bool) -> void:
@@ -93,7 +110,8 @@ func _build_drag_data(at_position: Vector2) -> Dictionary:
 	var trigger_kind := owned_card.card_data.spell_trigger_kind
 	var icon_texture := SpellPreparationIconStyle.get_texture(
 		SpellPreparationIconStyle.source_column_for_trigger(trigger_kind),
-		owned_card.card_data.rarity
+		owned_card.card_data.rarity,
+		owned_card.card_data.get_effective_faction()
 	)
 	return {
 		"kind": &"card",

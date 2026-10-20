@@ -6,7 +6,7 @@ extends RefCounted
 
 const SAVE_PATH := "user://battle_attack_effects.cfg"
 const FILE_FORMAT := "project_card_attack_effects"
-const FILE_VERSION: int = 1
+const FILE_VERSION: int = 2
 const PROFILE_IDS: Array[StringName] = [
 	&"melee_attack",
 	&"ranged_attack",
@@ -17,6 +17,7 @@ const PROFILE_IDS: Array[StringName] = [
 	&"dark_repeat",
 	&"wood_pierce",
 	&"light_reflect",
+	&"fire_burn",
 ]
 const PROFILE_NAMES := {
 	&"melee_attack": "近战攻击",
@@ -28,9 +29,10 @@ const PROFILE_NAMES := {
 	&"dark_repeat": "暗·连击",
 	&"wood_pierce": "木·穿刺",
 	&"light_reflect": "光·折射",
+	&"fire_burn": "火·灼烧",
 }
-const MASK_IDS: Array[StringName] = [&"energy", &"projectile", &"soul_ribbon"]
-const MASK_NAMES := {&"energy": "宽能量尾迹", &"projectile": "尖头弹体尾迹", &"soul_ribbon": "灵魂光带"}
+const MASK_IDS: Array[StringName] = [&"energy", &"projectile", &"soul_ribbon", &"water_flow", &"wood_thorns", &"dark_slash"]
+const MASK_NAMES := {&"energy": "宽能量尾迹", &"projectile": "尖头弹体尾迹", &"soul_ribbon": "灵魂光带", &"water_flow": "像素水流", &"wood_thorns": "手绘木穿刺", &"dark_slash": "手绘暗斩击"}
 
 # 只替换外观参数，保留当前行动的播放时间与变速强度，沿用既有命中时序。
 const SOUL_RIBBON_PRESET := {
@@ -115,11 +117,13 @@ static func get_default_profile(profile_id: StringName) -> Dictionary:
 	var profile := _COMMON_DEFAULTS.duplicate(true)
 	match profile_id:
 		&"water_spread":
-			profile.merge({"mask_kind": &"energy", "arc_height": 54.0, "flow_speed": 2.04, "flow_frequency": 5.1, "flow_strength": 0.408, "warp_speed": -0.80, "warp_frequency": 4.0, "twirl_frequency": 3.0, "warp_strength": 0.10}, true)
+			profile.merge({"mask_kind": &"water_flow", "beam_height": 112.0, "pixel_size": 2.0, "arc_height": 0.0, "end_padding": 0.0, "flow_speed": 2.04, "flow_frequency": 5.1, "flow_strength": 0.55, "warp_speed": -0.80, "warp_frequency": 4.0, "twirl_frequency": 3.0, "warp_strength": 0.14}, true)
+		&"fire_burn":
+			profile.merge({"mask_kind": &"energy", "duration": 1.8, "beam_height": 160.0, "pixel_size": 2.0, "flow_speed": 1.6, "flow_frequency": 5.0, "warp_strength": 0.10}, true)
 		&"dark_repeat":
-			profile.merge({"mask_kind": &"energy", "arc_height": 42.0, "flow_speed": 2.88, "flow_frequency": 8.4, "flow_strength": 0.528, "warp_speed": -1.20, "warp_frequency": 6.0, "twirl_frequency": 7.0, "warp_strength": 0.20}, true)
+			profile.merge({"mask_kind": &"dark_slash", "beam_height": 144.0, "arc_height": 0.0}, true) # 暗斩整体宽度为144逻辑像素
 		&"wood_pierce":
-			profile.merge({"mask_kind": &"projectile", "arc_height": 12.0, "flow_speed": 1.80, "flow_frequency": 3.9, "flow_strength": 0.384, "warp_speed": -0.60, "warp_frequency": 3.0, "twirl_frequency": 2.2, "warp_strength": 0.08}, true)
+			profile.merge({"mask_kind": &"wood_thorns", "beam_height": 70.0, "arc_height": 0.0}, true) # 70为木原图的横向比例参考值；默认不压缩原画像素
 		&"light_reflect":
 			profile.merge({"mask_kind": &"projectile", "arc_height": -60.0, "flow_speed": 3.24, "flow_frequency": 9.6, "flow_strength": 0.360, "warp_speed": -1.50, "warp_frequency": 8.0, "twirl_frequency": 8.0, "warp_strength": 0.06}, true)
 		&"melee_attack":
@@ -146,6 +150,14 @@ static func normalize_profile(profile_id: StringName, source: Dictionary) -> Dic
 static func make_soul_ribbon_profile(profile_id: StringName, source: Dictionary) -> Dictionary:
 	var result := normalize_profile(profile_id, source)
 	result.merge(SOUL_RIBBON_PRESET, true)
+	return _clamp_profile(result)
+
+
+static func make_element_sample_profile(profile_id: StringName, source: Dictionary) -> Dictionary:
+	var result := normalize_profile(profile_id, source)
+	var defaults := get_default_profile(profile_id)
+	for key: String in ["mask_kind", "beam_height"]:
+		result[key] = defaults[key]
 	return _clamp_profile(result)
 
 
@@ -217,16 +229,19 @@ static func read_profile_file(path: String) -> Dictionary:
 	file.close()
 	if error != OK: return {"success": false, "error": "JSON格式错误（第%d行）" % parser.get_error_line()}
 	var document: Variant = parser.data
-	if not document is Dictionary or document.get("format") != FILE_FORMAT or document.get("version") != FILE_VERSION:
+	if not document is Dictionary or document.get("format") != FILE_FORMAT or (document.get("version") != 1 and document.get("version") != FILE_VERSION):
 		return {"success": false, "error": "文件类型或配置版本不受支持"}
-	return _validate_file_profiles(document.get("profiles"))
+	return _validate_file_profiles(document.get("profiles"), int(document.version) == 1)
 
 
-static func _validate_file_profiles(source: Variant) -> Dictionary:
-	if not source is Dictionary or source.size() != PROFILE_IDS.size():
-		return {"success": false, "error": "配置必须包含全部九类攻击特效"}
+static func _validate_file_profiles(source: Variant, legacy: bool = false) -> Dictionary:
+	if not source is Dictionary or source.size() != PROFILE_IDS.size() - (1 if legacy else 0):
+		return {"success": false, "error": "配置必须包含全部攻击特效类型"}
 	var profiles: Dictionary = {}
 	for id: StringName in PROFILE_IDS:
+		if legacy and id == &"fire_burn":
+			profiles[id] = get_default_profile(id)
+			continue
 		var profile: Variant = source.get(id)
 		if not profile is Dictionary:
 			return {"success": false, "error": "缺少特效类型：" + PROFILE_NAMES[id]}

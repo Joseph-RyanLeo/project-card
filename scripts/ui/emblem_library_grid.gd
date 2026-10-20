@@ -8,6 +8,8 @@ const CELL_GAP := InventoryScript.CELL_GAP
 const CELL_STEP := InventoryScript.CELL_STEP
 const COLUMN_COUNT := InventoryScript.COLUMN_COUNT
 const ROW_COUNT := InventoryScript.ROW_COUNT
+const EMPTY_CELL_ALPHA := 0.55 # 空槽底色不透明度，弱化黑色方块
+const DROP_AREA := Rect2(10, 98, 86, 40) # 工具箱左半部下三分之一区域，允许贴纸互相叠放
 const GRID_ORIGIN := Vector2(114.0, 16.0) # 旋转底图右侧4×7格网的首格坐标
 
 var inventory_view: EmblemLibraryView
@@ -29,6 +31,7 @@ func _ready() -> void:
 			cell.position = GRID_ORIGIN + Vector2(column, row) * CELL_STEP
 			cell.size = CELL_SIZE
 			cell.color = Color("2b1b20")
+			cell.color.a = EMPTY_CELL_ALPHA
 			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			_cell_layer.add_child(cell)
 	_drop_preview = ColorRect.new()
@@ -48,14 +51,18 @@ func layout_entries(entries: Array[Variant]) -> void:
 		var state: Dictionary = entry.definition.get("returned_state", {})
 		var span := 2 if entry.is_element_sticker() else 1
 		var cell := Vector2i(int(state.get("grid_x", 0)), int(state.get("grid_y", 0)))
-		entry.position = GRID_ORIGIN + Vector2(cell) * CELL_STEP
+		if InventoryScript.is_dropped(state):
+			var point: Array = state.get("drop_position", [0.0, 0.0])
+			entry.position = DROP_AREA.position + Vector2(float(point[0]), float(point[1]))
+		else:
+			entry.position = GRID_ORIGIN + Vector2(cell) * CELL_STEP
 		entry.size = Vector2(span, span) * CELL_SIZE + Vector2.ONE * CELL_GAP * (span - 1)
 		entry.custom_minimum_size = entry.size
 		entry.update_layout_visuals()
 
 
 func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
-	if inventory_view == null or not data is Dictionary:
+	if inventory_view == null or not inventory_view._drag_enabled or not data is Dictionary:
 		_hide_drop_preview()
 		return false
 	var drag_data := data as Dictionary
@@ -65,20 +72,22 @@ func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 	var accepted: bool = (
 		drag_data.get("kind") == &"emblem_library"
 		and not instance_id.is_empty()
-		and inventory_view.can_move_sticker(instance_id, cell)
+		and (DROP_AREA.has_point(at_position) or inventory_view.can_move_sticker(instance_id, cell))
 	)
-	_show_drop_preview(cell, 2 if bool(state.get("element_sticker", false)) else 1, accepted)
+	if DROP_AREA.has_point(at_position):
+		_hide_drop_preview()
+	else:
+		_show_drop_preview(cell, 2 if bool(state.get("element_sticker", false)) else 1, accepted)
 	return accepted
 
 
 func _drop_data(at_position: Vector2, data: Variant) -> void:
-	if inventory_view == null or not data is Dictionary:
+	if inventory_view == null or not inventory_view._drag_enabled or not data is Dictionary:
 		return
 	var state := (data as Dictionary).get("definition", {}).get("returned_state", {}) as Dictionary
 	var instance_id := StringName(String(state.get("instance_id", "")))
-	var cell := _cell_for_drag(data as Dictionary, get_global_transform_with_canvas() * at_position)
 	if not instance_id.is_empty():
-		inventory_view.move_sticker(instance_id, cell)
+		inventory_view.try_move_sticker_global(instance_id, get_global_transform_with_canvas() * at_position, data as Dictionary)
 	_hide_drop_preview()
 
 
@@ -130,3 +139,9 @@ func _cell_for_drag(data: Dictionary, global_pointer_position: Vector2) -> Vecto
 		global_pointer_position + placement_offset
 	)
 	return inventory_view.cell_for_local_position(item_origin_local - GRID_ORIGIN)
+
+
+func _gui_input(event: InputEvent) -> void:
+	if inventory_view != null and not inventory_view._inspect_mode and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		inventory_view.expand_requested.emit()
+		accept_event()

@@ -31,6 +31,10 @@ func preview_card_drop(
 	data: Variant
 ) -> bool:
 	var can_drop := _is_card_drag(data)
+	if can_drop and data is Dictionary:
+		var preview := (data as Dictionary).get("drag_visual") as CardDragPreview
+		if is_instance_valid(preview) and is_instance_valid(preview.get_spell_preparation_visual()):
+			can_drop = get_global_rect().has_point(preview.get_spell_preparation_global_center())
 	_set_highlighted(can_drop)
 	return can_drop
 

@@ -300,3 +300,8 @@ func get_race_name() -> String:
 
 func get_rarity_name() -> String:
 	return ["I", "II", "III", "IV", "V"][rarity]
+
+
+func is_unique_while_owned() -> bool:
+	# 这是同名持有限制，按稳定id判断；永久移除后恢复获取资格。
+	return rarity == Rarity.IV or card_type == CardType.EQUIPMENT

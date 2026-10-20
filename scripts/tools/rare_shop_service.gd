@@ -32,12 +32,15 @@ func refresh(card_definitions: Array[CardData], owned_cards: Array, _sticker_def
 			if definition.rarity == specification.guarantee: guaranteed.append(definition)
 		if common.is_empty() or guaranteed.is_empty(): return false
 		var chosen: Array[CardData] = []
+		var picked_unique := {}
 		var counts := count_owned_cards(owned_cards)
 		for draw: int in 5:
-			var selected := draw_card_candidate(common if draw < 4 else guaranteed, next_rng, counts)
+			var remaining := _eligible_cards(common if draw < 4 else guaranteed, [], picked_unique)
+			var selected := draw_card_candidate(remaining, next_rng, counts)
 			if selected == null: return false
 			chosen.append(selected)
 			counts[selected.id] = int(counts.get(selected.id, 0)) + 1
+			if selected.is_unique_while_owned(): picked_unique[selected.id] = true
 		next_offers.append({"kind": "card_pack", "pack_id": specification.pack_id, "size": "large", "price": 0,
 			"display_name": specification.display_name, "cards": _card_ids(chosen), "offer_id": "rare_test_%d" % next_offers.size()})
 	rng.state = next_rng.state

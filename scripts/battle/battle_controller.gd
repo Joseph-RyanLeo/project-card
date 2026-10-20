@@ -75,7 +75,7 @@ var enemy_states: Array[BattleSquadState] = []
 var player_resource_states: Array[RefCounted] = []
 var enemy_resource_states: Array[RefCounted] = []
 var _reward_card_catalog: Array[CardData] = []
-var _player_owned_card_ids: Dictionary = {} # 键用于IV持有去重，值保存同名持有数量供奖励降权
+var _player_owned_card_ids: Dictionary = {} # 键用于物品／IV持有去重，值保存同名持有数量供奖励降权
 var _held_reward_stickers: Array[Dictionary] = []
 var _card_reward_picker := CardRewardPickerScript.new()
 var mining_actions_remaining_by_runtime_id: Dictionary = {} # 每个小队由自己的有效效果来源和装备提供本场开采次数
@@ -2359,6 +2359,24 @@ func _resolve_opening_spell(spell: OwnedCard, side: int) -> bool:
 			return false
 
 
+func get_spell_display_states(side: int) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var spells := _enemy_prepared_spell_instances if side == BattleSquadState.Side.ENEMY else _prepared_spell_instances
+	for spell: OwnedCard in spells:
+		var remaining := -1.0
+		var spent := false
+		for entry: Dictionary in _prepared_spell_schedule:
+			if entry.spell == spell:
+				remaining = maxf(float(entry.release_time) - elapsed_seconds, 0.0)
+				spent = _elapsed_spell_attempted.has(spell.instance_id)
+		if spell.card_data.spell_trigger_kind == CardData.SpellTriggerKind.INSTANT:
+			var prefix := "%s:spell:%s:" % [battle_instance_id, spell.instance_id]
+			for id: StringName in _processed_spell_event_ids:
+				if String(id).begins_with(prefix): spent = true
+		result.append({"spell": spell, "remaining": remaining, "spent": spent})
+	return result
+
+
 func _build_prepared_spell_schedule(spells: Array[OwnedCard], side: int, parallel_count: int) -> void:
 	# 每个位置记录何时空闲；下一张始终接到最早空闲的位置，而不是固定分奇偶两组。
 	var available_at: Array[float] = []
@@ -3698,7 +3716,7 @@ func _resolve_resource_harvest(event: BattleEffectEvent) -> void:
 						attach_npc_emblem(emblem, instance_id)
 					else: record_pending_run_reward(owner, BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE, 1, reward_id, actor.runtime_id, timestamp, {"emblem_id": emblem.get("id", &""), "emblem_instance_id": instance_id, "source": "resource:%s" % resource_owned.instance_id, "roll": roll})
 		&"abandoned_toolbox":
-			var equipment := _random_equipment_definition(CardData.Rarity.I)
+			var equipment := _random_equipment_definition(CardData.Rarity.I, actor.side)
 			if equipment != null: _record_resource_card_award(owner, equipment, reward_id, actor, timestamp)
 	if event.log_qualifier.contains("击碎了"):
 		event.log_qualifier += "；获得收获"
@@ -3741,6 +3759,7 @@ func _record_resource_wound_heal(actor: BattleSquadState, owner: BattleEffectOwn
 
 func _record_resource_card_award(owner: BattleEffectOwnerRef, card: CardData, effect_id: StringName, actor: BattleSquadState, timestamp: int) -> void:
 	if card == null: return
+	if actor.side == BattleSquadState.Side.PLAYER and card.is_unique_while_owned() and int(_reward_held_card_counts().get(card.id, 0)) > 0: return
 	if actor.side == BattleSquadState.Side.ENEMY:
 		if card.card_type == CardData.CardType.RESOURCE: spawn_content_resource(card, actor.side)
 		elif card.card_type == CardData.CardType.EQUIPMENT: equip_npc_reward(actor, card)
@@ -3755,14 +3774,19 @@ func _random_shard_definition() -> CardData:
 	return _draw_reward_card_pool(shards)
 
 
-func _random_equipment_definition(requested_rarity: int = -1) -> CardData:
+func _random_equipment_definition(requested_rarity: int = -1, side: BattleSquadState.Side = BattleSquadState.Side.PLAYER) -> CardData:
 	var by_rarity: Dictionary = {}
 	for rarity in 4: by_rarity[rarity] = []
+	var held := _player_owned_card_ids.duplicate() if side == BattleSquadState.Side.PLAYER else {}
+	if side == BattleSquadState.Side.ENEMY:
+		for state: BattleSquadState in get_all_states():
+			var item := state.squad_data.get_equipped_item()
+			if state.side == side and item != null: held[item.card_data.id] = true
 	for card: CardData in _reward_card_catalog:
 		if card.card_type != CardData.CardType.EQUIPMENT or not card.is_available or card.is_derived or card.rarity > CardData.Rarity.IV or card.pack_id == &"development_test" or not CardPackRegistryScript.PACKS.has(card.pack_id): continue
 		if requested_rarity >= 0 and int(card.rarity) != requested_rarity: continue
-		if int(card.rarity) == CardData.Rarity.IV and _player_owned_card_ids.has(card.id): continue
-		if int(card.rarity) == CardData.Rarity.IV and _has_same_battle_equipment_award(card.id): continue
+		if card.is_unique_while_owned() and held.has(card.id): continue
+		if side == BattleSquadState.Side.PLAYER and card.is_unique_while_owned() and _has_same_battle_equipment_award(card.id): continue
 		(by_rarity[int(card.rarity)] as Array).append(card)
 	if requested_rarity >= 0:
 		var requested: Array = by_rarity.get(requested_rarity, [])

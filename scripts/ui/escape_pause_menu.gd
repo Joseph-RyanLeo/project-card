@@ -8,7 +8,7 @@ signal diagnostic_export_requested
 signal restore_requested
 signal target_priority_display_changed(enabled: bool)
 
-const MENU_PANEL_SIZE := Vector2(360.0, 482.0) # 暂停菜单面板宽高
+const MENU_PANEL_SIZE := Vector2(360.0, 530.0) # 暂停菜单面板宽高，容纳移入的音量控件
 const MENU_BUTTON_SIZE := Vector2(260.0, 38.0) # 暂停菜单按钮宽高
 const MENU_BUTTON_SEPARATION: int = 8 # 菜单各按钮之间的垂直间距
 const ESCAPE_BUTTON_POSITION := Vector2(0.0, 0.0) # 位于左上角
@@ -80,6 +80,23 @@ func _build_controls() -> void:
 	_target_priority_check.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_target_priority_check.toggled.connect(target_priority_display_changed.emit)
 	layout.add_child(_target_priority_check)
+	var volume_row := HBoxContainer.new()
+	volume_row.custom_minimum_size = MENU_BUTTON_SIZE
+	volume_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	layout.add_child(volume_row)
+	var volume_label := Label.new()
+	volume_label.text = "音量"
+	volume_row.add_child(volume_label)
+	var volume_slider := HSlider.new()
+	volume_slider.name = "BattleVolumeSlider"
+	volume_slider.unique_name_in_owner = true
+	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	volume_slider.min_value = 0.0
+	volume_slider.max_value = 100.0
+	volume_slider.step = 1.0
+	volume_slider.value = 25.0 # 全局音量默认百分比，0为静音
+	volume_slider.tooltip_text = "全局音量：0 为静音，100 为最大音量"
+	volume_row.add_child(volume_slider)
 	var export_button := _add_menu_button(layout, "导出诊断日志", &"diagnostics")
 	export_button.name = "ExportRunDiagnosticsButton"
 	export_button.tooltip_text = "导出最近操作、卡牌状态变化、存档和上一场战斗数据"

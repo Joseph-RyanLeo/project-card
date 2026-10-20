@@ -2,13 +2,14 @@ class_name CelestialIndicatorController
 extends Control
 
 ## 指示物共用点按与原生拖动的投放入口；日月星归属小队，哨位归属区域。
-const BOARD_TEXTURE: Texture2D = preload("res://assets/card_ui/celestial/source/indicator_tray_board.png")
-const TRAY_POSITION := Vector2(1080, 860) # 指示物板固定在大世界收藏段右侧，随WorldContent切换视角
-const TRAY_SIZE := Vector2(195, 195) # 指示物板按用户原图195×195像素显示
+const BOARD_TEXTURE: Texture2D = preload("res://assets/ui/board_revision_20261019/indicator_tray.png")
+const TRAY_SIZE := Vector2(195, 189) # 指示物板按用户原图195×189像素显示
 const TRAY_PADDING := Vector2(20, 42) # 指示物在新卡板内的首格左上角
 const TRAY_ITEM_GAP: float = 52.0 # 指示物库存格横向中心间距
 const TRAY_ROW_GAP: float = 48.0 # 指示物库存格纵向中心间距
+const INDICATOR_START_POSITIONS: Array[Vector2] = [Vector2(47, 81), Vector2(83, 78), Vector2(121, 72)] # 月亮、星星、太阳初始位置对齐原稿，玩家手动摆放仍随实例保存
 const DROP_TRAVEL := Vector2(0, 6) # 放置时从手持图像中心向下落到卡面的距离
+const INVENTORY_GAP: float = 2.0 # 库存内指示物与哨位之间的最小留白
 var main: Node
 var items: Array[CelestialIndicator] = []
 var next_attachment_order: int = 1
@@ -30,7 +31,7 @@ func initialize(owner_main: Node) -> void:
 	_tray_board = TextureRect.new()
 	_tray_board.name = "CelestialIndicatorTrayBoard"
 	_tray_board.texture = BOARD_TEXTURE
-	_tray_board.position = TRAY_POSITION
+	_tray_board.position = Vector2(5, main.COLLECTION_WORLD_TOP) # 与收藏共用世界顶边，整体上移3像素
 	_tray_board.size = TRAY_SIZE
 	_tray_board.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_tray_board.stretch_mode = TextureRect.STRETCH_KEEP
@@ -39,7 +40,7 @@ func initialize(owner_main: Node) -> void:
 	_tray_board.z_index = -1
 	main.world_content.add_child(_tray_board)
 	_tray = Control.new()
-	_tray.position = TRAY_POSITION
+	_tray.position = _tray_board.position
 	_tray.size = TRAY_SIZE
 	_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	main.world_content.add_child(_tray)
@@ -49,7 +50,7 @@ func initialize(owner_main: Node) -> void:
 		item.kind = kind as CelestialIndicator.Kind
 		item.instance_id = StringName("demo_indicator_%d" % kind)
 		items.append(item)
-		_tray_positions[item.instance_id] = _default_tray_position(items.size() - 1)
+		_tray_positions[item.instance_id] = _default_indicator_position(item)
 	_sync_tray()
 
 func capture_state() -> Dictionary:
@@ -58,7 +59,7 @@ func capture_state() -> Dictionary:
 		encoded.append(item.capture_state())
 	var tray_positions: Dictionary = {}
 	for item: CelestialIndicator in items:
-		var point := _tray_positions.get(item.instance_id, _default_tray_position(0)) as Vector2
+		var point := _tray_positions.get(item.instance_id, _default_indicator_position(item)) as Vector2
 		tray_positions[String(item.instance_id)] = [point.x, point.y]
 	return {
 		"items": encoded,
@@ -83,7 +84,7 @@ func restore_state(state: Dictionary) -> void:
 			if point.is_finite():
 				_tray_positions[item.instance_id] = _clamp_tray_position(item, point)
 		if not _tray_positions.has(item.instance_id):
-			_tray_positions[item.instance_id] = _default_tray_position(index)
+			_tray_positions[item.instance_id] = _default_indicator_position(item)
 	next_attachment_order = maxi(1, int(state.get("next_attachment_order", 1)))
 	_last_positions.clear()
 	_sync_tray()
@@ -116,16 +117,22 @@ func _sync_tray() -> void:
 			view.drag_enabled = true
 			_tray.add_child(view)
 			view.click_carry_requested.connect(begin_click_carry)
-			view.position = _tray_positions.get(item.instance_id, _default_tray_position(index)) as Vector2
+			view.position = _tray_positions.get(item.instance_id, _default_indicator_position(item)) as Vector2
 			_tray_views[item.instance_id] = view
 			if _last_positions.has(item.instance_id):
 				view.play_drop_feedback(_last_positions[item.instance_id])
 		else:
-			view.position = _tray_positions.get(item.instance_id, _default_tray_position(index)) as Vector2
+			view.position = _tray_positions.get(item.instance_id, _default_indicator_position(item)) as Vector2
 	for id: Variant in _tray_views.keys():
 		if not retained.has(id):
 			(_tray_views[id] as Control).queue_free()
 			_tray_views.erase(id)
+	for id: StringName in _tray_views:
+		var view := _tray_views[id] as Control
+		var point := find_inventory_position(view.size, view.position, id)
+		if point.is_finite():
+			_tray_positions[id] = point
+			view.position = point
 
 func _process(_delta: float) -> void:
 	if main == null:
@@ -221,8 +228,8 @@ func _find_target(
 			if card == null:
 				continue
 			var card_transform := card.get_global_transform_with_canvas()
-			var pointer_card_position := card_transform.affine_inverse() * pointer_global
-			if not Rect2(Vector2.ZERO, card.card_size).has_point(pointer_card_position):
+			var center_card_position := card_transform.affine_inverse() * center
+			if not Rect2(Vector2.ZERO, card.card_size).has_point(center_card_position):
 				continue
 			var start_center := card_transform.affine_inverse() * center
 			var snapped_center := CardView.find_nearest_attachment_center(
@@ -236,6 +243,10 @@ func _find_target(
 	return {}
 
 
+func _default_indicator_position(item: CelestialIndicator) -> Vector2:
+	return INDICATOR_START_POSITIONS[item.kind]
+
+
 func _default_tray_position(index: int) -> Vector2:
 	return Vector2(
 		TRAY_PADDING.x + (index % 3) * TRAY_ITEM_GAP,
@@ -247,19 +258,43 @@ func get_inventory_host() -> Control:
 	return _tray
 
 
-func get_inventory_slot_position(index: int) -> Vector2:
-	# 哨位复用卡板格子，避开日月星当前实际占用的位置。
-	var available: Array[Vector2] = []
-	for slot_index: int in range(9):
-		var point := _default_tray_position(slot_index)
-		var occupied := false
-		for view: Control in _tray_views.values():
-			if not view.is_queued_for_deletion() and Rect2(view.position, view.size).intersects(Rect2(point, Vector2(44, 49))):
-				occupied = true
-				break
-		if not occupied:
-			available.append(point)
-	return available[index] if index < available.size() else _default_tray_position(index)
+func get_inventory_slot_position(index: int, exclude_id: StringName = &"") -> Vector2:
+	return find_inventory_position(Vector2(44, 49), _default_tray_position(index), exclude_id)
+
+
+func find_inventory_position(item_size: Vector2, requested: Vector2, exclude_id: StringName) -> Vector2:
+	var obstacles: Array[Rect2] = []
+	for id: StringName in _tray_views:
+		var view := _tray_views[id] as Control
+		if id != exclude_id and is_instance_valid(view) and not view.is_queued_for_deletion():
+			obstacles.append(Rect2(_tray_positions.get(id, view.position), view.size).grow(INVENTORY_GAP))
+	if main.maze_controller != null and is_instance_valid(main.maze_controller._sentry_bar):
+		for child: Node in main.maze_controller._sentry_bar.get_children():
+			if child is EquipmentIndicator and StringName(child.sentry_data.get("instance_id", "")) != exclude_id:
+				obstacles.append(Rect2(child.position, child.size).grow(INVENTORY_GAP))
+	var maximum := TRAY_SIZE - item_size
+	var wanted := requested.clamp(Vector2.ZERO, maximum)
+	var xs: Array[float] = [wanted.x, 0.0, maximum.x]
+	var ys: Array[float] = [wanted.y, 0.0, maximum.y]
+	for bounds: Rect2 in obstacles:
+		xs.append(clampf(bounds.position.x - item_size.x, 0, maximum.x))
+		xs.append(clampf(bounds.end.x, 0, maximum.x))
+		ys.append(clampf(bounds.position.y - item_size.y, 0, maximum.y))
+		ys.append(clampf(bounds.end.y, 0, maximum.y))
+	var best := Vector2.INF
+	var distance := INF
+	for x: float in xs:
+		for y: float in ys:
+			var candidate := Rect2(Vector2(x, y), item_size)
+			var blocked := false
+			for bounds: Rect2 in obstacles:
+				if candidate.intersects(bounds):
+					blocked = true
+					break
+			if not blocked and wanted.distance_squared_to(candidate.position) < distance:
+				best = candidate.position
+				distance = wanted.distance_squared_to(best)
+	return best
 
 
 func _clamp_tray_position(item: CelestialIndicator, point: Vector2) -> Vector2:
@@ -275,7 +310,8 @@ func _find_tray_target(center: Vector2, item: CelestialIndicator) -> Dictionary:
 	if not Rect2(Vector2.ZERO, TRAY_SIZE).has_point(local_center):
 		return {}
 	var size := CelestialIndicatorStyle.get_texture(item.kind).get_size()
-	var position := _clamp_tray_position(item, local_center - size * 0.5)
+	var position := find_inventory_position(size, local_center - size * 0.5, item.instance_id)
+	if not position.is_finite(): return {}
 	var bounds := Rect2(position, size)
 	if Rect2(Vector2.ZERO, TRAY_SIZE).encloses(bounds):
 		return {"position": position}
@@ -300,7 +336,7 @@ func _resolve_drop_target(pointer: Vector2) -> Dictionary:
 	if _data.is_empty() or main.current_phase != main.GamePhase.PREPARE:
 		return {}
 	if _data.get("kind") == &"sentry_indicator":
-		return main.maze_controller.resolve_sentry_drop(String(_data.instance_id), pointer) if main.maze_controller != null else {}
+		return main.maze_controller.resolve_sentry_drop(String(_data.instance_id), _get_carry_center()) if main.maze_controller != null else {}
 	var item := _data["indicator"] as CelestialIndicator
 	var center := _get_carry_center()
 	var target := _find_target(center, item, pointer)
@@ -322,7 +358,7 @@ func finish_drop(pointer: Vector2 = Vector2.INF) -> void:
 		return
 	if _data.get("kind") == &"sentry_indicator":
 		var id := String(_data.instance_id)
-		var committed: bool = main.maze_controller.drop_sentry_at(id, pointer)
+		var committed: bool = main.maze_controller.drop_sentry_at(id, _get_carry_center())
 		_end_carry(committed)
 		return
 	var item := _data["indicator"] as CelestialIndicator

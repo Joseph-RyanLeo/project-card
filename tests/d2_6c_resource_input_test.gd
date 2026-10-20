@@ -343,9 +343,9 @@ func _run() -> void:
 	await mouse_move(enemy_tile.get_global_rect().get_center())
 	check(is_instance_valid(enemy_tray._hover_card) and enemy_tray._hover_card.card_data == enemy_resource.card_data, "重新悬停另一张敌方资源时切换到对应卡面")
 	var overlap_with_controls := false
-	for control: Control in [main.start_battle_button, main.phase_label, main.battle_seed_panel, main.ground_reward_panel]:
+	for control: Control in [main.start_battle_button, main.phase_label, main.battle_seed_panel]:
 		if is_instance_valid(control) and control.visible and hover_rect.intersects(control.get_global_rect()): overlap_with_controls = true
-	check(not overlap_with_controls, "悬停卡面不覆盖开战、阶段、种子或奖励控制条")
+	check(not overlap_with_controls, "悬停卡面不覆盖开战、阶段或种子控制条")
 	var escape_rect: Rect2 = main._escape_pause_menu.get_node("EscapeMenuButton").get_global_rect()
 	var mode_rect: Rect2 = shell.display_mode_option.get_parent().get_global_rect()
 	var physical_hover := Rect2(transform * hover_rect.position, hover_rect.size * transform.get_scale())

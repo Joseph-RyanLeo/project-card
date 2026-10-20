@@ -13,7 +13,7 @@ var _cards: Array[OwnedCard] = []
 var _next_instance_sequence: int = 1
 
 
-func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null) -> OwnedCard:
+func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null, reserved_cards: Array[CardData] = []) -> OwnedCard:
 	if card_data == null:
 		return null
 	var owned_card := OwnedCard.new()
@@ -25,7 +25,7 @@ func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null
 	)
 	_assign_member_identity(owned_card, _cards)
 	_cards.append(owned_card)
-	_grant_acquisition_cards(owned_card, instance_rng)
+	_grant_acquisition_cards(owned_card, instance_rng, reserved_cards)
 	return owned_card
 
 
@@ -156,25 +156,30 @@ func _assign_member_identity(owned_card: OwnedCard, existing_cards: Array[OwnedC
 			return
 
 
-func _grant_acquisition_cards(owned: OwnedCard, rng: RandomNumberGenerator) -> void:
+func _grant_acquisition_cards(owned: OwnedCard, rng: RandomNumberGenerator, reserved_cards: Array[CardData]) -> void:
 	if owned.card_data.content_effect == &"augustus_ironwall":
 		for id: String in ["skirmish_formation", "rally_formation"]:
 			var companion := create_card(load("res://resources/cards/%s.tres" % id), rng)
 			companion.companion_source_id = owned.instance_id
 	elif owned.card_data.content_effect == &"gunsmith_master":
 		var candidates: Array[CardData] = []
+		var selector := OrdinaryShopService.new()
+		var held_counts := selector.count_owned_cards(_cards)
+		# 同包／同批次已经选定但尚未创建的物品，也不能被获得时赠卡提前重复发放。
+		for reserved: CardData in reserved_cards:
+			held_counts[reserved.id] = int(held_counts.get(reserved.id, 0)) + 1
 		var filenames := ResourceLoader.list_directory("res://resources/cards")
 		filenames.sort()
 		for filename: String in filenames:
 			if filename.get_extension() != "tres": continue
 			var card := load("res://resources/cards/" + filename) as CardData
 			if card == null or not card.is_available or card.is_derived or card.get_effective_faction() == CardFaction.Id.LABYRINTH: continue
+			if card.is_unique_while_owned() and held_counts.has(card.id): continue
 			if card.card_type == CardData.CardType.EQUIPMENT and card.equipment_type == CardData.EquipmentType.RANGED_WEAPON and card.rarity <= CardData.Rarity.II: candidates.append(card)
 		if candidates.is_empty(): return
 		var source := rng
 		if source == null:
 			source = RandomNumberGenerator.new()
 			source.randomize()
-		var selector := OrdinaryShopService.new()
 		selector.load_config()
-		create_card(selector.draw_card_candidate(candidates, source, selector.count_owned_cards(_cards)), source)
+		create_card(selector.draw_card_candidate(candidates, source, held_counts), source)

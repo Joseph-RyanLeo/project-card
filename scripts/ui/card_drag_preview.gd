@@ -328,7 +328,7 @@ func configure_spell_preparation_icon(
 	_spell_preparation_icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_spell_preparation_icon.texture = icon_texture
 	_spell_preparation_icon.size = SPELL_PREPARATION_ICON_SIZE
-	_spell_preparation_icon.scale = _preview_scale
+	_spell_preparation_icon.scale = Vector2.ONE
 	_spell_preparation_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_spell_preparation_icon.z_index = 10
 	var icon_grab_position := grab_local_position
@@ -340,6 +340,14 @@ func configure_spell_preparation_icon(
 	_shadow.visible = not starts_as_icon
 	_spell_preparation_icon_mode = starts_as_icon
 	add_child(_spell_preparation_icon)
+
+
+func get_spell_preparation_visual() -> TextureRect:
+	return _spell_preparation_icon
+
+
+func get_spell_preparation_global_center() -> Vector2:
+	return _spell_preparation_icon.get_global_transform_with_canvas() * (_spell_preparation_icon.size * 0.5)
 
 
 func set_spell_preparation_icon_mode(enabled: bool) -> void:
@@ -363,19 +371,6 @@ func set_spell_preparation_icon_mode(enabled: bool) -> void:
 		1.0 if enabled else 0.0,
 		SPELL_PREPARATION_TRANSITION_DURATION
 	)
-
-
-func prepare_spell_preparation_transition() -> void:
-	# 一次性卡面快照在淡出期间冻结，避免为过渡动画持续重绘 SubViewport。
-	if is_instance_valid(_snapshot_visual):
-		var snapshot_viewport := _snapshot_visual.get_node_or_null("CardSnapshotViewport") as SubViewport
-		if snapshot_viewport != null:
-			snapshot_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-	if is_instance_valid(_shadow):
-		_shadow.visible = false
-	if is_instance_valid(_equipment_indicator_visual):
-		_equipment_indicator_visual.visible = false
-	set_process(false)
 
 
 func get_source_card_view() -> Variant:

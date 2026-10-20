@@ -7,6 +7,7 @@ const CARD_SCENE := preload("res://scenes/ui/CardView.tscn")
 const SLOT_SIZE := Vector2(130, 155) # 卡牌空槽及外侧投放范围
 const CARD_POSITION := Vector2(15, 8) # 卡牌轮廓在空槽内的位置
 const CARD_SIZE := Vector2(99, 136) # 空槽按真实卡牌大小画出轮廓
+var use_board_art: bool = false # 使用新棋盘自带的凹槽时，隐藏旧空槽轮廓和文字
 var accepts_card: Callable
 var resolve_card_view: Callable
 var _empty_outline: Panel
@@ -48,7 +49,7 @@ func show_card(owned: OwnedCard) -> void:
 	_selected_card = owned
 	if not is_node_ready():
 		return
-	_empty_outline.visible = owned == null
+	_empty_outline.visible = owned == null and not use_board_art
 	if owned == null:
 		return_card(false)
 		return
@@ -58,7 +59,7 @@ func show_card(owned: OwnedCard) -> void:
 	_selected_card = owned
 	_card_view = resolve_card_view.call(owned) if resolve_card_view.is_valid() else null
 	if not is_instance_valid(_card_view):
-		_empty_outline.visible = true
+		_empty_outline.visible = not use_board_art
 		return
 	var source_slot := _card_view._drag_source_slot
 	if is_instance_valid(source_slot) and source_slot.has_method("reset_hover_feedback"):
@@ -97,6 +98,7 @@ func return_card(notify: bool = true) -> void:
 	_card_view = null
 	_selected_card = null
 	if is_instance_valid(view):
+		view.set_service_stickers_detached(false)
 		view.set_as_top_level(false)
 		view.remove_meta("card_service_slot")
 		var parent := _source.get("parent") as Node
@@ -114,7 +116,7 @@ func return_card(notify: bool = true) -> void:
 		else:
 			view.queue_free()
 	_source.clear()
-	if is_instance_valid(_empty_outline): _empty_outline.visible = true
+	if is_instance_valid(_empty_outline): _empty_outline.visible = not use_board_art
 	if notify: card_returned.emit()
 
 func _clear_source_ghost() -> void:

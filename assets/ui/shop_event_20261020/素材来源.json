@@ -1,0 +1,98 @@
+[
+  {
+    "文件": "shop_board.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/商店/商店棋盘.png",
+    "SHA256": "8fc021605f38c44495dd57c13c92b9575e4c4b5e742bcaee8b2629f70f8bcbd1",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "service_board.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/商店/商店卡牌服务时棋盘.png",
+    "SHA256": "0e1f3c95fdd1246d39e4a561fc63830979ddf60db4eb353657190850aaef403c",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "shop_reference.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/商店/商店购物时总览.png",
+    "SHA256": "2c7b88ca75737ab44281d88efa3441a13a496094fb53e1385908bcb1179b5e0a",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "service_reference.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/商店/商店卡牌服务时总览.png",
+    "SHA256": "55b6dedf6f3266ba0a53fd0ef5f1bdb539eb6c270547c7faed7efd411ce1b754",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "shop_tabs.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/商店/商店按钮.png",
+    "SHA256": "558ee86c48fbd96ea4be66798f7abe05accdb00d5b1b028b85ac3e3e5299e001",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "refresh.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/商店/刷新按钮.png",
+    "SHA256": "00c784fdd26404f7ac3453efede5bb3c1bc29f77e4088f0afa909e47637f046c",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "service_button.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/商店/融合卡牌与分解卡牌按钮.png",
+    "SHA256": "c65516509e50af9f7906087d3dcb8cbe01c26c37f0f34f5e5440a6c8de10af18",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "exchange_state.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/商店/能否融合置换提示.png",
+    "SHA256": "4e66e2acc3777619ec6f4d2b3bc3e2f4e8b306c2e0a4ff712860f74976275d59",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "price_coin.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/商店/商店标价金币.png",
+    "SHA256": "c46521bc91c145b2c6825852b570fb14f6a4bede49a3b03317a1824d0067a6b6",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "shop_cloth.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/商店/商店绸缎.png",
+    "SHA256": "d6c48596724e88425861a1d58ccca3eccab9c02994e95c2c1bf0cb963e34cbab",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "event_board.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/事件/事件棋盘.png",
+    "SHA256": "53456492654dadbd71cf4af06dd8a1588c129993684a591d6fe8a4f89cd474fd",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "event_deck.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/事件/事件堆.png",
+    "SHA256": "a62ed9e0d85a078d8b4cee583584d8991f3f1ae696cd8a41d66f79b5cb1460a1",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "event_front.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/事件/事件卡正面.png",
+    "SHA256": "d21a48f704a8e6432df8779a195930e2ba4cc52fc2ad6e826e1f21db784c6114",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "event_back.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/事件/事件卡背面.png",
+    "SHA256": "09dc93858edff081a764e4e2e2c0eb3350cfd63bde08ab73fab8cb8b4655bcd6",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "event_description.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/事件/事件介绍.png",
+    "SHA256": "ab24110989ea5118f174c0f21a124e14aa20290af305ebcf07d8e94560315a14",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "event_reference.png",
+    "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/事件/事件棋盘抽取事件时总览.png",
+    "SHA256": "8d18835f50454ff463b86d15de2bf012edfa10d3ddaab4df1d816e71a100d2e9",
+    "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  }
+]

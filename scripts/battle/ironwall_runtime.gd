@@ -328,7 +328,7 @@ func harvest_scrap(event: BattleEffectEvent) -> void:
 	var candidates: Array[CardData] = []
 	for card: CardData in controller._reward_card_catalog:
 		if not card.is_available or card.is_derived or card.card_type != CardData.CardType.EQUIPMENT or card.rarity > CardData.Rarity.IV: continue
-		if card.rarity == CardData.Rarity.IV and ((event.source.side == 0 and int(controller._player_owned_card_ids.get(card.id, 0)) > 0) or controller.get_living_states(event.source.side).any(func(s: BattleSquadState) -> bool: return s.squad_data.get_equipped_item() != null and s.squad_data.get_equipped_item().card_data.id == card.id)): continue
+		if card.is_unique_while_owned() and ((event.source.side == 0 and int(controller._player_owned_card_ids.get(card.id, 0)) > 0) or controller.get_living_states(event.source.side).any(func(s: BattleSquadState) -> bool: return s.squad_data.get_equipped_item() != null and s.squad_data.get_equipped_item().card_data.id == card.id)): continue
 		if card.has_keyword(&"squad_equipment") and target.squad_data.get_card_count() == 1: continue
 		candidates.append(card)
 	if candidates.is_empty(): return

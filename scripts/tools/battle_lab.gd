@@ -35,7 +35,7 @@ const FORMULA_POPUP_MAX_HEIGHT: float = 300.0 # 实验室公式弹窗允许的�
 const FORMULA_POPUP_CONTENT_PADDING := Vector2(18.0, 18.0) # 弹窗两侧各 9 像素内边距的合计尺寸
 const FORMULA_POPUP_MOUSE_GAP: float = 10.0 # 公式弹窗与鼠标之间的垂直间距
 const EFFECT_LAYER_Z_INDEX: int = 1200 # 战斗特效覆盖卡面，但仍位于配置抽屉与公式弹窗之下
-const EFFECT_FLASH_SECONDS: float = 0.62 # 火焰持续效果命中时的卡位闪烁时长（秒）
+const FIRE_BACKGROUND_Z_INDEX: int = -10 # 与正式战斗一致，火团在卡后，前景火舌与瞬白仍在卡前
 const EFFECT_IMPACT_RADIUS := Vector2(24.0, 32.0) # 命中菱形脉冲的横纵半径
 const EFFECT_COLOR_NONE := Color("ffffff") # 无元素组合时的攻击颜色
 const EFFECT_COLOR_LIGHT := Color("ffd70f") # 光元素攻击颜色
@@ -57,6 +57,7 @@ var _log_by_group: Dictionary = {}
 var _trace_lines: Array[String] = []
 var _battle_state_slots: Dictionary = {}
 var _visuals_enabled: bool = true
+var _fire_burn_visuals: Dictionary = {}
 
 var scenario_name_edit: LineEdit
 var preset_option: OptionButton
@@ -105,6 +106,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_sync_fire_burn_visuals()
 	if _playing and not _paused and battle_controller.is_running():
 		battle_controller.advance_time(delta * SPEED_VALUES[_speed_index])
 		_refresh_status()
@@ -763,6 +765,7 @@ func _load_saved_scenario() -> void:
 
 func _on_states_changed() -> void:
 	_update_live_state_visuals()
+	_sync_fire_burn_visuals()
 	_refresh_status()
 
 
@@ -872,34 +875,23 @@ func _on_projectile_launched(event: BattleEffectEvent) -> void:
 		func() -> void: _play_element_impact(to_local, visual_kind, colors["head"]),
 		battle_controller.battle_speed_multiplier,
 		event.projectile_speed_variant,
-		event.projectile_impact_delay
+		event.projectile_impact_delay,
+		event.sequence_index,
+		inverse.basis_xform(target_slot.get_global_rect().size).y
 	)
 
 
 func _play_effect_visual(event: BattleEffectEvent) -> void:
 	if event == null or not is_instance_valid(battle_effect_layer):
 		return
-	var target_slot := _battle_state_slots.get(event.target) as BoardSlot
-	if not is_instance_valid(target_slot):
+	BattleFireVisual.play_event(event, _fire_burn_visuals, battle_controller, _battle_state_slots, battle_effect_layer, FIRE_BACKGROUND_Z_INDEX, EFFECT_LAYER_Z_INDEX)
+
+
+func _sync_fire_burn_visuals() -> void:
+	if not _visuals_enabled or battle_controller == null or battle_controller.get_all_states().is_empty():
+		if not _fire_burn_visuals.is_empty(): BattleFireVisual.clear_targets(_fire_burn_visuals)
 		return
-	var inverse := battle_effect_layer.get_global_transform_with_canvas().affine_inverse()
-	var global_rect := target_slot.get_global_rect()
-	var flash := ColorRect.new()
-	flash.name = "ElementFlash"
-	flash.position = inverse * global_rect.position
-	flash.size = global_rect.size
-	flash.pivot_offset = flash.size * 0.5
-	flash.scale = Vector2(0.88, 0.88)
-	flash.color = _effect_visual_color(event.visual_kind)
-	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	battle_effect_layer.add_child(flash)
-	var tween := flash.create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(flash, "scale", Vector2(1.04, 1.04), EFFECT_FLASH_SECONDS)
-	tween.tween_property(flash, "modulate:a", 0.0, EFFECT_FLASH_SECONDS)
-	tween.set_parallel(false)
-	tween.tween_callback(flash.queue_free)
-	_play_element_impact(inverse * global_rect.get_center(), event.visual_kind)
+	BattleFireVisual.sync_targets(_fire_burn_visuals, battle_controller, _battle_state_slots, battle_effect_layer, FIRE_BACKGROUND_Z_INDEX, EFFECT_LAYER_Z_INDEX)
 
 
 func _action_visual_kind(action_type: CardData.ActionType) -> StringName:
@@ -943,6 +935,8 @@ func _play_element_impact(
 	color_override: Color = Color.TRANSPARENT
 ) -> void:
 	if not is_instance_valid(battle_effect_layer):
+		return
+	if BattleAttackTrailRenderer.is_sample_style(BattleAttackEffectProfiles.get_profile(kind)["mask_kind"]):
 		return
 	var pulse := Node2D.new()
 	pulse.name = "ElementImpact"
@@ -1330,6 +1324,7 @@ func _hide_formula_popup_after_pointer_transition(generation: int) -> void:
 
 
 func _clear_outputs() -> void:
+	BattleFireVisual.clear_targets(_fire_burn_visuals)
 	_log_entries.clear()
 	_log_by_group.clear()
 	_trace_lines.clear()

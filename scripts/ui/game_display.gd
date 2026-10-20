@@ -13,7 +13,7 @@ enum DisplayMode {
 
 const DESIGN_SIZE := Vector2i(1280, 720)
 const INTERNAL_RENDER_SIZE := Vector2i(1280, 720) # 1×内部渲染画幅
-const DISPLAY_MODE_POSITION := Vector2(766, 8) # 显示模式入口的逻辑坐标，避开资源悬停卡
+const DISPLAY_MODE_POSITION := Vector2(1080, 8) # 显示模式入口放在右上，避开顶栏金币和生命槽
 const DISPLAY_FEEDBACK_POSITION := Vector2(650, 46) # 窗口切换提示的逻辑坐标，避开右侧资源板
 const INTEGER_SCALE_EPSILON: float = 0.0001 # 判断客户区是否为等比整数倍率时允许的浮点误差
 const CARD_ART_TUNER_SCENE: PackedScene = preload("res://scenes/tools/CardArtTuner.tscn")

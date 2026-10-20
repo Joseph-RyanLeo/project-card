@@ -8,21 +8,25 @@ signal inspection_requested(card_view: CardView, card_data: CardData, owned_card
 
 const SPELL_ICON_SCRIPT: Script = preload("res://scripts/ui/spell_preparation_icon.gd")
 const SPELL_ICON_STYLE = preload("res://scripts/ui/spell_preparation_icon_style.gd")
-const CARD_VIEW_SCRIPT: Script = preload("res://scripts/ui/card_view.gd")
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
 const COLUMN_NAMES: Array[String] = ["即时", "条件", "准备"]
-const BOARD_TEXTURE: Texture2D = preload("res://assets/card_ui/spells/source/preparation_board.png")
-const TRAY_SIZE := Vector2(193.0, 310.0) # 法术板按用户原图193×310像素显示
-const BOARD_BACKGROUND_Z_INDEX: int = -225 # 根节点层级150时有效层级为-75，夹在锦缎-80与木板-70之间
+const BOARD_LEFT: Texture2D = preload("res://assets/ui/board_revision_20261019/spell_tray_left.png")
+const BOARD_RIGHT: Texture2D = preload("res://assets/ui/board_revision_20261019/spell_tray_right.png")
+const HEADERS: Array[Texture2D] = [
+	preload("res://assets/ui/board_revision_20261019/spell_header_instant.png"),
+	preload("res://assets/ui/board_revision_20261019/spell_header_conditional.png"),
+	preload("res://assets/ui/board_revision_20261019/spell_header_prepared.png"),
+]
+var enemy_display: bool = false
+const TRAY_SIZE := Vector2(195.0, 324.0) # 左右法术空框按原生195×324像素显示
+const BOARD_BACKGROUND_Z_INDEX: int = -1 # 底板位于本托盘的法术图标下方
 const COLUMN_WIDTH: float = 52.0 # 三类法术各自的滚动列宽
 const COLUMN_STEP: float = 58.0 # 三列图标之间的水平间距
 const ICON_STEP: float = 21.0 # 同类图标步长为图标高度的一半
 const ICON_POSITION := Vector2(5.0, 0.0) # 图标在各滚动列内的左侧留白
-const PANEL_INSET: float = 8.0 # 图标栏相对外框的内边距
-const TITLE_HEIGHT: float = 18.0 # 法术准备标题行高度
-const COLUMN_HEADER_HEIGHT: float = 12.0 # 即时、条件、准备列标题高度
-const LIST_TOP: float = 37.0 # 三列图标滚动区在面板中的顶部位置
-const LIST_HEIGHT: float = 263.0 # 三列图标的可见高度
+const PANEL_INSET: float = 15.0 # 图标栏相对外框的内边距
+const LIST_TOP: float = 65.0 # 三列图标滚动区在面板中的顶部位置
+const LIST_HEIGHT: float = 237.0 # 三列图标的可见高度
 const INSERTION_MARKER_COLOR := Color("f7d882") # 拖动排序时插入线颜色
 const INSERTION_GHOST_ALPHA: float = 0.42 # 目标位置法术图标虚影的透明度
 const DROP_TRANSITION_DURATION: float = 0.16 # 卡牌落入准备栏并转为图标的动画时长
@@ -61,6 +65,18 @@ func set_prepared_cards(cards: Array[OwnedCard]) -> void:
 		_refresh_cards()
 
 
+func sync_battle_spells(entries: Array[Dictionary]) -> void:
+	var cards: Array[OwnedCard] = []
+	for entry: Dictionary in entries:
+		cards.append(entry.spell)
+	if cards != _prepared_cards:
+		set_prepared_cards(cards)
+	for entry: Dictionary in entries:
+		var icon: Control = _icons_by_instance_id.get(entry.spell.instance_id)
+		if is_instance_valid(icon):
+			icon.set_battle_status(entry.remaining, entry.spent)
+
+
 func set_capacity(capacity: int) -> void:
 	_capacity = maxi(capacity, 0)
 
@@ -85,7 +101,7 @@ func _build_columns() -> void:
 	custom_minimum_size = TRAY_SIZE
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var background := TextureRect.new()
-	background.texture = BOARD_TEXTURE
+	background.texture = BOARD_RIGHT if enemy_display else BOARD_LEFT
 	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	background.stretch_mode = TextureRect.STRETCH_KEEP
 	background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -93,26 +109,16 @@ func _build_columns() -> void:
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	background.z_index = BOARD_BACKGROUND_Z_INDEX
 	add_child(background)
-	var title := Label.new()
-	title.text = "法术准备"
-	title.position = Vector2(PANEL_INSET, 1.0)
-	title.size = Vector2(TRAY_SIZE.x - PANEL_INSET * 2.0, TITLE_HEIGHT)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 9)
-	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(title)
 	for column_index: int in COLUMN_NAMES.size():
 		var column := Control.new()
 		column.position = Vector2(PANEL_INSET + column_index * COLUMN_STEP, 0.0)
 		column.size = Vector2(COLUMN_WIDTH, TRAY_SIZE.y)
 		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(column)
-		var header := Label.new()
-		header.text = COLUMN_NAMES[column_index]
-		header.position = Vector2(0.0, TITLE_HEIGHT + 2.0)
-		header.size = Vector2(COLUMN_WIDTH, COLUMN_HEADER_HEIGHT)
-		header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		header.add_theme_font_size_override("font_size", 8)
+		var header := TextureRect.new()
+		header.texture = HEADERS[column_index]
+		header.position = Vector2(1 if enemy_display else 6, 9) # 对齐原稿分类图标；右侧仍使用左侧完整图
+		header.size = HEADERS[column_index].get_size()
 		header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		column.add_child(header)
 		var scroll := ScrollContainer.new()
@@ -156,6 +162,7 @@ func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 		return false
 	var drag_data := data as Dictionary
 	var owned := drag_data.get("owned_card") as OwnedCard
+	at_position = get_global_transform_with_canvas().affine_inverse() * drop_global_position(get_global_transform_with_canvas() * at_position, drag_data)
 	var valid: bool = (
 		owned != null
 		and owned.card_data != null
@@ -216,13 +223,20 @@ func _drop_data(at_position: Vector2, data: Variant) -> void:
 
 func insertion_index_for_global_position(global_point: Vector2, data: Dictionary = {}) -> int:
 	return _insertion_index(
-		get_global_transform_with_canvas().affine_inverse() * global_point,
+		get_global_transform_with_canvas().affine_inverse() * drop_global_position(global_point, data),
 		data.get("owned_card") as OwnedCard
 	)
 
 
-func is_drop_position_global(global_point: Vector2) -> bool:
-	var local_point := get_global_transform_with_canvas().affine_inverse() * global_point
+func drop_global_position(pointer: Vector2, data: Dictionary) -> Vector2:
+	var preview := data.get("drag_visual") as CardDragPreview
+	if is_instance_valid(preview) and is_instance_valid(preview.get_spell_preparation_visual()):
+		return preview.get_spell_preparation_global_center()
+	return pointer
+
+
+func is_drop_position_global(global_point: Vector2, data: Dictionary = {}) -> bool:
+	var local_point := get_global_transform_with_canvas().affine_inverse() * drop_global_position(global_point, data)
 	return _is_inside_drop_area(local_point)
 
 
@@ -231,53 +245,33 @@ func animate_drop_transition(data: Dictionary, instance_id: StringName) -> bool:
 	var drag_preview := data.get("drag_visual") as CardDragPreview
 	if icon == null or not is_instance_valid(drag_preview):
 		return false
-	var source_visual := drag_preview.get_card_visual() as TextureRect
-	if source_visual == null:
+	var source_visual := drag_preview.get_spell_preparation_visual()
+	if not is_instance_valid(source_visual):
 		return false
 	_stop_drop_transition(instance_id)
 	var transition_layer := get_parent() as Control
-	if transition_layer == null:
-		return false
-	var transition: CardDragPreview = CARD_VIEW_SCRIPT.create_drag_visual(data)
+	var transition := TextureRect.new()
 	transition.name = "SpellDropTransition"
+	transition.texture = source_visual.texture
+	transition.size = source_visual.size
+	transition.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	transition.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	transition_layer.add_child(transition)
 	var layer_transform := transition_layer.get_global_transform_with_canvas()
-	var source_transform := source_visual.get_global_transform_with_canvas()
-	var source_root_transform := drag_preview.get_global_transform_with_canvas()
-	_apply_visual_transform(transition, layer_transform.affine_inverse() * source_root_transform)
-	var transition_visual := transition.get_card_visual() as TextureRect
-	if transition_visual == null:
-		transition.queue_free()
-		return false
-	_apply_visual_transform(
-		transition_visual,
-		source_root_transform.affine_inverse() * source_transform
-	)
-	transition.prepare_spell_preparation_transition()
-	var target_rect := icon.get_global_rect()
-	var target_top_left := layer_transform.affine_inverse() * target_rect.position
-	var target_bottom_right := layer_transform.affine_inverse() * target_rect.end
-	var end_scale := Vector2(
-		(target_bottom_right.x - target_top_left.x) / maxf(1.0, transition_visual.size.x * transition_visual.scale.x),
-		(target_bottom_right.y - target_top_left.y) / maxf(1.0, transition_visual.size.y * transition_visual.scale.y)
-	)
-	var end_position := target_top_left - transition_visual.position * end_scale
+	_apply_visual_transform(transition, layer_transform.affine_inverse() * source_visual.get_global_transform_with_canvas())
+	var end_position := layer_transform.affine_inverse() * icon.get_global_rect().position
 	icon.modulate.a = 0.0
 	drag_preview.visible = false
-	transition.z_index = 1000
+	transition.z_index = CardDragPreview.DRAG_PREVIEW_Z_INDEX
 	var tween := create_tween().set_parallel(true)
 	tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(transition, "position", end_position, DROP_TRANSITION_DURATION)
-	tween.tween_property(transition, "scale", end_scale, DROP_TRANSITION_DURATION)
 	tween.tween_property(transition, "rotation", 0.0, DROP_TRANSITION_DURATION)
-	tween.tween_property(transition_visual, "rotation_degrees", 0.0, DROP_TRANSITION_DURATION)
-	tween.tween_property(transition_visual, "modulate:a", 0.0, DROP_TRANSITION_DURATION)
+	tween.tween_property(transition, "modulate:a", 0.0, DROP_TRANSITION_DURATION)
 	tween.tween_property(icon, "modulate:a", 1.0, DROP_TRANSITION_DURATION)
 	tween.finished.connect(func() -> void:
-		if is_instance_valid(transition):
-			transition.queue_free()
-		if _icons_by_instance_id.get(instance_id) == icon and is_instance_valid(icon):
-			icon.modulate.a = 1.0
+		if is_instance_valid(transition): transition.queue_free()
+		if _icons_by_instance_id.get(instance_id) == icon and is_instance_valid(icon): icon.modulate.a = 1.0
 		_drop_transitions.erase(instance_id)
 		_drop_transitions.erase(StringName("visual_%s" % instance_id))
 	)
@@ -638,7 +632,7 @@ func _get_spell_icon_texture(owned: OwnedCard) -> Texture2D:
 	var trigger_column: int = SPELL_ICON_STYLE.source_column_for_trigger(
 		owned.card_data.spell_trigger_kind
 	)
-	return SPELL_ICON_STYLE.get_texture(trigger_column, owned.card_data.rarity)
+	return SPELL_ICON_STYLE.get_texture(trigger_column, owned.card_data.rarity, owned.card_data.get_effective_faction())
 
 
 func _clear_insertion_preview() -> void:

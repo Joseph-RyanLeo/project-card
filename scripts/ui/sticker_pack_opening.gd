@@ -259,7 +259,8 @@ func _open_toolbox() -> void:
 	_library.show()
 	var zoom := _library.scale.x
 	_library.position = Vector2(-_library.size.x * zoom, (overlay.size.y - _library.size.y * zoom) * 0.5)
-	_library_rest = Vector2(TOOLBOX_MARGIN - Grid.GRID_ORIGIN.x * zoom, _library.position.y)
+	var has_drop := _sticker_ids.any(func(id: StringName): return EmblemStickerInventory.is_dropped(_library.get_inventory_item(id)))
+	_library_rest = Vector2(TOOLBOX_MARGIN if has_drop else TOOLBOX_MARGIN - Grid.GRID_ORIGIN.x * zoom, _library.position.y)
 	_start_animation().set_parallel(true)
 	animation.tween_property(_library, "position", _library_rest, TOOLBOX_SECONDS)
 	animation.tween_property(surface, "position", _sheet_center + Vector2(CONTENT_SHIFT, 0), TOOLBOX_SECONDS)
@@ -276,7 +277,8 @@ func _store_next() -> void:
 	var icon := _flying[stored_count]
 	var slot := _library.get_item_canvas_rect(_sticker_ids[stored_count])
 	var target := overlay.get_global_transform_with_canvas().affine_inverse() * slot.get_center()
-	_set_help("正在收入工具箱 %d / %d；连点加速" % [stored_count + 1, _flying.size()])
+	var dropped := EmblemStickerInventory.is_dropped(_library.get_inventory_item(_sticker_ids[stored_count]))
+	_set_help(("正在放入临时区域 %d / %d；离开前请整理" if dropped else "正在收入工具箱 %d / %d；连点加速") % [stored_count + 1, _flying.size()])
 	_start_animation()
 	animation.tween_property(icon, "position", target - icon.pivot_offset, STORE_SECONDS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	animation.parallel().tween_property(icon, "rotation", 0.0, STORE_SECONDS)

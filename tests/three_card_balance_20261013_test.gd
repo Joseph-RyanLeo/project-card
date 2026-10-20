@@ -193,20 +193,26 @@ func test_main_rewards() -> void:
 	main.run_reward_state.pending_emblem_instances.assign(rewards.pending_emblem_instances.duplicate(true))
 	for entry: Dictionary in main.run_reward_state.pending_emblem_instances: entry.battle_instance_id = snapshot.battle_instance_id
 	main._add_settled_emblem_rewards_to_library()
-	check(main.run_reward_state.pending_ground_items.size() == 2 and main.run_reward_state.pending_ground_items[0].element_sticker, "满包时元素贴纸留在地面，保留类型")
-	main.emblem_library.restore_inventory_state([])
-	var ground: Dictionary = main.run_reward_state.pending_ground_items[0]
-	main._keep_ground_item(StringName(ground.ground_id))
-	check(main.emblem_library.get_inventory_state()[0].element_sticker and main.run_reward_state.pending_ground_items.size() == 1, "地面入包保持元素贴纸2×2类别")
-	ground = main.run_reward_state.pending_ground_items[0]
+	var dropped: Array = main.emblem_library.get_inventory_state().filter(func(item: Dictionary) -> bool: return EmblemStickerInventory.is_dropped(item))
+	check(dropped.size() == 2 and dropped[0].element_sticker and main.run_reward_state.pending_ground_items.is_empty(), "满包元素奖励进入同一工具箱临时区域，保留类型")
+	var retained: Array[Dictionary] = []
+	retained.assign(dropped)
+	main.emblem_library.restore_inventory_state(retained)
+	var first_id := StringName(String(dropped[0].instance_id))
+	check(main.emblem_library.move_sticker(first_id, Vector2i(0, 0)) and not EmblemStickerInventory.is_dropped(main.emblem_library.get_inventory_item(first_id)), "临时元素贴纸回包保持2×2类别与原实例")
 	main.front_row.clear_squads()
 	var deploy: OwnedCard = main.owned_card_collection.create_card(load("res://resources/cards/rune_engraver.tres"))
 	main.front_row.add_squad(SquadData.from_owned_card(deploy), 0)
-	var target: Dictionary = main._find_ground_emblem_slot(ground)
-	check(target.get("rune", false), "元素地面奖励选择符文槽")
-	if target.get("rune", false):
-		main._equip_ground_item(StringName(ground.ground_id))
-		check(not target.owned.rune_stickers[int(target.slot_index)].is_empty() and main.run_reward_state.pending_ground_items.is_empty(), "元素奖励贴到符文槽并移除地面实例")
+	main._open_card_inspection(deploy.card_data, deploy)
+	var second_id := StringName(String(dropped[1].instance_id))
+	var drag_data := {}
+	for entry: EmblemLibraryEntry in main.emblem_library._entries:
+		if StringName(String(entry.definition.returned_state.instance_id)) == second_id:
+			drag_data = entry._build_drag_data(Vector2.ZERO, false)
+	var rune_point: Vector2 = main._inspection_card_view.rune_area_position + main._inspection_card_view.rune_slot_size * 0.5
+	check(main._drop_emblem_on_inspection_card(main._inspection_card_view, rune_point, drag_data) and deploy.rune_stickers.any(func(item: Dictionary) -> bool: return not item.is_empty()), "临时元素奖励通过真实检视贴入符文槽，并从临时区域移除")
+	(drag_data.drag_visual as Control).free()
+	main._close_card_inspection(true)
 	main.queue_free()
 	await process_frame
 func _run() -> void:

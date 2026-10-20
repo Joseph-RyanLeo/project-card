@@ -76,6 +76,18 @@ func has_talent(talent_id: String) -> bool:
 	return talent_id in selected_talents.values()
 
 
+func get_current_level_experience() -> int:
+	if _level_thresholds.is_empty():
+		return 0
+	return maxi(experience - _level_thresholds[clampi(level - 1, 0, _level_thresholds.size() - 1)], 0)
+
+
+func get_next_level_experience_required() -> int:
+	if level < 1 or level >= _level_thresholds.size():
+		return 0
+	return _level_thresholds[level] - _level_thresholds[level - 1]
+
+
 func capture_state() -> Dictionary:
 	return {
 		"experience": experience,

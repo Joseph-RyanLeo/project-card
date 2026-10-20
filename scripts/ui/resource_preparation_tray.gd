@@ -14,12 +14,13 @@ const IndicatorStyle = preload("res://scripts/ui/resource_indicator_style.gd")
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const CardView = preload("res://scripts/ui/card_view.gd")
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
-const BOARD_TEXTURE: Texture2D = preload("res://assets/card_ui/resources/resource_board_background.png")
-const LAYOUT_TEXTURE: Texture2D = preload("res://assets/card_ui/resources/resource_hex_layout.png")
+const BOARD_TEXTURE: Texture2D = preload("res://assets/ui/board_revision_20261019/resource_tray_right.png")
+const BOARD_LEFT: Texture2D = preload("res://assets/ui/board_revision_20261019/resource_tray_left.png")
+const LAYOUT_TEXTURE: Texture2D = preload("res://assets/ui/board_revision_20261019/resource_layout.png")
 const DISABLED_TEXTURE: Texture2D = preload("res://assets/card_ui/resources/resource_hex_disabled.png")
 const TILE_ATLAS: Texture2D = preload("res://assets/card_ui/resources/resource_hex_tile.png")
-const BOARD_SIZE := Vector2(182, 184) # 底板原始像素尺寸
-const LAYOUT_ORIGIN := Vector2(6, 12) # 固定栏位在底板中的居中偏移
+const BOARD_SIZE := Vector2(199, 208) # 新托盘底板原始像素尺寸
+var LAYOUT_ORIGIN := Vector2(26, 20) # 右侧网格偏移；左侧按镜像托盘修正为30,20
 const CELL_SIZE := Vector2(35, 32) # 单格素材原生尺寸
 const HOVER_COLOR := Color(1.0, 0.91, 0.42, 1.0) # 悬停整块拼图的描边颜色
 const PREVIEW_VALID := Color(0.35, 1.0, 0.55, 0.58) # 合法落点拼图预览颜色
@@ -68,6 +69,7 @@ func sync_battle_state(board: BoardState, owner_side: String, states: Array) -> 
 	_battle_display_snapshot = snapshot.duplicate(true)
 	board_state = board
 	side = owner_side
+	LAYOUT_ORIGIN = Vector2(30, 20) if side == "enemy" else Vector2(26, 20)
 	_owned_by_id = owned
 	_battle_health_by_id = health
 	refresh()
@@ -76,6 +78,7 @@ func configure(board: BoardState, owner_side: String) -> void:
 	_battle_display_snapshot.clear()
 	board_state = board
 	side = owner_side
+	LAYOUT_ORIGIN = Vector2(30, 20) if side == "enemy" else Vector2(26, 20)
 	if is_inside_tree(): refresh()
 
 func set_owned_cards(cards: Array[OwnedCard]) -> void:
@@ -149,9 +152,9 @@ func refresh() -> void:
 	_tile_nodes_by_id.clear()
 	_icon_nodes_by_id.clear()
 	_disabled_nodes.clear()
-	var background := _ensure_background("ResourceBoardBackground", BOARD_TEXTURE, Vector2.ZERO, BOARD_SIZE)
+	var background := _ensure_background("ResourceBoardBackground", BOARD_LEFT if side == "enemy" else BOARD_TEXTURE, Vector2.ZERO, BOARD_SIZE)
 	background.z_index = -2
-	var layout := _ensure_background("ResourceHexLayout", LAYOUT_TEXTURE, LAYOUT_ORIGIN, Vector2(170, 160))
+	var layout := _ensure_background("ResourceHexLayout", LAYOUT_TEXTURE, LAYOUT_ORIGIN, Vector2(Layout.BOARD_SIZE))
 	layout.z_index = -1
 	for cell in board_state.disabled_by_side.get(side, []):
 		var disabled := TextureRect.new()
@@ -255,7 +258,6 @@ func _build_board() -> void:
 	size = BOARD_SIZE
 	custom_minimum_size = BOARD_SIZE
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	z_index = 150
 	mouse_exited.connect(_on_mouse_exited)
 	var title := Label.new()
 	title.name = "ResourceBoardTitle"

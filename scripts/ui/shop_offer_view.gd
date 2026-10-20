@@ -24,14 +24,16 @@ var inspectable := false
 
 func configure(art: Control, price: Control, is_inspectable: bool, enabled: bool, stacked: bool = false, service_name: String = "") -> void:
 	var compact := not service_name.is_empty()
+	if compact: art.size = Vector2(32, 32) # 棋盘下沿服务图标缩至32像素，点击与价格保持独立
 	var art_height := maxf(ART_HEIGHT, art.size.y)
-	var footprint := Vector2(224, 70) if compact else (Vector2(art.size.x, art_height) if stacked else Vector2(maxf(TILE_SIZE.x, art.size.x), art_height + TILE_SIZE.y - ART_HEIGHT))
+	var footprint := Vector2(148, 48) if compact else (Vector2(art.size.x, art_height) if stacked else Vector2(maxf(TILE_SIZE.x, art.size.x), art_height + TILE_SIZE.y - ART_HEIGHT))
 	custom_minimum_size = footprint
 	size = footprint
+	size_flags_vertical = Control.SIZE_SHRINK_BEGIN # 高包装只扩大所在行，不拉高旁边单卡的实际命中范围
 	mouse_filter = Control.MOUSE_FILTER_IGNORE if stacked else Control.MOUSE_FILTER_STOP
 	inspectable = is_inspectable
 	_visual = Control.new()
-	_visual.size = Vector2(76, footprint.y) if compact else Vector2(footprint.x, art_height)
+	_visual.size = Vector2(40, footprint.y) if compact else Vector2(footprint.x, art_height)
 	_visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_visual)
 	art.position = ((_visual.size - art.size) * 0.5).round()
@@ -43,16 +45,16 @@ func configure(art: Control, price: Control, is_inspectable: bool, enabled: bool
 	if stacked:
 		price.free()
 	else:
-		price.position = Vector2(76, 30) if compact else Vector2(0, art_height + 4)
-		price.size = Vector2(footprint.x - 76, 28) if compact else Vector2(footprint.x, 28)
+		price.position = Vector2(40, 22) if compact else Vector2(0, art_height + 4)
+		price.size = Vector2(footprint.x - 40, 28) if compact else Vector2(footprint.x, 28)
 		add_child(price)
 		if compact:
 			var caption := Label.new()
 			caption.text = service_name
-			caption.position = Vector2(76, 0)
-			caption.size = Vector2(footprint.x - 76, 26)
+			caption.position = Vector2(40, 0)
+			caption.size = Vector2(footprint.x - 40, 26)
 			caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			caption.add_theme_font_size_override("font_size", 20) # 独立服务区的名称字号
+			caption.add_theme_font_size_override("font_size", 14) # 独立服务区的名称字号
 			caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			add_child(caption)
 	_set_mouse_ignore_recursive(art)

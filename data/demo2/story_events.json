@@ -1,0 +1,301 @@
+{
+  "_说明": "按用户2026-10-18确认：第一层试玩暂时忽略原始层数和英雄限制；原始条件保留。未实现的奖励整项禁用，不改写概率。来源表只作为事件内容数据。",
+  "source_url": "https://my.feishu.cn/wiki/StamwnVppibRoZknZftcQCXJnQf?sheet=lAwIUd",
+  "test_ignore_appearance_limits": true,
+  "events": [
+    {
+      "path_id": "ioann_prayer",
+      "kind": "free_event",
+      "reward": "story",
+      "name": "伊奥恩的祈愿",
+      "hint": "黑暗中，三颗星体忽然照亮了迷宫。",
+      "art": "res://assets/events/ioann_prayer.png",
+      "description": "漆黑的迷宫突然被照亮，你们抬头一看，是天上闪耀着的三颗星体，“是伊奥恩祈愿从天外降下援助！”。选择一颗星体，其他的星体将会变得暗淡",
+      "source_floors": "3层",
+      "source_condition": "本局使用角色非“伊奥恩·沃登”",
+      "options": [
+        {
+          "label": "伸向太阳",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "太阳的光芒炫彩夺目，你闭眼的瞬间，它已经化作一枚闪耀着耀眼光芒的微型星体。",
+              "source_probability": "-",
+              "effect_text": "获得指示物“太阳”",
+              "indicator": "SUN"
+            }
+          ]
+        },
+        {
+          "label": "伸向月亮",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "月亮的光芒若隐若现，你仿佛快要看不见它的行踪，转眼间，它已变成了一颗不仔细看都看不清的银色星体。",
+              "source_probability": "-",
+              "effect_text": "获得指示物“月亮”",
+              "indicator": "MOON"
+            }
+          ]
+        },
+        {
+          "label": "伸向星星",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你的手伸向星星的瞬间，天上无穷多的星辰突然闪耀起来，把夜晚照亮如白昼一般，你的背包里也同时有一颗星星亮起。",
+              "source_probability": "-",
+              "effect_text": "获得指示物“星星”",
+              "indicator": "STAR"
+            }
+          ]
+        },
+        {
+          "label": "伸向未被星辰照亮的黑暗",
+          "condition": "局外解锁\n元素贴纸",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你的手伸向了那仿佛能吞噬一切光芒的黑暗，捏住了一个薄薄的东西。",
+              "source_probability": "-",
+              "effect_text": "获得“混沌”贴纸",
+              "sticker": "混沌贴纸"
+            }
+          ],
+          "unavailable_reason": "需要局外解锁元素贴纸；局外解锁系统尚未接入"
+        }
+      ]
+    },
+    {
+      "path_id": "strange_casino",
+      "kind": "free_event",
+      "reward": "story",
+      "name": "奇怪的赌坊",
+      "hint": "迷宫转角传来喧闹与硬币碰撞声。",
+      "art": "res://assets/events/strange_casino.png",
+      "description": "迷宫转角处传来亮光，你们走进一看，是一座灯火通明的赌坊，人类、矮人、精灵，甚至食人魔、地精、骷髅，都在牌桌上坐着。",
+      "source_floors": "1层,2层,3层",
+      "source_condition": "金币数量≥5",
+      "options": [
+        {
+          "label": "消耗5金币 · 玩猜硬币",
+          "condition": "-",
+          "cost": 5,
+          "outcomes": [
+            {
+              "text": "随着你投掷出的硬币在空中翻转数圈，你的队伍中发出一声欢呼",
+              "source_probability": 0.5,
+              "effect_text": "失去5金币，获得10金币",
+              "weight": 0.5,
+              "gold": 10
+            },
+            {
+              "text": "随着你投掷出的硬币在空中翻转数圈，你的队伍中响起此起彼伏地叹气",
+              "source_probability": 0.5,
+              "effect_text": "失去5金币，无事发生",
+              "weight": 0.5,
+              "gold": 0
+            }
+          ]
+        },
+        {
+          "label": "消耗10金币 · 玩骰子",
+          "condition": "≥10金币",
+          "cost": 10,
+          "outcomes": [
+            {
+              "text": "今天是你的幸运日！一堆金币如下雨一般掉入你的口袋里",
+              "source_probability": "1d6=6",
+              "effect_text": "失去10金币，获得60金币",
+              "weight": 1,
+              "gold": 60,
+              "roll_values": [
+                6
+              ]
+            },
+            {
+              "text": "你红着眼锤了一下桌子，懊恼地喊了一声，桌子缝隙处落下一枚金币",
+              "source_probability": "1d6≤5",
+              "effect_text": "失去10金币，获得1金币",
+              "weight": 1,
+              "gold": 1,
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            }
+          ],
+          "roll_sides": 6
+        },
+        {
+          "label": "使用奈克斯的骰子作弊 · 消耗10金币 · 玩骰子",
+          "condition": "≥10金币且牌组中拥有装备\n奈克斯的骰子",
+          "cost": 10,
+          "outcomes": [
+            {
+              "text": "你额头满头大汗地使用奈克斯的骰子，好在荷官好像以为你只是紧张，没有发现你的作弊行为",
+              "source_probability": 0.95,
+              "effect_text": "失去10金币，获得60金币",
+              "weight": 0.95
+            },
+            {
+              "text": "你额头满头大汗地使用奈克斯的骰子，突然背后有人拍了拍你的肩膀，是赌场保安，你被踢出了赌坊",
+              "source_probability": 0.05,
+              "effect_text": "失去10金币，失去剩余2/3的金币",
+              "weight": 0.05
+            }
+          ],
+          "unavailable_reason": "需要装备奈克斯的骰子；该装备尚未实现"
+        },
+        {
+          "label": "消耗20金币 · 玩老虎机",
+          "condition": "≥20金币",
+          "cost": 20,
+          "outcomes": [
+            {
+              "text": "Jackpot！整个赌场响起激昂的音乐，所有人......或者非人生物向你投来羡慕的目光",
+              "source_probability": 0.1,
+              "effect_text": "失去20金币，获得一个镀金委托卡包、一个随机普通大卡包和一个纹章贴纸包和10金币",
+              "weight": 0.1
+            },
+            {
+              "text": "随着机器停止转动，你获得了大奖，很不错了，很不错，你脸上浮现出一丝微笑",
+              "source_probability": 0.15,
+              "effect_text": "失去20金币，获得一个随机普通大卡包、一个纹章包和10金币",
+              "weight": 0.15
+            },
+            {
+              "text": "你好歹还是中奖了，虽然是小奖",
+              "source_probability": 0.25,
+              "effect_text": "失去20金币，获得一个随机普通小卡包和10金币",
+              "weight": 0.25
+            },
+            {
+              "text": "这机器是不是坏了？你明明精心挑选了一台连续出好几次无奖的机器，怎么又是无奖，你对着机器摇来摇去，哐当掉出来的一枚金币仿佛在嘲笑你",
+              "source_probability": 0.5,
+              "effect_text": "失去20金币，获得1金币",
+              "weight": 0.5
+            }
+          ],
+          "unavailable_reason": "头奖包含镀金委托卡包；该卡包尚未实现"
+        },
+        {
+          "label": "使用一次预见 · 消耗20金币 · 玩老虎机",
+          "condition": "≥20金币，且本局使用的角色为六目血鸦并至少拥有一次预见",
+          "cost": 20,
+          "outcomes": [
+            {
+              "text": "整个赌场响起激昂的音乐，Jackpot。当然，你选择了下次必定会出头奖的那一台机器，你当然会获得头奖",
+              "source_probability": "-",
+              "effect_text": "失去20金币，获得一个镀金委托卡包、一个随机普通大卡包和一个纹章贴纸包和10金币",
+              "weight": 1
+            }
+          ],
+          "unavailable_reason": "需要六目血鸦与预见；该英雄和预见系统尚未接入"
+        },
+        {
+          "label": "花3金币随便吃点东西",
+          "condition": "-",
+          "cost": 3,
+          "outcomes": [
+            {
+              "text": "服务员端上了一颗苹果",
+              "source_probability": 0.25,
+              "effect_text": "失去3金币，获得“苹果”纹章",
+              "weight": 0.25,
+              "sticker": "苹果"
+            },
+            {
+              "text": "服务员端上了一个面包",
+              "source_probability": 0.25,
+              "effect_text": "失去3金币，获得“面包”纹章",
+              "weight": 0.25,
+              "sticker": "面包"
+            },
+            {
+              "text": "服务员端上了一条火腿",
+              "source_probability": 0.25,
+              "effect_text": "失去3金币，获得“火腿”纹章",
+              "weight": 0.25,
+              "sticker": "火腿"
+            },
+            {
+              "text": "服务员端上了一块芝士",
+              "source_probability": 0.25,
+              "effect_text": "失去3金币，获得“芝士”纹章",
+              "weight": 0.25,
+              "sticker": "奶酪"
+            }
+          ]
+        },
+        {
+          "label": "戒赌",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你摇了摇头，转身离开了这个是非之地",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "bone_tower",
+      "kind": "free_event",
+      "reward": "story",
+      "name": "白骨塔",
+      "hint": "岔路上，一块黑石压在整齐的白骨之上。",
+      "art": "res://assets/events/bone_tower.png",
+      "description": "两条通道的交叉口，地面上堆着一小堆白骨，骨头被整齐地码成金字塔形，顶端放着一块发黑的石头。",
+      "source_floors": "2层",
+      "source_condition": "-",
+      "options": [
+        {
+          "label": "拿走石头",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "黑石沉重入手，它的表面刻着模糊的天平图案。",
+              "source_probability": 0.1,
+              "effect_text": "获得业石碎片"
+            },
+            {
+              "text": "触摸黑色的时候你感到一阵灼痛，黑色掉落变成了普通的石头。",
+              "source_probability": 0.45,
+              "effect_text": "你上一场战斗造成伤害最多的随从受到业火伤势。"
+            },
+            {
+              "text": "你拿起石头仔细端详感觉只是一块普通的黑石头。",
+              "source_probability": 0.45,
+              "effect_text": "-"
+            }
+          ],
+          "unavailable_reason": "该选项可能获得业石碎片或施加业火伤势；两项内容尚未实现"
+        },
+        {
+          "label": "离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们绕过骨头堆。金字塔在身后纹丝不动，像一座小小的墓碑。",
+              "source_probability": "-",
+              "effect_text": "-"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

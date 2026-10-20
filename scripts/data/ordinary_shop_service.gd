@@ -373,21 +373,21 @@ func draw_card_pack(card_definitions: Array[CardData], is_large: bool, draw_coun
 	if draw_count <= 0:
 		return {"success": false, "reason": "invalid_pack_size"}
 	var picks: Array[CardData] = []
-	var picked_iv: Dictionary = {}
+	var picked_unique: Dictionary = {}
 	var held_counts := count_owned_cards(owned_cards)
 	var minimum_rarity := _configured_minimum_pack_rarity()
 	if minimum_rarity < CardData.Rarity.I or minimum_rarity > CardData.Rarity.V:
 		return {"success": false, "reason": "invalid_guarantee_rarity"}
 	for draw_index: int in draw_count:
-		var eligible := _eligible_cards(card_definitions, owned_cards, picked_iv)
+		var eligible := _eligible_cards(card_definitions, owned_cards, picked_unique)
 		var guarantee := is_large and draw_index == draw_count - 1 and not _contains_rarity_at_least(picks, minimum_rarity)
 		var selected := _draw_by_rarity_weights(eligible, active_rng, minimum_rarity if guarantee else CardData.Rarity.I, held_counts)
 		if selected == null:
 			return {"success": false, "reason": "no_valid_candidate"}
 		picks.append(selected)
 		held_counts[selected.id] = int(held_counts.get(selected.id, 0)) + 1
-		if selected.rarity == CardData.Rarity.IV:
-			picked_iv[selected.id] = true
+		if selected.is_unique_while_owned():
+			picked_unique[selected.id] = true
 	if source_rng == null:
 		rng.state = active_rng.state
 	else:
@@ -397,13 +397,13 @@ func draw_card_pack(card_definitions: Array[CardData], is_large: bool, draw_coun
 
 func _eligible_cards(definitions: Array[CardData], owned_cards: Array, additionally_used: Dictionary = {}) -> Array[CardData]:
 	var eligible: Array[CardData] = []
-	var held_iv: Dictionary = additionally_used.duplicate(true)
+	var held_unique: Dictionary = additionally_used.duplicate(true)
 	for owned_value: Variant in owned_cards:
 		var owned: Object = owned_value as Object
 		if owned != null and owned.get("card_data") is CardData:
 			var owned_definition := owned.get("card_data") as CardData
-			if owned_definition.rarity == CardData.Rarity.IV:
-				held_iv[owned_definition.id] = true
+			if owned_definition.is_unique_while_owned():
+				held_unique[owned_definition.id] = true
 	var allowed: Array = config.get("allowed_pack_ids", []) as Array
 	var excluded: Array = config.get("excluded_pack_ids", []) as Array
 	for definition: CardData in definitions:
@@ -419,7 +419,7 @@ func _eligible_cards(definitions: Array[CardData], owned_cards: Array, additiona
 			continue
 		if definition.rarity == CardData.Rarity.V:
 			continue
-		if definition.rarity == CardData.Rarity.IV and held_iv.has(definition.id):
+		if definition.is_unique_while_owned() and held_unique.has(definition.id):
 			continue
 		eligible.append(definition)
 	return eligible

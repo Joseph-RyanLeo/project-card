@@ -31,7 +31,7 @@ func _run() -> void:
 		drafts[id].duration = 0.3 + i * 0.1
 		drafts[id].arc_height = -80 + i * 20
 		drafts[id].mask_kind = Profiles.MASK_IDS[i % Profiles.MASK_IDS.size()]
-	check(Profiles.export_profiles(JSON_PATH, drafts) == OK, "九类草稿导出JSON")
+	check(Profiles.export_profiles(JSON_PATH, drafts) == OK, "全部类型草稿导出JSON")
 	check(Profiles.get_profiles() == original, "导出不提前应用草稿")
 	var result := Profiles.read_profile_file(JSON_PATH)
 	check(result.success, "导出文件可读回")
@@ -44,13 +44,13 @@ func _run() -> void:
 	await process_frame
 	check(lab.find_child("ImportProfilesButton", true, false) != null and lab.find_child("ExportProfilesButton", true, false) != null, "界面提供导入导出按钮")
 	lab._import_profile_file(JSON_PATH)
-	check(lab._drafts == result.profiles and Profiles.get_profiles() == original, "导入仅更新九类草稿，保存前正式战斗保持原配置")
+	check(lab._drafts == result.profiles and Profiles.get_profiles() == original, "导入仅更新全部类型草稿，保存前正式战斗保持原配置")
 	check(is_equal_approx((lab._numeric_controls[&"duration"].slider as HSlider).value, drafts[lab._current_profile_id].duration), "导入后当前类型控件同步")
 	lab._export_profile_file(JSON_PATH)
 	check(Profiles.read_profile_file(JSON_PATH).profiles == lab._drafts, "界面导出当前草稿而非旧保存值")
 	check(Profiles.save_profiles(lab._drafts, CFG_PATH) == OK and Profiles.get_profiles() == result.profiles, "保存成功才应用正式配置")
 	var cfg := ConfigFile.new()
-	check(cfg.load(CFG_PATH) == OK and cfg.get_sections().size() == 9 and is_equal_approx(float(cfg.get_value("ranged_attack", "duration")), drafts[&"ranged_attack"].duration), "正式保存文件包含全部九类")
+	check(cfg.load(CFG_PATH) == OK and cfg.get_sections().size() == Profiles.PROFILE_IDS.size() and is_equal_approx(float(cfg.get_value("ranged_attack", "duration")), drafts[&"ranged_attack"].duration), "正式保存文件包含全部类型")
 	check(Profiles.save_profiles(original, "/private/tmp/project-card-missing-parent/config.cfg") != OK and Profiles.get_profiles() == result.profiles, "保存失败不改变运行配置")
 	var good: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(JSON_PATH))
 	var invalid: Array[Dictionary] = []

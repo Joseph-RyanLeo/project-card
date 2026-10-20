@@ -284,10 +284,16 @@ func _test_main_transactions_and_save() -> void:
 		var before_bag: Array[Dictionary] = main.emblem_library.get_inventory_state()
 		main.run_reward_state.gold = 100
 		var before_capacity_gold := main.run_reward_state.gold
-		var before_capacity_rng: int = service.rng.state
 		var before_capacity_next := int(main.owned_card_collection.capture_state().next_instance_sequence)
 		main._on_ordinary_shop_offer_pressed(sticker_index)
-		_expect(main.emblem_library.get_inventory_state() == before_bag and main.run_reward_state.gold == before_capacity_gold and service.rng.state == before_capacity_rng and int(main.owned_card_collection.capture_state().next_instance_sequence) == before_capacity_next and not bool(service.offers[sticker_index].get("sold", false)), "金币充足但工具箱满载时购买失败且金币、库存、实例序号、随机状态和报价均不变")
+		var full_received: Array = main.emblem_library.get_inventory_state()
+		var overflow: Array = full_received.filter(func(item: Dictionary): return EmblemStickerInventory.is_dropped(item))
+		_expect(full_received.size() == before_bag.size() + 5 and overflow.size() == 5 and main.run_reward_state.gold == before_capacity_gold - int(service.offers[sticker_index].price) and int(main.owned_card_collection.capture_state().next_instance_sequence) == before_capacity_next and bool(service.offers[sticker_index].get("sold", false)), "满箱仍可购买，五枚放入临时区域，只扣报价且不改变卡牌实例序号")
+		main._close_card_inspection(true)
+		await process_frame
+		service.offers[sticker_index].erase("sold")
+		main.run_reward_state.gold = 100
+		main._refresh_ordinary_shop_panel()
 		main.emblem_library.restore_inventory_state([])
 		var before_sticker_count: int = main.emblem_library.get_inventory_state().size()
 		var sticker_price: int = int(service.offers[sticker_index].get("price", 0))
@@ -299,6 +305,9 @@ func _test_main_transactions_and_save() -> void:
 		await create_timer(1.5).timeout
 		main._sticker_pack_opening.collect()
 		await create_timer(0.3).timeout
+	# 此文件验交易；结束仍在逐枚入箱的演出，再开始下一笔商品交易。
+	main._close_card_inspection(true)
+	await process_frame
 	var offer_weights: Dictionary = service.config.get("temporary_offer_weights", {})
 	offer_weights["single_card_count"] = {"1": 1}
 	offer_weights["single_card_visibility"] = {"hidden": 1}
@@ -465,22 +474,30 @@ func _test_tear_confirmation_and_equipment_return(main: MainScript) -> void:
 	var same_name_member := same_name_owned.get_battlefield_card()
 	_expect(same_name_slot != null and same_name_slot.get_squad_data().get_card_data_for_owned_instance(same_name_owned.instance_id) == same_name_member and same_name_slot.get_squad_data().get_owned_card(same_name_member) == same_name_owned, "同名卡以另一个OwnedCard实例部署到另一小队")
 	main.run_reward_state.gold = 20
-	var card_picker := OptionButton.new()
-	card_picker.add_item(owned.card_data.display_name)
-	card_picker.set_item_metadata(0, String(owned.instance_id))
+	# 从真实服务按钮进入选择框，避免跳过数组构建和信号绑定路径。
+	main._open_shop_tear_selection(null)
+	_expect(main.ordinary_shop_status.text == "没有带有可返还贴纸的卡牌" and not is_instance_valid(main._shop_tear_dialog), "空卡牌走无可返还提示，不创建选择框")
+	main._open_shop_tear_selection(same_name_owned)
+	_expect(main.ordinary_shop_status.text == "没有带有可返还贴纸的卡牌" and not is_instance_valid(main._shop_tear_dialog), "无贴纸卡牌走空列表分支，不发生数组类型错误")
+	main.ordinary_shop_open = true
+	main._open_shop_card_services()
+	main._select_shop_service_card({"kind": &"card", "owned_card": owned})
+	var tear_button := main._shop_card_service_actions.get_node("ServiceTearButton") as Button
+	_expect(not tear_button.disabled, "拖入带贴纸单卡后真实撕卡按钮可用")
+	tear_button.pressed.emit()
+	var selection := main._shop_tear_dialog
+	_expect(is_instance_valid(selection) and selection.title == "撕卡：选择返还贴纸", "真实撕卡按钮信号成功打开贴纸选择框")
+	if not is_instance_valid(selection): return
+	var card_picker := selection.find_child("TearCardPicker", true, false) as OptionButton
+	_expect(card_picker != null and card_picker.item_count == 1 and card_picker.get_item_metadata(0) == String(owned.instance_id), "选择框只包含槽内指定OwnedCard实例")
 	var pickers: Array[OptionButton] = []
-	for index: int in 3:
-		var picker := OptionButton.new()
-		picker.add_item("不返还")
-		picker.set_item_metadata(0, "")
-		if index == 0:
-			picker.add_item("火把")
-			picker.set_item_metadata(1, "tear_selected")
-			picker.select(1)
-		pickers.append(picker)
-	main._shop_tear_dialog = ConfirmationDialog.new()
-	main.ordinary_shop_layer.add_child(main._shop_tear_dialog)
-	main._confirm_shop_tear_selection(card_picker, pickers, [owned])
+	for node: Node in selection.find_children("*", "OptionButton", true, false):
+		if node != card_picker: pickers.append(node as OptionButton)
+	_expect(pickers.size() == 3 and pickers[0].item_count == 4, "选择框提供三个返还位，列出普通和元素贴纸")
+	card_picker.item_selected.emit(0)
+	_expect(pickers[0].item_count == 4, "卡牌选择信号绑定的强类型候选数组可正常刷新贴纸")
+	pickers[0].select(1)
+	selection.get_ok_button().pressed.emit()
 	var confirm := main.ordinary_shop_layer.get_children().filter(func(node: Node) -> bool: return node is ConfirmationDialog and (node as ConfirmationDialog).title == "确认撕卡")
 	var exact_confirmation := not confirm.is_empty() and (confirm[0] as ConfirmationDialog).dialog_text.contains("火把") and (confirm[0] as ConfirmationDialog).dialog_text.contains("长剑") and (confirm[0] as ConfirmationDialog).dialog_text.contains("光贴纸") and (confirm[0] as ConfirmationDialog).dialog_text.contains("2金币")
 	_expect(exact_confirmation, "二次确认列出卡牌、返还贴纸、销毁贴纸和精确费用")

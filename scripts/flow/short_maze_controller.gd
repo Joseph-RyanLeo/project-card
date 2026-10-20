@@ -9,15 +9,22 @@ const Rewards = preload("res://scripts/data/maze_reward_service.gd")
 const Sentry = preload("res://scripts/data/sentry_indicator.gd")
 const HeroRuntime = preload("res://scripts/battle/battle_hero_runtime.gd")
 const SentryView = preload("res://scripts/ui/sentry_indicator_view.gd")
+const EventTable = preload("res://scripts/ui/event_card_table.gd")
+const StoryEvents = preload("res://scripts/data/maze_story_event_service.gd")
 const CardServiceSlot = preload("res://scripts/ui/card_service_slot.gd")
 const TEXT_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const SentryStyle = preload("res://scripts/ui/sentry_indicator_style.gd")
 const SENTRY_MOVE_SECONDS: float = 0.30 # 哨位从鼠标落点移动到区域角落的时长
-const PANEL_POSITION := Vector2(208, 44) # 路径、天赋、事件占用敌方桌面区域
-const PANEL_SIZE := Vector2(844, 306) # 上半屏流程面板尺寸
+const PANEL_POSITION := Vector2(189, -6) # 普通事件的固定屏幕位置；战斗介绍换算后固定在上半世界
+const PANEL_SIZE := Vector2(902, 351) # 新事件棋盘原生尺寸
 var run := RunState.new()
 var hero := Progress.new()
 var rewards := Rewards.new()
+var story_events := StoryEvents.new()
+var _event_table: Control
+var _detail_body: VBoxContainer
+var _last_dealt_key: String = ""
+var _reveal_selected_event: bool = false
 var content: Dictionary = {}
 var stock: Array[Dictionary] = []
 var deployed: Array[Dictionary] = []
@@ -28,7 +35,7 @@ var next_sentry_id: int = 1
 var _main: Control
 var _panel: PanelContainer
 var _body: VBoxContainer
-var _status: Label
+var _status: Control
 var _enhancement_slot: Control
 var _enhancement_card_id: StringName = &""
 var _sentry_bar: Control
@@ -40,12 +47,13 @@ var _sentry_views: Dictionary = {}
 
 func initialize(main: Control) -> bool:
 	_main = main
-	if not rewards.load_config():
+	if not rewards.load_config() or not story_events.load_config():
 		return false
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/demo2/short_maze_content.json"))
 	if not parsed is Dictionary:
 		return false
 	content = parsed
+	content.free_events.append_array(story_events.config.events.duplicate(true))
 	var thresholds: Array[int] = []
 	thresholds.assign(rewards.config.experience.level_thresholds)
 	if not hero.initialize(thresholds, rewards.config.talent_choices):
@@ -65,6 +73,7 @@ func new_run(seed_value: int) -> void:
 	stock.clear()
 	deployed.clear()
 	seen_events.clear()
+	_last_dealt_key = ""
 	fortify_complete = false
 	last_reward.clear()
 	next_sentry_id = 1
@@ -148,6 +157,8 @@ func _generate_paths() -> void:
 			var unseen: Array[Dictionary] = []
 			var visited: Array[Dictionary] = []
 			for event: Dictionary in pool:
+				if event.get("reward") == "story" and not story_events.can_appear(event, _main.run_reward_state.gold, int(content.get("floor", 1)), "ioann_warden"):
+					continue
 				(visited if String(event.path_id) in seen_events else unseen).append(event.duplicate(true))
 			while candidates.size() < 3:
 				var available: Array[Dictionary] = unseen if not unseen.is_empty() else visited
@@ -202,10 +213,13 @@ func select_path(id: String) -> bool:
 			seen_events.append(id)
 	if not _commit_transaction(previous):
 		return false
-	if run.get_round_kind() == "shop":
+	return true
+
+
+func enter_selected_shop() -> void:
+	if run.step == RunState.Step.EVENT and run.get_round_kind() == "shop" and not _main.ordinary_shop_open:
 		_main._toggle_ordinary_shop()
 		_main.ordinary_shop_status.text = shop_entry_message()
-	return true
 
 
 func _grant_pack(large: bool) -> bool:
@@ -214,26 +228,27 @@ func _grant_pack(large: bool) -> bool:
 	if not bool(result.get("success", false)):
 		return false
 	for card: CardData in result.cards:
-		_main.owned_card_collection.create_card(card, run.rng)
+		_main.owned_card_collection.create_card(card, run.rng, result.cards)
 	return true
 
 
 func _grant_emblem(id: String, receipt: String) -> void:
 	var state := {"instance_id": receipt, "emblem_id": id, "temporary": false, "source": "maze_reward"}
-	if _main.emblem_library.can_add_sticker(state):
-		_main.emblem_library.return_sticker(state)
-	else:
-		_main.run_reward_state.add_ground_item({"ground_id": receipt, "item_kind": "emblem", "item_id": id, "instance_id": receipt, "source": "maze_reward"})
+	_main.emblem_library.receive_stickers([state])
 
 
-func complete_event(take_reward: bool = true) -> bool:
-	if run.step != RunState.Step.EVENT or run.get_round_kind() == "shop" or (take_reward and run.selected_path.get("reward") == "enhance_card"):
+func complete_event(take_reward: bool = true, discard_confirmed: bool = false) -> bool:
+	if run.step != RunState.Step.EVENT or run.get_round_kind() == "shop" or (take_reward and run.selected_path.get("reward") in ["enhance_card", "story"] and not run.selected_path.has("story_result")):
 		return false
+	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(complete_event.bind(take_reward, true)): return false
 	var previous := _capture_transaction()
+	_main._close_toolbox_inspection(false)
+	_main.emblem_library.discard_dropped_stickers()
 	var event: Dictionary = run.selected_path
 	var cost := int(event.get("cost", 0))
-	if take_reward:
+	if take_reward and not bool(event.get("reward_claimed", false)):
 		if _main.run_reward_state.gold < cost:
+			_rollback_transaction(previous)
 			return false
 		_main.run_reward_state.gold -= cost
 		var receipt := "maze_event:%d:%s" % [run.day, event.path_id]
@@ -257,16 +272,58 @@ func complete_event(take_reward: bool = true) -> bool:
 						pool.append(card)
 				if not pool.is_empty():
 					_main.owned_card_collection.create_card(_main.ordinary_shop_service.draw_card_candidate(pool, run.rng, _main.ordinary_shop_service.count_owned_cards(_main.owned_card_collection.get_cards())), run.rng)
-	run.complete_event()
+		if _main.emblem_library.has_dropped_stickers():
+			run.selected_path["reward_claimed"] = true
+			var committed := _commit_transaction(previous)
+			if committed: _main._open_toolbox_inspection()
+			return committed
+	if not run.complete_event():
+		_rollback_transaction(previous)
+		return false
 	_generate_paths()
 	return _commit_transaction(previous)
 
 
-func leave_shop() -> bool:
-	if run.step != RunState.Step.EVENT or run.get_round_kind() != "shop":
+func choose_story_option(index: int) -> bool:
+	var event: Dictionary = run.selected_path
+	if run.step != RunState.Step.EVENT or event.get("reward") != "story" or event.has("story_result") or index < 0 or index >= event.options.size():
+		return false
+	var option: Dictionary = event.options[index]
+	if not story_events.blocked_reason(option, _main.run_reward_state.gold).is_empty():
 		return false
 	var previous := _capture_transaction()
+	var result := story_events.draw_outcome(option, run.rng)
+	if result.is_empty():
+		_rollback_transaction(previous)
+		return false
+	result["option_index"] = index
+	var outcome: Dictionary = option.outcomes[int(result.outcome_index)]
+	_main.run_reward_state.gold -= int(option.cost)
+	_main.run_reward_state.add_gold(int(outcome.get("gold", 0)))
+	var receipt := "maze_story:%d:%s" % [run.day, event.path_id]
+	if outcome.has("sticker"):
+		_grant_emblem(String(outcome.sticker), receipt)
+	if outcome.has("indicator"):
+		var inventory: Dictionary = _main.celestial_indicators.capture_state()
+		inventory.items.append({"instance_id": receipt, "kind": CelestialIndicator.Kind[String(outcome.indicator)], "star_transfer_count": 0})
+		_main.celestial_indicators.restore_state(inventory)
+	run.selected_path["story_result"] = result
+	run.selected_path["reward_claimed"] = true
+	var committed := _commit_transaction(previous)
+	if committed and _main.emblem_library.has_dropped_stickers():
+		_main._open_toolbox_inspection()
+	return committed
+
+
+func leave_shop(discard_confirmed: bool = false) -> bool:
+	if run.step != RunState.Step.EVENT or run.get_round_kind() != "shop":
+		return false
+	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(_main._toggle_ordinary_shop.bind(true)): return false
+	var previous := _capture_transaction()
+	_main._close_toolbox_inspection(false)
+	_main.emblem_library.discard_dropped_stickers()
 	if not run.complete_event():
+		_rollback_transaction(previous)
 		return false
 	_generate_paths()
 	return _commit_transaction(previous)
@@ -415,12 +472,16 @@ func settle_battle(won: bool, battle_id: String, runtime: HeroRuntime) -> bool:
 	return true
 
 
-func continue_after_battle() -> bool:
+func continue_after_battle(discard_confirmed: bool = false) -> bool:
 	_main._record_run_diagnostic("next_day_requested", {}, true)
-	if run.step != RunState.Step.BATTLE_RESULT or not hero.pending_talent_levels.is_empty() or not _main.run_reward_state.pending_ground_items.is_empty():
+	if run.step != RunState.Step.BATTLE_RESULT or not hero.pending_talent_levels.is_empty():
 		return false
+	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(continue_after_battle.bind(true)): return false
 	var previous := _capture_transaction()
+	_main._close_toolbox_inspection(false)
+	_main.emblem_library.discard_dropped_stickers()
 	if not run.continue_after_battle():
+		_rollback_transaction(previous)
 		return false
 	if run.step != RunState.Step.ENDED:
 		if not _main.start_new_resource_level(StringName("level_%06d" % run.day), run.rng):
@@ -528,6 +589,8 @@ func validate_state(snapshot: Dictionary) -> bool:
 				return false
 		if path.has("encounter_state"):
 			if not path.encounter_state is Dictionary or EncounterBuilder.new().restore(path.encounter_state, _main._build_card_definition_registry()).is_empty(): return false
+		if path.has("story_result") and (path.get("reward") != "story" or not path.story_result is Dictionary or not story_events.valid_result(path, path.story_result)):
+			return false
 		if not found:
 			return false
 	return true
@@ -545,12 +608,16 @@ func restore_state(snapshot: Dictionary) -> bool:
 			var encounter := EncounterBuilder.new().restore(path.encounter_state, _main._build_card_definition_registry())
 			path["encounter_state"] = encounter.snapshot
 	hero.restore_state(snapshot.hero)
-	stock.assign(snapshot.stock)
-	deployed.assign(snapshot.deployed)
+	stock.assign((snapshot.stock as Array).duplicate(true))
+	deployed.assign((snapshot.deployed as Array).duplicate(true))
+	for sentry: Dictionary in stock + deployed:
+		sentry["visual_variant"] = int(sentry["visual_variant"]) # JSON数字读回后恢复外观编号的整数类型，不修改输入快照
 	seen_events.assign(snapshot.seen_events)
 	fortify_complete = snapshot.fortify_complete
 	last_reward = snapshot.last_reward.duplicate(true)
 	next_sentry_id = int(snapshot.next_sentry_id)
+	if is_instance_valid(_status):
+		_status.sync(self, false)
 	return true
 
 
@@ -564,9 +631,6 @@ func restore_ui() -> void:
 		_build_enemy()
 	_main._update_phase_label()
 	_main.set_world_view(_main.WorldView.BATTLEFIELDS, false)
-	if run.step == RunState.Step.EVENT and run.get_round_kind() == "shop":
-		_main._toggle_ordinary_shop()
-		_main.ordinary_shop_status.text = shop_entry_message()
 	refresh()
 
 
@@ -625,7 +689,7 @@ func _commit_transaction(previous: Dictionary) -> bool:
 func _refresh_collection() -> void:
 	_main._sync_legacy_collection_cards()
 	_main._build_collection_cards()
-	_main._refresh_ground_reward_panel()
+	_main._receive_pending_ground_stickers()
 	_main._refresh_preparation_effect_preview.call_deferred()
 
 
@@ -637,21 +701,19 @@ func _build_ui() -> void:
 	_panel.position = PANEL_POSITION
 	_panel.size = PANEL_SIZE
 	_panel.z_index = 2400 # 流程面板覆盖战场图标，位于商店弹层下方
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.07, 0.08, 0.10, 0.97) # 流程桌面的深色背景与97%不透明度
-	style.set_content_margin_all(12) # 面板内容与边框的内边距
-	_panel.add_theme_stylebox_override("panel", style)
+	_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	_main.add_child(_panel)
+	var panel_host := Control.new()
+	panel_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel.add_child(panel_host)
 	_body = VBoxContainer.new()
-	_body.add_theme_constant_override("separation", 10) # 标题、路径选项与说明之间的间隔
-	_panel.add_child(_body)
-	_status = Label.new()
-	_status.add_theme_font_override("font", TEXT_FONT)
-	_status.position = Vector2(216, 12) # 英雄与迷宫进度放在敌区顶部
-	_status.size = Vector2(832, 28) # 顶栏宽度
-	_status.z_index = 2600 # 进度文字位于流程和商店面板上方
-	_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_main.add_child(_status)
+	_body.size = PANEL_SIZE
+	_body.add_theme_constant_override("separation", 8) # 天赋或结局说明的垂直间距
+	panel_host.add_child(_body)
+	_status = preload("res://scripts/ui/maze_run_hud.gd").new()
+	_main.world_content.add_child(_status)
+	_status.initialize(_main)
+
 	_sentry_bar = Control.new()
 	_sentry_bar.theme = _panel.theme
 	_sentry_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -677,16 +739,20 @@ func _clear_children(parent: Node) -> void:
 func _label(text: String) -> void:
 	var label := Label.new()
 	label.text = text
+	label.add_theme_font_size_override("font_size", 14) # 事件纸面正文按原生像素使用紧凑字号
+	label.add_theme_color_override("font_color", Color("513124"))
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_body.add_child(label)
+	(_detail_body if is_instance_valid(_detail_body) else _body).add_child(label)
 
 
 func _button(text: String, callback: Callable, parent: Node = null) -> Button:
 	var button := Button.new()
-	button.text = text.left(46) + ("…" if text.length() > 46 else "")
+	button.text = text
+	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	button.add_theme_font_size_override("font_size", 13) # 纸面选项使用紧凑字号，长句在可用宽度内换行
 	button.tooltip_text = text
 	button.pressed.connect(callback)
-	(parent if parent != null else _body).add_child(button)
+	(parent if parent != null else (_detail_body if is_instance_valid(_detail_body) else _body)).add_child(button)
 	return button
 
 
@@ -701,7 +767,18 @@ func _input(event: InputEvent) -> void:
 func refresh() -> void:
 	if not is_instance_valid(_panel):
 		return
+	# 战斗介绍属于上半战场，切到收藏视角时必须让出我方阵容；其余事件仍固定屏幕。
+	var battle_intro := run.step == RunState.Step.BATTLE_PREPARE and hero.pending_talent_levels.is_empty()
+	var panel_parent: Control = _main.world_content if battle_intro else _main
+	if _panel.get_parent() != panel_parent:
+		_panel.reparent(panel_parent, false)
+	_panel.position = PANEL_POSITION + _main.BATTLEFIELD_VIEW_ORIGIN if battle_intro else PANEL_POSITION
 	_update_status()
+	var choice_key := "%d:%d:%s" % [run.day, run.round_index, JSON.stringify(run.paths)] if run.step == RunState.Step.CHOOSING else ""
+	if is_instance_valid(_event_table) and not choice_key.is_empty() and choice_key == _last_dealt_key and hero.pending_talent_levels.is_empty():
+		_panel.visible = not _main.ordinary_shop_open
+		_status.visible = not _panel.visible and not _main.ordinary_shop_open
+		return
 	var preparing: bool = _main.current_phase == _main.GamePhase.PREPARE
 	var choosing_talent := not hero.pending_talent_levels.is_empty()
 	# 战后先完成升级选择；中央结算页不能同时遮住天赋按钮。
@@ -709,47 +786,44 @@ func refresh() -> void:
 	if _main.current_phase == _main.GamePhase.RESULT:
 		_main.battle_result_panel.visible = not choosing_talent and not _main._viewing_result_battlefield
 	_main.start_battle_button.visible = preparing and can_start_battle()
-	_main.ordinary_shop_entry_button.visible = preparing and run.step == RunState.Step.EVENT and run.get_round_kind() == "shop"
+	_main.ordinary_shop_entry_button.visible = preparing and run.step == RunState.Step.EVENT and run.get_round_kind() == "shop" and not _main.ordinary_shop_open
 	_main.battle_seed_panel.visible = false
 	_main.battle_seed_random_button.disabled = true
 	_main.battle_seed_spin.get_line_edit().editable = false
 	if is_instance_valid(_main.debug_new_shop_button):
 		_main.debug_new_shop_button.visible = false
-	_main.continue_next_level_button.visible = run.step == RunState.Step.BATTLE_RESULT and not choosing_talent and _main.run_reward_state.pending_ground_items.is_empty()
+	_main.continue_next_level_button.visible = run.step == RunState.Step.BATTLE_RESULT and not choosing_talent
 	_main.continue_next_level_button.text = "结束本局" if not run.battle_results.is_empty() and not String(run.battle_results.back().ending).is_empty() else "进入下一天"
 	_main.restart_battle_button.visible = false
 	if is_instance_valid(_enhancement_slot): _enhancement_slot.return_card(false)
 	_enhancement_slot = null
 	_clear_children(_body)
+	_body.position = Vector2.ZERO
+	_body.size = PANEL_SIZE
+	_detail_body = null
+	_event_table = null
 	var show_panel := false
 	if choosing_talent:
 		show_panel = true
+		_build_plain_event_board()
 		_label("选择%d级天赋（本局生效）" % hero.pending_talent_levels[0])
 		for id: String in hero.get_pending_choices():
 			var definition: Dictionary = rewards.config.talents[id]
 			_button("%s　%s" % [definition.display_name, definition.source_text], choose_talent.bind(id))
 	elif run.step == RunState.Step.CHOOSING:
 		show_panel = true
-		_label("第%d天 · %s：从三个线索中选择一个" % [run.day, ["随机事件", "强化事件", "商店", "Boss战" if run.is_boss_day() else "战斗"][run.round_index]])
-		for path: Dictionary in run.paths:
-			_button(String(path.hint), select_path.bind(String(path.path_id)))
-		_label("点击人物可切换收藏与路径桌面，随时准备阵容。")
-	elif run.step == RunState.Step.EVENT and run.selected_path.get("reward") == "enhance_card":
+		_event_table = EventTable.new()
+		_event_table.main = _main
+		_body.add_child(_event_table)
+		_event_table.path_chosen.connect(_on_event_path_chosen)
+		_event_table.show_choices(run.paths, choice_key != _last_dealt_key)
+		_last_dealt_key = choice_key
+	elif run.step in [RunState.Step.EVENT, RunState.Step.BATTLE_PREPARE]:
 		show_panel = true
-		_build_enhancement_interface()
-	elif run.step == RunState.Step.EVENT and run.get_round_kind() != "shop":
-		show_panel = true
-		var event: Dictionary = run.selected_path
-		_label(String(event.name))
-		var reward_text: String = {"gold": "获得3金币", "emblem": "获得1枚随机I级纹章", "minion": "获得1张随机灰烬证册I级随从", "pack": "获得1个灰烬证册小卡包（立即打开）", "wound": "随机拥有且有空槽的随从新增1处I级伤势；无目标不执行"}[event.reward]
-		_label(reward_text)
-		var cost := int(event.cost)
-		var take := _button("花费%d金币" % cost if cost > 0 else "领取并继续", complete_event.bind(true))
-		take.disabled = _main.run_reward_state.gold < cost
-		if cost > 0:
-			_button("放弃，不花金币", complete_event.bind(false))
+		_build_selected_event()
 	elif run.step == RunState.Step.ENDED:
 		show_panel = true
+		_build_plain_event_board()
 		var wins := 0
 		for result: Dictionary in run.battle_results:
 			if result.won: wins += 1
@@ -757,9 +831,10 @@ func refresh() -> void:
 		_label({"cleared": "第一层通关", "boss_loss": "Boss战失败", "ordinary_loss": "失败保护耗尽，本局结束"}[ending])
 		_label("到达第%d天　胜利%d场／失败%d场\n剩余金币%d　总经验%d　英雄等级%d" % [run.day, wins, run.battle_results.size() - wins, _main.run_reward_state.gold, hero.experience, hero.level])
 		_button("新一局", _restart_run)
-	_panel.visible = show_panel and not _main._viewing_result_battlefield and (_main.current_world_view == _main.WorldView.BATTLEFIELDS or run.selected_path.get("reward") == "enhance_card") and not _main.ordinary_shop_open
-	if preparing:
-		_main.get_node("WorldContent/EnemyBoardSection").visible = not show_panel and run.step == RunState.Step.BATTLE_PREPARE and not _main.ordinary_shop_open
+	_panel.visible = show_panel and not _main._viewing_result_battlefield and not _main.ordinary_shop_open
+	_status.visible = not _panel.visible and not _main.ordinary_shop_open
+	# 父节点隐藏会连带隐藏全部敌方卡面；每次阶段变化都重新设置，不能只在准备阶段隐藏。
+	_main.get_node("WorldContent/EnemyBoardSection").visible = _main.current_phase in [_main.GamePhase.BATTLE, _main.GamePhase.RESULT] and not choosing_talent and not _main.ordinary_shop_open
 	for child: Node in _sentry_bar.get_children():
 		if child == _sentry_zones.stock:
 			continue
@@ -774,7 +849,7 @@ func refresh() -> void:
 	for sentry: Dictionary in stock:
 		var stock_view := _create_sentry_view(sentry, "stock", _sentry_bar, preparing)
 		var saved_position: Array = sentry.get("stock_position", [])
-		stock_view.position = Vector2(float(saved_position[0]), float(saved_position[1])) if saved_position.size() == 2 else _main.celestial_indicators.get_inventory_slot_position(stock.find(sentry))
+		stock_view.position = Vector2(float(saved_position[0]), float(saved_position[1])) if saved_position.size() == 2 else _main.celestial_indicators.get_inventory_slot_position(stock.find(sentry), StringName(sentry.instance_id))
 	for sentry: Dictionary in deployed:
 		var region: String = sentry.region
 		# 排容器会撑大直接子节点；复用自由布局的投放区承载固定大小图标。
@@ -785,6 +860,80 @@ func refresh() -> void:
 		_sentry_views[region] = view
 	_main._refresh_drag_availability()
 	update_battle_display()
+
+
+func _build_plain_event_board() -> void:
+	var board := EventTable.new()
+	board.main = _main
+	_body.add_child(board)
+	board.show_selected({"name": "旅程", "kind": "battle"})
+	_detail_body = board.detail_body
+
+
+func _on_event_path_chosen(id: String) -> void:
+	_reveal_selected_event = true
+	var committed := select_path(id)
+	_reveal_selected_event = false
+	if not committed:
+		# 选择存档失败后重建可点击牌堆，不能保留已经退场的旧模态层。
+		_last_dealt_key = ""
+		refresh()
+
+
+func _build_selected_event() -> void:
+	_event_table = EventTable.new()
+	_event_table.main = _main
+	_body.add_child(_event_table)
+	_event_table.show_selected(run.selected_path, _reveal_selected_event)
+	_detail_body = _event_table.detail_body
+	var event: Dictionary = run.selected_path
+	match run.get_round_kind():
+		"shop":
+			_label("迷宫商人")
+			_label(String(event.hint) + "\n挑选商品，完成后离店继续今天的旅程。")
+			_button("进入商店", enter_selected_shop)
+		"battle":
+			_label("Boss战" if run.is_boss_day() else "战斗遭遇")
+			_label(String(event.hint) + "\n可以先调整我方阵容，准备后点击右下方开始战斗。")
+		_:
+			if event.get("reward") == "enhance_card":
+				_build_enhancement_interface()
+			elif event.get("reward") == "story":
+				_build_story_choices(event)
+			else:
+				_label(String(event.name))
+				var reward_text: String = {"gold": "获得3金币", "emblem": "获得1枚随机I级纹章", "minion": "获得1张随机灰烬证册I级随从", "pack": "获得1个灰烬证册小卡包（立即打开）", "wound": "随机拥有且有空槽的随从新增1处I级伤势；无目标不执行"}[event.reward]
+				_label(reward_text)
+				var cost := int(event.cost)
+				var take := _button("继续" if bool(event.get("reward_claimed", false)) else ("花费%d金币" % cost if cost > 0 else "领取并继续"), complete_event.bind(true))
+				take.disabled = not bool(event.get("reward_claimed", false)) and _main.run_reward_state.gold < cost
+				if cost > 0 and not bool(event.get("reward_claimed", false)):
+					_button("放弃，不花金币", complete_event.bind(false))
+
+
+func _build_story_choices(event: Dictionary) -> void:
+	_label(String(event.name))
+	if event.has("story_result"):
+		var result: Dictionary = event.story_result
+		var outcome: Dictionary = event.options[int(result.option_index)].outcomes[int(result.outcome_index)]
+		_label(("骰子点数：%d\n" % int(result.roll) if result.has("roll") else "") + String(outcome.text))
+		_label(String(outcome.effect_text))
+		_button("继续旅程", complete_event.bind(true))
+		return
+	_label(String(event.description))
+	for index: int in event.options.size():
+		var option: Dictionary = event.options[index]
+		var blocked := story_events.blocked_reason(option, _main.run_reward_state.gold)
+		var button := _button(String(option.label), choose_story_option.bind(index))
+		button.text = String(option.label)
+		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		button.disabled = not blocked.is_empty()
+		var explanation := "条件：%s" % String(option.condition)
+		for outcome: Dictionary in option.outcomes:
+			explanation += "\n%s：%s" % [str(outcome.source_probability), String(outcome.effect_text)]
+		button.tooltip_text = explanation + ("\n" + blocked if not blocked.is_empty() else "")
+		if not blocked.is_empty():
+			_label(blocked)
 
 
 func update_battle_display() -> void:
@@ -876,6 +1025,8 @@ func drop_sentry_at(id: String, pointer: Vector2) -> bool:
 func _place_sentry_in_stock(id: String, local: Vector2) -> bool:
 	if not can_drop_sentry(id, "stock"):
 		return false
+	var placement: Vector2 = _main.celestial_indicators.find_inventory_position(Vector2(44, 49), local - Vector2(22, 24.5), StringName(id))
+	if not placement.is_finite(): return false
 	var previous := _capture_transaction()
 	for sentry: Dictionary in deployed:
 		if sentry.instance_id == id:
@@ -885,8 +1036,7 @@ func _place_sentry_in_stock(id: String, local: Vector2) -> bool:
 			break
 	for sentry: Dictionary in stock:
 		if sentry.instance_id == id:
-			var point := (local - Vector2(22, 24.5)).clamp(Vector2.ZERO, (_sentry_bar.size - Vector2(44, 49)).max(Vector2.ZERO))
-			sentry["stock_position"] = [point.x, point.y]
+			sentry["stock_position"] = [placement.x, placement.y]
 			return _commit_transaction(previous)
 	return false
 
@@ -898,8 +1048,8 @@ func _restart_run() -> void:
 
 
 func _update_status() -> void:
-	_status.visible = not _main.ordinary_shop_open
-	_status.text = "伊奥恩·沃登  等级%d / 经验%d　第一层 第%d/8天　%s　金币%d　失败保护%d" % [hero.level, hero.experience, run.day, ["随机事件", "强化事件", "商店", "战斗"][run.round_index], _main.run_reward_state.gold, run.failure_protection]
+	_status.visible = not _panel.visible and not _main.ordinary_shop_open
+	_status.sync(self)
 
 
 func shop_entry_message() -> String:
@@ -959,7 +1109,7 @@ func _build_enhancement_interface() -> void:
 	_label(String(run.selected_path.name) + " · 本局永久强化")
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 24) # 强化选项和右侧卡槽的间距
-	_body.add_child(row)
+	(_detail_body if is_instance_valid(_detail_body) else _body).add_child(row)
 	var options := VBoxContainer.new()
 	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(options)
@@ -984,14 +1134,17 @@ func _build_enhancement_interface() -> void:
 	slot.show_card(owned)
 
 
-func apply_card_enhancement(option_index: int) -> bool:
+func apply_card_enhancement(option_index: int, discard_confirmed: bool = false) -> bool:
 	if run.step != RunState.Step.EVENT or run.selected_path.get("reward") != "enhance_card" or option_index < 0 or option_index >= run.selected_path.options.size():
 		return false
 	var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id)
 	var option: Dictionary = run.selected_path.options[option_index]
 	if owned == null or owned.card_data.card_type != CardData.CardType.MINION or _main.run_reward_state.gold < int(option.cost):
 		return false
+	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(apply_card_enhancement.bind(option_index, true)): return false
 	var previous := _capture_transaction()
+	_main._close_toolbox_inspection(false)
+	_main.emblem_library.discard_dropped_stickers()
 	_main.run_reward_state.gold -= int(option.cost)
 	for stat: StringName in [OwnedCard.STAT_MAX_HEALTH, OwnedCard.STAT_BASE_ARMOR, OwnedCard.STAT_BASE_VALUE]:
 		if option.has(String(stat)):

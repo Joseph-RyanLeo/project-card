@@ -1,0 +1,75 @@
+{
+  "说明": "用户2026-10-19英雄面板与灯素材；圆形占位沿用Aseprite现有导出。",
+  "素材": [
+    {
+      "文件": "hero_panel.png",
+      "来源": "/Users/Zhuanz/Library/Containers/com.tencent.qq/Data/Library/Application Support/QQ/nt_qq_df55436763b24c939118fc3592997bf2/nt_data/Pic/2026-10/Ori/2895e6d8b07ad187a6347cb5ae453ce6.png",
+      "尺寸": [
+        185,
+        357
+      ],
+      "处理": "原始像素直接复制",
+      "SHA256": "2ec92dc08b110bf702d631b97a46a7b7bb09b3e8b1cbe60e0d8c7abc01063d16"
+    },
+    {
+      "文件": "experience_lit.png",
+      "来源": "/Users/Zhuanz/Library/Containers/com.tencent.qq/Data/Library/Application Support/QQ/nt_qq_df55436763b24c939118fc3592997bf2/nt_data/Pic/2026-10/Ori/d6354a9d190494d0e6dbce4afb82d2a8.png",
+      "尺寸": [
+        6,
+        6
+      ],
+      "处理": "原始像素直接复制",
+      "SHA256": "87444ac53a5f4ca35e1b20134757e00630cab0dd375f4272183888ad9422fee7"
+    },
+    {
+      "文件": "level_lit.png",
+      "来源": "/Users/Zhuanz/Library/Containers/com.tencent.qq/Data/Library/Application Support/QQ/nt_qq_df55436763b24c939118fc3592997bf2/nt_data/Pic/2026-10/Ori/1c3ad90aa5a757187872467c85fbc4cd.png",
+      "尺寸": [
+        14,
+        15
+      ],
+      "处理": "原始像素直接复制",
+      "SHA256": "bb2562cd064c1a4fac40d6995bb0c34f90e1f311d93fc4d1032c7e10c58ba0bc"
+    },
+    {
+      "文件": "experience_unused.png",
+      "来源": "/var/folders/q4/2dkk97f551g3pvysd86w94d00000gp/T/codex-clipboard-e80bf235-01a5-4b91-9956-1e8248321c20.png",
+      "尺寸": [
+        6,
+        6
+      ],
+      "处理": "原始像素直接复制",
+      "SHA256": "95abfbd4a5546dacb53523baa2a542a86c9f2f2f6e392d143060ac30383b68e7"
+    },
+    {
+      "文件": "progress_empty.png",
+      "来源": "/var/folders/q4/2dkk97f551g3pvysd86w94d00000gp/T/codex-clipboard-1ced7896-4c09-45f3-b6e9-455645ef6139.png",
+      "尺寸": [
+        153,
+        25
+      ],
+      "处理": "原始像素直接复制",
+      "SHA256": "da392de0ee01f7f6f1dd03dc01e8618ad91edba837a707f8ab0558bd0aec4ff9"
+    },
+    {
+      "文件": "ritual_outer.png",
+      "来源": "素材导出/棋盘修订_可见上层_20261018/命名素材/占位稿/英雄头像_灰色外圆.png",
+      "尺寸": [
+        120,
+        120
+      ],
+      "处理": "原始像素直接复制",
+      "SHA256": "35b6cf1974e16529ce6bd904df04ae820bd3d09b99f38aea34bf3f66aa156a35"
+    },
+    {
+      "文件": "ritual_inner.png",
+      "来源": "素材导出/棋盘修订_可见上层_20261018/命名素材/占位稿/英雄头像_白色内圆.png",
+      "尺寸": [
+        102,
+        102
+      ],
+      "处理": "原始像素直接复制",
+      "SHA256": "f32769635593920a0e6f8602a35ad1cb2395ce92845336666c3b5bb7e6f2dc0f"
+    }
+  ]
+}

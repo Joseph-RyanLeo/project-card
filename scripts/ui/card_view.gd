@@ -210,6 +210,7 @@ var _hover_effect_active: bool = false
 var _layout_resting_position: Vector2 = Vector2.ZERO
 var _mouse_hovered: bool = false
 var _snapshot_mode: bool = false
+var _service_stickers_detached: bool = false
 var _interaction_shadow: Panel
 var _status_slot_layer: Control
 var _new_card_dot: Control
@@ -432,7 +433,8 @@ func _build_drag_data(at_position: Vector2) -> Dictionary:
 	if card_data.card_type == CardData.CardType.SPELL and card_data.get_spell_preparation_column() >= 0:
 		drag_data["spell_icon_texture"] = SpellPreparationIconStyle.get_texture(
 			SpellPreparationIconStyle.source_column_for_trigger(card_data.spell_trigger_kind),
-			card_data.rarity
+			card_data.rarity,
+			card_data.get_effective_faction()
 		)
 	if (
 		is_instance_valid(_drag_source_slot)
@@ -1061,6 +1063,7 @@ func get_sticker_tooltip(point: Vector2) -> String:
 	if _owned_card == null or card_data == null:
 		return ""
 	for slot: Dictionary in CardSlotLayout.get_slot_definitions(card_data, _owned_card):
+		if _service_stickers_detached and slot.kind == CardSlotLayout.Kind.EMBLEM: continue
 		if not Rect2(slot.position, Vector2(14, 14)).has_point(point):
 			continue
 		var states: Array[Dictionary] = _owned_card.emblem_slots if slot.kind == CardSlotLayout.Kind.EMBLEM else _owned_card.wound_slots
@@ -1340,6 +1343,13 @@ func copy_runtime_display_state_from(source: CardView) -> void:
 	_squad_cooldown_preview = source._squad_cooldown_preview
 	_battle_masked_rune_indices.assign(source._battle_masked_rune_indices)
 	_battle_rune_element_overrides = source._battle_rune_element_overrides.duplicate(true)
+	_battle_spent_emblem_slots.assign(source._battle_spent_emblem_slots)
+	_battle_masked_wound_slots.assign(source._battle_masked_wound_slots)
+	_target_priority_preview = source._target_priority_preview
+	_battle_target_weight_display_enabled = source._battle_target_weight_display_enabled
+	_highlighted_rune_indices.assign(source._highlighted_rune_indices)
+	_rune_highlight_is_preview = source._rune_highlight_is_preview
+	_dim_preview_active_runes = source._dim_preview_active_runes
 	_battle_number_targets.clear()
 	if is_node_ready():
 		_refresh()
@@ -1629,14 +1639,10 @@ func set_battle_status_slot_states(
 	spent_emblem_indices: Array[int],
 	masked_wound_indices: Array[int]
 ) -> void:
-	if (
-		_battle_spent_emblem_slots == spent_emblem_indices
-		and _battle_masked_wound_slots == masked_wound_indices
-	):
-		return
 	_battle_spent_emblem_slots.assign(spent_emblem_indices)
 	_battle_masked_wound_slots.assign(masked_wound_indices)
 	if is_node_ready():
+		# OwnedCard可原位新增、升级或移除贴纸；是否需要更新由完整槽位签名判断。
 		_refresh_status_slots()
 
 
@@ -1765,6 +1771,7 @@ func _refresh_status_slots() -> void:
 		if storage_index < 0 or storage_index >= states.size():
 			continue
 		var slot_state := states[storage_index]
+		if _service_stickers_detached and kind == CardSlotLayout.Kind.EMBLEM: continue
 		var status_id := StringName(String(
 			slot_state.get(
 				"emblem_id" if kind == CardSlotLayout.Kind.EMBLEM else "wound_id",
@@ -2590,7 +2597,17 @@ func _get_rune_texture(rune: CardData.ElementType) -> Texture2D:
 			return RUNE_FIRE_TEXTURE
 
 
+func set_service_stickers_detached(value: bool) -> void:
+	if _service_stickers_detached == value: return
+	_service_stickers_detached = value
+	_has_status_slot_signature = false
+	if is_node_ready():
+		_refresh_status_slots()
+		_refresh_runes()
+
+
 func _rune_sticker_id(index: int) -> StringName:
+	if _service_stickers_detached: return &""
 	if _owned_card == null or index >= _owned_card.rune_stickers.size():
 		return &""
 	return StringName(_owned_card.rune_stickers[index].get("emblem_id", ""))
@@ -2599,13 +2616,14 @@ func _rune_sticker_id(index: int) -> StringName:
 func _get_display_rune_element(index: int) -> CardData.ElementType:
 	if _battle_rune_element_overrides.has(index):
 		return int(_battle_rune_element_overrides[index]) as CardData.ElementType
-	if _owned_card != null and index < _owned_card.rune_stickers.size():
+	if not _service_stickers_detached and _owned_card != null and index < _owned_card.rune_stickers.size():
 		var sticker_id := StringName(_owned_card.rune_stickers[index].get("emblem_id", ""))
 		if not sticker_id.is_empty():
 			var sticker_element := RuneStickerStyle.get_element_type(RuneStickerStyle.RUNE_IDS.find(sticker_id))
 			if sticker_element >= 0:
 				return sticker_element as CardData.ElementType
 	if _owned_card != null and index < _owned_card.resolved_runes.size():
+		if _service_stickers_detached: return _owned_card.resolved_runes[index] as CardData.ElementType
 		return _owned_card.get_effective_rune(index)
 	return card_data.runes[index] as CardData.ElementType if card_data != null and index < card_data.runes.size() else CardData.ElementType.FIRE
 

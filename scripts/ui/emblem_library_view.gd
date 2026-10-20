@@ -3,6 +3,8 @@ extends Panel
 
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 signal scraper_action_mode_requested
+signal inventory_changed
+signal expand_requested
 
 ## 纹章库的唯一 UI 实例。
 ## 普通收藏界面和大卡牌检视只改变同一节点的位置、缩放与视口布局。
@@ -32,6 +34,7 @@ var _sticker_inventory: Variant = StickerInventoryScript.new()
 var _scraper_count: int = 0
 var fusion_busy := false
 var _hidden_item_ids: Array[StringName] = []
+var _drop_stack_order: Array[StringName] = []
 
 
 func return_sticker(state: Dictionary) -> bool:
@@ -48,6 +51,7 @@ func return_sticker(state: Dictionary) -> bool:
 		return false
 	if is_node_ready():
 		_refresh_entries()
+	inventory_changed.emit()
 	return true
 
 
@@ -56,7 +60,36 @@ func consume_returned(state: Dictionary) -> bool:
 	if removed.is_empty():
 		return false
 	_refresh_entries()
+	inventory_changed.emit()
 	return true
+
+
+func receive_stickers(states: Array) -> bool:
+	var normalized: Variant = _normalize_inventory_states(states)
+	if normalized == null: return false
+	var rarities := {}
+	for definition: Dictionary in _definitions:
+		rarities[String(definition.id)] = int(definition.get("rarity", -1))
+	if not _sticker_inventory.receive(normalized, rarities): return false
+	_refresh_entries()
+	inventory_changed.emit()
+	return true
+
+
+func has_dropped_stickers() -> bool:
+	return get_inventory_state().any(func(item: Dictionary): return StickerInventoryScript.is_dropped(item))
+
+
+func discard_dropped_stickers() -> void:
+	_sticker_inventory.discard_dropped()
+	_refresh_entries()
+	inventory_changed.emit()
+
+
+func _gui_input(event: InputEvent) -> void:
+	if not _inspect_mode and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		expand_requested.emit()
+		accept_event()
 
 
 func _ready() -> void:
@@ -141,6 +174,7 @@ func restore_inventory_state(states: Array) -> bool:
 		return false
 	if is_node_ready():
 		_refresh_entries()
+	inventory_changed.emit()
 	return true
 
 
@@ -184,6 +218,7 @@ func move_sticker(instance_id: StringName, target_cell: Vector2i) -> bool:
 	if not _sticker_inventory.move(instance_id, target_cell):
 		return false
 	_refresh_entries()
+	inventory_changed.emit()
 	return true
 
 
@@ -194,12 +229,28 @@ func can_move_sticker(instance_id: StringName, target_cell: Vector2i) -> bool:
 func try_move_sticker_global(instance_id: StringName, global_position: Vector2, drag_data: Dictionary) -> bool:
 	if not _drag_enabled or fusion_busy or not is_instance_valid(_grid):
 		return false
+	var local := _grid.get_global_transform_with_canvas().affine_inverse() * global_position
+	if EmblemLibraryGridScript.DROP_AREA.has_point(local):
+		var item := get_inventory_item(instance_id)
+		var span := 2 if bool(item.get("element_sticker", false)) else 1
+		var item_size := Vector2.ONE * (17.0 * span - 3.0)
+		var origin := _grid.get_global_transform_with_canvas().affine_inverse() * (global_position + (drag_data.get("placement_offset", Vector2.ZERO) as Vector2))
+		var point := (origin - EmblemLibraryGridScript.DROP_AREA.position).clamp(Vector2.ZERO, EmblemLibraryGridScript.DROP_AREA.size - item_size)
+		if not _sticker_inventory.move_to_drop(instance_id, point): return false
+		_refresh_entries()
+		bring_dropped_sticker_to_front(instance_id)
+		inventory_changed.emit()
+		return true
 	return move_sticker(instance_id, _grid.cell_for_drag(drag_data, global_position))
 
 
 func preview_sticker_move_global(instance_id: StringName, global_position: Vector2, drag_data: Dictionary) -> bool:
 	if not is_instance_valid(_grid):
 		return false
+	var local := _grid.get_global_transform_with_canvas().affine_inverse() * global_position
+	if EmblemLibraryGridScript.DROP_AREA.has_point(local):
+		_grid.clear_move_preview()
+		return not get_inventory_item(instance_id).is_empty()
 	var cell: Vector2i = _grid.cell_for_drag(drag_data, global_position)
 	return _grid.show_move_preview(instance_id, cell)
 
@@ -267,11 +318,11 @@ func _build_controls() -> void:
 	_scroll.name = "Scroll"
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-	_scroll.mouse_filter = Control.MOUSE_FILTER_STOP
+	_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(_scroll)
 	_grid = EmblemLibraryGridScript.new()
 	_grid.name = "Grid"
-	_grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_grid.mouse_filter = Control.MOUSE_FILTER_PASS
 	_scroll.add_child(_grid)
 	_grid.inventory_view = self
 	_scraper = preload("res://scripts/ui/sticker_scraper.gd").new()
@@ -298,12 +349,20 @@ func _build_controls() -> void:
 	add_child(_scraper)
 	_scraper_count_label = Label.new()
 	_scraper_count_label.name = "ScraperCount"
-	_scraper_count_label.position = Vector2(50, 111) # 数量标记避开原生刮刀和凹槽
+	_scraper_count_label.position = Vector2(50, 83) # 数量标记避开原生刮刀和凹槽
 	_scraper_count_label.size = Vector2(30, 14) # 数量标记紧凑贴合工具区
 	_scraper_count_label.add_theme_font_size_override("font_size", 9)
 	_scraper_count_label.add_theme_color_override("font_color", Color("fff0a0"))
 	_scraper_count_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_scraper_count_label)
+	var drop_label := Label.new()
+	drop_label.name = "TemporaryAreaLabel"
+	drop_label.text = "临时区域"
+	drop_label.position = Vector2(12, 94) # 临时区域名称位于工具区下部
+	drop_label.add_theme_font_size_override("font_size", 7) # 原生像素标注字号
+	drop_label.add_theme_color_override("font_color", Color(0.18, 0.10, 0.08, 0.65)) # 标注降低存在感
+	drop_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(drop_label)
 	set_scraper_count(_scraper_count)
 
 
@@ -348,22 +407,41 @@ func _refresh_entries() -> void:
 				var inventory_definition := definition.duplicate(true)
 				inventory_definition["returned_state"] = state
 				display_definitions.append(inventory_definition)
+	var dropped_entries := {}
 	for definition: Dictionary in display_definitions:
 		var entry: Variant = EmblemLibraryEntryScript.new()
 		entry.configure(definition, _drag_enabled and not fusion_busy)
 		entry.modulate.a = 0.0 if StringName(String(definition.returned_state.instance_id)) in _hidden_item_ids else 1.0
 		entry.click_carry_requested.connect(_on_item_click_carry_requested)
+		entry.front_requested.connect(bring_dropped_sticker_to_front)
 		_grid.add_child(entry)
 		_entries.append(entry)
+		if StickerInventoryScript.is_dropped(definition.returned_state):
+			dropped_entries[StringName(String(definition.returned_state.instance_id))] = entry
+	_drop_stack_order = _drop_stack_order.filter(func(id: StringName): return dropped_entries.has(id))
+	for id: StringName in dropped_entries:
+		if id not in _drop_stack_order: _drop_stack_order.append(id)
+	for id: StringName in _drop_stack_order:
+		_grid.move_child(dropped_entries[id], _grid.get_child_count() - 1)
 	_grid.layout_entries(_entries)
 	_update_title()
+
+
+func bring_dropped_sticker_to_front(instance_id: StringName) -> void:
+	if not StickerInventoryScript.is_dropped(get_inventory_item(instance_id)): return
+	_drop_stack_order.erase(instance_id)
+	_drop_stack_order.append(instance_id)
+	for entry: Control in _entries:
+		if StringName(String(entry.definition.returned_state.instance_id)) == instance_id:
+			_grid.move_child(entry, _grid.get_child_count() - 1)
+			return
 
 
 func _update_title() -> void:
 	if not is_instance_valid(_title):
 		return
 	_title.text = "工具箱 %d/%d" % [
-		_sticker_inventory.get_items().size(),
+		get_inventory_capacity() - _sticker_inventory.free_cell_count(),
 		get_inventory_capacity(),
 	]
 
@@ -400,4 +478,5 @@ func commit_fusion_onto_card(source_id: StringName, owned: OwnedCard, slot_index
 	if result.is_empty():
 		return {}
 	_refresh_entries()
+	inventory_changed.emit()
 	return result

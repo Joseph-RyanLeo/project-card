@@ -1,0 +1,6397 @@
+{
+  "source": "/Users/Zhuanz/Downloads/棋盘(修订).aseprite",
+  "source_sha256": "3810847bc0bf7b92c75aab8e16f9e173aca90e89146a998881775f595d15e6a8",
+  "canvas": [
+    1320,
+    1240
+  ],
+  "frames": 1,
+  "total_layers": 220,
+  "effective_visible_image_layers": 50,
+  "contributing_layers": 48,
+  "fully_covered_layers": [
+    25,
+    34
+  ],
+  "native_composite_pixel_equal": true,
+  "assets": [
+    {
+      "number": 1,
+      "category": "背景",
+      "name": "桌面木纹背景",
+      "file": "命名素材/背景/桌面木纹背景.png",
+      "width": 1320,
+      "height": 1240,
+      "source_layers": [
+        {
+          "index": 1,
+          "original_path": "图层 33"
+        }
+      ],
+      "instances": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 1320,
+          "height": 1240
+        }
+      ],
+      "note": "背景源层完整画布；上层遮挡处保留源像素，便于复用。",
+      "pixel_hash": "c019c322f1dd227783825f98776c6ec41c895d6647e9cecd0e0154558bccc7fd"
+    },
+    {
+      "number": 2,
+      "category": "背景",
+      "name": "斜向蓝色桌布",
+      "file": "命名素材/背景/斜向蓝色桌布.png",
+      "width": 1320,
+      "height": 673,
+      "source_layers": [
+        {
+          "index": 14,
+          "original_path": "图层 168"
+        }
+      ],
+      "instances": [
+        {
+          "x": 0,
+          "y": 31,
+          "width": 1320,
+          "height": 673
+        }
+      ],
+      "note": "",
+      "pixel_hash": "28ea4dfb09fa13a0bd3bd0d296cc317c0b292b7c7375ca1c84f7a59a8dc767d0"
+    },
+    {
+      "number": 3,
+      "category": "英雄",
+      "name": "蓝衣英雄_下方俯视像",
+      "file": "命名素材/英雄/蓝衣英雄_下方俯视像.png",
+      "width": 157,
+      "height": 173,
+      "source_layers": [
+        {
+          "index": 217,
+          "original_path": "图层 47"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1123,
+          "y": 562,
+          "width": 157,
+          "height": 173
+        }
+      ],
+      "note": "人物身份未根据图层名推断；上方人物有17像素超出画布，本次仅导出画布内部分。",
+      "pixel_hash": "978d36375d9471c1cc55ebbd25547274343abebb24b484843b2f3fcd5565f352"
+    },
+    {
+      "number": 4,
+      "category": "英雄",
+      "name": "蓝衣英雄_上方俯视像_画布裁切",
+      "file": "命名素材/英雄/蓝衣英雄_上方俯视像_画布裁切.png",
+      "width": 164,
+      "height": 152,
+      "source_layers": [
+        {
+          "index": 218,
+          "original_path": "图层 63"
+        }
+      ],
+      "instances": [
+        {
+          "x": 17,
+          "y": 0,
+          "width": 164,
+          "height": 152
+        }
+      ],
+      "note": "人物身份未根据图层名推断；上方人物有17像素超出画布，本次仅导出画布内部分。",
+      "pixel_hash": "dca1ca6c66ff4a3bcb5c8e89a58ee9bec9661a335e0e8a12fdb9c3678d0a7794"
+    },
+    {
+      "number": 5,
+      "category": "资源",
+      "name": "左侧资源托盘_含蜂窝格",
+      "file": "命名素材/资源/左侧资源托盘_含蜂窝格.png",
+      "width": 199,
+      "height": 208,
+      "source_layers": [
+        {
+          "index": 22,
+          "original_path": "资源/图层 62"
+        }
+      ],
+      "instances": [
+        {
+          "x": 26,
+          "y": 152,
+          "width": 199,
+          "height": 208
+        }
+      ],
+      "note": "",
+      "pixel_hash": "1edc6626824b564cde900ce4226c20a2ed47b3ae362170c83920cb566bfd8e48"
+    },
+    {
+      "number": 6,
+      "category": "资源",
+      "name": "右侧资源托盘_组合",
+      "file": "命名素材/资源/右侧资源托盘_组合.png",
+      "width": 199,
+      "height": 208,
+      "source_layers": [
+        {
+          "index": 17,
+          "original_path": "资源/图层 54"
+        },
+        {
+          "index": 18,
+          "original_path": "资源/图层 55"
+        },
+        {
+          "index": 21,
+          "original_path": "资源/图层 46"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1095,
+          "y": 367,
+          "width": 199,
+          "height": 208
+        }
+      ],
+      "note": "",
+      "pixel_hash": "1fd14df103503c94fdbaa80189a1a7f4c3911dc123ebac06760e459fb409908c"
+    },
+    {
+      "number": 7,
+      "category": "资源",
+      "name": "右侧资源托盘_底框与把手",
+      "file": "命名素材/资源/右侧资源托盘_底框与把手.png",
+      "width": 199,
+      "height": 208,
+      "source_layers": [
+        {
+          "index": 17,
+          "original_path": "资源/图层 54"
+        },
+        {
+          "index": 18,
+          "original_path": "资源/图层 55"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1095,
+          "y": 367,
+          "width": 199,
+          "height": 208
+        }
+      ],
+      "note": "",
+      "pixel_hash": "5d526c37abbd358d5195bd5b652e34a5042b6c49f4375464848b7fa8686b795a"
+    },
+    {
+      "number": 8,
+      "category": "资源",
+      "name": "资源蜂窝网格",
+      "file": "命名素材/资源/资源蜂窝网格.png",
+      "width": 143,
+      "height": 160,
+      "source_layers": [
+        {
+          "index": 21,
+          "original_path": "资源/图层 46"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1121,
+          "y": 387,
+          "width": 143,
+          "height": 160
+        }
+      ],
+      "note": "",
+      "pixel_hash": "699da6c2fd49095676e0139adce2d41b9e2ac2a828d75f5224cdbf58ee69433b"
+    },
+    {
+      "number": 9,
+      "category": "法术",
+      "name": "左侧法术托盘_空框",
+      "file": "命名素材/法术/左侧法术托盘_空框.png",
+      "width": 195,
+      "height": 324,
+      "source_layers": [
+        {
+          "index": 24,
+          "original_path": "法术盒子/图层 43"
+        },
+        {
+          "index": 32,
+          "original_path": "法术盒子/图层 44"
+        },
+        {
+          "index": 33,
+          "original_path": "法术盒子/图层 104"
+        }
+      ],
+      "instances": [
+        {
+          "x": 26,
+          "y": 367,
+          "width": 195,
+          "height": 324
+        }
+      ],
+      "note": "",
+      "pixel_hash": "81656c29b118fa99623384484b90e3a648dabd8e7344be2145e35df02f173232"
+    },
+    {
+      "number": 10,
+      "category": "法术",
+      "name": "右侧法术托盘_空框",
+      "file": "命名素材/法术/右侧法术托盘_空框.png",
+      "width": 195,
+      "height": 324,
+      "source_layers": [
+        {
+          "index": 35,
+          "original_path": "图层 115"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1099,
+          "y": 38,
+          "width": 195,
+          "height": 324
+        }
+      ],
+      "note": "",
+      "pixel_hash": "d54f68708d2f25d133243a8eea2633a517d216c0f233d5aecd35a3452d7c444a"
+    },
+    {
+      "number": 11,
+      "category": "法术",
+      "name": "左侧法术托盘_当前组合",
+      "file": "命名素材/法术/左侧法术托盘_当前组合.png",
+      "width": 195,
+      "height": 324,
+      "source_layers": [
+        {
+          "index": 24,
+          "original_path": "法术盒子/图层 43"
+        },
+        {
+          "index": 26,
+          "original_path": "法术盒子/图层 113"
+        },
+        {
+          "index": 29,
+          "original_path": "法术盒子/图层 110"
+        },
+        {
+          "index": 32,
+          "original_path": "法术盒子/图层 44"
+        },
+        {
+          "index": 33,
+          "original_path": "法术盒子/图层 104"
+        }
+      ],
+      "instances": [
+        {
+          "x": 26,
+          "y": 367,
+          "width": 195,
+          "height": 324
+        }
+      ],
+      "note": "",
+      "pixel_hash": "d2ff6e44f571a9e497bb48e5cffac0e07e8c56dadf37a24b79a7843bd79e3bad"
+    },
+    {
+      "number": 12,
+      "category": "法术",
+      "name": "右侧法术托盘_当前组合",
+      "file": "命名素材/法术/右侧法术托盘_当前组合.png",
+      "width": 195,
+      "height": 324,
+      "source_layers": [
+        {
+          "index": 35,
+          "original_path": "图层 115"
+        },
+        {
+          "index": 36,
+          "original_path": "图层 116"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1099,
+          "y": 38,
+          "width": 195,
+          "height": 324
+        }
+      ],
+      "note": "",
+      "pixel_hash": "f26c181d3b543415032a579e5b38856805055e1c7dc5317c0289fbba9456288e"
+    },
+    {
+      "number": 13,
+      "category": "法术",
+      "name": "左侧分类_闪电",
+      "file": "命名素材/法术/左侧分类_闪电.png",
+      "width": 42,
+      "height": 43,
+      "source_layers": [
+        {
+          "index": 26,
+          "original_path": "法术盒子/图层 113"
+        }
+      ],
+      "instances": [
+        {
+          "x": 47,
+          "y": 376,
+          "width": 42,
+          "height": 43
+        }
+      ],
+      "note": "",
+      "pixel_hash": "550b9146d1b4bb5fa87c677da383f50f42b66820f97a28d326f5a3ef62973a10"
+    },
+    {
+      "number": 14,
+      "category": "法术",
+      "name": "左侧分类_卷轴",
+      "file": "命名素材/法术/左侧分类_卷轴.png",
+      "width": 42,
+      "height": 43,
+      "source_layers": [
+        {
+          "index": 26,
+          "original_path": "法术盒子/图层 113"
+        }
+      ],
+      "instances": [
+        {
+          "x": 105,
+          "y": 376,
+          "width": 42,
+          "height": 43
+        }
+      ],
+      "note": "",
+      "pixel_hash": "3bfcdbfebff312977ea161784b1b6ef0e88200bc023ec82e9f2c78b82e781935"
+    },
+    {
+      "number": 15,
+      "category": "法术",
+      "name": "左侧分类_沙漏",
+      "file": "命名素材/法术/左侧分类_沙漏.png",
+      "width": 42,
+      "height": 43,
+      "source_layers": [
+        {
+          "index": 26,
+          "original_path": "法术盒子/图层 113"
+        }
+      ],
+      "instances": [
+        {
+          "x": 163,
+          "y": 376,
+          "width": 42,
+          "height": 43
+        }
+      ],
+      "note": "",
+      "pixel_hash": "7b826271eeb65e70913f703e9abf01eef512997ccf3b6795451d0cad7e5d3c43"
+    },
+    {
+      "number": 16,
+      "category": "法术",
+      "name": "右侧分类_闪电",
+      "file": "命名素材/法术/右侧分类_闪电.png",
+      "width": 42,
+      "height": 40,
+      "source_layers": [
+        {
+          "index": 36,
+          "original_path": "图层 116"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1115,
+          "y": 47,
+          "width": 42,
+          "height": 40
+        }
+      ],
+      "note": "",
+      "pixel_hash": "d3572b840c175567eeed832f064a75b83777f50430f686206ab78721befa9e87"
+    },
+    {
+      "number": 17,
+      "category": "法术",
+      "name": "右侧分类_卷轴",
+      "file": "命名素材/法术/右侧分类_卷轴.png",
+      "width": 42,
+      "height": 40,
+      "source_layers": [
+        {
+          "index": 36,
+          "original_path": "图层 116"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1173,
+          "y": 47,
+          "width": 42,
+          "height": 40
+        }
+      ],
+      "note": "",
+      "pixel_hash": "30c0cbd1e5fe7aecca536bf0ec66d4ca3951543cc814bbf0008cba2867ab4b1a"
+    },
+    {
+      "number": 18,
+      "category": "法术",
+      "name": "右侧分类_沙漏",
+      "file": "命名素材/法术/右侧分类_沙漏.png",
+      "width": 42,
+      "height": 40,
+      "source_layers": [
+        {
+          "index": 36,
+          "original_path": "图层 116"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1231,
+          "y": 47,
+          "width": 42,
+          "height": 40
+        }
+      ],
+      "note": "",
+      "pixel_hash": "256742fbed7704096b5fad82014ce7d546a1df0cf67505a1a635966b76495abb"
+    },
+    {
+      "number": 19,
+      "category": "法术",
+      "name": "法术槽_绿色",
+      "file": "命名素材/法术/法术槽_绿色.png",
+      "width": 42,
+      "height": 42,
+      "source_layers": [
+        {
+          "index": 29,
+          "original_path": "法术盒子/图层 110"
+        }
+      ],
+      "instances": [
+        {
+          "x": 46,
+          "y": 432,
+          "width": 42,
+          "height": 42
+        }
+      ],
+      "note": "",
+      "pixel_hash": "c930da787ab5e8b3c8a05822e49cf45ee6a7f3b56d5ba54761735d32a54e35f0"
+    },
+    {
+      "number": 20,
+      "category": "法术",
+      "name": "法术槽_红色",
+      "file": "命名素材/法术/法术槽_红色.png",
+      "width": 42,
+      "height": 42,
+      "source_layers": [
+        {
+          "index": 29,
+          "original_path": "法术盒子/图层 110"
+        }
+      ],
+      "instances": [
+        {
+          "x": 105,
+          "y": 432,
+          "width": 42,
+          "height": 42
+        }
+      ],
+      "note": "",
+      "pixel_hash": "8550680d89a4be85380312d1040bde8230bacccfac1645b1effe0c012df8a49d"
+    },
+    {
+      "number": 21,
+      "category": "法术",
+      "name": "法术槽_蓝色",
+      "file": "命名素材/法术/法术槽_蓝色.png",
+      "width": 42,
+      "height": 42,
+      "source_layers": [
+        {
+          "index": 29,
+          "original_path": "法术盒子/图层 110"
+        }
+      ],
+      "instances": [
+        {
+          "x": 163,
+          "y": 432,
+          "width": 42,
+          "height": 42
+        }
+      ],
+      "note": "",
+      "pixel_hash": "782879b640fb552f082672072518497ca8af028a9fff18c09d6d8a540af9f61c"
+    },
+    {
+      "number": 22,
+      "category": "战场",
+      "name": "战场外框底板与金色包角",
+      "file": "命名素材/战场/战场外框底板与金色包角.png",
+      "width": 902,
+      "height": 739,
+      "source_layers": [
+        {
+          "index": 39,
+          "original_path": "盒子主体/图层 34"
+        },
+        {
+          "index": 40,
+          "original_path": "盒子主体/图层 37"
+        },
+        {
+          "index": 46,
+          "original_path": "盒子主体/图层 56"
+        }
+      ],
+      "instances": [
+        {
+          "x": 209,
+          "y": 0,
+          "width": 902,
+          "height": 739
+        }
+      ],
+      "note": "仅取当前主战场范围；底层向下延伸的旧画布不并入该组件。",
+      "pixel_hash": "33e3dd9c3f3f1daad6b8922ef1d0ef76dcb28d4a747fdee304ab868794e87188"
+    },
+    {
+      "number": 23,
+      "category": "战场",
+      "name": "敌方后排底板",
+      "file": "命名素材/战场/敌方后排底板.png",
+      "width": 836,
+      "height": 155,
+      "source_layers": [
+        {
+          "index": 56,
+          "original_path": "盒子主体/组 3/图层 3"
+        }
+      ],
+      "instances": [
+        {
+          "x": 242,
+          "y": 33,
+          "width": 836,
+          "height": 155
+        }
+      ],
+      "note": "",
+      "pixel_hash": "dab816ab1cc5d7031929fa8fb09f8a62a41af65623ad8972e28d9b2f4da59c69"
+    },
+    {
+      "number": 24,
+      "category": "战场",
+      "name": "敌方前排底板",
+      "file": "命名素材/战场/敌方前排底板.png",
+      "width": 836,
+      "height": 155,
+      "source_layers": [
+        {
+          "index": 56,
+          "original_path": "盒子主体/组 3/图层 3"
+        }
+      ],
+      "instances": [
+        {
+          "x": 242,
+          "y": 188,
+          "width": 836,
+          "height": 155
+        }
+      ],
+      "note": "",
+      "pixel_hash": "927588f7cf6c4aab011e9a788e2ed0d2efad0047130bbbf33d99f8ca0f962ffa"
+    },
+    {
+      "number": 25,
+      "category": "战场",
+      "name": "我方前排底板",
+      "file": "命名素材/战场/我方前排底板.png",
+      "width": 836,
+      "height": 155,
+      "source_layers": [
+        {
+          "index": 56,
+          "original_path": "盒子主体/组 3/图层 3"
+        }
+      ],
+      "instances": [
+        {
+          "x": 242,
+          "y": 367,
+          "width": 836,
+          "height": 155
+        }
+      ],
+      "note": "",
+      "pixel_hash": "fa081c12fbcd9840e129fe2a316ca21b53c1968d09e8a6b704c45f320340a738"
+    },
+    {
+      "number": 26,
+      "category": "战场",
+      "name": "我方后排底板",
+      "file": "命名素材/战场/我方后排底板.png",
+      "width": 836,
+      "height": 155,
+      "source_layers": [
+        {
+          "index": 56,
+          "original_path": "盒子主体/组 3/图层 3"
+        }
+      ],
+      "instances": [
+        {
+          "x": 242,
+          "y": 522,
+          "width": 836,
+          "height": 155
+        }
+      ],
+      "note": "",
+      "pixel_hash": "c8c233391650758a70118ddb3a7be5d07a84b03daceea6109c432038c6edf27e"
+    },
+    {
+      "number": 27,
+      "category": "战场",
+      "name": "战场中线_进度条",
+      "file": "命名素材/战场/战场中线_进度条.png",
+      "width": 897,
+      "height": 16,
+      "source_layers": [
+        {
+          "index": 47,
+          "original_path": "盒子主体/图层 58"
+        }
+      ],
+      "instances": [
+        {
+          "x": 211,
+          "y": 347,
+          "width": 897,
+          "height": 16
+        }
+      ],
+      "note": "",
+      "pixel_hash": "b4dae882d1ae71b58ec8fbb8625d4a47b15ff3b144dd5a1f59f8eee7db01b47e"
+    },
+    {
+      "number": 28,
+      "category": "战场",
+      "name": "战场中线_眼睛标记",
+      "file": "命名素材/战场/战场中线_眼睛标记.png",
+      "width": 16,
+      "height": 10,
+      "source_layers": [
+        {
+          "index": 50,
+          "original_path": "盒子主体/组 4/图层 61"
+        }
+      ],
+      "instances": [
+        {
+          "x": 652,
+          "y": 350,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "note": "",
+      "pixel_hash": "b11a5ff34835869860fc2a6e8e4f05d6871586d94f8661ce49ef2f3f2b6e937a"
+    },
+    {
+      "number": 29,
+      "category": "战场",
+      "name": "战场中线_组合",
+      "file": "命名素材/战场/战场中线_组合.png",
+      "width": 897,
+      "height": 16,
+      "source_layers": [
+        {
+          "index": 47,
+          "original_path": "盒子主体/图层 58"
+        },
+        {
+          "index": 50,
+          "original_path": "盒子主体/组 4/图层 61"
+        }
+      ],
+      "instances": [
+        {
+          "x": 211,
+          "y": 347,
+          "width": 897,
+          "height": 16
+        }
+      ],
+      "note": "",
+      "pixel_hash": "9b81cd2c51e3eaebe2aa88036238fca767decd8a50b5ff6b0ee0c200bd60fd9e"
+    },
+    {
+      "number": 30,
+      "category": "战场",
+      "name": "战斗开始_按钮底板",
+      "file": "命名素材/战场/战斗开始_按钮底板.png",
+      "width": 83,
+      "height": 29,
+      "source_layers": [
+        {
+          "index": 139,
+          "original_path": "战斗开始/图层 154"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1019,
+          "y": 674,
+          "width": 83,
+          "height": 29
+        }
+      ],
+      "note": "",
+      "pixel_hash": "bed7600e467e957d666f801015abc0b4446d474c2a3aaf30b70a05987e7017c0"
+    },
+    {
+      "number": 31,
+      "category": "战场",
+      "name": "战斗开始_双剑图标",
+      "file": "命名素材/战场/战斗开始_双剑图标.png",
+      "width": 19,
+      "height": 19,
+      "source_layers": [
+        {
+          "index": 140,
+          "original_path": "战斗开始/图层 157"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1027,
+          "y": 677,
+          "width": 19,
+          "height": 19
+        }
+      ],
+      "note": "",
+      "pixel_hash": "988a5544c661771527ca83abc50515b649580046388724afef64cb6dbd323aaa"
+    },
+    {
+      "number": 32,
+      "category": "战场",
+      "name": "战斗开始_组合按钮",
+      "file": "命名素材/战场/战斗开始_组合按钮.png",
+      "width": 83,
+      "height": 29,
+      "source_layers": [
+        {
+          "index": 139,
+          "original_path": "战斗开始/图层 154"
+        },
+        {
+          "index": 140,
+          "original_path": "战斗开始/图层 157"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1019,
+          "y": 674,
+          "width": 83,
+          "height": 29
+        }
+      ],
+      "note": "",
+      "pixel_hash": "51f732d5923f36ded8127a72d404589e6a49532650569b208f48a7abba07160b"
+    },
+    {
+      "number": 33,
+      "category": "顶栏",
+      "name": "层数进度_三格底槽",
+      "file": "命名素材/顶栏/层数进度_三格底槽.png",
+      "width": 55,
+      "height": 15,
+      "source_layers": [
+        {
+          "index": 43,
+          "original_path": "盒子主体/组 7/图层 118"
+        }
+      ],
+      "instances": [
+        {
+          "x": 307,
+          "y": 14,
+          "width": 55,
+          "height": 15
+        }
+      ],
+      "note": "",
+      "pixel_hash": "c8de97bb9efd3579da7313b20953ee9ce18429a52ceef0e6e7c0ec7a2d854c09"
+    },
+    {
+      "number": 34,
+      "category": "顶栏",
+      "name": "天数进度_九格底槽",
+      "file": "命名素材/顶栏/天数进度_九格底槽.png",
+      "width": 125,
+      "height": 15,
+      "source_layers": [
+        {
+          "index": 43,
+          "original_path": "盒子主体/组 7/图层 118"
+        }
+      ],
+      "instances": [
+        {
+          "x": 415,
+          "y": 14,
+          "width": 125,
+          "height": 15
+        }
+      ],
+      "note": "",
+      "pixel_hash": "9203d4d81d75b7e56abd42b6c54ad90bceaa4155305cd86bc2856eff9d671cf0"
+    },
+    {
+      "number": 35,
+      "category": "顶栏",
+      "name": "层数进度_白色亮点",
+      "file": "命名素材/顶栏/层数进度_白色亮点.png",
+      "width": 13,
+      "height": 13,
+      "source_layers": [
+        {
+          "index": 44,
+          "original_path": "盒子主体/组 7/图层 119"
+        }
+      ],
+      "instances": [
+        {
+          "x": 314,
+          "y": 15,
+          "width": 13,
+          "height": 13
+        }
+      ],
+      "note": "",
+      "pixel_hash": "1a7bbb0f6e06fc3d71eb48b5f1b0092aee766aab2ae1cef62959a74769715d87"
+    },
+    {
+      "number": 36,
+      "category": "顶栏",
+      "name": "天数进度_橙红亮点",
+      "file": "命名素材/顶栏/天数进度_橙红亮点.png",
+      "width": 13,
+      "height": 13,
+      "source_layers": [
+        {
+          "index": 44,
+          "original_path": "盒子主体/组 7/图层 119"
+        }
+      ],
+      "instances": [
+        {
+          "x": 450,
+          "y": 15,
+          "width": 13,
+          "height": 13
+        }
+      ],
+      "note": "",
+      "pixel_hash": "4ada514b64876d86fc2e0c289814c72ef2755b50e5ffd559a04d66664234c032"
+    },
+    {
+      "number": 37,
+      "category": "顶栏",
+      "name": "天数进度_金黄亮点",
+      "file": "命名素材/顶栏/天数进度_金黄亮点.png",
+      "width": 13,
+      "height": 13,
+      "source_layers": [
+        {
+          "index": 44,
+          "original_path": "盒子主体/组 7/图层 119"
+        }
+      ],
+      "instances": [
+        {
+          "x": 464,
+          "y": 15,
+          "width": 13,
+          "height": 13
+        }
+      ],
+      "note": "",
+      "pixel_hash": "b3e7b1c45cb99f7ac0ebc7afa3f284aa2fb71e325a0523dd0959f1bc73a04a28"
+    },
+    {
+      "number": 38,
+      "category": "顶栏",
+      "name": "天数进度_蓝金亮点",
+      "file": "命名素材/顶栏/天数进度_蓝金亮点.png",
+      "width": 13,
+      "height": 13,
+      "source_layers": [
+        {
+          "index": 44,
+          "original_path": "盒子主体/组 7/图层 119"
+        }
+      ],
+      "instances": [
+        {
+          "x": 478,
+          "y": 15,
+          "width": 13,
+          "height": 13
+        }
+      ],
+      "note": "",
+      "pixel_hash": "8e86df2d8cc9e827d00f17aef24a4e857ec0d64f3ed56196ca37cdd2a1d2b557"
+    },
+    {
+      "number": 39,
+      "category": "顶栏",
+      "name": "FLOOR文字",
+      "file": "命名素材/顶栏/FLOOR文字.png",
+      "width": 43,
+      "height": 12,
+      "source_layers": [
+        {
+          "index": 45,
+          "original_path": "盒子主体/组 7/图层 120"
+        }
+      ],
+      "instances": [
+        {
+          "x": 258,
+          "y": 16,
+          "width": 43,
+          "height": 12
+        }
+      ],
+      "note": "",
+      "pixel_hash": "4a1c42c677af68ab66c06007bbdcfaed38d13be627056b82d423d12869785136"
+    },
+    {
+      "number": 40,
+      "category": "顶栏",
+      "name": "DAY文字",
+      "file": "命名素材/顶栏/DAY文字.png",
+      "width": 25,
+      "height": 12,
+      "source_layers": [
+        {
+          "index": 45,
+          "original_path": "盒子主体/组 7/图层 120"
+        }
+      ],
+      "instances": [
+        {
+          "x": 383,
+          "y": 16,
+          "width": 25,
+          "height": 12
+        }
+      ],
+      "note": "",
+      "pixel_hash": "0fa1b7b04051242a9772acc6bd350dc245d5d00086dd0685a459ed24aa592c0d"
+    },
+    {
+      "number": 41,
+      "category": "顶栏",
+      "name": "生命与保护_数值底槽",
+      "file": "命名素材/顶栏/生命与保护_数值底槽.png",
+      "width": 66,
+      "height": 26,
+      "source_layers": [
+        {
+          "index": 59,
+          "original_path": "盒子主体/组 5/图层 97"
+        }
+      ],
+      "instances": [
+        {
+          "x": 860,
+          "y": 5,
+          "width": 66,
+          "height": 26
+        }
+      ],
+      "note": "",
+      "pixel_hash": "4f7ef51c22c9c3826cc0f996c678a4cba1e2b397c46cdc4705eef414d8deac91"
+    },
+    {
+      "number": 42,
+      "category": "顶栏",
+      "name": "金币_数值底槽",
+      "file": "命名素材/顶栏/金币_数值底槽.png",
+      "width": 83,
+      "height": 26,
+      "source_layers": [
+        {
+          "index": 59,
+          "original_path": "盒子主体/组 5/图层 97"
+        }
+      ],
+      "instances": [
+        {
+          "x": 932,
+          "y": 5,
+          "width": 83,
+          "height": 26
+        }
+      ],
+      "note": "",
+      "pixel_hash": "fe73c282b69f903e1cfb3f79fa4740dfbedb529366372444721c4987b99a34f7"
+    },
+    {
+      "number": 43,
+      "category": "顶栏",
+      "name": "保护_盾牌图标",
+      "file": "命名素材/顶栏/保护_盾牌图标.png",
+      "width": 14,
+      "height": 14,
+      "source_layers": [
+        {
+          "index": 60,
+          "original_path": "盒子主体/组 5/图层 59"
+        }
+      ],
+      "instances": [
+        {
+          "x": 871,
+          "y": 11,
+          "width": 14,
+          "height": 14
+        },
+        {
+          "x": 889,
+          "y": 11,
+          "width": 14,
+          "height": 14
+        }
+      ],
+      "note": "",
+      "pixel_hash": "86f184ea819bc79279fcb6f899d1f54dd82af2f084081f686232f896d31f52b2"
+    },
+    {
+      "number": 44,
+      "category": "顶栏",
+      "name": "生命_红心图标",
+      "file": "命名素材/顶栏/生命_红心图标.png",
+      "width": 23,
+      "height": 22,
+      "source_layers": [
+        {
+          "index": 60,
+          "original_path": "盒子主体/组 5/图层 59"
+        }
+      ],
+      "instances": [
+        {
+          "x": 909,
+          "y": 7,
+          "width": 23,
+          "height": 22
+        }
+      ],
+      "note": "",
+      "pixel_hash": "61c39f1a473da6dabde67dc892d38329ff98e8b9d23263b4b4c8ee78d1c8cd18"
+    },
+    {
+      "number": 45,
+      "category": "顶栏",
+      "name": "金币_金色钱币图标",
+      "file": "命名素材/顶栏/金币_金色钱币图标.png",
+      "width": 25,
+      "height": 27,
+      "source_layers": [
+        {
+          "index": 60,
+          "original_path": "盒子主体/组 5/图层 59"
+        }
+      ],
+      "instances": [
+        {
+          "x": 997,
+          "y": 4,
+          "width": 25,
+          "height": 27
+        }
+      ],
+      "note": "",
+      "pixel_hash": "a4f3665787b746c569dfc0b89aa9ae9f31214748aa54af019a35cf38276c4672"
+    },
+    {
+      "number": 46,
+      "category": "收藏",
+      "name": "收藏书_外框与内页",
+      "file": "命名素材/收藏/收藏书_外框与内页.png",
+      "width": 874,
+      "height": 361,
+      "source_layers": [
+        {
+          "index": 90,
+          "original_path": "收藏书/图层 8"
+        },
+        {
+          "index": 97,
+          "original_path": "收藏书/图层 41"
+        }
+      ],
+      "instances": [
+        {
+          "x": 223,
+          "y": 750,
+          "width": 874,
+          "height": 361
+        }
+      ],
+      "note": "",
+      "pixel_hash": "ccd1d06244cba0dc7e98dee5d4c5dcd2154a0b22d13973ea96206b0a2c622212"
+    },
+    {
+      "number": 47,
+      "category": "收藏",
+      "name": "收藏书_当前完整排版示例",
+      "file": "命名素材/收藏/收藏书_当前完整排版示例.png",
+      "width": 874,
+      "height": 389,
+      "source_layers": [
+        {
+          "index": 90,
+          "original_path": "收藏书/图层 8"
+        },
+        {
+          "index": 91,
+          "original_path": "收藏书/图层 14"
+        },
+        {
+          "index": 92,
+          "original_path": "收藏书/图层 105"
+        },
+        {
+          "index": 93,
+          "original_path": "收藏书/图层 17"
+        },
+        {
+          "index": 94,
+          "original_path": "收藏书/图层 106"
+        },
+        {
+          "index": 95,
+          "original_path": "收藏书/图层 107"
+        },
+        {
+          "index": 96,
+          "original_path": "收藏书/图层 179"
+        },
+        {
+          "index": 97,
+          "original_path": "收藏书/图层 41"
+        },
+        {
+          "index": 99,
+          "original_path": "收藏书/图层 9"
+        }
+      ],
+      "instances": [
+        {
+          "x": 223,
+          "y": 722,
+          "width": 874,
+          "height": 389
+        }
+      ],
+      "note": "",
+      "pixel_hash": "d43bbe1c54c129c7978c219fc19598fc5886dcd5ce59eccb937b2b5d9d068306"
+    },
+    {
+      "number": 48,
+      "category": "收藏",
+      "name": "收藏空白分页标签_01",
+      "file": "命名素材/收藏/收藏空白分页标签_01.png",
+      "width": 34,
+      "height": 66,
+      "source_layers": [
+        {
+          "index": 91,
+          "original_path": "收藏书/图层 14"
+        }
+      ],
+      "instances": [
+        {
+          "x": 264,
+          "y": 746,
+          "width": 34,
+          "height": 66
+        }
+      ],
+      "note": "",
+      "pixel_hash": "570c27cf3bfca23d7b78bbaeeaf70c100e2e14c8c098ec72be1bc478c79cdc9b"
+    },
+    {
+      "number": 49,
+      "category": "收藏",
+      "name": "收藏空白分页标签_02",
+      "file": "命名素材/收藏/收藏空白分页标签_02.png",
+      "width": 34,
+      "height": 66,
+      "source_layers": [
+        {
+          "index": 91,
+          "original_path": "收藏书/图层 14"
+        }
+      ],
+      "instances": [
+        {
+          "x": 306,
+          "y": 746,
+          "width": 34,
+          "height": 66
+        }
+      ],
+      "note": "",
+      "pixel_hash": "570c27cf3bfca23d7b78bbaeeaf70c100e2e14c8c098ec72be1bc478c79cdc9b"
+    },
+    {
+      "number": 50,
+      "category": "收藏",
+      "name": "收藏空白分页标签_03",
+      "file": "命名素材/收藏/收藏空白分页标签_03.png",
+      "width": 34,
+      "height": 66,
+      "source_layers": [
+        {
+          "index": 91,
+          "original_path": "收藏书/图层 14"
+        }
+      ],
+      "instances": [
+        {
+          "x": 348,
+          "y": 746,
+          "width": 34,
+          "height": 66
+        }
+      ],
+      "note": "",
+      "pixel_hash": "570c27cf3bfca23d7b78bbaeeaf70c100e2e14c8c098ec72be1bc478c79cdc9b"
+    },
+    {
+      "number": 51,
+      "category": "收藏",
+      "name": "收藏空白分页标签_04",
+      "file": "命名素材/收藏/收藏空白分页标签_04.png",
+      "width": 34,
+      "height": 58,
+      "source_layers": [
+        {
+          "index": 91,
+          "original_path": "收藏书/图层 14"
+        }
+      ],
+      "instances": [
+        {
+          "x": 390,
+          "y": 738,
+          "width": 34,
+          "height": 58
+        }
+      ],
+      "note": "",
+      "pixel_hash": "cdcff1b82950de2ce0775b9ea8aefd8e60518457b2b6e92ba8640fe5cfac2b64"
+    },
+    {
+      "number": 52,
+      "category": "收藏",
+      "name": "收藏空白分页标签_05",
+      "file": "命名素材/收藏/收藏空白分页标签_05.png",
+      "width": 34,
+      "height": 62,
+      "source_layers": [
+        {
+          "index": 91,
+          "original_path": "收藏书/图层 14"
+        }
+      ],
+      "instances": [
+        {
+          "x": 432,
+          "y": 746,
+          "width": 34,
+          "height": 62
+        }
+      ],
+      "note": "",
+      "pixel_hash": "88fae685d0c6df10021fe81f8d314a6e03fdb1738c279cebcea753d295c96684"
+    },
+    {
+      "number": 53,
+      "category": "收藏",
+      "name": "卡类筛选_人物轮廓",
+      "file": "命名素材/收藏/卡类筛选_人物轮廓.png",
+      "width": 30,
+      "height": 40,
+      "source_layers": [
+        {
+          "index": 92,
+          "original_path": "收藏书/图层 105"
+        }
+      ],
+      "instances": [
+        {
+          "x": 483,
+          "y": 743,
+          "width": 30,
+          "height": 40
+        }
+      ],
+      "note": "",
+      "pixel_hash": "9de9df7fc91dff6339dbb3e06afcc166aacabb79df0c7fb10b7770dea09410c4"
+    },
+    {
+      "number": 54,
+      "category": "收藏",
+      "name": "卡类筛选_星形标志",
+      "file": "命名素材/收藏/卡类筛选_星形标志.png",
+      "width": 30,
+      "height": 40,
+      "source_layers": [
+        {
+          "index": 92,
+          "original_path": "收藏书/图层 105"
+        }
+      ],
+      "instances": [
+        {
+          "x": 522,
+          "y": 743,
+          "width": 30,
+          "height": 40
+        }
+      ],
+      "note": "",
+      "pixel_hash": "e4eff19d4e9e73e03aeff386a798c93c19cc59fc898a312a7d9d0b99a6856b82"
+    },
+    {
+      "number": 55,
+      "category": "收藏",
+      "name": "卡类筛选_护甲轮廓",
+      "file": "命名素材/收藏/卡类筛选_护甲轮廓.png",
+      "width": 30,
+      "height": 40,
+      "source_layers": [
+        {
+          "index": 92,
+          "original_path": "收藏书/图层 105"
+        }
+      ],
+      "instances": [
+        {
+          "x": 562,
+          "y": 743,
+          "width": 30,
+          "height": 40
+        }
+      ],
+      "note": "",
+      "pixel_hash": "084889e7893d80ab0172c8f972d483c29dfe3ce39a218bce211ebaa1974a96f3"
+    },
+    {
+      "number": 56,
+      "category": "收藏",
+      "name": "卡类筛选_钱袋",
+      "file": "命名素材/收藏/卡类筛选_钱袋.png",
+      "width": 30,
+      "height": 40,
+      "source_layers": [
+        {
+          "index": 92,
+          "original_path": "收藏书/图层 105"
+        }
+      ],
+      "instances": [
+        {
+          "x": 602,
+          "y": 743,
+          "width": 30,
+          "height": 40
+        }
+      ],
+      "note": "",
+      "pixel_hash": "a4c64d82f66c12411e9cd1f7c69969f5912b006eca833f729f1003389b8bd5c9"
+    },
+    {
+      "number": 57,
+      "category": "收藏",
+      "name": "收藏搜索框",
+      "file": "命名素材/收藏/收藏搜索框.png",
+      "width": 83,
+      "height": 14,
+      "source_layers": [
+        {
+          "index": 93,
+          "original_path": "收藏书/图层 17"
+        }
+      ],
+      "instances": [
+        {
+          "x": 928,
+          "y": 757,
+          "width": 83,
+          "height": 14
+        }
+      ],
+      "note": "",
+      "pixel_hash": "9b919f698c54612b64ae29d5d0649badc90ddb2ce5dba8cef6f5b0dabb18d24e"
+    },
+    {
+      "number": 58,
+      "category": "收藏",
+      "name": "元素筛选_水滴",
+      "file": "命名素材/收藏/元素筛选_水滴.png",
+      "width": 16,
+      "height": 16,
+      "source_layers": [
+        {
+          "index": 94,
+          "original_path": "收藏书/图层 106"
+        }
+      ],
+      "instances": [
+        {
+          "x": 806,
+          "y": 756,
+          "width": 16,
+          "height": 16
+        }
+      ],
+      "note": "按可见图形命名；具体元素归属仍需用户核对。",
+      "pixel_hash": "bd4028ef53799f53f669e431d22f2531d10bf6a92da20626cd57e57b88818e60"
+    },
+    {
+      "number": 59,
+      "category": "收藏",
+      "name": "元素筛选_树形",
+      "file": "命名素材/收藏/元素筛选_树形.png",
+      "width": 16,
+      "height": 16,
+      "source_layers": [
+        {
+          "index": 94,
+          "original_path": "收藏书/图层 106"
+        }
+      ],
+      "instances": [
+        {
+          "x": 830,
+          "y": 756,
+          "width": 16,
+          "height": 16
+        }
+      ],
+      "note": "按可见图形命名；具体元素归属仍需用户核对。",
+      "pixel_hash": "f7e27f8148b133f844be8a5005ff82a3ed604c8727bfd4b15b214602fdc5477d"
+    },
+    {
+      "number": 60,
+      "category": "收藏",
+      "name": "元素筛选_火焰",
+      "file": "命名素材/收藏/元素筛选_火焰.png",
+      "width": 16,
+      "height": 16,
+      "source_layers": [
+        {
+          "index": 94,
+          "original_path": "收藏书/图层 106"
+        }
+      ],
+      "instances": [
+        {
+          "x": 854,
+          "y": 756,
+          "width": 16,
+          "height": 16
+        }
+      ],
+      "note": "按可见图形命名；具体元素归属仍需用户核对。",
+      "pixel_hash": "7780fe163b49374e355cb3c0a2870210850c6d92451994152afb8488907e9899"
+    },
+    {
+      "number": 61,
+      "category": "收藏",
+      "name": "元素筛选_光芒",
+      "file": "命名素材/收藏/元素筛选_光芒.png",
+      "width": 16,
+      "height": 16,
+      "source_layers": [
+        {
+          "index": 94,
+          "original_path": "收藏书/图层 106"
+        }
+      ],
+      "instances": [
+        {
+          "x": 877,
+          "y": 756,
+          "width": 16,
+          "height": 16
+        }
+      ],
+      "note": "按可见图形命名；具体元素归属仍需用户核对。",
+      "pixel_hash": "443eaa83c586633eedc9b9c7c8d42a5f7614e11087e83185344ff7689e5ffe68"
+    },
+    {
+      "number": 62,
+      "category": "收藏",
+      "name": "元素筛选_旋涡",
+      "file": "命名素材/收藏/元素筛选_旋涡.png",
+      "width": 16,
+      "height": 16,
+      "source_layers": [
+        {
+          "index": 94,
+          "original_path": "收藏书/图层 106"
+        }
+      ],
+      "instances": [
+        {
+          "x": 901,
+          "y": 756,
+          "width": 16,
+          "height": 16
+        }
+      ],
+      "note": "按可见图形命名；具体元素归属仍需用户核对。",
+      "pixel_hash": "e18859fdfe693c79bf15e8dedb2822b3f9a07a0e0047d17294798e225580ea9d"
+    },
+    {
+      "number": 63,
+      "category": "收藏",
+      "name": "品级筛选_I",
+      "file": "命名素材/收藏/品级筛选_I.png",
+      "width": 13,
+      "height": 11,
+      "source_layers": [
+        {
+          "index": 95,
+          "original_path": "收藏书/图层 107"
+        }
+      ],
+      "instances": [
+        {
+          "x": 683,
+          "y": 760,
+          "width": 13,
+          "height": 11
+        }
+      ],
+      "note": "",
+      "pixel_hash": "95e60e285445e8fb154fafaf9e2164e6c0b86009efa59a65bd21f7bc566ab9ec"
+    },
+    {
+      "number": 64,
+      "category": "收藏",
+      "name": "品级筛选_II",
+      "file": "命名素材/收藏/品级筛选_II.png",
+      "width": 13,
+      "height": 13,
+      "source_layers": [
+        {
+          "index": 95,
+          "original_path": "收藏书/图层 107"
+        }
+      ],
+      "instances": [
+        {
+          "x": 704,
+          "y": 759,
+          "width": 13,
+          "height": 13
+        }
+      ],
+      "note": "",
+      "pixel_hash": "1b95fccb153a0eea454bb9d02d465a0ea5bc29ce10a44c9f5d9a47fabc4bcc54"
+    },
+    {
+      "number": 65,
+      "category": "收藏",
+      "name": "品级筛选_III",
+      "file": "命名素材/收藏/品级筛选_III.png",
+      "width": 13,
+      "height": 15,
+      "source_layers": [
+        {
+          "index": 95,
+          "original_path": "收藏书/图层 107"
+        }
+      ],
+      "instances": [
+        {
+          "x": 725,
+          "y": 758,
+          "width": 13,
+          "height": 15
+        }
+      ],
+      "note": "",
+      "pixel_hash": "3411da8f999993ef1d64bd490df9ca7469fa09bda5b579eb5178b284229b179d"
+    },
+    {
+      "number": 66,
+      "category": "收藏",
+      "name": "品级筛选_IV",
+      "file": "命名素材/收藏/品级筛选_IV.png",
+      "width": 15,
+      "height": 18,
+      "source_layers": [
+        {
+          "index": 95,
+          "original_path": "收藏书/图层 107"
+        }
+      ],
+      "instances": [
+        {
+          "x": 746,
+          "y": 756,
+          "width": 15,
+          "height": 18
+        }
+      ],
+      "note": "",
+      "pixel_hash": "12bf18f0044a6e691c18e185251570c9bfd23d8bc2eae7794ffb09aeeb5641f2"
+    },
+    {
+      "number": 67,
+      "category": "收藏",
+      "name": "品级筛选_V",
+      "file": "命名素材/收藏/品级筛选_V.png",
+      "width": 15,
+      "height": 18,
+      "source_layers": [
+        {
+          "index": 95,
+          "original_path": "收藏书/图层 107"
+        }
+      ],
+      "instances": [
+        {
+          "x": 769,
+          "y": 756,
+          "width": 15,
+          "height": 18
+        }
+      ],
+      "note": "",
+      "pixel_hash": "3bddbbdd1342ff9939431c5f3557ac3e2f184e61e370f33eb7a261ffd7644899"
+    },
+    {
+      "number": 68,
+      "category": "收藏",
+      "name": "蓝色书签_上段",
+      "file": "命名素材/收藏/蓝色书签_上段.png",
+      "width": 23,
+      "height": 57,
+      "source_layers": [
+        {
+          "index": 96,
+          "original_path": "收藏书/图层 179"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1027,
+          "y": 722,
+          "width": 23,
+          "height": 57
+        }
+      ],
+      "note": "",
+      "pixel_hash": "1ffd93a83493d7b8f5944cf94a332ab9881c4242d48a79b9584c6923009f9d0c"
+    },
+    {
+      "number": 69,
+      "category": "收藏",
+      "name": "火枪手卡牌_展示样例",
+      "file": "命名素材/收藏/火枪手卡牌_展示样例.png",
+      "width": 107,
+      "height": 142,
+      "source_layers": [
+        {
+          "index": 99,
+          "original_path": "收藏书/图层 9"
+        }
+      ],
+      "instances": [
+        {
+          "x": 266,
+          "y": 777,
+          "width": 107,
+          "height": 142
+        },
+        {
+          "x": 266,
+          "y": 930,
+          "width": 107,
+          "height": 142
+        }
+      ],
+      "note": "当前排版中的卡牌样例；像素一致的重复卡只存一份，保留全部出现坐标。",
+      "pixel_hash": "1a064cb404da7bfef348f61591afb54393de405f72372ca1bb1343b38ab8c2ef"
+    },
+    {
+      "number": 70,
+      "category": "收藏",
+      "name": "火枪手卡牌_展示样例_变体02",
+      "file": "命名素材/收藏/火枪手卡牌_展示样例_变体02.png",
+      "width": 107,
+      "height": 142,
+      "source_layers": [
+        {
+          "index": 99,
+          "original_path": "收藏书/图层 9"
+        }
+      ],
+      "instances": [
+        {
+          "x": 403,
+          "y": 777,
+          "width": 107,
+          "height": 142
+        },
+        {
+          "x": 540,
+          "y": 777,
+          "width": 107,
+          "height": 142
+        },
+        {
+          "x": 675,
+          "y": 777,
+          "width": 107,
+          "height": 142
+        },
+        {
+          "x": 812,
+          "y": 777,
+          "width": 107,
+          "height": 142
+        },
+        {
+          "x": 949,
+          "y": 777,
+          "width": 107,
+          "height": 142
+        },
+        {
+          "x": 403,
+          "y": 930,
+          "width": 107,
+          "height": 142
+        },
+        {
+          "x": 540,
+          "y": 930,
+          "width": 107,
+          "height": 142
+        },
+        {
+          "x": 675,
+          "y": 930,
+          "width": 107,
+          "height": 142
+        },
+        {
+          "x": 812,
+          "y": 930,
+          "width": 107,
+          "height": 142
+        },
+        {
+          "x": 949,
+          "y": 930,
+          "width": 107,
+          "height": 142
+        }
+      ],
+      "note": "当前排版中的卡牌样例；像素一致的重复卡只存一份，保留全部出现坐标。",
+      "pixel_hash": "11a3da9b71ecccb062f0f5818922c42af3bf9223a333218dbd1958a616a175de"
+    },
+    {
+      "number": 71,
+      "category": "指示物与贴纸",
+      "name": "指示物托盘_空框",
+      "file": "命名素材/指示物与贴纸/指示物托盘_空框.png",
+      "width": 195,
+      "height": 189,
+      "source_layers": [
+        {
+          "index": 69,
+          "original_path": "指示物/图层 30"
+        }
+      ],
+      "instances": [
+        {
+          "x": 25,
+          "y": 750,
+          "width": 195,
+          "height": 189
+        }
+      ],
+      "note": "",
+      "pixel_hash": "fadfa5640446d549a30a1089466b7b325cb568efe70febe903c988529ef03620"
+    },
+    {
+      "number": 72,
+      "category": "指示物与贴纸",
+      "name": "指示物托盘_日月星组合",
+      "file": "命名素材/指示物与贴纸/指示物托盘_日月星组合.png",
+      "width": 195,
+      "height": 189,
+      "source_layers": [
+        {
+          "index": 69,
+          "original_path": "指示物/图层 30"
+        },
+        {
+          "index": 76,
+          "original_path": "图层 31"
+        }
+      ],
+      "instances": [
+        {
+          "x": 25,
+          "y": 750,
+          "width": 195,
+          "height": 189
+        }
+      ],
+      "note": "",
+      "pixel_hash": "181a06d8378c64bb058c6e49d0eae8636acd74d1032ba5b3649276495d13e40c"
+    },
+    {
+      "number": 73,
+      "category": "指示物与贴纸",
+      "name": "指示物_月亮",
+      "file": "命名素材/指示物与贴纸/指示物_月亮.png",
+      "width": 26,
+      "height": 30,
+      "source_layers": [
+        {
+          "index": 76,
+          "original_path": "图层 31"
+        }
+      ],
+      "instances": [
+        {
+          "x": 72,
+          "y": 831,
+          "width": 26,
+          "height": 30
+        }
+      ],
+      "note": "",
+      "pixel_hash": "83d3970cf96451367b005c6d14b9d0cf2adb1dabec211c48139502850d51e27f"
+    },
+    {
+      "number": 74,
+      "category": "指示物与贴纸",
+      "name": "指示物_星星",
+      "file": "命名素材/指示物与贴纸/指示物_星星.png",
+      "width": 31,
+      "height": 36,
+      "source_layers": [
+        {
+          "index": 76,
+          "original_path": "图层 31"
+        }
+      ],
+      "instances": [
+        {
+          "x": 108,
+          "y": 828,
+          "width": 31,
+          "height": 36
+        }
+      ],
+      "note": "",
+      "pixel_hash": "e7f6ca6ba130152608897069724a0fecc6eecb6c900a60ce9b45269e949b8c31"
+    },
+    {
+      "number": 75,
+      "category": "指示物与贴纸",
+      "name": "指示物_太阳",
+      "file": "命名素材/指示物与贴纸/指示物_太阳.png",
+      "width": 43,
+      "height": 47,
+      "source_layers": [
+        {
+          "index": 76,
+          "original_path": "图层 31"
+        }
+      ],
+      "instances": [
+        {
+          "x": 146,
+          "y": 822,
+          "width": 43,
+          "height": 47
+        }
+      ],
+      "note": "",
+      "pixel_hash": "42265100f4a520a250ec91f541c1412f1182f445be2846e01b20f41f62864293"
+    },
+    {
+      "number": 76,
+      "category": "指示物与贴纸",
+      "name": "贴纸工具箱_当前组合",
+      "file": "命名素材/指示物与贴纸/贴纸工具箱_当前组合.png",
+      "width": 195,
+      "height": 152,
+      "source_layers": [
+        {
+          "index": 102,
+          "original_path": "贴纸/图层 48"
+        },
+        {
+          "index": 103,
+          "original_path": "贴纸/图层 49"
+        }
+      ],
+      "instances": [
+        {
+          "x": 25,
+          "y": 941,
+          "width": 195,
+          "height": 152
+        }
+      ],
+      "note": "",
+      "pixel_hash": "460ff1733d5ef63670abc4f31c8760e7fcc0e8c778296cd58f8b314b51d378fb"
+    },
+    {
+      "number": 77,
+      "category": "指示物与贴纸",
+      "name": "贴纸工具箱_左侧空板",
+      "file": "命名素材/指示物与贴纸/贴纸工具箱_左侧空板.png",
+      "width": 98,
+      "height": 152,
+      "source_layers": [
+        {
+          "index": 102,
+          "original_path": "贴纸/图层 48"
+        }
+      ],
+      "instances": [
+        {
+          "x": 25,
+          "y": 941,
+          "width": 98,
+          "height": 152
+        }
+      ],
+      "note": "",
+      "pixel_hash": "544f2bc62dbfd4ca7c33c714b249ca7442b4464c9e809dbbcf004f1251ea8a18"
+    },
+    {
+      "number": 78,
+      "category": "指示物与贴纸",
+      "name": "贴纸工具箱_右侧空板",
+      "file": "命名素材/指示物与贴纸/贴纸工具箱_右侧空板.png",
+      "width": 97,
+      "height": 152,
+      "source_layers": [
+        {
+          "index": 102,
+          "original_path": "贴纸/图层 48"
+        }
+      ],
+      "instances": [
+        {
+          "x": 123,
+          "y": 941,
+          "width": 97,
+          "height": 152
+        }
+      ],
+      "note": "",
+      "pixel_hash": "d8eaa44e36174e9898311e61b46f34add8eef68977bc2035196a0097dedec24c"
+    },
+    {
+      "number": 79,
+      "category": "指示物与贴纸",
+      "name": "贴纸工具箱_四列七行格子",
+      "file": "命名素材/指示物与贴纸/贴纸工具箱_四列七行格子.png",
+      "width": 65,
+      "height": 116,
+      "source_layers": [
+        {
+          "index": 103,
+          "original_path": "贴纸/图层 49"
+        }
+      ],
+      "instances": [
+        {
+          "x": 139,
+          "y": 959,
+          "width": 65,
+          "height": 116
+        }
+      ],
+      "note": "",
+      "pixel_hash": "a1666c157a75416fe1b3fc2a398b5cae80b98637609db86e3c817b4cd1660ea2"
+    },
+    {
+      "number": 80,
+      "category": "占位稿",
+      "name": "英雄信息_当前完整占位稿",
+      "file": "命名素材/占位稿/英雄信息_当前完整占位稿.png",
+      "width": 186,
+      "height": 367,
+      "source_layers": [
+        {
+          "index": 4,
+          "original_path": "英雄/图层 169"
+        },
+        {
+          "index": 5,
+          "original_path": "英雄/图层 176"
+        },
+        {
+          "index": 6,
+          "original_path": "英雄/图层 175"
+        },
+        {
+          "index": 9,
+          "original_path": "英雄/图层 171"
+        },
+        {
+          "index": 10,
+          "original_path": "英雄/图层 173"
+        },
+        {
+          "index": 11,
+          "original_path": "英雄/图层 178"
+        },
+        {
+          "index": 13,
+          "original_path": "英雄/图层 177"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1105,
+          "y": 740,
+          "width": 186,
+          "height": 367
+        }
+      ],
+      "note": "蓝底、灰圆、灰方块、金色手写形状按源文件原样保留，不推定为已完成素材。",
+      "pixel_hash": "c8813d6688fa39cf9494ce23463bf93b0a7a097ad8efd1b925469bef68d0cca6"
+    },
+    {
+      "number": 81,
+      "category": "占位稿",
+      "name": "英雄信息_蓝色底板",
+      "file": "命名素材/占位稿/英雄信息_蓝色底板.png",
+      "width": 186,
+      "height": 357,
+      "source_layers": [
+        {
+          "index": 4,
+          "original_path": "英雄/图层 169"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1105,
+          "y": 750,
+          "width": 186,
+          "height": 357
+        }
+      ],
+      "note": "",
+      "pixel_hash": "66e7683bc0b6c2dbb0d32e35ad6edbcbe88685321b1bd0f96f1b441e20f30bcd"
+    },
+    {
+      "number": 82,
+      "category": "占位稿",
+      "name": "英雄信息_金色手写占位",
+      "file": "命名素材/占位稿/英雄信息_金色手写占位.png",
+      "width": 142,
+      "height": 44,
+      "source_layers": [
+        {
+          "index": 6,
+          "original_path": "英雄/图层 175"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1130,
+          "y": 903,
+          "width": 142,
+          "height": 44
+        }
+      ],
+      "note": "",
+      "pixel_hash": "e2871ec69211cf943f269629445c15b88e52afdaf2b4c20d25d477746ddeb655"
+    },
+    {
+      "number": 83,
+      "category": "占位稿",
+      "name": "英雄头像_灰色外圆",
+      "file": "命名素材/占位稿/英雄头像_灰色外圆.png",
+      "width": 120,
+      "height": 120,
+      "source_layers": [
+        {
+          "index": 9,
+          "original_path": "英雄/图层 171"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1138,
+          "y": 767,
+          "width": 120,
+          "height": 120
+        }
+      ],
+      "note": "",
+      "pixel_hash": "a5742169993af75b958a59625d892d3f58b1d481185a8e6a30d84f682fc136b7"
+    },
+    {
+      "number": 84,
+      "category": "占位稿",
+      "name": "英雄头像_白色内圆",
+      "file": "命名素材/占位稿/英雄头像_白色内圆.png",
+      "width": 102,
+      "height": 102,
+      "source_layers": [
+        {
+          "index": 10,
+          "original_path": "英雄/图层 173"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1147,
+          "y": 776,
+          "width": 102,
+          "height": 102
+        }
+      ],
+      "note": "",
+      "pixel_hash": "aaa4354ff8299ca78ec95294fad165ecd0226d503ba6829452eb67a57a9c9fac"
+    },
+    {
+      "number": 85,
+      "category": "占位稿",
+      "name": "英雄技能_灰色方块",
+      "file": "命名素材/占位稿/英雄技能_灰色方块.png",
+      "width": 36,
+      "height": 36,
+      "source_layers": [
+        {
+          "index": 5,
+          "original_path": "英雄/图层 176"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1152,
+          "y": 954,
+          "width": 36,
+          "height": 36
+        },
+        {
+          "x": 1208,
+          "y": 954,
+          "width": 36,
+          "height": 36
+        },
+        {
+          "x": 1152,
+          "y": 1000,
+          "width": 36,
+          "height": 36
+        },
+        {
+          "x": 1208,
+          "y": 1000,
+          "width": 36,
+          "height": 36
+        }
+      ],
+      "note": "",
+      "pixel_hash": "64ce3ec7210fc41f10a4cacdf635df64dc34a248ef3e202032ba7955612dc997"
+    },
+    {
+      "number": 86,
+      "category": "占位稿",
+      "name": "角落球体_灰色圆点",
+      "file": "命名素材/占位稿/角落球体_灰色圆点.png",
+      "width": 41,
+      "height": 41,
+      "source_layers": [
+        {
+          "index": 11,
+          "original_path": "英雄/图层 178"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1245,
+          "y": 756,
+          "width": 41,
+          "height": 41
+        },
+        {
+          "x": 1110,
+          "y": 858,
+          "width": 41,
+          "height": 41
+        }
+      ],
+      "note": "",
+      "pixel_hash": "9de02b16bebb6eba41eebcc5fbb0cebf2af81924306f5306e941f3313341e277"
+    },
+    {
+      "number": 87,
+      "category": "占位稿",
+      "name": "角落球体_白色图形",
+      "file": "命名素材/占位稿/角落球体_白色图形.png",
+      "width": 41,
+      "height": 57,
+      "source_layers": [
+        {
+          "index": 13,
+          "original_path": "英雄/图层 177"
+        }
+      ],
+      "instances": [
+        {
+          "x": 1110,
+          "y": 740,
+          "width": 41,
+          "height": 57
+        },
+        {
+          "x": 1245,
+          "y": 842,
+          "width": 41,
+          "height": 57
+        }
+      ],
+      "note": "",
+      "pixel_hash": "4af7793b00acc8752b7fc75313bf6694bb3689f3bd74b6d06d7ef99715a67585"
+    }
+  ],
+  "layers": [
+    {
+      "index": 0,
+      "name": "图层 1",
+      "type": 0,
+      "level": 0,
+      "own_visible": false,
+      "parents": [],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 1"
+    },
+    {
+      "index": 1,
+      "name": "图层 33",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 33",
+      "cel_rect": [
+        0,
+        -4,
+        1325,
+        1244
+      ],
+      "canvas_bounds": [
+        0,
+        0,
+        1320,
+        1240
+      ],
+      "visible_pixel_count": 263755,
+      "visible_bounds": [
+        0,
+        0,
+        1320,
+        1240
+      ],
+      "export_path": "图层来源/L001_桌面木纹背景.png"
+    },
+    {
+      "index": 2,
+      "name": "英雄",
+      "type": 1,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "英雄"
+    },
+    {
+      "index": 3,
+      "name": "图层 69",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        2
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 69"
+    },
+    {
+      "index": 4,
+      "name": "图层 169",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        2
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 169",
+      "cel_rect": [
+        1105,
+        750,
+        186,
+        357
+      ],
+      "canvas_bounds": [
+        1105,
+        750,
+        1291,
+        1107
+      ],
+      "visible_pixel_count": 41564,
+      "visible_bounds": [
+        1105,
+        750,
+        1291,
+        1107
+      ],
+      "export_path": "图层来源/L004_英雄信息蓝色占位底板.png"
+    },
+    {
+      "index": 5,
+      "name": "图层 176",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        2
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 176",
+      "cel_rect": [
+        1152,
+        954,
+        92,
+        82
+      ],
+      "canvas_bounds": [
+        1152,
+        954,
+        1244,
+        1036
+      ],
+      "visible_pixel_count": 5184,
+      "visible_bounds": [
+        1152,
+        954,
+        1244,
+        1036
+      ],
+      "export_path": "图层来源/L005_英雄技能灰色方块占位.png"
+    },
+    {
+      "index": 6,
+      "name": "图层 175",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        2
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 175",
+      "cel_rect": [
+        1130,
+        903,
+        142,
+        44
+      ],
+      "canvas_bounds": [
+        1130,
+        903,
+        1272,
+        947
+      ],
+      "visible_pixel_count": 2119,
+      "visible_bounds": [
+        1130,
+        903,
+        1272,
+        947
+      ],
+      "export_path": "图层来源/L006_英雄信息金色手写占位.png"
+    },
+    {
+      "index": 7,
+      "name": "图层 174",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        2
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 174"
+    },
+    {
+      "index": 8,
+      "name": "图层 170",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        2
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 170"
+    },
+    {
+      "index": 9,
+      "name": "图层 171",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        2
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 171",
+      "cel_rect": [
+        1138,
+        767,
+        120,
+        120
+      ],
+      "canvas_bounds": [
+        1138,
+        767,
+        1258,
+        887
+      ],
+      "visible_pixel_count": 3087,
+      "visible_bounds": [
+        1138,
+        767,
+        1258,
+        887
+      ],
+      "export_path": "图层来源/L009_英雄头像外圆占位.png"
+    },
+    {
+      "index": 10,
+      "name": "图层 173",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        2
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 173",
+      "cel_rect": [
+        1147,
+        776,
+        102,
+        102
+      ],
+      "canvas_bounds": [
+        1147,
+        776,
+        1249,
+        878
+      ],
+      "visible_pixel_count": 8112,
+      "visible_bounds": [
+        1147,
+        776,
+        1249,
+        878
+      ],
+      "export_path": "图层来源/L010_英雄头像内圆占位.png"
+    },
+    {
+      "index": 11,
+      "name": "图层 178",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        2
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 178",
+      "cel_rect": [
+        1110,
+        756,
+        176,
+        143
+      ],
+      "canvas_bounds": [
+        1110,
+        756,
+        1286,
+        899
+      ],
+      "visible_pixel_count": 2626,
+      "visible_bounds": [
+        1110,
+        756,
+        1286,
+        899
+      ],
+      "export_path": "图层来源/L011_英雄信息角落灰圆占位.png"
+    },
+    {
+      "index": 12,
+      "name": "图层 172",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        2
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 172"
+    },
+    {
+      "index": 13,
+      "name": "图层 177",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        2
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "英雄/图层 177",
+      "cel_rect": [
+        1110,
+        740,
+        176,
+        159
+      ],
+      "canvas_bounds": [
+        1110,
+        740,
+        1286,
+        899
+      ],
+      "visible_pixel_count": 3938,
+      "visible_bounds": [
+        1110,
+        740,
+        1286,
+        899
+      ],
+      "export_path": "图层来源/L013_英雄信息角落白圆占位.png"
+    },
+    {
+      "index": 14,
+      "name": "图层 168",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 168",
+      "cel_rect": [
+        0,
+        -61,
+        1320,
+        765
+      ],
+      "canvas_bounds": [
+        0,
+        31,
+        1320,
+        704
+      ],
+      "visible_pixel_count": 32846,
+      "visible_bounds": [
+        0,
+        31,
+        1320,
+        704
+      ],
+      "export_path": "图层来源/L014_斜向蓝色桌布.png"
+    },
+    {
+      "index": 15,
+      "name": "资源",
+      "type": 1,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "资源"
+    },
+    {
+      "index": 16,
+      "name": "图层 45",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        15
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "资源/图层 45"
+    },
+    {
+      "index": 17,
+      "name": "图层 54",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        15
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "资源/图层 54",
+      "cel_rect": [
+        1095,
+        367,
+        193,
+        208
+      ],
+      "canvas_bounds": [
+        1095,
+        367,
+        1288,
+        575
+      ],
+      "visible_pixel_count": 20158,
+      "visible_bounds": [
+        1110,
+        367,
+        1288,
+        575
+      ],
+      "export_path": "图层来源/L017_右侧资源托盘底框.png"
+    },
+    {
+      "index": 18,
+      "name": "图层 55",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        15
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "资源/图层 55",
+      "cel_rect": [
+        1286,
+        436,
+        8,
+        56
+      ],
+      "canvas_bounds": [
+        1286,
+        436,
+        1294,
+        492
+      ],
+      "visible_pixel_count": 434,
+      "visible_bounds": [
+        1286,
+        436,
+        1294,
+        492
+      ],
+      "export_path": "图层来源/L018_右侧资源托盘把手.png"
+    },
+    {
+      "index": 19,
+      "name": "图层 52",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        15
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "资源/图层 52"
+    },
+    {
+      "index": 20,
+      "name": "图层 53",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        15
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "资源/图层 53"
+    },
+    {
+      "index": 21,
+      "name": "图层 46",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        15
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "资源/图层 46",
+      "cel_rect": [
+        1121,
+        387,
+        143,
+        160
+      ],
+      "canvas_bounds": [
+        1121,
+        387,
+        1264,
+        547
+      ],
+      "visible_pixel_count": 16416,
+      "visible_bounds": [
+        1121,
+        387,
+        1264,
+        547
+      ],
+      "export_path": "图层来源/L021_右侧资源蜂窝网格.png"
+    },
+    {
+      "index": 22,
+      "name": "图层 62",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        15
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "资源/图层 62",
+      "cel_rect": [
+        26,
+        152,
+        199,
+        208
+      ],
+      "canvas_bounds": [
+        26,
+        152,
+        225,
+        360
+      ],
+      "visible_pixel_count": 37345,
+      "visible_bounds": [
+        26,
+        152,
+        210,
+        360
+      ],
+      "export_path": "图层来源/L022_左侧资源托盘含网格.png"
+    },
+    {
+      "index": 23,
+      "name": "法术盒子",
+      "type": 1,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "法术盒子"
+    },
+    {
+      "index": 24,
+      "name": "图层 43",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        23
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "法术盒子/图层 43",
+      "cel_rect": [
+        32,
+        367,
+        189,
+        324
+      ],
+      "canvas_bounds": [
+        32,
+        367,
+        221,
+        691
+      ],
+      "visible_pixel_count": 43355,
+      "visible_bounds": [
+        32,
+        367,
+        210,
+        691
+      ],
+      "export_path": "图层来源/L024_左侧法术托盘底框.png"
+    },
+    {
+      "index": 25,
+      "name": "图层 109",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        23
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "法术盒子/图层 109",
+      "cel_rect": [
+        47,
+        376,
+        158,
+        43
+      ],
+      "canvas_bounds": [
+        47,
+        376,
+        205,
+        419
+      ],
+      "visible_pixel_count": 0,
+      "visible_bounds": null
+    },
+    {
+      "index": 26,
+      "name": "图层 113",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        23
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "法术盒子/图层 113",
+      "cel_rect": [
+        47,
+        376,
+        158,
+        43
+      ],
+      "canvas_bounds": [
+        47,
+        376,
+        205,
+        419
+      ],
+      "visible_pixel_count": 5004,
+      "visible_bounds": [
+        47,
+        376,
+        205,
+        416
+      ],
+      "export_path": "图层来源/L026_左侧法术分类按钮.png"
+    },
+    {
+      "index": 27,
+      "name": "图层 111",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        23
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "法术盒子/图层 111"
+    },
+    {
+      "index": 28,
+      "name": "图层 112",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        23
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "法术盒子/图层 112"
+    },
+    {
+      "index": 29,
+      "name": "图层 110",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        23
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "法术盒子/图层 110",
+      "cel_rect": [
+        46,
+        432,
+        159,
+        42
+      ],
+      "canvas_bounds": [
+        46,
+        432,
+        205,
+        474
+      ],
+      "visible_pixel_count": 5220,
+      "visible_bounds": [
+        46,
+        432,
+        205,
+        474
+      ],
+      "export_path": "图层来源/L029_法术状态彩色槽.png"
+    },
+    {
+      "index": 30,
+      "name": "图层 114",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        23
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "法术盒子/图层 114"
+    },
+    {
+      "index": 31,
+      "name": "图层 103",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        23
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "法术盒子/图层 103"
+    },
+    {
+      "index": 32,
+      "name": "图层 44",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        23
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "法术盒子/图层 44",
+      "cel_rect": [
+        26,
+        494,
+        8,
+        56
+      ],
+      "canvas_bounds": [
+        26,
+        494,
+        34,
+        550
+      ],
+      "visible_pixel_count": 434,
+      "visible_bounds": [
+        26,
+        494,
+        34,
+        550
+      ],
+      "export_path": "图层来源/L032_左侧法术托盘把手.png"
+    },
+    {
+      "index": 33,
+      "name": "图层 104",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        23
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "法术盒子/图层 104",
+      "cel_rect": [
+        41,
+        376,
+        170,
+        292
+      ],
+      "canvas_bounds": [
+        41,
+        376,
+        211,
+        668
+      ],
+      "visible_pixel_count": 3964,
+      "visible_bounds": [
+        41,
+        376,
+        210,
+        668
+      ],
+      "export_path": "图层来源/L033_左侧法术托盘分隔线.png"
+    },
+    {
+      "index": 34,
+      "name": "Flattened",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "Flattened",
+      "cel_rect": [
+        1094,
+        38,
+        200,
+        324
+      ],
+      "canvas_bounds": [
+        1094,
+        38,
+        1294,
+        362
+      ],
+      "visible_pixel_count": 0,
+      "visible_bounds": null
+    },
+    {
+      "index": 35,
+      "name": "图层 115",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 115",
+      "cel_rect": [
+        1099,
+        38,
+        195,
+        324
+      ],
+      "canvas_bounds": [
+        1099,
+        38,
+        1294,
+        362
+      ],
+      "visible_pixel_count": 52989,
+      "visible_bounds": [
+        1110,
+        38,
+        1294,
+        362
+      ],
+      "export_path": "图层来源/L035_右侧法术托盘底框与分隔线.png"
+    },
+    {
+      "index": 36,
+      "name": "图层 116",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 116",
+      "cel_rect": [
+        1115,
+        47,
+        158,
+        40
+      ],
+      "canvas_bounds": [
+        1115,
+        47,
+        1273,
+        87
+      ],
+      "visible_pixel_count": 5004,
+      "visible_bounds": [
+        1115,
+        47,
+        1273,
+        87
+      ],
+      "export_path": "图层来源/L036_右侧法术分类按钮.png"
+    },
+    {
+      "index": 37,
+      "name": "图层 67",
+      "type": 0,
+      "level": 0,
+      "own_visible": false,
+      "parents": [],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 67"
+    },
+    {
+      "index": 38,
+      "name": "盒子主体",
+      "type": 1,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "盒子主体"
+    },
+    {
+      "index": 39,
+      "name": "图层 34",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        38
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/图层 34",
+      "cel_rect": [
+        210,
+        0,
+        900,
+        871
+      ],
+      "canvas_bounds": [
+        210,
+        0,
+        1110,
+        871
+      ],
+      "visible_pixel_count": 12,
+      "visible_bounds": [
+        1011,
+        700,
+        1015,
+        704
+      ],
+      "export_path": "图层来源/L039_战场底色补边.png"
+    },
+    {
+      "index": 40,
+      "name": "图层 37",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        38
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/图层 37",
+      "cel_rect": [
+        209,
+        0,
+        902,
+        739
+      ],
+      "canvas_bounds": [
+        209,
+        0,
+        1111,
+        739
+      ],
+      "visible_pixel_count": 114044,
+      "visible_bounds": [
+        209,
+        0,
+        1111,
+        739
+      ],
+      "export_path": "图层来源/L040_战场外框底板.png"
+    },
+    {
+      "index": 41,
+      "name": "图层 151",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        38
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/图层 151"
+    },
+    {
+      "index": 42,
+      "name": "组 7",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        38
+      ],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "盒子主体/组 7"
+    },
+    {
+      "index": 43,
+      "name": "图层 118",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        38,
+        42
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 7/图层 118",
+      "cel_rect": [
+        307,
+        14,
+        233,
+        15
+      ],
+      "canvas_bounds": [
+        307,
+        14,
+        540,
+        29
+      ],
+      "visible_pixel_count": 2088,
+      "visible_bounds": [
+        307,
+        14,
+        540,
+        29
+      ],
+      "export_path": "图层来源/L043_层数与天数进度槽.png"
+    },
+    {
+      "index": 44,
+      "name": "图层 119",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        38,
+        42
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 7/图层 119",
+      "cel_rect": [
+        314,
+        15,
+        177,
+        13
+      ],
+      "canvas_bounds": [
+        314,
+        15,
+        491,
+        28
+      ],
+      "visible_pixel_count": 516,
+      "visible_bounds": [
+        314,
+        15,
+        491,
+        28
+      ],
+      "export_path": "图层来源/L044_层数与天数已亮进度点.png"
+    },
+    {
+      "index": 45,
+      "name": "图层 120",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        38,
+        42
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 7/图层 120",
+      "cel_rect": [
+        258,
+        16,
+        150,
+        12
+      ],
+      "canvas_bounds": [
+        258,
+        16,
+        408,
+        28
+      ],
+      "visible_pixel_count": 463,
+      "visible_bounds": [
+        258,
+        16,
+        408,
+        28
+      ],
+      "export_path": "图层来源/L045_FLOOR与DAY文字.png"
+    },
+    {
+      "index": 46,
+      "name": "图层 56",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        38
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/图层 56",
+      "cel_rect": [
+        209,
+        0,
+        902,
+        739
+      ],
+      "canvas_bounds": [
+        209,
+        0,
+        1111,
+        739
+      ],
+      "visible_pixel_count": 8388,
+      "visible_bounds": [
+        209,
+        0,
+        1111,
+        739
+      ],
+      "export_path": "图层来源/L046_战场金色包角.png"
+    },
+    {
+      "index": 47,
+      "name": "图层 58",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        38
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/图层 58",
+      "cel_rect": [
+        211,
+        347,
+        897,
+        16
+      ],
+      "canvas_bounds": [
+        211,
+        347,
+        1108,
+        363
+      ],
+      "visible_pixel_count": 14256,
+      "visible_bounds": [
+        211,
+        347,
+        1108,
+        363
+      ],
+      "export_path": "图层来源/L047_战场中线进度条.png"
+    },
+    {
+      "index": 48,
+      "name": "组 4",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        38
+      ],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "盒子主体/组 4"
+    },
+    {
+      "index": 49,
+      "name": "图层 60",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        38,
+        48
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 4/图层 60"
+    },
+    {
+      "index": 50,
+      "name": "图层 61",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        38,
+        48
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 4/图层 61",
+      "cel_rect": [
+        652,
+        350,
+        16,
+        10
+      ],
+      "canvas_bounds": [
+        652,
+        350,
+        668,
+        360
+      ],
+      "visible_pixel_count": 76,
+      "visible_bounds": [
+        652,
+        350,
+        668,
+        360
+      ],
+      "export_path": "图层来源/L050_中线眼睛标记.png"
+    },
+    {
+      "index": 51,
+      "name": "图层 57",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        38
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/图层 57"
+    },
+    {
+      "index": 52,
+      "name": "图层 40",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        38
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/图层 40"
+    },
+    {
+      "index": 53,
+      "name": "图层 35",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        38
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/图层 35"
+    },
+    {
+      "index": 54,
+      "name": "组 3",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        38
+      ],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "盒子主体/组 3"
+    },
+    {
+      "index": 55,
+      "name": "图层 96",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        38,
+        54
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 3/图层 96"
+    },
+    {
+      "index": 56,
+      "name": "图层 3",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        38,
+        54
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 3/图层 3",
+      "cel_rect": [
+        242,
+        33,
+        836,
+        644
+      ],
+      "canvas_bounds": [
+        242,
+        33,
+        1078,
+        677
+      ],
+      "visible_pixel_count": 518007,
+      "visible_bounds": [
+        242,
+        33,
+        1078,
+        677
+      ],
+      "export_path": "图层来源/L056_四排战场底板.png"
+    },
+    {
+      "index": 57,
+      "name": "图层 51",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        38,
+        54
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 3/图层 51"
+    },
+    {
+      "index": 58,
+      "name": "组 5",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        38
+      ],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "盒子主体/组 5"
+    },
+    {
+      "index": 59,
+      "name": "图层 97",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        38,
+        58
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 5/图层 97",
+      "cel_rect": [
+        860,
+        5,
+        155,
+        26
+      ],
+      "canvas_bounds": [
+        860,
+        5,
+        1015,
+        31
+      ],
+      "visible_pixel_count": 2816,
+      "visible_bounds": [
+        860,
+        5,
+        1006,
+        31
+      ],
+      "export_path": "图层来源/L059_生命与金币数值槽.png"
+    },
+    {
+      "index": 60,
+      "name": "图层 59",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        38,
+        58
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 5/图层 59",
+      "cel_rect": [
+        871,
+        4,
+        151,
+        27
+      ],
+      "canvas_bounds": [
+        871,
+        4,
+        1022,
+        31
+      ],
+      "visible_pixel_count": 1222,
+      "visible_bounds": [
+        871,
+        4,
+        1022,
+        31
+      ],
+      "export_path": "图层来源/L060_护盾生命金币图标.png"
+    },
+    {
+      "index": 61,
+      "name": "图层 64",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        38,
+        58
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 5/图层 64"
+    },
+    {
+      "index": 62,
+      "name": "图层 65",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        38,
+        58
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 5/图层 65"
+    },
+    {
+      "index": 63,
+      "name": "图层 152",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        38,
+        58
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 5/图层 152"
+    },
+    {
+      "index": 64,
+      "name": "图层 153",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        38,
+        58
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "盒子主体/组 5/图层 153"
+    },
+    {
+      "index": 65,
+      "name": "图层 5",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 5"
+    },
+    {
+      "index": 66,
+      "name": "图层 4",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 4"
+    },
+    {
+      "index": 67,
+      "name": "图层 27",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 27"
+    },
+    {
+      "index": 68,
+      "name": "指示物",
+      "type": 1,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "指示物"
+    },
+    {
+      "index": 69,
+      "name": "图层 30",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        68
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "指示物/图层 30",
+      "cel_rect": [
+        25,
+        750,
+        195,
+        189
+      ],
+      "canvas_bounds": [
+        25,
+        750,
+        220,
+        939
+      ],
+      "visible_pixel_count": 34633,
+      "visible_bounds": [
+        25,
+        750,
+        220,
+        939
+      ],
+      "export_path": "图层来源/L069_指示物托盘.png"
+    },
+    {
+      "index": 70,
+      "name": "图层 117",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        68
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "指示物/图层 117"
+    },
+    {
+      "index": 71,
+      "name": "图层 32",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 32"
+    },
+    {
+      "index": 72,
+      "name": "图层 26",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 26"
+    },
+    {
+      "index": 73,
+      "name": "图层 25",
+      "type": 0,
+      "level": 0,
+      "own_visible": false,
+      "parents": [],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 25"
+    },
+    {
+      "index": 74,
+      "name": "图层 16",
+      "type": 0,
+      "level": 0,
+      "own_visible": false,
+      "parents": [],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 16"
+    },
+    {
+      "index": 75,
+      "name": "图层 21",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 21"
+    },
+    {
+      "index": 76,
+      "name": "图层 31",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 31",
+      "cel_rect": [
+        72,
+        822,
+        117,
+        47
+      ],
+      "canvas_bounds": [
+        72,
+        822,
+        189,
+        869
+      ],
+      "visible_pixel_count": 2210,
+      "visible_bounds": [
+        72,
+        822,
+        189,
+        869
+      ],
+      "export_path": "图层来源/L076_月亮星星太阳图标.png"
+    },
+    {
+      "index": 77,
+      "name": "图层 20",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 20"
+    },
+    {
+      "index": 78,
+      "name": "图层 19",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 19"
+    },
+    {
+      "index": 79,
+      "name": "组 2",
+      "type": 1,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "组 2"
+    },
+    {
+      "index": 80,
+      "name": "组 1",
+      "type": 1,
+      "level": 0,
+      "own_visible": false,
+      "parents": [],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "组 1"
+    },
+    {
+      "index": 81,
+      "name": "图层 2",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        80
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 1/图层 2"
+    },
+    {
+      "index": 82,
+      "name": "图层 8",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        80
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 1/图层 8"
+    },
+    {
+      "index": 83,
+      "name": "图层 14",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        80
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 1/图层 14"
+    },
+    {
+      "index": 84,
+      "name": "图层 17",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        80
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 1/图层 17"
+    },
+    {
+      "index": 85,
+      "name": "图层 13",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        80
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 1/图层 13"
+    },
+    {
+      "index": 86,
+      "name": "图层 9",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        80
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 1/图层 9"
+    },
+    {
+      "index": 87,
+      "name": "图层 10",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        80
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 1/图层 10"
+    },
+    {
+      "index": 88,
+      "name": "收藏书",
+      "type": 1,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "收藏书"
+    },
+    {
+      "index": 89,
+      "name": "图层 2",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        88
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 2"
+    },
+    {
+      "index": 90,
+      "name": "图层 8",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        88
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 8",
+      "cel_rect": [
+        223,
+        750,
+        874,
+        361
+      ],
+      "canvas_bounds": [
+        223,
+        750,
+        1097,
+        1111
+      ],
+      "visible_pixel_count": 33030,
+      "visible_bounds": [
+        223,
+        750,
+        1097,
+        1111
+      ],
+      "export_path": "图层来源/L090_收藏书外框与书脊.png"
+    },
+    {
+      "index": 91,
+      "name": "图层 14",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        88
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 14",
+      "cel_rect": [
+        264,
+        738,
+        202,
+        74
+      ],
+      "canvas_bounds": [
+        264,
+        738,
+        466,
+        812
+      ],
+      "visible_pixel_count": 4832,
+      "visible_bounds": [
+        264,
+        738,
+        466,
+        773
+      ],
+      "export_path": "图层来源/L091_收藏书空白分页标签.png"
+    },
+    {
+      "index": 92,
+      "name": "图层 105",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        88
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 105",
+      "cel_rect": [
+        483,
+        743,
+        149,
+        40
+      ],
+      "canvas_bounds": [
+        483,
+        743,
+        632,
+        783
+      ],
+      "visible_pixel_count": 3224,
+      "visible_bounds": [
+        483,
+        743,
+        632,
+        773
+      ],
+      "export_path": "图层来源/L092_收藏分类图案标签.png"
+    },
+    {
+      "index": 93,
+      "name": "图层 17",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        88
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 17",
+      "cel_rect": [
+        928,
+        757,
+        83,
+        14
+      ],
+      "canvas_bounds": [
+        928,
+        757,
+        1011,
+        771
+      ],
+      "visible_pixel_count": 1150,
+      "visible_bounds": [
+        928,
+        757,
+        1011,
+        771
+      ],
+      "export_path": "图层来源/L093_收藏搜索框.png"
+    },
+    {
+      "index": 94,
+      "name": "图层 106",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        88
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 106",
+      "cel_rect": [
+        806,
+        756,
+        111,
+        16
+      ],
+      "canvas_bounds": [
+        806,
+        756,
+        917,
+        772
+      ],
+      "visible_pixel_count": 940,
+      "visible_bounds": [
+        806,
+        756,
+        917,
+        772
+      ],
+      "export_path": "图层来源/L094_元素筛选图标.png"
+    },
+    {
+      "index": 95,
+      "name": "图层 107",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        88
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 107",
+      "cel_rect": [
+        683,
+        756,
+        101,
+        18
+      ],
+      "canvas_bounds": [
+        683,
+        756,
+        784,
+        774
+      ],
+      "visible_pixel_count": 688,
+      "visible_bounds": [
+        683,
+        756,
+        784,
+        773
+      ],
+      "export_path": "图层来源/L095_品级筛选图标.png"
+    },
+    {
+      "index": 96,
+      "name": "图层 179",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        88
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 179",
+      "cel_rect": [
+        1027,
+        722,
+        37,
+        94
+      ],
+      "canvas_bounds": [
+        1027,
+        722,
+        1064,
+        816
+      ],
+      "visible_pixel_count": 1073,
+      "visible_bounds": [
+        1027,
+        722,
+        1050,
+        773
+      ],
+      "export_path": "图层来源/L096_收藏蓝色书签上下段.png"
+    },
+    {
+      "index": 97,
+      "name": "图层 41",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        88
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 41",
+      "cel_rect": [
+        238,
+        773,
+        844,
+        316
+      ],
+      "canvas_bounds": [
+        238,
+        773,
+        1082,
+        1089
+      ],
+      "visible_pixel_count": 103394,
+      "visible_bounds": [
+        238,
+        773,
+        1082,
+        1089
+      ],
+      "export_path": "图层来源/L097_收藏书浅色内页.png"
+    },
+    {
+      "index": 98,
+      "name": "图层 42",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        88
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 42"
+    },
+    {
+      "index": 99,
+      "name": "图层 9",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        88
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 9",
+      "cel_rect": [
+        266,
+        777,
+        790,
+        295
+      ],
+      "canvas_bounds": [
+        266,
+        777,
+        1056,
+        1072
+      ],
+      "visible_pixel_count": 163256,
+      "visible_bounds": [
+        266,
+        777,
+        1056,
+        1072
+      ],
+      "export_path": "图层来源/L099_火枪手卡牌排版示例.png"
+    },
+    {
+      "index": 100,
+      "name": "图层 10",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        88
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "收藏书/图层 10"
+    },
+    {
+      "index": 101,
+      "name": "贴纸",
+      "type": 1,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "贴纸"
+    },
+    {
+      "index": 102,
+      "name": "图层 48",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        101
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "贴纸/图层 48",
+      "cel_rect": [
+        25,
+        941,
+        195,
+        152
+      ],
+      "canvas_bounds": [
+        25,
+        941,
+        220,
+        1093
+      ],
+      "visible_pixel_count": 24108,
+      "visible_bounds": [
+        25,
+        941,
+        220,
+        1093
+      ],
+      "export_path": "图层来源/L102_贴纸工具箱左右面板.png"
+    },
+    {
+      "index": 103,
+      "name": "图层 49",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        101
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "贴纸/图层 49",
+      "cel_rect": [
+        139,
+        959,
+        65,
+        116
+      ],
+      "canvas_bounds": [
+        139,
+        959,
+        204,
+        1075
+      ],
+      "visible_pixel_count": 5488,
+      "visible_bounds": [
+        139,
+        959,
+        204,
+        1075
+      ],
+      "export_path": "图层来源/L103_贴纸工具箱右侧格子.png"
+    },
+    {
+      "index": 104,
+      "name": "商店",
+      "type": 1,
+      "level": 0,
+      "own_visible": false,
+      "parents": [],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "商店"
+    },
+    {
+      "index": 105,
+      "name": "图层 66",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 66"
+    },
+    {
+      "index": 106,
+      "name": "图层 71",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 71"
+    },
+    {
+      "index": 107,
+      "name": "Flattened",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/Flattened"
+    },
+    {
+      "index": 108,
+      "name": "图层 88",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 88"
+    },
+    {
+      "index": 109,
+      "name": "图层 92",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 92"
+    },
+    {
+      "index": 110,
+      "name": "图层 82",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 82"
+    },
+    {
+      "index": 111,
+      "name": "图层 87",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 87"
+    },
+    {
+      "index": 112,
+      "name": "图层 85",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 85"
+    },
+    {
+      "index": 113,
+      "name": "图层 79",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 79"
+    },
+    {
+      "index": 114,
+      "name": "图层 77",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 77"
+    },
+    {
+      "index": 115,
+      "name": "图层 90",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 90"
+    },
+    {
+      "index": 116,
+      "name": "图层 91",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 91"
+    },
+    {
+      "index": 117,
+      "name": "图层 75",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 75"
+    },
+    {
+      "index": 118,
+      "name": "图层 94",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 94"
+    },
+    {
+      "index": 119,
+      "name": "图层 89",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 89"
+    },
+    {
+      "index": 120,
+      "name": "图层 98",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 98"
+    },
+    {
+      "index": 121,
+      "name": "图层 84",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 84"
+    },
+    {
+      "index": 122,
+      "name": "图层 95",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 95"
+    },
+    {
+      "index": 123,
+      "name": "图层 74",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 74"
+    },
+    {
+      "index": 124,
+      "name": "图层 73",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 73"
+    },
+    {
+      "index": 125,
+      "name": "图层 72",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 72"
+    },
+    {
+      "index": 126,
+      "name": "图层 70",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 70"
+    },
+    {
+      "index": 127,
+      "name": "图层 68",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 68"
+    },
+    {
+      "index": 128,
+      "name": "组 6",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "商店/组 6"
+    },
+    {
+      "index": 129,
+      "name": "图层 100",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        104,
+        128
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 100"
+    },
+    {
+      "index": 130,
+      "name": "图层 101",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        104,
+        128
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 101"
+    },
+    {
+      "index": 131,
+      "name": "图层 99",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        104,
+        128
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 99"
+    },
+    {
+      "index": 132,
+      "name": "图层 102",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        104,
+        128
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 102"
+    },
+    {
+      "index": 133,
+      "name": "组 7",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        104
+      ],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "商店/组 7"
+    },
+    {
+      "index": 134,
+      "name": "图层 118",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        104,
+        133
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 7/图层 118"
+    },
+    {
+      "index": 135,
+      "name": "图层 119",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        104,
+        133
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 7/图层 119"
+    },
+    {
+      "index": 136,
+      "name": "图层 120",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        104,
+        133
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 7/图层 120"
+    },
+    {
+      "index": 137,
+      "name": "战斗开始",
+      "type": 1,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 0,
+      "blend": 0,
+      "path": "战斗开始"
+    },
+    {
+      "index": 138,
+      "name": "图层 156",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        137
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "战斗开始/图层 156"
+    },
+    {
+      "index": 139,
+      "name": "图层 154",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        137
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "战斗开始/图层 154",
+      "cel_rect": [
+        1019,
+        674,
+        83,
+        29
+      ],
+      "canvas_bounds": [
+        1019,
+        674,
+        1102,
+        703
+      ],
+      "visible_pixel_count": 2020,
+      "visible_bounds": [
+        1019,
+        674,
+        1102,
+        703
+      ],
+      "export_path": "图层来源/L139_战斗开始按钮底板.png"
+    },
+    {
+      "index": 140,
+      "name": "图层 157",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        137
+      ],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "战斗开始/图层 157",
+      "cel_rect": [
+        1027,
+        677,
+        19,
+        19
+      ],
+      "canvas_bounds": [
+        1027,
+        677,
+        1046,
+        696
+      ],
+      "visible_pixel_count": 325,
+      "visible_bounds": [
+        1027,
+        677,
+        1046,
+        696
+      ],
+      "export_path": "图层来源/L140_战斗开始双剑图标.png"
+    },
+    {
+      "index": 141,
+      "name": "商店",
+      "type": 1,
+      "level": 0,
+      "own_visible": false,
+      "parents": [],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "商店"
+    },
+    {
+      "index": 142,
+      "name": "图层 66",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        141
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/图层 66"
+    },
+    {
+      "index": 143,
+      "name": "Flattened",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        141
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/Flattened"
+    },
+    {
+      "index": 144,
+      "name": "组 10",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        141
+      ],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "商店/组 10"
+    },
+    {
+      "index": 145,
+      "name": "图层 77",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        144
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 10/图层 77"
+    },
+    {
+      "index": 146,
+      "name": "图层 90",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        144
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 10/图层 90"
+    },
+    {
+      "index": 147,
+      "name": "图层 127",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        144
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 10/图层 127"
+    },
+    {
+      "index": 148,
+      "name": "图层 91",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        144
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 10/图层 91"
+    },
+    {
+      "index": 149,
+      "name": "组 8",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        141
+      ],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "商店/组 8"
+    },
+    {
+      "index": 150,
+      "name": "图层 131",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 131"
+    },
+    {
+      "index": 151,
+      "name": "图层 122",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 122"
+    },
+    {
+      "index": 152,
+      "name": "图层 92",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 92"
+    },
+    {
+      "index": 153,
+      "name": "图层 82",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 82"
+    },
+    {
+      "index": 154,
+      "name": "图层 129",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 129"
+    },
+    {
+      "index": 155,
+      "name": "图层 130",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 130"
+    },
+    {
+      "index": 156,
+      "name": "图层 87",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 87"
+    },
+    {
+      "index": 157,
+      "name": "图层 85",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 85"
+    },
+    {
+      "index": 158,
+      "name": "图层 79",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 79"
+    },
+    {
+      "index": 159,
+      "name": "图层 126",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 126"
+    },
+    {
+      "index": 160,
+      "name": "图层 75",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 75"
+    },
+    {
+      "index": 161,
+      "name": "图层 121",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 121"
+    },
+    {
+      "index": 162,
+      "name": "图层 84",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 84"
+    },
+    {
+      "index": 163,
+      "name": "图层 95",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 95"
+    },
+    {
+      "index": 164,
+      "name": "图层 68",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        149
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 8/图层 68"
+    },
+    {
+      "index": 165,
+      "name": "组 6",
+      "type": 1,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        141
+      ],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "商店/组 6"
+    },
+    {
+      "index": 166,
+      "name": "图层 100",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 100"
+    },
+    {
+      "index": 167,
+      "name": "图层 125",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 125"
+    },
+    {
+      "index": 168,
+      "name": "图层 139",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 139"
+    },
+    {
+      "index": 169,
+      "name": "图层 132",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 132"
+    },
+    {
+      "index": 170,
+      "name": "图层 128",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 128"
+    },
+    {
+      "index": 171,
+      "name": "图层 124",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 107,
+      "blend": 0,
+      "path": "商店/组 6/图层 124"
+    },
+    {
+      "index": 172,
+      "name": "图层 101",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 101"
+    },
+    {
+      "index": 173,
+      "name": "图层 99",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 99"
+    },
+    {
+      "index": 174,
+      "name": "图层 133",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 133"
+    },
+    {
+      "index": 175,
+      "name": "图层 134",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 134"
+    },
+    {
+      "index": 176,
+      "name": "图层 123",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 123"
+    },
+    {
+      "index": 177,
+      "name": "图层 140",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 140"
+    },
+    {
+      "index": 178,
+      "name": "图层 136",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 136"
+    },
+    {
+      "index": 179,
+      "name": "图层 138",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 138"
+    },
+    {
+      "index": 180,
+      "name": "图层 137",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 137"
+    },
+    {
+      "index": 181,
+      "name": "图层 135",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 135"
+    },
+    {
+      "index": 182,
+      "name": "图层 102",
+      "type": 0,
+      "level": 2,
+      "own_visible": false,
+      "parents": [
+        141,
+        165
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 6/图层 102"
+    },
+    {
+      "index": 183,
+      "name": "组 9",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        141
+      ],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "商店/组 9"
+    },
+    {
+      "index": 184,
+      "name": "图层 94",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        183
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 9/图层 94"
+    },
+    {
+      "index": 185,
+      "name": "图层 89",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        183
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 9/图层 89"
+    },
+    {
+      "index": 186,
+      "name": "图层 98",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        183
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/组 9/图层 98"
+    },
+    {
+      "index": 187,
+      "name": "v",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        141
+      ],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "商店/v"
+    },
+    {
+      "index": 188,
+      "name": "图层 118",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        187
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/v/图层 118"
+    },
+    {
+      "index": 189,
+      "name": "图层 119",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        187
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/v/图层 119"
+    },
+    {
+      "index": 190,
+      "name": "图层 120",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        141,
+        187
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "商店/v/图层 120"
+    },
+    {
+      "index": 191,
+      "name": "事件",
+      "type": 1,
+      "level": 0,
+      "own_visible": false,
+      "parents": [],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "事件"
+    },
+    {
+      "index": 192,
+      "name": "图层 141",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 141"
+    },
+    {
+      "index": 193,
+      "name": "图层 167",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 167"
+    },
+    {
+      "index": 194,
+      "name": "图层 161",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 161"
+    },
+    {
+      "index": 195,
+      "name": "图层 159",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 159"
+    },
+    {
+      "index": 196,
+      "name": "组 11",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "事件/组 11"
+    },
+    {
+      "index": 197,
+      "name": "图层 149",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        191,
+        196
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/组 11/图层 149"
+    },
+    {
+      "index": 198,
+      "name": "图层 148",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        191,
+        196
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/组 11/图层 148"
+    },
+    {
+      "index": 199,
+      "name": "图层 145",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        191,
+        196
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/组 11/图层 145"
+    },
+    {
+      "index": 200,
+      "name": "图层 150",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        191,
+        196
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/组 11/图层 150"
+    },
+    {
+      "index": 201,
+      "name": "图层 162",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 162"
+    },
+    {
+      "index": 202,
+      "name": "图层 147",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 147"
+    },
+    {
+      "index": 203,
+      "name": "图层 146",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 146"
+    },
+    {
+      "index": 204,
+      "name": "图层 142",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 142"
+    },
+    {
+      "index": 205,
+      "name": "图层 144",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 144"
+    },
+    {
+      "index": 206,
+      "name": "图层 160",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 160"
+    },
+    {
+      "index": 207,
+      "name": "图层 143",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/图层 143"
+    },
+    {
+      "index": 208,
+      "name": "组 7",
+      "type": 1,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        191
+      ],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "事件/组 7"
+    },
+    {
+      "index": 209,
+      "name": "图层 118",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        191,
+        208
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/组 7/图层 118"
+    },
+    {
+      "index": 210,
+      "name": "图层 119",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        191,
+        208
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/组 7/图层 119"
+    },
+    {
+      "index": 211,
+      "name": "图层 120",
+      "type": 0,
+      "level": 2,
+      "own_visible": true,
+      "parents": [
+        191,
+        208
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "事件/组 7/图层 120"
+    },
+    {
+      "index": 212,
+      "name": "组 12",
+      "type": 1,
+      "level": 0,
+      "own_visible": false,
+      "parents": [],
+      "effective_visible": false,
+      "opacity": 0,
+      "blend": 0,
+      "path": "组 12"
+    },
+    {
+      "index": 213,
+      "name": "图层 164",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        212
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 12/图层 164"
+    },
+    {
+      "index": 214,
+      "name": "图层 165",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        212
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 12/图层 165"
+    },
+    {
+      "index": 215,
+      "name": "图层 166",
+      "type": 0,
+      "level": 1,
+      "own_visible": false,
+      "parents": [
+        212
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 12/图层 166"
+    },
+    {
+      "index": 216,
+      "name": "图层 163",
+      "type": 0,
+      "level": 1,
+      "own_visible": true,
+      "parents": [
+        212
+      ],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "组 12/图层 163"
+    },
+    {
+      "index": 217,
+      "name": "图层 47",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 47",
+      "cel_rect": [
+        1123,
+        562,
+        157,
+        173
+      ],
+      "canvas_bounds": [
+        1123,
+        562,
+        1280,
+        735
+      ],
+      "visible_pixel_count": 20087,
+      "visible_bounds": [
+        1123,
+        562,
+        1280,
+        735
+      ],
+      "export_path": "图层来源/L217_下方蓝衣英雄俯视像.png"
+    },
+    {
+      "index": 218,
+      "name": "图层 63",
+      "type": 0,
+      "level": 0,
+      "own_visible": true,
+      "parents": [],
+      "effective_visible": true,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 63",
+      "cel_rect": [
+        17,
+        -17,
+        164,
+        169
+      ],
+      "canvas_bounds": [
+        17,
+        0,
+        181,
+        152
+      ],
+      "visible_pixel_count": 20900,
+      "visible_bounds": [
+        17,
+        0,
+        181,
+        152
+      ],
+      "export_path": "图层来源/L218_上方蓝衣英雄俯视像_画布内部分.png"
+    },
+    {
+      "index": 219,
+      "name": "图层 12",
+      "type": 0,
+      "level": 0,
+      "own_visible": false,
+      "parents": [],
+      "effective_visible": false,
+      "opacity": 255,
+      "blend": 0,
+      "path": "图层 12"
+    }
+  ]
+}

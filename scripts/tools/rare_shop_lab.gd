@@ -47,11 +47,11 @@ func _open_shop_pack_inspection(offer: Dictionary, source: Control = null, openi
 	if offer.has("display_name") and is_instance_valid(_inspection_overlay):
 		_inspection_overlay.get_node("InspectionPackName").text = String(offer.display_name) + " · 免费"
 
-func _toggle_ordinary_shop() -> void:
+func _toggle_ordinary_shop(discard_confirmed: bool = false) -> void:
 	if ordinary_shop_open:
 		if not is_instance_valid(_inspection_overlay): close_requested.emit()
 		return
-	super._toggle_ordinary_shop()
+	super._toggle_ordinary_shop(discard_confirmed)
 
 
 func _capture_run_diagnostic_state() -> Dictionary:

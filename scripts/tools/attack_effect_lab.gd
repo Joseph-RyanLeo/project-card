@@ -8,6 +8,17 @@ signal close_requested
 
 const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
 const BattleAttackTrailRenderer = preload("res://scripts/battle/battle_attack_trail_renderer.gd")
+const FireVisual = preload("res://scripts/battle/battle_fire_visual.gd")
+const PREVIEW_CARD: PackedScene = preload("res://scenes/ui/CardView.tscn")
+const FIRE_FIELDS := {&"duration": "预览持续时间", &"beam_height": "火焰高度", &"pixel_size": "像素块大小", &"flow_speed": "火焰上升速度", &"flow_frequency": "焰尖噪声密度", &"warp_strength": "焰尖摆动强度"} # 火焰仅展示会生效的外观参数
+const WATER_FIELDS := {&"duration": "播放时间", &"speed_variation_strength": "变速强度", &"beam_height": "波面宽度", &"pixel_size": "像素块大小", &"trail_length": "命中节奏长度", &"trail_softness": "命中节奏柔化", &"flow_strength": "两端后拖强度", &"flow_speed": "尾波流动速度", &"flow_frequency": "尾波噪声密度", &"warp_strength": "尾缘起伏强度"} # 噪声只改变半透明尾缘，节奏参数沿用既有命中计算
+const SAMPLE_FIELDS := {&"duration": "播放时间", &"speed_variation_strength": "变速强度", &"beam_height": "原画显示宽度", &"trail_length": "命中节奏长度", &"trail_softness": "命中节奏柔化"} # 原画样板只展示生效参数，保留朋友的配色和像素
+const WOOD_PREVIEW_GAP := 186.0 # 木穿刺预览中上下两排目标的中心距离
+const DARK_PREVIEW_COUNT := 3 # 调试器示范三次真实事件的外观，正式次数由战斗规则决定
+const DARK_PREVIEW_INTERVAL := 0.20 # 预览中相邻两次斩击的起始间隔（秒）
+const WATER_PREVIEW_GAP := 126.0 # 水扩散预览的相邻卡位中心间距
+const FIRE_PREVIEW_CARD_SCALE := 2.0 # 火焰样板卡面显示倍率
+const FIRE_PREVIEW_TICK_SECONDS := 0.6 # 样板短周期内模拟一次真实灼烧跳动的间隔
 const UI_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const PREVIEW_MARGIN_X: float = 92.0 # 预览起终点距离面板左右边缘的留白
 const PREVIEW_REPLAY_GAP: float = 0.16 # 一次尾迹完全结束到下一次自动播放的间隔（秒）
@@ -25,6 +36,8 @@ const PREVIEW_COLORS: Array[Color] = [
 	Color("35d04f"),
 ]
 
+var _preview_card: CardView
+var _wood_target_card: CardView
 var _drafts: Dictionary = {}
 var _current_profile_id: StringName = &"melee_attack"
 var _numeric_controls: Dictionary = {}
@@ -104,6 +117,9 @@ func _build_top_bar() -> Control:
 	var top := VBoxContainer.new()
 	var bar := HBoxContainer.new()
 	top.add_child(bar)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 8) # 操作按钮独立一行，避开显示模式选择器
+	top.add_child(actions)
 	bar.custom_minimum_size.y = 40.0
 	bar.add_theme_constant_override("separation", 8)
 	var back := Button.new()
@@ -125,25 +141,25 @@ func _build_top_bar() -> Control:
 	var save := Button.new()
 	save.text = "保存并应用"
 	save.pressed.connect(_save_all_profiles)
-	bar.add_child(save)
+	actions.add_child(save)
 	var reset := Button.new()
 	reset.text = "当前恢复默认"
 	reset.pressed.connect(_reset_current_profile)
-	bar.add_child(reset)
+	actions.add_child(reset)
 	var reload := Button.new()
 	reload.text = "重新载入已保存"
 	reload.pressed.connect(_reload_saved_profiles)
-	bar.add_child(reload)
+	actions.add_child(reload)
 	var import_button := Button.new()
 	import_button.name = "ImportProfilesButton"
 	import_button.text = "导入配置"
 	import_button.pressed.connect(_open_import_dialog)
-	bar.add_child(import_button)
+	actions.add_child(import_button)
 	var export_button := Button.new()
 	export_button.name = "ExportProfilesButton"
 	export_button.text = "导出配置"
 	export_button.pressed.connect(_open_export_dialog)
-	bar.add_child(export_button)
+	actions.add_child(export_button)
 	status_label = Label.new()
 	status_label.text = "修改任意参数会立即重播"
 	status_label.add_theme_color_override("font_color", Color("9fd6ac"))
@@ -169,10 +185,23 @@ func _build_settings_panel() -> Control:
 	mask_option.item_selected.connect(_on_mask_selected)
 	layout.add_child(mask_option)
 	var soul_preset := Button.new()
+	soul_preset.name = "SoulRibbonPresetButton"
 	soul_preset.text = "应用灵魂光带预设"
 	soul_preset.tooltip_text = "替换当前类型的外观参数；保留播放时间、变速强度、拖尾长度与头尾柔化。保存后用于正式战斗。"
 	soul_preset.pressed.connect(_apply_soul_ribbon_preset)
 	layout.add_child(soul_preset)
+	var water_preset := Button.new()
+	water_preset.name = "WaterFlowPresetButton"
+	water_preset.text = "应用水流样板"
+	water_preset.tooltip_text = "圆弧头部、起伏尾部和三档纯色色块；保留当前飞行时间。保存后用于战斗。"
+	water_preset.pressed.connect(_apply_water_flow_preset)
+	layout.add_child(water_preset)
+	var sample_preset := Button.new()
+	sample_preset.name = "ElementSamplePresetButton"
+	sample_preset.text = "应用朋友原画样板"
+	sample_preset.tooltip_text = "木：每次一刺，随机选一种原画角度。暗：每次真实连击一斩，角度随机。保留当前命中时间。"
+	sample_preset.pressed.connect(_apply_element_sample_preset)
+	layout.add_child(sample_preset)
 	var separator := HSeparator.new()
 	layout.add_child(separator)
 	var numeric_title := Label.new()
@@ -216,7 +245,7 @@ func _build_numeric_row(field: Dictionary) -> Control:
 	spin.allow_greater = false
 	spin.allow_lesser = false
 	row.add_child(spin)
-	_numeric_controls[key] = {"slider": slider, "spin": spin}
+	_numeric_controls[key] = {"slider": slider, "spin": spin, "row": row, "label": label}
 	slider.value_changed.connect(_on_slider_changed.bind(key, spin))
 	spin.value_changed.connect(_on_spin_changed.bind(key, slider))
 	return row
@@ -276,12 +305,25 @@ func _build_preview_panel() -> Control:
 	target_marker = _make_marker("目标")
 	preview_canvas.add_child(source_marker)
 	preview_canvas.add_child(target_marker)
+	_preview_card = _make_preview_card()
+	_wood_target_card = _make_preview_card()
 	var help := Label.new()
-	help.text = "选择行动类型，再选择特效样式。灵魂光带预设会生成细尾、亮芯与终点吸收；收尾指数和亮芯宽度仅用于光带。保存后正式战斗读取同一配置；头尾颜色在此仅供预览，实战沿用元素颜色。"
+	help.text = "木：完整原帧穿过两张真实卡牌，原图两段留白各对应一张卡牌，保留全部残影与碎屑。暗：白闪接紫色斩痕，每斩随机角度；这里演示三连击，实战按真实次数播放。保存并应用后用于战斗，手绘样板保留原画配色。"
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help.add_theme_color_override("font_color", Color("a9bac8"))
 	layout.add_child(help)
 	return panel
+
+
+func _make_preview_card() -> CardView:
+	var card := PREVIEW_CARD.instantiate() as CardView
+	card.set_card_data(preload("res://resources/cards/ember_squire.tres"))
+	card.configure_drag_source(false)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.z_index = 20 # 真实卡面位于背景与前景特效之间
+	card.hide()
+	preview_canvas.add_child(card)
+	return card
 
 
 func _panel_style(background: Color, border: Color) -> StyleBoxFlat:
@@ -331,8 +373,21 @@ func _layout_preview() -> void:
 	var canvas_size := preview_canvas.size
 	_preview_start = Vector2(PREVIEW_MARGIN_X, canvas_size.y * 0.56)
 	_preview_end = Vector2(canvas_size.x - PREVIEW_MARGIN_X, canvas_size.y * 0.44)
+	if _current_profile_id == &"water_spread":
+		_preview_start = canvas_size * 0.5 - Vector2(WATER_PREVIEW_GAP * 0.5, 0.0)
+		_preview_end = canvas_size * 0.5 + Vector2(WATER_PREVIEW_GAP * 0.5, 0.0)
+	var mask: StringName = _drafts[_current_profile_id]["mask_kind"]
+	if mask == &"wood_thorns":
+		_preview_start = canvas_size * 0.5 + Vector2(0, WOOD_PREVIEW_GAP * 0.5)
+		_preview_end = canvas_size * 0.5 - Vector2(0, WOOD_PREVIEW_GAP * 0.5)
+	elif mask == &"dark_slash":
+		_preview_end = canvas_size * 0.5
 	source_marker.position = _preview_start - source_marker.custom_minimum_size * 0.5
 	target_marker.position = _preview_end - target_marker.custom_minimum_size * 0.5
+	_preview_card.position = (canvas_size - _preview_card.size * FIRE_PREVIEW_CARD_SCALE) * 0.5 + _preview_card.pivot_offset * (FIRE_PREVIEW_CARD_SCALE - 1.0)
+	if mask == &"wood_thorns":
+		_preview_card.position = _preview_start - _preview_card.size * 0.5
+		_wood_target_card.position = _preview_end - _wood_target_card.size * 0.5
 	var center_guide := preview_canvas.get_node("CenterGuide") as ColorRect
 	center_guide.position = Vector2(0.0, canvas_size.y * 0.5 - 1.0)
 	center_guide.size = Vector2(canvas_size.x, 2.0)
@@ -340,17 +395,52 @@ func _layout_preview() -> void:
 
 
 func _on_profile_selected(index: int) -> void:
+	profile_option.select(index)
 	_current_profile_id = BattleAttackEffectProfiles.PROFILE_IDS[index]
 	_load_profile_into_controls(_current_profile_id)
+	_layout_preview()
 
 
 func _load_profile_into_controls(profile_id: StringName) -> void:
 	_loading_controls = true
 	var profile := _drafts[profile_id] as Dictionary
+	var fire := profile_id == &"fire_burn"
+	var water: bool = profile["mask_kind"] == &"water_flow"
+	var sample := BattleAttackTrailRenderer.is_sample_style(profile["mask_kind"])
+	var dark: bool = profile["mask_kind"] == &"dark_slash" and not fire
+	var wood: bool = profile["mask_kind"] == &"wood_thorns" and not fire
+	mask_option.disabled = fire
+	(find_child("SoulRibbonPresetButton", true, false) as Button).disabled = fire
+	(find_child("WaterFlowPresetButton", true, false) as Button).disabled = fire
+	(find_child("ElementSamplePresetButton", true, false) as Button).visible = profile_id in [&"wood_pierce", &"dark_repeat"]
+	source_marker.visible = not fire and not dark and not wood
+	target_marker.visible = not fire and not dark and not wood
+	source_marker.z_index = 0 if water or sample else 20
+	target_marker.z_index = 0 if water or sample else 20
+	(source_marker.get_child(0) as Label).text = "承载目标" if profile["mask_kind"] == &"wood_thorns" else "攻击方"
+	(target_marker.get_child(0) as Label).text = "另一排目标" if profile["mask_kind"] == &"wood_thorns" else "目标"
+	_preview_card.visible = fire or dark or wood
+	_preview_card.scale = Vector2.ONE * (1.0 if wood else FIRE_PREVIEW_CARD_SCALE)
+	_wood_target_card.visible = wood
+	effect_layer.z_index = 30 if dark or wood else 10
+	head_color_option.disabled = fire or sample
+	tail_color_option.disabled = fire or sample
+	if profile_id == &"water_spread":
+		head_color_option.select(4)
+		tail_color_option.select(4)
 	mask_option.select(BattleAttackEffectProfiles.MASK_IDS.find(profile["mask_kind"] as StringName))
 	for field: Dictionary in BattleAttackEffectProfiles.NUMERIC_FIELDS:
 		var key := StringName(field["key"])
 		var controls := _numeric_controls[key] as Dictionary
+		var field_names: Dictionary = FIRE_FIELDS if fire else (SAMPLE_FIELDS if sample else (WATER_FIELDS if water else {}))
+		(controls.row as Control).visible = field_names.is_empty() or field_names.has(key)
+		(controls.label as Label).text = String(field_names.get(key, field.label))
+		if wood and key == &"beam_height":
+			(controls.label as Label).text = "木刺宽度"
+			(controls.label as Label).tooltip_text = "70为原图比例；只调整横向宽度，两段卡牌长度始终按真实卡高对齐。"
+		elif wood and key == &"duration":
+			(controls.label as Label).text = "发射节奏时间"
+			(controls.label as Label).tooltip_text = "沿用原命中时刻；命中后的原画单独保持每帧50毫秒，完整播放长刺与残影。"
 		(controls["slider"] as HSlider).value = float(profile[String(key)])
 		(controls["spin"] as SpinBox).value = float(profile[String(key)])
 	_loading_controls = false
@@ -362,7 +452,8 @@ func _on_mask_selected(index: int) -> void:
 		return
 	var profile := _drafts[_current_profile_id] as Dictionary
 	profile["mask_kind"] = BattleAttackEffectProfiles.MASK_IDS[index]
-	_restart_preview()
+	_load_profile_into_controls(_current_profile_id)
+	_layout_preview()
 
 
 func _apply_soul_ribbon_preset() -> void:
@@ -371,6 +462,24 @@ func _apply_soul_ribbon_preset() -> void:
 	)
 	_load_profile_into_controls(_current_profile_id)
 	status_label.text = "灵魂光带预设已应用；保存后用于战斗"
+
+
+func _apply_water_flow_preset() -> void:
+	var profile := BattleAttackEffectProfiles.get_default_profile(&"water_spread")
+	for key: String in ["duration", "trail_length", "trail_softness", "speed_variation_strength"]:
+		profile[key] = _drafts[_current_profile_id][key]
+	_drafts[_current_profile_id] = profile
+	head_color_option.select(4)
+	tail_color_option.select(4)
+	_load_profile_into_controls(_current_profile_id)
+	status_label.text = "像素水流样板已应用；保存后用于战斗"
+
+
+func _apply_element_sample_preset() -> void:
+	_drafts[_current_profile_id] = BattleAttackEffectProfiles.make_element_sample_profile(_current_profile_id, _drafts[_current_profile_id])
+	_load_profile_into_controls(_current_profile_id)
+	_layout_preview()
+	status_label.text = "朋友原画样板已应用；保存后用于战斗"
 
 
 func _on_slider_changed(value: float, key: StringName, spin: SpinBox) -> void:
@@ -413,14 +522,57 @@ func _play_preview(clear_previous: bool) -> void:
 		_current_profile_id,
 		_drafts[_current_profile_id] as Dictionary
 	)
-	BattleAttackTrailRenderer.play(
-		effect_layer,
-		PackedVector2Array([_preview_start, _preview_end]),
-		profile,
-		PREVIEW_COLORS[head_color_option.selected],
-		PREVIEW_COLORS[tail_color_option.selected]
-	)
-	_replay_seconds = float(profile["duration"]) + PREVIEW_REPLAY_GAP
+	var preview_duration := float(profile["duration"])
+	if _current_profile_id == &"fire_burn":
+		var fire := FireVisual.new()
+		effect_layer.add_child(fire)
+		fire.configure(profile)
+		var bounds := _fire_preview_bounds()
+		var tween := fire.create_tween()
+		fire.set_meta("preview_tween", tween)
+		tween.tween_method(_update_fire_preview.bind(fire, bounds, float(profile.duration)), 0.0, float(profile.duration), float(profile.duration))
+		tween.tween_callback(fire.queue_free)
+	else:
+		var count := DARK_PREVIEW_COUNT if profile["mask_kind"] == &"dark_slash" else 1
+		if profile["mask_kind"] == &"dark_slash":
+			profile["beam_height"] = float(profile["beam_height"]) * FIRE_PREVIEW_CARD_SCALE # 暗斩与两倍样板卡面同比放大，草稿仍保存逻辑尺寸
+		for index: int in count:
+			var effect := BattleAttackTrailRenderer.play(
+				effect_layer,
+				PackedVector2Array([_preview_start, _preview_end]),
+				profile,
+				PREVIEW_COLORS[head_color_option.selected],
+				PREVIEW_COLORS[tail_color_option.selected],
+				Callable(), 1.0, -1, -1.0, index, _fire_preview_bounds().size.y
+			)
+			if effect != null: preview_duration = maxf(preview_duration, float(effect.get_meta("visual_duration", preview_duration)))
+			# 只在预览串起三个独立斩击；不创建另一套战斗次数计算。
+			if count > 1 and effect != null:
+				var tween := effect.get_meta("flight_tween") as Tween
+				tween.pause()
+				var delay := effect.create_tween()
+				delay.tween_interval(float(index) * DARK_PREVIEW_INTERVAL)
+				delay.tween_callback(tween.play)
+	var extra := float(DARK_PREVIEW_COUNT - 1) * DARK_PREVIEW_INTERVAL if profile["mask_kind"] == &"dark_slash" and _current_profile_id != &"fire_burn" else 0.0
+	_replay_seconds = preview_duration + extra + PREVIEW_REPLAY_GAP
+
+
+func _fire_preview_bounds() -> Rect2:
+	# CardView绕中心缩放，必须先取实际画布矩形，再转换到特效层。
+	var rect := _preview_card.get_global_rect()
+	var inverse := effect_layer.get_global_transform_with_canvas().affine_inverse()
+	return Rect2(inverse * rect.position, inverse.basis_xform(rect.size))
+
+
+func _update_fire_preview(time: float, fire: FireVisual, bounds: Rect2, duration: float) -> void:
+	var index := floori(time / FIRE_PREVIEW_TICK_SECONDS)
+	if time >= duration - FireVisual.PULSE_SECONDS and not fire.get_meta("finisher", false):
+		fire.pulse(time, true)
+		fire.set_meta("finisher", true)
+	elif not fire.get_meta("finisher", false) and index > int(fire.get_meta("tick_index", 0)):
+		fire.pulse(time)
+		fire.set_meta("tick_index", index)
+	fire.update_visual(bounds, time, 1.0, clampf((duration - time) / 0.15, 0.0, 1.0))
 
 
 func _toggle_auto_play() -> void:
@@ -486,7 +638,7 @@ func _import_profile_file(path: String) -> void:
 		return
 	_drafts = result.profiles.duplicate(true)
 	_load_profile_into_controls(_current_profile_id)
-	status_label.text = "已导入全部九类配置；点击“保存并应用”用于正式战斗"
+	status_label.text = "已导入全部特效配置；点击“保存并应用”用于正式战斗"
 	status_label.add_theme_color_override("font_color", Color("9fd6ac"))
 
 

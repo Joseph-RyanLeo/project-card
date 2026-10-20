@@ -3,10 +3,14 @@ extends RefCounted
 
 ## 将法术启动类别的底座与对应品级图案裁切、居中，合成为准备栏图标。
 
-const BASE_ATLAS: Texture2D = preload("res://assets/card_ui/spells/source/preparation_bases.png")
+const BASE_TEXTURES: Array[Texture2D] = [
+	preload("res://assets/ui/board_revision_20261019/spell_base_conditional.png"),
+	preload("res://assets/ui/board_revision_20261019/spell_base_prepared.png"),
+	preload("res://assets/ui/board_revision_20261019/spell_base_instant.png"),
+]
+const LABYRINTH_BASE: Texture2D = preload("res://assets/ui/board_revision_20261019/spell_base_labyrinth.png")
 const ICON_ATLAS: Texture2D = preload("res://assets/card_ui/spells/source/preparation_icons.png")
 const DISPLAY_SIZE := Vector2(42.0, 42.0) # 法术准备栏图标保持底座原生42×42像素
-const BASE_X := [0, 64, 127] # 原图从左到右：条件、准备、即时
 const ICON_X := [0, 64, 126] # 图案原图从左到右：条件、准备、即时
 const ICON_WIDTH := [24, 24, 26] # 三列图案的原生宽度
 const ICON_Y := [0, 41, 86, 125, 170] # 图案从上到下对应I～V品级
@@ -27,18 +31,18 @@ static func source_column_for_trigger(kind: CardData.SpellTriggerKind) -> int:
 			return -1
 
 
-static func get_texture(source_column: int, rarity: CardData.Rarity) -> Texture2D:
-	if source_column < 0 or source_column >= BASE_X.size():
+static func get_texture(source_column: int, rarity: CardData.Rarity, faction: CardFaction.Id = CardFaction.Id.UNALIGNED) -> Texture2D:
+	if source_column < 0 or source_column >= BASE_TEXTURES.size():
 		return null
 	var rarity_index := int(rarity)
 	if rarity_index < 0 or rarity_index >= ICON_Y.size():
 		return null
-	var cache_key := Vector2i(source_column, rarity_index)
+	var labyrinth := faction == CardFaction.Id.LABYRINTH
+	var cache_key := Vector3i(source_column, rarity_index, int(labyrinth))
 	if _texture_cache.has(cache_key):
 		return _texture_cache[cache_key] as Texture2D
-	var base := BASE_ATLAS.get_image().get_region(
-		Rect2i(BASE_X[source_column], 0, 42, 42)
-	)
+	var base_texture := LABYRINTH_BASE if labyrinth else BASE_TEXTURES[source_column]
+	var base := base_texture.get_image().duplicate() as Image
 	var icon := ICON_ATLAS.get_image().get_region(
 		Rect2i(ICON_X[source_column], ICON_Y[rarity_index], ICON_WIDTH[source_column], ICON_HEIGHT)
 	)

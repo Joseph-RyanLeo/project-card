@@ -150,6 +150,7 @@ func capture_state() -> Dictionary:
 			})
 	return {
 		"level_id": String(level_id),
+		"layout_version": Layout.VERSION,
 		"disabled_by_side": _encode_side_cells(disabled_by_side),
 		"deployments": deployments.duplicate(true),
 		"level_resource_cards": encoded_level_cards,
@@ -160,6 +161,8 @@ func capture_state() -> Dictionary:
 func restore_state(state: Dictionary, card_registry: Dictionary = {}) -> bool:
 	if not state.has("level_id") or not state.get("disabled_by_side", null) is Dictionary or not state.get("deployments", null) is Dictionary:
 		return false
+	var layout_version := int(state.get("layout_version", 1))
+	if layout_version not in [1, Layout.VERSION]: return false
 	var parsed_disabled: Dictionary = {}
 	for side in ["player", "enemy"]:
 		var cells: Variant = state.disabled_by_side.get(side, null)
@@ -171,7 +174,7 @@ func restore_state(state: Dictionary, card_registry: Dictionary = {}) -> bool:
 			if not pair is Array or pair.size() != 2:
 				return false
 			var cell := Vector2i(int(pair[0]), int(pair[1]))
-			if not Layout.is_valid_cell(cell) or seen.has(cell):
+			if not Layout.is_valid_cell(cell, layout_version) or seen.has(cell):
 				return false
 			seen[cell] = true
 			parsed.append(cell)
@@ -238,7 +241,7 @@ func restore_state(state: Dictionary, card_registry: Dictionary = {}) -> bool:
 			if not pixel_offset_value is Array or pixel_offset_value.size() != 2:
 				return false
 			var pixel_offset := Vector2(float(pixel_offset_value[0]), float(pixel_offset_value[1]))
-			if not pixel_offset.is_finite() or not shape.has(grab_anchor) or not Layout.can_place(shape, anchor, occupied, disabled_map):
+			if not pixel_offset.is_finite() or not shape.has(grab_anchor) or not Layout.can_place(shape, anchor, occupied, disabled_map, layout_version):
 				return false
 			for offset: Vector2i in shape: occupied[anchor + offset] = instance_id
 			decoded[instance_id] = {
@@ -253,6 +256,8 @@ func restore_state(state: Dictionary, card_registry: Dictionary = {}) -> bool:
 			if not parsed_deployments[side].has(instance_id):
 				return false
 
+	if layout_version == 1 and not _migrate_to_current_layout(parsed_disabled, parsed_deployments):
+		return false
 	level_id = StringName(String(state.level_id))
 	disabled_by_side = parsed_disabled
 	deployments = parsed_deployments
@@ -262,6 +267,54 @@ func restore_state(state: Dictionary, card_registry: Dictionary = {}) -> bool:
 	if not resources_generated and (not parsed_level_cards.player.is_empty() or not parsed_level_cards.enemy.is_empty()):
 		return false
 	return true
+
+
+func _migrate_to_current_layout(disabled: Dictionary, placements: Dictionary) -> bool:
+	# 旧存档先按旧27格完整校验，再确定性搬到19格；不抽随机数、不改资源形状。
+	for side: String in ["player", "enemy"]:
+		var blocked: Dictionary = {}
+		var moved: Array[Vector2i] = []
+		for cell: Vector2i in disabled[side]:
+			if Layout.is_valid_cell(cell):
+				blocked[cell] = true
+				moved.append(cell)
+		while moved.size() < disabled[side].size():
+			for cell: Vector2i in Layout.valid_cells():
+				if not blocked.has(cell):
+					blocked[cell] = true
+					moved.append(cell)
+					break
+		var ids: Array = placements[side].keys()
+		ids.sort_custom(func(a: String, b: String) -> bool:
+			var difference: int = placements[side][a].shape.size() - placements[side][b].shape.size()
+			return difference > 0 if difference != 0 else a < b)
+		var total := blocked.size()
+		for id: String in ids: total += placements[side][id].shape.size()
+		if total > Layout.valid_cells().size() or not _repack_legacy_resources(ids, 0, placements[side], {}, blocked):
+			# 容量确实不够时拒绝读取，保留原存档，不能静默删除资源。
+			return false
+		disabled[side] = moved
+	return true
+
+
+func _repack_legacy_resources(ids: Array, index: int, placements: Dictionary, occupied: Dictionary, blocked: Dictionary) -> bool:
+	if index >= ids.size(): return true
+	var id: String = ids[index]
+	var placement: Dictionary = placements[id]
+	var shape: Array[Vector2i] = []
+	for pair: Array in placement.shape: shape.append(Vector2i(int(pair[0]), int(pair[1])))
+	var anchors: Array[Vector2i] = [Vector2i(int(placement.anchor[0]), int(placement.anchor[1]))]
+	for cell: Vector2i in Layout.valid_cells():
+		for offset: Vector2i in shape:
+			if cell - offset not in anchors: anchors.append(cell - offset)
+	for anchor: Vector2i in anchors:
+		if not Layout.can_place(shape, anchor, occupied, blocked): continue
+		for offset: Vector2i in shape: occupied[anchor + offset] = true
+		if _repack_legacy_resources(ids, index + 1, placements, occupied, blocked):
+			placement.anchor = [anchor.x, anchor.y]
+			return true
+		for offset: Vector2i in shape: occupied.erase(anchor + offset)
+	return false
 
 
 func is_level_resource(side: String, instance_id: String) -> bool:
