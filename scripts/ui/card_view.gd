@@ -75,6 +75,7 @@ const SPELL_RARITY_BADGE_SIZE := Vector2(22, 22) # 法术稀有度角标保持�
 const RESOURCE_BADGE_POSITION := Vector2(-5, -4) # 资源袋角标放在卡牌左上角，保持原生像素对齐
 const RESOURCE_BADGE_SIZE := Vector2(21, 26) # 资源袋角标保持用户素材原生21×26像素
 const EQUIPMENT_ACTION_POSITION := Vector2(-9, -9) # 装备参考合图相对卡框原点的位置；完整箭头位于合图顶部
+const CONSTRUCT_IDENTITY_REGION := Rect2(0, 0, 13, 11) # 造物原PNG第14行有2个游离像素，只读取上方完整头部，不改写原图
 const EQUIPMENT_ACTION_SIZE := Vector2(28, 28) # 装备增减箭头保持原生 28×28px 画布
 const SPELL_TYPE_ATLAS_X := [5, 26, 46, 67, 86] # 法术类型图集视觉列为 V、IV、III、II、I
 const SPELL_TYPE_ATLAS_Y := [6, 23, 37, 52, 66] # 法术类型图集行依次为强化、召唤、伤害、支援、干扰
@@ -196,7 +197,7 @@ var _drag_source_type: StringName
 var _drag_source_row: Node
 var _drag_source_slot: Control
 var _effect_row: StringName = &"" # 检视和快照保存来源排；场上卡实时读取所属排
-var _collection_source_ghosted: bool = false
+var _drag_source_ghosted: bool = false
 var _left_button_pressed: bool = false
 var _active_drag_preview_offset: Vector2 = Vector2.ZERO
 var _active_drag_visual: CardDragPreview
@@ -561,14 +562,15 @@ func _notification(what: int) -> void:
 			_reset_interaction_visual()
 		if (
 			_drag_enabled
-			and _drag_source_type == &"collection"
+			and _drag_source_type in [&"collection", &"card_service"]
 			and is_instance_valid(_drag_source_slot)
 			and drag_data is Dictionary
 			and (drag_data as Dictionary).get("source_slot") == _drag_source_slot
 		):
-			_drag_source_slot.modulate.a = COLLECTION_DRAG_GHOST_ALPHA
-			_collection_source_ghosted = true
-	elif what == NOTIFICATION_DRAG_END and _collection_source_ghosted:
+			if _drag_source_type == &"card_service": modulate.a = 0.0
+			else: _drag_source_slot.modulate.a = COLLECTION_DRAG_GHOST_ALPHA
+			_drag_source_ghosted = true
+	elif what == NOTIFICATION_DRAG_END and _drag_source_ghosted:
 		var should_animate_back := (
 			not get_viewport().gui_is_drag_successful()
 		)
@@ -580,9 +582,12 @@ func _notification(what: int) -> void:
 				- _active_drag_preview_offset
 			)
 		)
-		if is_instance_valid(_drag_source_slot):
-			_drag_source_slot.modulate.a = 1.0
-		_collection_source_ghosted = false
+		if _drag_source_type == &"card_service":
+			if should_animate_back and is_instance_valid(_drag_source_slot) and _drag_source_slot._card_view == self:
+				_drag_source_slot.return_card(true, return_global_position)
+			should_animate_back = false
+		elif is_instance_valid(_drag_source_slot): _drag_source_slot.modulate.a = 1.0
+		_drag_source_ghosted = false
 		if should_animate_back:
 			collection_return_requested.emit(
 				self,
@@ -600,7 +605,6 @@ func configure_drag_source(
 	source_row: Node = null,
 	source_slot: Control = null
 ) -> void:
-	if has_meta("card_service_slot") and source_type != &"card_service": return
 	_drag_enabled = enabled
 	_drag_source_type = source_type
 	_drag_source_row = source_row
@@ -2112,76 +2116,36 @@ func _refresh_card_frame() -> void:
 	card_frame.visible = card_frame.texture != null
 
 
+func _get_identity_texture(definition: CardData) -> Texture2D:
+	match definition.card_type:
+		CardData.CardType.RESOURCE:
+			return ResourceIndicatorStyle.get_card_type_texture(definition.rarity, int(definition.resource_type))
+		CardData.CardType.SPELL:
+			return _make_raw_atlas_texture(SPELL_TYPE_ATLAS, _get_spell_type_region(definition.spell_type, definition.rarity))
+		CardData.CardType.EQUIPMENT:
+			return _make_raw_atlas_texture(EQUIPMENT_TYPE_ATLAS, _get_equipment_type_region(definition.equipment_type, definition.rarity))
+		CardData.CardType.MINION:
+			if definition.race_type == CardData.RaceType.NONE: return null
+			var key := definition.get_race_asset_key()
+			var texture := load("res://assets/races/%s/race_%s_%s.png" % [key, key, definition.get_rarity_asset_key()]) as Texture2D
+			if definition.race_type == CardData.RaceType.CONSTRUCT:
+				return _make_raw_atlas_texture(texture, CONSTRUCT_IDENTITY_REGION)
+			return texture
+	return null
+
+
 func _refresh_race_icon() -> void:
-	if card_data.card_type == CardData.CardType.RESOURCE:
-		race_icon.texture = ResourceIndicatorStyle.get_card_type_texture(
-			card_data.rarity, int(card_data.resource_type)
-		)
-		race_icon.visible = race_icon.texture != null
-		if race_icon.visible:
-			_set_centered_identity_icon(race_icon.texture.get_size())
-		race_icon.tooltip_text = "%s · 稀有度 %s" % [
-			card_data.get_resource_type_name(),
-			card_data.get_rarity_name(),
-		]
-		return
-	if card_data.card_type == CardData.CardType.SPELL:
-		race_icon.texture = _make_raw_atlas_texture(
-			SPELL_TYPE_ATLAS,
-			_get_spell_type_region(card_data.spell_type, card_data.rarity)
-		)
-		race_icon.visible = true
-		var spell_icon_size := (_get_spell_type_region(card_data.spell_type, card_data.rarity)).size
-		_set_centered_identity_icon(spell_icon_size)
-		race_icon.tooltip_text = "%s · 稀有度 %s" % [
-			card_data.get_spell_type_name(),
-			card_data.get_rarity_name(),
-		]
-		return
-	if card_data.card_type == CardData.CardType.EQUIPMENT:
-		race_icon.texture = _make_raw_atlas_texture(
-			EQUIPMENT_TYPE_ATLAS,
-			_get_equipment_type_region(card_data.equipment_type, card_data.rarity)
-		)
-		race_icon.visible = true
-		var equipment_icon_size := (_get_equipment_type_region(card_data.equipment_type, card_data.rarity)).size
-		_set_centered_identity_icon(equipment_icon_size)
-		race_icon.tooltip_text = "%s · 稀有度 %s" % [
-			card_data.get_equipment_type_name(),
-			card_data.get_rarity_name(),
-		]
-		return
-	if card_data.card_type != CardData.CardType.MINION:
-		race_icon.texture = null
-		race_icon.visible = false
-		return
-
-	if card_data.race_type == CardData.RaceType.NONE:
-		race_icon.texture = null
-		race_icon.visible = false
-		return
-	var race_key := card_data.get_race_asset_key()
-	var rarity_key := card_data.get_rarity_asset_key()
-	var texture_path := (
-		"res://assets/races/%s/race_%s_%s.png"
-		% [race_key, race_key, rarity_key]
-	)
-	var texture := load(texture_path) as Texture2D
-	race_icon.texture = texture
-	race_icon.visible = texture != null
-	if texture == null:
-		return
-
-	var icon_size := texture.get_size()
-	var icon_position := Vector2(
-		race_center_pixel.x - floori(icon_size.x * 0.5),
-		race_center_pixel.y - floori(icon_size.y * 0.5)
-	)
-	_set_control_rect(race_icon, icon_position, icon_size)
-	race_icon.tooltip_text = "%s · 稀有度 %s" % [
-		card_data.get_race_name(),
-		card_data.get_rarity_name(),
-	]
+	race_icon.texture = _get_identity_texture(card_data)
+	race_icon.visible = race_icon.texture != null
+	if not race_icon.visible: return
+	_set_centered_identity_icon(race_icon.texture.get_size())
+	var identity_name: String
+	match card_data.card_type:
+		CardData.CardType.RESOURCE: identity_name = card_data.get_resource_type_name()
+		CardData.CardType.SPELL: identity_name = card_data.get_spell_type_name()
+		CardData.CardType.EQUIPMENT: identity_name = card_data.get_equipment_type_name()
+		CardData.CardType.MINION: identity_name = card_data.get_race_name()
+	race_icon.tooltip_text = "%s · 稀有度 %s" % [identity_name, card_data.get_rarity_name()]
 
 
 func _refresh_card_type_visuals() -> void:

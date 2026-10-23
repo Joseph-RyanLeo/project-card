@@ -460,10 +460,7 @@ func get_item_canvas_rect(instance_id: StringName) -> Rect2:
 func set_fusion_busy(value: bool, hidden_ids: Array[StringName] = []) -> void:
 	fusion_busy = value
 	set_hidden_item_ids(hidden_ids)
-	for entry: Control in _entries:
-		entry.set_drag_enabled(_drag_enabled and not fusion_busy)
-	if is_instance_valid(_scraper):
-		_scraper.enabled = _drag_enabled and not fusion_busy and _scraper_count > 0
+	set_drag_enabled(_drag_enabled)
 
 
 func set_hidden_item_ids(instance_ids: Array[StringName]) -> void:

@@ -169,7 +169,7 @@ const SEARCH_CLEAR_HOTSPOT_REGION := Rect2(67, 10, 16, 14) # 右端X随边框左
 const COLLECTION_CARD_SAFE_PADDING := Vector2(14, 11) # 收藏槽四周预留空间，避免放大和越界图标被裁切
 const WORLD_SECTION_HEIGHT: float = 360.0 # 战场逻辑半区高度；素材使用原稿世界坐标，不按半区压缩
 const COLLECTION_WORLD_TOP: float = 747.0 # 收藏、指示物和英雄板从原稿位置整体上移3像素
-const BATTLEFIELD_VIEW_ORIGIN := Vector2(0, 3) # 战场视角向下看3像素，世界素材保持原稿坐标
+const BATTLEFIELD_VIEW_ORIGIN := Vector2.ZERO # 上半视角从原稿顶部开始，避免重复裁切顶栏
 const VIEW_VERTICAL_TRAVEL: float = 364.0 # 从上半视角到下半视角实际向下移动的像素距离
 const COLLECTION_VIEW_ORIGIN := Vector2(0, BATTLEFIELD_VIEW_ORIGIN.y + VIEW_VERTICAL_TRAVEL) # 下半只纵向移动364像素，取消旧稿带来的1像素横移
 const SIDE_TRAY_Z_INDEX: int = -75 # 两侧法术与资源托盘位于桌布(-80)之上、战场框(-70)之后
@@ -182,6 +182,8 @@ const ESCAPE_PAUSE_MENU_Z_INDEX: int = 4000 # 暂停菜单高于结算统计与�
 const VIEW_TWEEN_DURATION: float = 0.32 # 视角移动到略超出目标位置的时长
 const VIEW_OVERSHOOT_PIXELS: float = 6.0 # 上下切换时沿移动方向越过目标的像素距离
 const VIEW_SETTLE_DURATION: float = 0.12 # 越过目标后回弹到准确位置的时长
+const TABLETOP_PARK_BUTTON_POSITION := Vector2(599, 713) # 收起事件／商店板按钮在世界中的左上角
+const TABLETOP_PARK_SECONDS: float = 0.30 # 面板移回上半世界的时长
 const PLAYER_AVATAR_TURN_DURATION: float = 0.32 # 完整转身动作的时长，与战场视角切换同步
 const COLLECTION_MAX_PHYSICAL_PAGES: int = 100 # 收藏最多显示 100 个物理单页
 const COLLECTION_MAX_SPREADS: int = COLLECTION_MAX_PHYSICAL_PAGES / 2 # 两个物理页组成一组展开页
@@ -317,6 +319,9 @@ var _battle_trace_page_turn_usec: int = 0
 var _battle_trace_start_usec: int = 0
 var _battle_trace_result_usec: int = 0
 var current_world_view: WorldView = WorldView.COLLECTION
+var _tabletop_panels_parked := false
+var _tabletop_park_tween: Tween
+var _tabletop_park_button: TextureButton
 var current_collection_page: int = 0
 var active_rarity_filters: Array[int] = []
 var active_element_filters: Array[int] = []
@@ -365,6 +370,9 @@ var battle_settlement_service := BattleSettlementService.new()
 var run_save_service := RunSaveService.new()
 var resource_board_state := ResourceBoardState.new()
 var player_resource_tray: Control
+const ENEMY_TRAY_SLIDE_SECONDS: float = 0.32 # 敌方资源和法术托盘向中央收起、向两边展开的秒数
+const ENEMY_SPELL_TRAY_POSITION := Vector2(1079, 38) # 敌方法术托盘展开时的世界坐标
+var _enemy_tray_tweens: Dictionary = {}
 var enemy_resource_tray: Control
 var _last_battle_settlement_result: Dictionary = {}
 var _last_run_persistence_result: Dictionary = {}
@@ -515,6 +523,7 @@ var _shop_card_service_panel: Control
 var _shop_service_slot: PanelContainer
 var _shop_board_view: Control
 var _shop_service_card_id: StringName = &""
+var _shop_service_undo: Dictionary = {} # 当前服务页上一笔交易；离页、放新卡或使用提取结果后清空
 var _shop_procurement_action: int = -1
 var _shop_procurement_button: Button
 var _shop_action_filters: HBoxContainer
@@ -564,6 +573,7 @@ func _build_scene_structure() -> void:
 	_build_battle_result_panel()
 	_assign_runtime_owner(world)
 	_build_ordinary_shop_interface()
+	_build_tabletop_park_button(world)
 	_build_developer_console()
 	_build_escape_pause_menu()
 	_build_click_carry_layer()
@@ -619,6 +629,8 @@ func _build_ordinary_shop_interface() -> void:
 	_shop_motion_root = Control.new()
 	_shop_motion_root.name = "ShopMotionRoot"
 	_shop_motion_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_shop_motion_root.z_as_relative = false
+	_shop_motion_root.z_index = ordinary_shop_layer.z_index # 换到WorldContent收板时仍保留商店绘制层，不被战场卡穿透
 	ordinary_shop_layer.add_child(_shop_motion_root)
 	ordinary_shop_panel = PanelContainer.new()
 	ordinary_shop_panel.name = "OrdinaryShopPanel"
@@ -641,7 +653,7 @@ func _build_ordinary_shop_interface() -> void:
 	_shop_board_view.add_child(ordinary_shop_status)
 	var close := preload("res://scripts/ui/tabletop_art.gd").button(_shop_board_view, "离店", Vector2(780, 308), load("res://assets/ui/shop_event_20261020/service_button.png"), _toggle_ordinary_shop)
 	close.name = "LeaveShopButton"
-	ordinary_shop_status.size.x = 700 # 右侧留出离店按钮的位置
+	ordinary_shop_status.size.x = 440 # 状态提示右侧留出刮刀、刷新和离店操作行
 	ordinary_shop_entry_button = Button.new()
 	ordinary_shop_entry_button.name = "OrdinaryShopEntryButton"
 	ordinary_shop_entry_button.text = "商店"
@@ -712,6 +724,7 @@ func _toggle_ordinary_shop(discard_confirmed: bool = false) -> void:
 		continue_run_button.visible = FileAccess.file_exists(run_save_path)
 	if maze_controller != null:
 		maze_controller.refresh()
+	_refresh_enemy_side_trays()
 
 
 func _play_shop_open_animation() -> void:
@@ -941,16 +954,19 @@ func _refresh_ordinary_shop_panel() -> void:
 		wallet.add_child(_shop_action_filters)
 		display_row = HBoxContainer.new()
 		display_row.name = "ShopDisplayRow"
+		display_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		display_row.position = Vector2(78, 79) # 商品顶部对齐原稿绸缎，保留卡图的完整原生高度
 		display_row.size = Vector2(775, 214) # 图片与价格共用绸缎及其下沿空间
 		ordinary_shop_offer_list.add_child(display_row)
 		var grid := HBoxContainer.new()
 		grid.name = "OrdinaryShopOfferGrid"
+		grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		grid.add_theme_constant_override("separation", 8) # 各类商品的基础横向间距
 		display_row.add_child(grid)
 		var services := VBoxContainer.new()
 		services.name = "ShopServices"
-		services.position = Vector2(620, 270) # 刮刀独立放在商品下沿、刷新按钮左侧
+		services.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		services.position = Vector2(520, 296) # 刮刀位于底部操作行，不遮挡锦缎下方的商品报价
 		ordinary_shop_offer_list.add_child(services)
 	_shop_board_view.sync_page()
 	_shop_action_filters.visible = _shop_procurement_action >= 0
@@ -965,10 +981,8 @@ func _refresh_ordinary_shop_panel() -> void:
 		retained[int(existing.get_meta("shop_offer_index"))] = existing
 		old_positions[existing] = existing._visual.get_global_transform_with_canvas().origin
 	var existing_stacks: Dictionary = {}
-	var old_prices: Dictionary = {}
 	for stack: ShopPackStackView in offer_grid.get_children().filter(func(node: Node): return node is ShopPackStackView):
 		existing_stacks[String(stack.name)] = stack
-		old_prices[stack] = stack._description.get_global_transform_with_canvas().origin
 	# 本次刷新共用定义和合法候选；不把持有资格长期缓存，购买时仍重新验证。
 	var definitions := _build_card_definition_registry()
 	var catalog: Array[CardData] = []
@@ -1038,9 +1052,8 @@ func _refresh_ordinary_shop_panel() -> void:
 	for tile: ShopOfferView in old_positions:
 		if tile.is_inside_tree():
 			tile.animate_reflow_from(old_positions[tile])
-	for stack: ShopPackStackView in old_prices:
-		if stack.is_inside_tree():
-			stack.animate_price_reflow_from(old_prices[stack])
+	# GUI按兄弟节点顺序命中，不能用z_index代替；商品刷新后把操作按钮放回输入最前层。
+	ordinary_shop_offer_list.move_child(_shop_board_view._refresh, -1)
 
 
 func _remove_shop_offer_tile(tile: ShopOfferView) -> void:
@@ -1613,7 +1626,7 @@ func _can_buy_shop_card_pack(offer: Dictionary, definitions: Dictionary = {}, ca
 func _execute_shop_tear(instance_id: StringName, selected_states: Array[Dictionary], price: int) -> void:
 	var owned := owned_card_collection.get_by_instance_id(instance_id)
 	var squad := _get_squad_for_owned_instance(instance_id)
-	if not ordinary_shop_open or current_phase != GamePhase.PREPARE or owned == null or run_reward_state.gold < price or (squad != null and squad.get_card_count() > 1):
+	if not ordinary_shop_open or current_phase != GamePhase.PREPARE or owned == null or run_reward_state.gold < price or (squad != null and squad.get_card_count() > 1 and not _is_owned_card_in_service(owned)):
 		ordinary_shop_status.text = "撕卡条件已变化；没有扣费或销毁卡牌"
 		return
 	var allowed := _tearable_stickers(owned)
@@ -1648,6 +1661,7 @@ func _execute_shop_tear(instance_id: StringName, selected_states: Array[Dictiona
 		return
 	_remove_missing_equipment_from_board()
 	_sync_legacy_collection_cards()
+	_remember_shop_card_service(before, instance_id, -price, selected_states)
 	_build_collection_cards(null, null, true)
 	_refresh_spell_preparation_tray()
 	ordinary_shop_status.text = "已销毁卡牌并返还贴纸：%s" % "、".join(_shop_sticker_names(selected_states))
@@ -1706,6 +1720,7 @@ func _open_shop_card_services() -> void:
 
 
 func _close_shop_card_services() -> void:
+	_finish_shop_card_service_undo()
 	_close_shop_exchange()
 	_shop_card_service_panel.visible = false
 	ordinary_shop_offer_list.visible = true
@@ -1714,6 +1729,7 @@ func _close_shop_card_services() -> void:
 	_shop_board_view.sync_service(null)
 	_shop_board_view.sync_page()
 	_refresh_drag_availability()
+	_build_collection_cards()
 
 
 func _can_select_shop_service_card(data: Dictionary) -> bool:
@@ -1726,6 +1742,7 @@ func _select_shop_service_card(data: Dictionary) -> void:
 		return
 	if _shop_service_card_id == (data.owned_card as OwnedCard).instance_id:
 		return
+	_finish_shop_card_service_undo()
 	var entry_position: Vector2 = CardServiceSlotScript.get_entry_position(data)
 	_shop_service_card_id = (data.owned_card as OwnedCard).instance_id
 	_refresh_shop_card_services()
@@ -1742,6 +1759,66 @@ func _find_service_card_view(owned: OwnedCard) -> CardView:
 				if view.get_owned_card() == owned: return view
 	var collection_slot := _find_collection_slot_for_owned_card(owned)
 	return collection_slot.get_child(0) as CardView if is_instance_valid(collection_slot) and collection_slot.get_child_count() > 0 else null
+
+func _take_service_card_view(owned: OwnedCard) -> CardView:
+	var view := _find_service_card_view(owned)
+	var origin: Dictionary = {}
+	if is_instance_valid(view):
+		if view._drag_source_slot is SquadView:
+			var source := view._drag_source_slot as SquadView
+			origin = {"source_type": &"board", "source_row": source._source_row, "source_slot": source, "source_squad": source, "squad_data": source.get_squad_data(), "card_data": view.card_data}
+			if source.get_squad_data().get_card_count() == 1 and source.get_squad_data().get_equipped_item() != null:
+				origin["attached_equipment_data"] = source.get_squad_data().get_equipped_item().card_data
+				origin["equipment_indicator_position"] = source.get_squad_data().get_equipment_indicator_position()
+			source.detach_card_view(view)
+		view.reparent(_click_carry_layer)
+	else:
+		view = CARD_VIEW_SCENE.instantiate() as CardView
+		_click_carry_layer.add_child(view)
+		view.set_card_data(owned.card_data)
+		view.set_owned_card(owned)
+	view.set_meta("service_origin", origin)
+	for signal_name: String in ["card_clicked", "inspection_requested", "click_carry_requested", "mouse_entered", "mouse_exited"]:
+		for connection: Dictionary in view.get_signal_connection_list(signal_name):
+			if connection.callable.get_object() != view: view.disconnect(signal_name, connection.callable)
+	view.inspection_requested.connect(_on_card_inspection_requested)
+	view.click_carry_requested.connect(_on_click_carry_requested)
+	view.card_clicked.connect(_on_collection_card_clicked)
+	if not view.collection_return_requested.is_connected(_animate_collection_card_entry):
+		view.collection_return_requested.connect(_animate_collection_card_entry)
+	view.clear_pointer_hover_feedback()
+	_refresh_drag_availability()
+	_build_collection_cards.call_deferred()
+	_refresh_spell_preparation_tray()
+	_refresh_resource_preparation_trays()
+	return view
+
+
+func _release_service_card_view(owned: OwnedCard, entry: Vector2) -> void:
+	if owned == null or owned_card_collection.get_by_instance_id(owned.instance_id) != owned: return
+	_refresh_drag_availability()
+	for row: BattlefieldRow in [front_row, back_row]:
+		for slot: BoardSlot in row.get_squads():
+			var data := slot.get_squad_data()
+			var definition := data.get_card_data_for_owned_instance(owned.instance_id)
+			if definition != null:
+				slot.set_squad_data(data)
+				var target_view := slot.get_card_view(definition)
+				_animate_collection_card_entry(target_view, entry)
+				return
+	_build_collection_cards()
+	_refresh_spell_preparation_tray()
+	_refresh_resource_preparation_trays()
+	var target := _find_collection_slot_for_owned_card(owned)
+	if is_instance_valid(target) and target.get_child_count() > 0:
+		_animate_collection_card_entry(target.get_child(0), entry)
+
+
+func _is_owned_card_in_service(owned: OwnedCard) -> bool:
+	for slot: PanelContainer in _card_service_slots():
+		if slot._selected_card == owned: return true
+	return false
+
 
 func _card_service_slots() -> Array[PanelContainer]:
 	var slots: Array[PanelContainer] = []
@@ -1803,12 +1880,14 @@ func _can_select_exchange_card(data: Dictionary, index: int) -> bool:
 	for other: int in _shop_exchange_ids.size():
 		if other == index: continue
 		var selected := owned_card_collection.get_by_instance_id(_shop_exchange_ids[other])
-		if selected != null and (selected.instance_id == owned.instance_id or selected.card_data.rarity != owned.card_data.rarity): return false
+		if selected != null and (selected.instance_id == owned.instance_id): return false
 	return true
 
 
 func _select_exchange_card(data: Dictionary, index: int) -> void:
 	if not _can_select_exchange_card(data, index): return
+	if _shop_exchange_ids[index] != (data.owned_card as OwnedCard).instance_id:
+		_finish_shop_card_service_undo()
 	var entry_position: Vector2 = CardServiceSlotScript.get_entry_position(data)
 	_shop_exchange_ids[index] = (data.owned_card as OwnedCard).instance_id
 	_refresh_shop_exchange()
@@ -1829,6 +1908,9 @@ func _exchange_candidates() -> Array[CardData]:
 			if rarity >= 0 and rarity != int(owned.card_data.rarity): return pool
 			rarity = int(owned.card_data.rarity)
 		else: remaining.append(owned)
+	# 尚可撤销的唯一卡仍保留取得资格，避免本页融合产出同名IV后无法返还。
+	for entry: Dictionary in _shop_service_undo.get("cards", []):
+		remaining.append(entry.state.owned_card_ref as OwnedCard)
 	if rarity < 0 or rarity > _random_reward_rarity(ordinary_shop_service.config.card_exchange.maximum_input_rarity): return pool
 	for definition: CardData in ordinary_shop_service._eligible_cards(_get_shop_card_definitions(), remaining):
 		if definition.card_type == CardData.CardType.MINION and int(definition.rarity) == rarity + 1: pool.append(definition)
@@ -1939,7 +2021,7 @@ func _execute_shop_sale(instance_id: StringName, expected_value: int) -> void:
 		return
 	var owned := owned_card_collection.get_by_instance_id(instance_id)
 	var hosted_squad := _get_squad_for_owned_instance(instance_id)
-	if owned == null or _shop_card_sale_price(owned) != expected_value or (hosted_squad != null and hosted_squad.get_card_count() > 1):
+	if owned == null or _shop_card_sale_price(owned) != expected_value or (hosted_squad != null and hosted_squad.get_card_count() > 1 and not _is_owned_card_in_service(owned)):
 		ordinary_shop_status.text = "出售条件已变化，没有销毁卡牌"
 		return
 	var before := _capture_shop_card_transaction()
@@ -1956,11 +2038,59 @@ func _execute_shop_sale(instance_id: StringName, expected_value: int) -> void:
 		return
 	_remove_missing_equipment_from_board()
 	_sync_legacy_collection_cards()
+	_remember_shop_card_service(before, instance_id, sold_value)
 	_build_collection_cards(null, null, true)
 	ordinary_shop_status.text = "已出售%s，获得%d金币" % [owned.card_data.display_name, sold_value]
 	_refresh_shop_card_services()
 	_refresh_ordinary_shop_panel()
 	_refresh_spell_preparation_tray()
+
+
+func _remember_shop_card_service(before: Dictionary, instance_id: StringName, gold_delta: int, stickers: Array[Dictionary] = []) -> void:
+	_finish_shop_card_service_undo()
+	var removed: Array[Dictionary] = []
+	var original_cards: Array = before.collection.cards
+	for index: int in original_cards.size():
+		var state: Dictionary = original_cards[index]
+		if owned_card_collection.get_by_instance_id(state.instance_id) == null:
+			removed.append({"index": index, "state": state})
+	_shop_service_undo = {"instance_id": instance_id, "cards": removed, "gold_delta": gold_delta, "stickers": stickers.duplicate(true)}
+
+
+func _finish_shop_card_service_undo() -> void:
+	_shop_service_undo.clear()
+	if is_instance_valid(_shop_board_view) and is_instance_valid(_shop_board_view._service_action):
+		_shop_board_view._update_service_action()
+
+
+func _undo_shop_card_service() -> void:
+	if _shop_service_undo.is_empty() or not ordinary_shop_open or current_phase != GamePhase.PREPARE or not _shop_card_service_panel.is_visible_in_tree(): return
+	var undo := _shop_service_undo.duplicate(true)
+	var gold_delta := int(undo.gold_delta)
+	if run_reward_state.gold < gold_delta: return
+	var before := _capture_shop_card_transaction()
+	var restored := owned_card_collection.capture_state()
+	# 只插回本笔删除的卡（含随源卡离开的衍生卡）；其余实例及新获得卡保持当前状态。
+	for entry: Dictionary in undo.cards:
+		if owned_card_collection.get_by_instance_id(entry.state.instance_id) != null: return
+		(restored.cards as Array).insert(mini(int(entry.index), restored.cards.size()), entry.state)
+	_finish_shop_card_service_undo()
+	var success := owned_card_collection.restore_state(restored)
+	for sticker: Dictionary in undo.stickers:
+		if not emblem_library.consume_returned(sticker): success = false
+	run_reward_state.gold -= gold_delta
+	if not success or save_run_to_path(run_save_path) != OK:
+		_shop_service_undo = undo
+		_restore_shop_card_transaction(before)
+		ordinary_shop_status.text = "撤销未完成，交易结果已保留，可重试"
+		return
+	_shop_service_card_id = StringName(undo.instance_id)
+	_sync_legacy_collection_cards()
+	_refresh_shop_card_services()
+	_build_collection_cards()
+	_refresh_spell_preparation_tray()
+	_refresh_ordinary_shop_panel()
+	ordinary_shop_status.text = "已撤销：原卡与全部贴纸已返还，已反向结算本笔金币"
 
 
 func _capture_shop_card_transaction() -> Dictionary:
@@ -2021,7 +2151,13 @@ func _remove_owned_instance_from_rows(instance_id: StringName) -> void:
 				row.remove_card_from_squad(slot, member_data)
 
 
-func _refresh_shop_sticker_purchase_availability() -> void:
+func _on_sticker_inventory_changed() -> void:
+	# 只有已成功消耗本笔提取实例才结束撤销；移动格位、携带或取消合成不会移除身份。
+	for sticker: Dictionary in _shop_service_undo.get("stickers", []):
+		if emblem_library.get_inventory_item(StringName(String(sticker.instance_id))).is_empty():
+			_finish_shop_card_service_undo()
+			_refresh_shop_exchange()
+			break
 	if not ordinary_shop_open: return
 	# 仅更新现有报价的购买资格，不刷新商品、重建卡面或消耗商店随机流。
 	for tile: ShopOfferView in ordinary_shop_offer_list.find_children("ShopOffer_*", "Control", true, false):
@@ -2190,11 +2326,46 @@ func _build_resource_preparation_trays(parent: Control) -> void:
 	parent.add_child(player_resource_tray)
 	enemy_resource_tray = RESOURCE_PREPARATION_TRAY_SCRIPT.new()
 	enemy_resource_tray.configure(resource_board_state, "enemy")
-	enemy_resource_tray.position = ENEMY_RESOURCE_TRAY_POSITION
+	enemy_resource_tray.position = Vector2(181, ENEMY_RESOURCE_TRAY_POSITION.y) # 初始向中央收起，只露左侧金色把手
+	enemy_resource_tray.visible = true
 	enemy_resource_tray.z_index = SIDE_TRAY_Z_INDEX
 	enemy_resource_tray.set_drop_enabled(false)
 	enemy_resource_tray.inspection_requested.connect(_on_card_inspection_requested)
 	parent.add_child(enemy_resource_tray)
+
+
+func _refresh_enemy_side_trays() -> void:
+	var preparing_encounter := current_phase == GamePhase.PREPARE and run_reward_state.pending_next_level_from_id.is_empty()
+	var showing_battle := current_phase == GamePhase.BATTLE or (current_phase == GamePhase.RESULT and _viewing_result_battlefield)
+	if maze_controller != null:
+		preparing_encounter = preparing_encounter and maze_controller.run.step == ShortMazeRunState.Step.BATTLE_PREPARE and maze_controller.hero.pending_talent_levels.is_empty()
+		showing_battle = showing_battle and maze_controller.hero.pending_talent_levels.is_empty()
+	_slide_enemy_tray(enemy_resource_tray, not ordinary_shop_open and (preparing_encounter or showing_battle), ENEMY_RESOURCE_TRAY_POSITION, Vector2(181, ENEMY_RESOURCE_TRAY_POSITION.y))
+	_slide_enemy_tray(enemy_spell_preparation_tray, not ordinary_shop_open and showing_battle, ENEMY_SPELL_TRAY_POSITION, Vector2(905, ENEMY_SPELL_TRAY_POSITION.y))
+
+
+func _slide_enemy_tray(tray: Control, expanded: bool, shown: Vector2, hidden: Vector2) -> void:
+	if not is_instance_valid(tray) or bool(tray.get_meta("expanded", false)) == expanded: return
+	tray.set_meta("expanded", expanded)
+	if _enemy_tray_tweens.has(tray):
+		var previous: Tween = _enemy_tray_tweens[tray]
+		if is_instance_valid(previous): previous.kill()
+	tray.visible = true
+	# 收起立即关闭命中，滑出时先完成展示；防止收放途中打开敌方资源详情。
+	tray.mouse_filter = Control.MOUSE_FILTER_STOP if expanded else Control.MOUSE_FILTER_IGNORE
+	tray.set_process_input(expanded)
+	if not expanded and tray.has_method("_clear_hover_card"):
+		tray._clear_hover_card(true)
+		tray._set_hover_instance(&"")
+	elif not expanded and tray.has_method("clear_hover_card"):
+		tray.clear_hover_card()
+	var slide := create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_enemy_tray_tweens[tray] = slide
+	slide.tween_property(tray, "position", shown if expanded else hidden, ENEMY_TRAY_SLIDE_SECONDS)
+	slide.tween_callback(func():
+		tray.visible = true # 收进中央底板后仍显示外侧金色把手
+		_enemy_tray_tweens.erase(tray)
+	)
 
 
 func _initialize_resource_level_if_needed() -> void:
@@ -2307,7 +2478,8 @@ func _build_spell_preparation_tray(parent: Control) -> void:
 	enemy_spell_preparation_tray = SPELL_PREPARATION_TRAY_SCRIPT.new()
 	enemy_spell_preparation_tray.enemy_display = true
 	enemy_spell_preparation_tray.name = "EnemySpellPreparationTray"
-	enemy_spell_preparation_tray.position = Vector2(1079, 38) # 原稿(1099,38)按1280宽居中适配，区域持续显示
+	enemy_spell_preparation_tray.position = Vector2(905, ENEMY_SPELL_TRAY_POSITION.y) # 初始向中央收起，只露右侧金色把手
+	enemy_spell_preparation_tray.visible = true
 	enemy_spell_preparation_tray.z_index = SIDE_TRAY_Z_INDEX
 	parent.add_child(enemy_spell_preparation_tray)
 	enemy_spell_preparation_tray.set_drop_enabled(false)
@@ -3077,7 +3249,7 @@ func _build_collection_section(parent: Control) -> void:
 	_emblem_library_parent = section
 	emblem_library.click_carry_requested.connect(_on_click_carry_requested)
 	emblem_library.scraper_action_mode_requested.connect(_toggle_rune_scraper_mode)
-	emblem_library.inventory_changed.connect(_refresh_shop_sticker_purchase_availability)
+	emblem_library.inventory_changed.connect(_on_sticker_inventory_changed)
 	emblem_library.expand_requested.connect(_open_toolbox_inspection)
 	_emblem_recipe_discovery.load_discoveries()
 	# Control 的命中顺序除了 z_index 也受同层子节点顺序影响；
@@ -3713,6 +3885,7 @@ func _apply_battle_speed() -> void:
 func set_world_view(view: WorldView, animate: bool = true) -> void:
 	if view != current_world_view: _close_toolbox_inspection(false)
 	current_world_view = view
+	_update_tabletop_park_button()
 	_turn_player_avatar(0 if view == WorldView.COLLECTION else PLAYER_AVATAR_FRAME_COUNT - 1, animate)
 	var origin := COLLECTION_VIEW_ORIGIN if view == WorldView.COLLECTION else BATTLEFIELD_VIEW_ORIGIN
 	var target := -origin
@@ -3721,11 +3894,95 @@ func set_world_view(view: WorldView, animate: bool = true) -> void:
 	_view_tween = null
 	if not animate or not is_inside_tree() or world_content.position.is_equal_approx(target):
 		world_content.position = target
+		if view == WorldView.BATTLEFIELDS: _resume_tabletop_follow()
+		else: _update_tabletop_park_button()
 		return
 	var overshoot := target + Vector2(0, signf(target.y - world_content.position.y) * VIEW_OVERSHOOT_PIXELS)
 	_view_tween = create_tween()
 	_view_tween.tween_property(world_content, "position", overshoot, VIEW_TWEEN_DURATION).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_view_tween.tween_property(world_content, "position", target, VIEW_SETTLE_DURATION).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	if view == WorldView.BATTLEFIELDS: _view_tween.tween_callback(_resume_tabletop_follow)
+
+
+func _build_tabletop_park_button(world: Control) -> void:
+	_tabletop_park_button = TextureButton.new()
+	_tabletop_park_button.texture_normal = load("res://assets/ui/shop_event_20261020/tabletop_park_bright.png")
+	_tabletop_park_button.texture_disabled = load("res://assets/ui/shop_event_20261020/tabletop_park_dark.png")
+	_tabletop_park_button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_tabletop_park_button.position = TABLETOP_PARK_BUTTON_POSITION
+	_tabletop_park_button.focus_mode = Control.FOCUS_NONE
+	_tabletop_park_button.pressed.connect(_park_tabletop_panels)
+	world.add_child(_tabletop_park_button)
+	_tabletop_park_button.name = "TabletopParkButton"
+	_tabletop_park_button.z_index = 2600 # 按钮位于事件、商店板之上，低于检视和暂停
+	_tabletop_park_button.tooltip_text = "将事件／商店板移回上半世界，腾出我方战场"
+	_update_tabletop_park_button()
+
+
+func _update_tabletop_park_button() -> void:
+	if not is_instance_valid(_tabletop_park_button): return
+	_tabletop_park_button.disabled = not _can_park_tabletop_panels()
+	_tabletop_park_button.texture_normal = _tabletop_park_button.texture_disabled if _tabletop_panels_parked else load("res://assets/ui/shop_event_20261020/tabletop_park_bright.png")
+	_tabletop_park_button.tooltip_text = "将事件／商店板移回当前视角" if _tabletop_panels_parked else "将事件／商店板移回上半世界，腾出我方战场"
+
+
+func _can_park_tabletop_panels() -> bool:
+	if current_world_view != WorldView.COLLECTION: return false
+	if is_instance_valid(_tabletop_park_tween) and _tabletop_park_tween.is_running(): return false
+	var panel: Control = ordinary_shop_panel if ordinary_shop_open else (maze_controller._panel if maze_controller != null else null)
+	if not is_instance_valid(panel) or not panel.is_visible_in_tree(): return false
+	if _tabletop_panels_parked: return true
+	if not is_instance_valid(front_row) or not is_instance_valid(back_row): return false
+	return panel.get_global_rect().intersects(front_row.get_global_rect().merge(back_row.get_global_rect()))
+
+
+func _sync_tabletop_panel_anchors() -> void:
+	if is_instance_valid(_shop_motion_root):
+		var shop_parent: Control = world_content if _tabletop_panels_parked else ordinary_shop_layer
+		if _shop_motion_root.get_parent() != shop_parent:
+			_shop_motion_root.reparent(shop_parent, false)
+			_shop_motion_root.position = Vector2.ZERO
+	if maze_controller == null or not is_instance_valid(maze_controller._panel): return
+	var panel: Control = maze_controller._panel
+	var battle_intro: bool = maze_controller.run.step == ShortMazeRunState.Step.BATTLE_PREPARE and maze_controller.hero.pending_talent_levels.is_empty()
+	var panel_parent: Control = world_content if _tabletop_panels_parked or battle_intro else self
+	if panel.get_parent() != panel_parent:
+		panel.reparent(panel_parent, false)
+		panel.position = preload("res://scripts/ui/tabletop_art.gd").SCREEN_POSITION
+
+
+func _park_tabletop_panels() -> void:
+	if not _can_park_tabletop_panels(): return
+	_tabletop_panels_parked = not _tabletop_panels_parked
+	if is_instance_valid(_shop_open_tween): _shop_open_tween.kill()
+	if is_instance_valid(_tabletop_park_tween): _tabletop_park_tween.kill()
+	# 保留换父节点前的屏幕位置，再移到新父节点的原位；同一块板往返，不重建事件或服务会话。
+	var shop_parent: Control = world_content if _tabletop_panels_parked else ordinary_shop_layer
+	if _shop_motion_root.get_parent() != shop_parent: _shop_motion_root.reparent(shop_parent, true)
+	_tabletop_park_tween = create_tween().set_parallel(true)
+	_tabletop_park_tween.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	_tabletop_park_tween.tween_property(_shop_motion_root, "position", Vector2.ZERO, TABLETOP_PARK_SECONDS)
+	if maze_controller != null and is_instance_valid(maze_controller._panel):
+		var panel: Control = maze_controller._panel
+		var panel_parent: Control = world_content if _tabletop_panels_parked else self
+		if panel.get_parent() != panel_parent: panel.reparent(panel_parent, true)
+		_tabletop_park_tween.tween_property(panel, "position", preload("res://scripts/ui/tabletop_art.gd").SCREEN_POSITION, TABLETOP_PARK_SECONDS)
+	_update_tabletop_park_button()
+	_refresh_drag_availability()
+
+
+func _resume_tabletop_follow() -> void:
+	var was_moving := is_instance_valid(_tabletop_park_tween)
+	if was_moving: _tabletop_park_tween.kill()
+	_tabletop_park_tween = null
+	_tabletop_panels_parked = false
+	_sync_tabletop_panel_anchors()
+	if was_moving:
+		_shop_motion_root.position = Vector2.ZERO
+		if maze_controller != null and is_instance_valid(maze_controller._panel):
+			maze_controller._panel.position = preload("res://scripts/ui/tabletop_art.gd").SCREEN_POSITION
+	_update_tabletop_park_button()
+	_refresh_drag_availability()
 
 
 func _turn_player_avatar(target_frame: int, animate: bool) -> void:
@@ -4157,9 +4414,7 @@ func get_filtered_collection_cards() -> Array[CardData]:
 
 
 func get_displayed_collection_cards() -> Array[CardData]:
-	if collection_bookmark_active:
-		return recently_returned_cards.duplicate()
-	return get_filtered_collection_cards()
+	return recently_returned_cards.duplicate() if collection_bookmark_active else get_filtered_collection_cards()
 
 
 func get_collection_physical_page_count() -> int:
@@ -4520,7 +4775,7 @@ func _create_page_turn_snapshot(
 		var card_data := filtered_cards[filtered_index]
 		var owned_card := _get_owned_card_for_collection_index(filtered_cards, filtered_index)
 		var is_ghost := (
-			_is_owned_card_deployed(owned_card) or _is_spell_prepared(owned_card)
+			_is_owned_card_deployed(owned_card) or _is_spell_prepared(owned_card) or _is_owned_card_in_service(owned_card)
 			if owned_card != null
 			else _is_card_deployed(card_data)
 		)
@@ -4770,6 +5025,7 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_tabletop_park_button()
 	_sync_fire_burn_visuals()
 	if is_instance_valid(_card_pack_opening) and is_instance_valid(_inspection_surface) and is_instance_valid(_inspection_card_view):
 		_inspection_surface.tilt_locked = _card_pack_opening.phase != CardPackOpeningScript.Phase.INSPECTING or _rune_scraper_mode or not _click_carry_data.is_empty() or get_viewport().gui_is_dragging() or _inspection_placement_in_progress or is_instance_valid(_emblem_fusion_overlay)
@@ -4912,7 +5168,7 @@ func _set_spell_preparation_drag_visual_mode(
 
 func _is_card_carry_drag(drag_data: Dictionary) -> bool:
 	return (
-		drag_data.get("source_type") in [&"board", &"collection", &"spell_preparation", &"resource_preparation"]
+		drag_data.get("source_type") in [&"board", &"collection", &"spell_preparation", &"resource_preparation", &"card_service"]
 		and drag_data.get("kind") in [
 		&"card",
 		&"squad",
@@ -4941,8 +5197,8 @@ func _update_card_carry_target_impl(
 ) -> Dictionary:
 	if is_instance_valid(_click_carry_preview):
 		_click_carry_preview.global_position = pointer_global_position
-	if drag_data.get("source_type") == &"card_service":
-		return {"collection": true, "accepted": collection_drop_zone.get_global_rect().has_point(pointer_global_position)}
+	if drag_data.get("source_type") == &"card_service" and not drag_data.source_slot.allow_deployment:
+		return {"collection": true, "accepted": pointer_global_position.y >= 351.0}
 	var is_native_drag := (
 		not _native_carry_data.is_empty()
 		and _is_card_carry_drag(drag_data)
@@ -5346,6 +5602,7 @@ func _get_prepared_spell_instances() -> Array[OwnedCard]:
 
 
 func _refresh_spell_preparation_tray() -> void:
+	_refresh_enemy_side_trays()
 	if not is_instance_valid(spell_preparation_tray):
 		return
 	spell_preparation_tray.set_capacity(spell_preparation_capacity)
@@ -5771,6 +6028,7 @@ func load_run_from_path(path: String) -> bool:
 	_refresh_resource_preparation_trays()
 	_receive_pending_ground_stickers()
 	_refresh_preparation_effect_preview.call_deferred()
+	_close_shop_card_services()
 	ordinary_shop_open = false
 	ordinary_shop_panel.visible = false
 	_refresh_ordinary_shop_panel()
@@ -7305,11 +7563,6 @@ func _build_collection_cards(
 	entry_global_position: Variant = null,
 	reuse_unchanged: bool = false
 ) -> void:
-	# 目标槽暂存的原卡面跨收藏翻页保留；当前页来源只显示不可交互的虚影，真实卡面留在槽内。
-	var held_collection: Dictionary = {}
-	for service: PanelContainer in _card_service_slots():
-		if is_instance_valid(service._card_view) and service._source.get("type") == &"collection":
-			held_collection[service._card_view.get_owned_card()] = service
 	var profile_started_usec := Time.get_ticks_usec() if _equipment_drop_profile_active else 0
 	_clear_page_turn_overlay()
 	current_collection_page = clampi(
@@ -7351,14 +7604,14 @@ func _build_collection_cards(
 			page_start + page_index
 		)
 		var is_ghost := (
-			_is_owned_card_deployed(owned_card) or _is_spell_prepared(owned_card)
+			_is_owned_card_deployed(owned_card) or _is_spell_prepared(owned_card) or _is_owned_card_in_service(owned_card)
 			if owned_card != null else _is_card_deployed(collection_card)
 		)
 		var slot := reusable_slots.get(owned_card) as Control
 		if slot != null and bool(slot.get_meta("is_deployed_ghost", false)) != is_ghost:
 			slot = null
 		if slot == null:
-			slot = _create_collection_card_slot(collection_card, is_ghost, true, owned_card, held_collection.get(owned_card))
+			slot = _create_collection_card_slot(collection_card, is_ghost, true, owned_card)
 			collection_card_row.add_child(slot)
 		else:
 			reusable_slots.erase(owned_card)
@@ -7434,8 +7687,7 @@ func _create_collection_card_slot(
 	card_data: CardData,
 	is_deployed_ghost: bool = false,
 	interactive: bool = true,
-	owned_card: OwnedCard = null,
-	card_service: PanelContainer = null
+	owned_card: OwnedCard = null
 ) -> Control:
 	var slot := Control.new()
 	slot.custom_minimum_size = (
@@ -7446,9 +7698,6 @@ func _create_collection_card_slot(
 	slot.set_meta("is_deployed_ghost", is_deployed_ghost)
 	if owned_card != null:
 		slot.set_meta("owned_card", owned_card)
-	if is_instance_valid(card_service):
-		card_service.rebind_collection_source(slot)
-		return slot
 
 	var card_view := CARD_VIEW_SCENE.instantiate() as CardView
 	card_view.show_new_card_marker = true
@@ -7527,17 +7776,14 @@ func _get_owned_card_for_collection_index(
 ) -> OwnedCard:
 	if filtered_index < 0 or filtered_index >= filtered_cards.size():
 		return null
-	if collection_bookmark_active and filtered_index < recently_returned_owned_cards.size():
-		var recent_owned := recently_returned_owned_cards[filtered_index]
-		if recent_owned != null and recent_owned.card_data == filtered_cards[filtered_index]:
-			return recent_owned
 	var target := filtered_cards[filtered_index]
 	var occurrence := 0
 	for index: int in filtered_index:
 		if filtered_cards[index] == target:
 			occurrence += 1
 	var seen := 0
-	for owned_card: OwnedCard in owned_card_collection.get_cards():
+	var candidates: Array[OwnedCard] = recently_returned_owned_cards if collection_bookmark_active else owned_card_collection.get_cards()
+	for owned_card: OwnedCard in candidates:
 		if owned_card.card_data != target:
 			continue
 		if seen == occurrence:
@@ -7729,7 +7975,7 @@ func _open_card_inspection(card_data: CardData, owned_card: OwnedCard, source_vi
 	var retain_library := is_instance_valid(_card_pack_opening) and _inspection_library_transform_saved
 	_inspection_read_only = read_only
 	if _inspection_has_library_toolbox:
-		_inspection_library_expanded = _last_minion_inspection_library_expanded
+		_inspection_library_expanded = false if is_instance_valid(_card_pack_opening) else _last_minion_inspection_library_expanded
 	_build_inspection_overlay(
 		"卡牌检视" + ("（战斗中只读）" if current_phase == GamePhase.BATTLE else ""),
 		("商店卡牌只读；" if read_only else ("准备阶段：拖动纹章到卡牌上的金色2×2点；" if current_phase == GamePhase.PREPARE else "战斗检视为只读；")) + "点击暗幕、右键或按 Esc 关闭"
@@ -8055,7 +8301,7 @@ func _close_card_inspection(immediate: bool = false, preserve_pack_sequence: boo
 		if source_card is ShopCardView and is_instance_valid(_inspection_card_view) and _inspection_card_view is ShopCardView:
 			_inspection_card_view._carousel_timer.paused = true
 			source_card.continue_carousel_from(_inspection_card_view)
-	if _inspection_has_library_toolbox:
+	if _inspection_has_library_toolbox and not is_instance_valid(_card_pack_opening):
 		_last_minion_inspection_library_expanded = _inspection_library_expanded
 	_finish_inspection_placement_animation()
 	if not _click_carry_data.is_empty():
@@ -8991,7 +9237,7 @@ func _refresh_inspection_markers() -> void:
 	for row: BattlefieldRow in [front_row, back_row, enemy_front_row, enemy_back_row]:
 		for slot: BoardSlot in row.get_squads():
 			var squad := slot.get_squad_data()
-			if squad != null and squad.get_card_data_for_owned_instance(_inspection_owned_card.instance_id) != null:
+			if squad != null and squad.get_card_data_for_owned_instance(_inspection_owned_card.instance_id) != null and not _is_owned_card_in_service(_inspection_owned_card):
 				inspection_squad = squad
 	var battle_state := _find_battle_state_for_squad(inspection_squad)
 	var pattern := battle_state.get_rune_pattern_result() if battle_state != null else inspection_squad.get_rune_pattern_result()
@@ -9027,11 +9273,15 @@ func _refresh_owned_card_status_visuals(owned_card: OwnedCard) -> void:
 					if view != null:
 						view.set_owned_card(owned_card)
 						view.set_squad_attribute_preview_from_squad(squad)
+	for service: PanelContainer in _card_service_slots():
+		if service._selected_card == owned_card and is_instance_valid(service._card_view):
+			service._card_view.set_owned_card(owned_card)
+			service._card_view.set_squad_attribute_preview_from_squad(SquadData.from_owned_card(owned_card))
 	_refresh_preparation_effect_preview()
 
 
 func _find_squad_for_owned_card(owned_card: OwnedCard) -> SquadData:
-	if owned_card == null:
+	if owned_card == null or _is_owned_card_in_service(owned_card):
 		return null
 	for row: BattlefieldRow in [front_row, back_row, enemy_back_row, enemy_front_row]:
 		for slot: BoardSlot in row.get_squads():
@@ -9144,7 +9394,7 @@ func _ghost_click_carry_source() -> void:
 	var source_type := _click_carry_data.get("source_type") as StringName
 	if source_type == &"card_service":
 		var service := _click_carry_data.get("source_slot") as Control
-		service._card_view.modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA
+		service._card_view.modulate.a = 0.0
 	elif source_type == &"collection":
 		var source_slot := _click_carry_data.get("source_slot") as Control
 		if (
@@ -9312,8 +9562,8 @@ func _commit_click_carry(pointer_global_position: Vector2) -> void:
 	)
 	var committed := false
 	var target_row := target.get("row") as BattlefieldRow
-	if _click_carry_data.get("source_type") == &"card_service":
-		if target.get("accepted", false): (_click_carry_data.source_slot as Control).return_card()
+	if _click_carry_data.get("source_type") == &"card_service" and not (_click_carry_data.source_slot as Control).allow_deployment:
+		(_click_carry_data.source_slot as Control).return_card(true, CardServiceSlotScript.get_entry_position(_click_carry_data))
 		_finish_click_carry(bool(target.get("accepted", false)))
 		get_viewport().set_input_as_handled()
 		return
@@ -9420,8 +9670,8 @@ func _finish_click_carry(committed: bool) -> void:
 	if source_type == &"card_service":
 		var service := drag_data.get("source_slot") as Control
 		if is_instance_valid(service) and is_instance_valid(service._card_view):
-			service._card_view.modulate.a = 1.0
-			if not committed and return_global_position is Vector2: _animate_collection_card_entry.call_deferred(service._card_view, return_global_position)
+			if not committed: service.return_card(true, return_global_position if return_global_position is Vector2 else Vector2.INF)
+			else: service._card_view.modulate.a = 1.0
 	elif source_type == &"collection":
 		var source_slot := drag_data.get("source_slot") as Control
 		if (
@@ -9508,6 +9758,13 @@ func _on_board_card_dropped(
 	drag_data: Dictionary,
 	card_global_position: Vector2
 ) -> void:
+	var service: Control = drag_data.get("service_slot", drag_data.get("source_slot") if drag_data.get("source_type") == &"card_service" else null)
+	if is_instance_valid(service):
+		drag_data = CardServiceSlotScript.board_drag_data(drag_data)
+		service.return_card()
+		if drag_data.get("source_type") == &"card_service":
+			drag_data = drag_data.duplicate()
+			drag_data["source_type"] = &"collection"
 	if drag_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
 		_begin_equipment_drop_profile()
 		_equip_item_on_squad(target_row, drag_data)
@@ -9533,7 +9790,7 @@ func _on_collection_card_dropped(
 	card_global_position: Vector2
 ) -> void:
 	if drag_data.get("source_type") == &"card_service":
-		(drag_data.source_slot as Control).return_card()
+		(drag_data.source_slot as Control).return_card(true, card_global_position)
 		return
 	if drag_data.get("source_type") == &"resource_preparation":
 		var owned_resource := drag_data.get("owned_card") as OwnedCard
@@ -10385,23 +10642,30 @@ func _is_inspection_item_drag(data: Variant) -> bool:
 
 
 func _is_card_service_active() -> bool:
+	if _tabletop_panels_parked: return false
 	return (
 		(is_instance_valid(_shop_exchange_panel) and _shop_exchange_panel.is_visible_in_tree())
 		or (is_instance_valid(_shop_card_service_panel) and _shop_card_service_panel.is_visible_in_tree())
-		or (maze_controller != null and is_instance_valid(maze_controller._enhancement_slot) and maze_controller._enhancement_slot.is_visible_in_tree())
+		or (maze_controller != null and is_instance_valid(maze_controller._enhancement_slot) and maze_controller._enhancement_slot.is_visible_in_tree() and not maze_controller._enhancement_slot.allow_deployment)
 	)
 
 
 func _refresh_drag_availability() -> void:
 	var drag_enabled := current_phase == GamePhase.PREPARE
 	var deployment_enabled := drag_enabled and not _is_card_service_active()
+	var service_ids: Array[StringName] = []
+	for service: PanelContainer in _card_service_slots():
+		if service._selected_card != null: service_ids.append(service._selected_card.instance_id)
 	if is_instance_valid(spell_preparation_tray):
+		spell_preparation_tray.set_service_ghosts(service_ids)
 		spell_preparation_tray.set_drop_enabled(deployment_enabled)
 	if is_instance_valid(player_resource_tray):
+		player_resource_tray.set_service_ghosts(service_ids)
 		player_resource_tray.set_drop_enabled(deployment_enabled)
 	if emblem_library != null:
 		emblem_library.set_drag_enabled(_inspection_tools_enabled() or (is_instance_valid(_toolbox_overlay) and not _toolbox_closing and not is_instance_valid(_toolbox_tween)))
 	for row: BattlefieldRow in [front_row, back_row]:
+		for slot: BoardSlot in row.get_squads(): slot.set_service_ghosts(service_ids)
 		row.set_drag_enabled(drag_enabled)
 		row.set_drop_enabled(deployment_enabled)
 
@@ -10496,6 +10760,7 @@ func _set_result_battlefield_visible(show_battlefield: bool) -> void:
 	_viewing_result_battlefield = show_battlefield
 	battle_result_panel.visible = not show_battlefield
 	_return_to_result_button.visible = show_battlefield
+	_refresh_enemy_side_trays()
 	if maze_controller != null:
 		maze_controller.refresh()
 

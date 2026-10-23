@@ -14,9 +14,15 @@ const CHOICE_GAP: float = 36.0 # 三张放大牌之间的水平空隙
 const DEAL_SECONDS: float = 0.32 # 每张牌从牌堆飞至屏幕中央的时长
 const DEAL_INTERVAL: float = 0.10 # 三张牌依次飞出的时间差
 const FLIP_SECONDS: float = 0.14 # 翻牌收拢和展开各自的时长
+const SHOP_FACE_HOLD_SECONDS: float = 1.0 # 商店牌翻到正面后停留的秒数
 const BOARD_SECONDS: float = 0.30 # 旧棋盘退场和描述棋盘落下的时长
 const MOVE_SECONDS: float = 0.34 # 选中牌缩回原生尺寸并落入左侧卡位的时长
-const DETAIL_SECONDS: float = 0.38 # 描述和操作选项逐渐浮现的时长
+const CHARACTER_SECONDS: float = 0.045 # 描述与选项每个字符跳出的间隔，约每秒22字
+const TEXT_LINE_PAUSE: float = 0.16 # 描述段落结束后开始下一段的停顿
+const OPTION_ENTER_SECONDS: float = 0.28 # 选项条整体上移并渐显的时长
+const OPTION_ENTER_OFFSET: float = 12.0 # 选项条从目标下方飞入的距离
+const REVEAL_CLICK_SPEED: float = 1.8 # 每次点击让正在进行的描述/选项演出加速的倍率
+const REVEAL_MAX_SPEED: float = 8.0 # 连点加速的上限
 const DIM_ALPHA: float = 0.70 # 三选一时除候选牌及暗示外的背景压暗程度
 var main: Control
 var cards: Array[Button] = []
@@ -28,6 +34,8 @@ var _modal: Control
 var _dim: ColorRect
 var _deck: Button
 var _hints: Array[Label] = []
+var _text_reveal: Tween
+var _reveal_speed := 1.0
 
 func _board_surface() -> Control:
 	var board := Control.new()
@@ -85,6 +93,7 @@ func _deal() -> void:
 		var card := CardView.new()
 		card.name = "EventChoice%d" % index
 		card.definition = _paths[index]
+		card.z_index = _paths.size() - index # 先抽的牌在上，后抽的牌始终从下面飞出
 		_modal.add_child(card)
 		card.pivot_offset = Vector2.ZERO
 		card.position = _board.global_position + DECK_POSITION
@@ -122,6 +131,7 @@ func _choose(index: int) -> void:
 	busy = true
 	for card: Button in cards: card.disabled = true
 	var selected: Button = cards[index]
+	selected.z_index = cards.size() + 1 # 选中后独立置顶，翻牌不被飞走的候选遮住
 	# 选中瞬间开始退场；候选牌仍位于独立屏幕层，不跟着旧棋盘飞走。
 	var leave := create_tween().set_parallel(true)
 	leave.tween_property(_board, "position:y", -TABLE_SIZE.y - 16, BOARD_SECONDS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
@@ -140,6 +150,20 @@ func _choose(index: int) -> void:
 	flip.tween_callback(func(): selected.face_up = true)
 	flip.tween_property(selected, "scale:x", CHOICE_SCALE, FLIP_SECONDS)
 	await flip.finished
+	if selected.definition.get("kind") == "shop":
+		await get_tree().create_timer(SHOP_FACE_HOLD_SECONDS).timeout
+		# 提交路径会释放旧事件页；将同一模态层交给Main，完成离场和渐亮。
+		var overlay := _modal
+		overlay.reparent(main, true)
+		path_chosen.emit(String(selected.definition.path_id))
+		if not main.ordinary_shop_open:
+			overlay.queue_free()
+			return
+		var depart := main.create_tween().set_parallel(true)
+		depart.tween_property(selected, "position:y", -CardView.CARD_SIZE.y * CHOICE_SCALE, BOARD_SECONDS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		depart.tween_property(_dim, "color:a", 0.0, main.SHOP_OPEN_DURATION + main.SHOP_REBOUND_DURATION)
+		depart.chain().tween_callback(overlay.queue_free)
+		return
 	var description := _board_surface()
 	description.name = "IncomingEventBoard"
 	description.position.y = -TABLE_SIZE.y - 16
@@ -182,7 +206,56 @@ func show_selected(path: Dictionary, reveal: bool = false) -> void:
 		var dust := Dust.new()
 		dust.position = SELECTED_POSITION - Vector2(80, 70) # 粒子范围围绕牌边，避免烟团盖满卡图
 		add_child(dust)
-		detail_body.modulate.a = 0.0
-		var fade := create_tween()
-		fade.tween_interval(0.10)
-		fade.tween_property(detail_body, "modulate:a", 1.0, DETAIL_SECONDS)
+	# 协调器随后同步添加描述和选项；推迟到布局完成后统一启动逐字显示。
+	_reveal_detail_text.call_deferred()
+
+func _input(event: InputEvent) -> void:
+	if not is_visible_in_tree() or not is_instance_valid(_text_reveal) or not _text_reveal.is_running(): return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		for slot: PanelContainer in main._card_service_slots():
+			if slot.is_visible_in_tree() and slot.get_global_rect().has_point(event.position): return
+		var paper := get_node_or_null("EventDescription") as Control
+		if is_instance_valid(paper) and paper.get_global_rect().has_point(event.position):
+			_reveal_speed = minf(_reveal_speed * REVEAL_CLICK_SPEED, REVEAL_MAX_SPEED)
+			_text_reveal.set_speed_scale(_reveal_speed)
+			get_viewport().set_input_as_handled()
+
+func _reveal_detail_text() -> void:
+	if not is_inside_tree() or not is_instance_valid(detail_body): return
+	var nodes := detail_body.find_children("*", "Control", true, false)
+	for node: Control in nodes:
+		if node is Button:
+			# VBoxContainer会在描述换行后重新排版。外层保留排版位置，
+			# 仅移动内部按钮，避免Tween用旧坐标把选项拉回文字上方。
+			var parent := node.get_parent()
+			var index := node.get_index()
+			var frame := Control.new()
+			frame.name = "OptionMotionFrame"
+			frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			frame.custom_minimum_size.y = node.get_combined_minimum_size().y
+			parent.add_child(frame)
+			parent.move_child(frame, index)
+			node.reparent(frame, false)
+			node.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			node.minimum_size_changed.connect(func(): frame.custom_minimum_size.y = node.get_combined_minimum_size().y)
+			node.modulate.a = 0.0
+		elif node is Label and not _inside_service_slot(node): node.visible_characters = 0
+	_text_reveal = create_tween()
+	_text_reveal.tween_interval(0.10)
+	for node: Control in nodes:
+		if _inside_service_slot(node): continue
+		if node is Button:
+			_text_reveal.tween_callback(func(): node.position = Vector2(0, OPTION_ENTER_OFFSET))
+			_text_reveal.tween_property(node, "position", Vector2.ZERO, OPTION_ENTER_SECONDS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+			_text_reveal.parallel().tween_property(node, "modulate:a", 1.0, OPTION_ENTER_SECONDS)
+		elif node is Label and not node.text.is_empty():
+			_text_reveal.tween_property(node, "visible_characters", node.get_total_character_count(), node.get_total_character_count() * CHARACTER_SECONDS)
+			_text_reveal.tween_interval(TEXT_LINE_PAUSE)
+
+func _inside_service_slot(node: Node) -> bool:
+	var ancestor := node.get_parent()
+	while ancestor != detail_body and ancestor != null:
+		if ancestor is CardView or ancestor.get_script() == preload("res://scripts/ui/card_service_slot.gd"): return true
+		ancestor = ancestor.get_parent()
+	return false

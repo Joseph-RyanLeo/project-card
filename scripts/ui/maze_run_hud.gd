@@ -21,7 +21,8 @@ var shown_round: int = -1
 var floor_number: int = 1
 var protection: int = 2
 var alive: bool = true
-var _gold: Label
+const RuneNumber = preload("res://scripts/ui/rune_number_display.gd")
+var _gold: RuneNumber
 var _hero_label: Label
 var _hero_panel: Control
 var _hero_progress_lamps: HeroProgressLampsScript
@@ -51,13 +52,9 @@ func initialize(main: Control) -> void:
 			marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			slot.add_child(marker)
 			views.append(marker)
-	_gold = Label.new()
-	_gold.position = Vector2(918, 6) # 金币数位于底槽内，右侧留出钱币图标
-	_gold.size = Vector2(58, 24) # 金币文字的显示宽高
-	_gold.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_gold.add_theme_font_override("font", FONT)
-	_gold.add_theme_font_size_override("font_size", 14) # 顶栏金币字号
-	_gold.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_gold = RuneNumber.new()
+	_gold.name = "GoldAmount"
+	_gold.character_spacing = -1 # 相邻数字仅重合黑色描边，七位余额仍能完整放进金币槽
 	add_child(_gold)
 	var hero_panel := Control.new()
 	hero_panel.name = "IoannInformationPanel"
@@ -103,6 +100,7 @@ func sync(maze: Node, animate: bool = true) -> void:
 	protection = maze.run.failure_protection
 	alive = maze.run.battle_results.is_empty() or String(maze.run.battle_results.back().ending) not in ["ordinary_loss", "boss_loss"]
 	_gold.text = str(maze._main.run_reward_state.gold)
+	_gold.position = Vector2(roundf(944 - _gold.size.x * 0.5), 12) # 金币槽内按字形实际宽度居中，原生14像素高
 	_hero_label.text = "伊奥恩·沃登"
 	_hero_progress_lamps.sync(maze.hero)
 	_hero_panel.tooltip_text = maze.hero_description()

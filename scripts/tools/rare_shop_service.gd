@@ -9,7 +9,7 @@ const PACKS := [
 func load_config() -> bool:
 	if not super.load_config(): return false
 	config.card_pack_prices.large = 0
-	config.refresh = {"initial_price": 0, "price_multiplier": 1}
+	config.refresh = {"initial_price": 0, "price_increment": 0}
 	config.action_procurement.enabled = false
 	config.scraper.always_available = false
 	config.tear_service.always_available = false

@@ -90,14 +90,14 @@ func _run() -> void:
 	check(index >= 0 and is_instance_valid(maze._event_table), "实际事件池生成候选，建立新棋盘")
 	check(maze._event_table.cards.is_empty() and maze._event_table._deck.size == Vector2(166, 153), "初始只显示中央原生牌堆，不自动发牌")
 	var fixed_position: Vector2 = maze._panel.global_position
-	check(fixed_position == Vector2(189, -6) and maze._panel.size == Vector2(902, 351), "事件棋盘坐标与原生尺寸准确")
+	check(fixed_position == Vector2(189, 0) and maze._panel.size == Vector2(902, 351), "事件棋盘坐标与原生尺寸准确")
 	main.set_world_view(main.WorldView.COLLECTION)
 	main._view_tween.pause()
 	for step: float in [0.12, 0.20, 0.12]:
 		main._view_tween.custom_step(step)
 		check(maze._panel.global_position == fixed_position and maze._panel.visible, "事件棋盘不继承视角的移动与回弹")
-	check(main.world_content.position == Vector2(0, -367), "下半视角不再横移1像素")
-	check(main.world_content.position + Vector2(189, 361) == fixed_position, "下半世界(189,361)与上半世界(189,-3)映射至同一屏幕点")
+	check(main.world_content.position == Vector2(0, -364), "下半视角不再横移1像素")
+	check(main.world_content.position + Vector2(189, 364) == fixed_position, "下半世界(189,361)与上半世界(189,-3)映射至同一屏幕点")
 	main.set_world_view(main.WorldView.BATTLEFIELDS, false)
 	await _frame("event_deck")
 	await _click(maze._event_table._deck)
@@ -158,11 +158,12 @@ func _run() -> void:
 	await create_timer(0.35).timeout
 	check(maze._enhancement_slot._card_view == original, "强化槽接收原卡并沿用平滑吸附")
 	check(original.position == maze._enhancement_slot.CARD_POSITION, "强化槽吸附结束准确归位")
-	check(maze.apply_card_enhancement(0), "强化仍写入原OwnedCard并推进商店轮")
+	check(maze.apply_card_enhancement(0), "强化写入原OwnedCard后显示结果页")
+	check(maze.complete_event(), "强化结果页继续后推进商店轮")
 	check(maze.select_path(maze.run.paths[0].path_id), "选择真实商店路径")
 	maze.enter_selected_shop()
 	await create_timer(0.5).timeout
-	check(main.ordinary_shop_open and main.ordinary_shop_panel.position == Vector2(189, -6), "商店打开在固定棋盘坐标")
+	check(main.ordinary_shop_open and main.ordinary_shop_panel.position == Vector2(189, 0), "商店打开在固定棋盘坐标")
 	check(main.ordinary_shop_offer_list.visible and not main._shop_card_service_panel.visible, "商店默认显示购物页")
 	await _frame("shop_goods")
 	await _click(main._shop_board_view.get_node("CardServicesTab"))
@@ -188,7 +189,7 @@ func _run() -> void:
 	check(main._shop_card_sale_price(service_card) == sale_price and main._shop_board_view._amount.text == "+%d" % sale_price, "暂卸后卖价保留全部贴纸加成与伤势扣减")
 	await _frame("shop_services")
 	await _click(main._shop_board_view.get_node("ShoppingTab"))
-	check(service_card.capture_state() == before and not source._service_stickers_detached and not source.has_meta("card_service_slot"), "切购物页归还真实卡面及贴纸显示，不改变卡牌数据")
+	check(service_card.capture_state() == before and not main._is_owned_card_in_service(service_card), "切购物页归还收藏及贴纸显示，不改变卡牌数据")
 	await _click(main._shop_board_view.get_node("CardServicesTab"))
 	main._select_shop_service_card({"kind": &"card", "owned_card": service_card})
 	var sale_id := service_card.instance_id
@@ -208,7 +209,7 @@ func _run() -> void:
 			await _click(main._shop_board_view._sticker_host.get_child(selected))
 		check(main._shop_board_view._service_action.text == "提取" and main._shop_board_view._selection.size() == count, "选中%d枚后切换到提取" % count)
 		var price: int = [2, 5, 10][count - 1]
-		check(main._shop_board_view._amount.text == "−%d" % price, "按原阶梯价格显示提取费用")
+		check(main._shop_board_view._amount.text == "-%d" % price, "按原阶梯价格显示提取费用")
 		if count == 3:
 			await _click(main._shop_board_view._sticker_host.get_child(3))
 			check(main._shop_board_view._selection.size() == 3, "第4枚不能突破最多提取3枚")
@@ -278,6 +279,7 @@ func _run() -> void:
 	for material_index: int in 3:
 		var material: OwnedCard = main.owned_card_collection.create_card(load("res://resources/cards/musketeer.tres"), main.ordinary_shop_service.rng)
 		materials.append(material)
+		await process_frame # 等待前一次服务归还/收藏重排结束，再取得可交互卡面
 		var material_view := _show_owned(material)
 		await process_frame
 		await _drag(material_view, main._shop_exchange_slots[material_index])

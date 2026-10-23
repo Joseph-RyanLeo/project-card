@@ -198,11 +198,11 @@ func _test_service_rng_and_state_roundtrip() -> void:
 	service.refresh_count = 0
 	_expect(service.refresh_price() == 1, "新商店第一次刷新费用为1金币")
 	service.refresh_count = 1
-	_expect(service.refresh_price() == 2, "同一商店第二次刷新费用翻倍")
+	_expect(service.refresh_price() == 2, "同一商店第二次刷新费用增加1金币")
 	service.refresh_count = 2
-	_expect(service.refresh_price() == 4, "同一商店第三次刷新费用继续翻倍")
+	_expect(service.refresh_price() == 3, "同一商店第三次刷新费用为3金币")
 	service.refresh_count = 3
-	_expect(service.refresh_price() == 8, "同一商店第四次刷新费用继续翻倍")
+	_expect(service.refresh_price() == 4, "同一商店第四次刷新费用为4金币")
 
 
 func _test_main_transactions_and_save() -> void:

@@ -19,7 +19,9 @@ const PULLBACK_PIXELS := 12.0 # 两侧卡撞击前向外回撤的距离，以原
 const COLLIDE_SECONDS := 0.35 # 两侧材料加速撞向中间卡的时长，参照GIF约7帧×50毫秒
 const WHITE_START_PROGRESS := 0.55 # 前冲时间经过此比例才开始变白，前半程保持原色
 const WHITE_SECONDS := 0.06 # 接近碰撞时迅速变白的时长，参照GIF的临近撞击闪白
-const FUSION_HOLD_SECONDS := 0.05 # 三张白色剪影重合后短暂停留的时长
+const FUSION_HOLD_SECONDS := 0.083 # 三张白色剪影在挤压极限停留，较原来增加约2帧（按60帧/秒）
+const JELLY_START_PROGRESS := 0.82 # 前冲进入最后18%时开始纵向拉长、横向挤压，在重合时达到峰值
+const JELLY_SECONDS := 0.40 # 新卡快速反弹、极限缓停、整体弹大并恢复的总时长；可超过2倍至4倍的放大时长
 const REVEAL_SECONDS := 0.10 # 新卡从白色迅速恢复原色的时长，参照GIF约2帧
 const EXPAND_SECONDS := 0.24 # 新卡由2倍扩大至4倍的时长，独立于恢复颜色
 const SPARK_SECONDS := 0.20 # 重合揭晓时十字闪点出现、向外飘散并消失的时长
@@ -79,6 +81,7 @@ func play(materials: Array[Dictionary], awarded: OwnedCard, book: Control, colle
 	_reward.modulate.a = 0.0
 	_reward.z_index = 4
 	_set_whiten(_reward, 1.0)
+	_effect(_reward).set_shader_parameter("jelly_amount", 1.0)
 	_sparks = SPARKS_SCRIPT.new()
 	_sparks.position = center
 	_sparks.scale = Vector2.ONE * SPARK_SCALE
@@ -108,6 +111,7 @@ func play(materials: Array[Dictionary], awarded: OwnedCard, book: Control, colle
 	_tween.tween_callback(_begin_reveal)
 	_tween.tween_method(_reveal_reward, 0.0, 1.0, REVEAL_SECONDS)
 	_tween.parallel().tween_property(_reward, "scale", Vector2.ONE * DISPLAY_SCALE, EXPAND_SECONDS)
+	_tween.parallel().tween_method(_settle_reward, 0.0, 1.0, JELLY_SECONDS).set_trans(Tween.TRANS_LINEAR)
 	_tween.parallel().tween_method(_sparks.set_progress, 0.0, 1.0, SPARK_SECONDS).set_trans(Tween.TRANS_LINEAR)
 	_tween.tween_callback(func(): stage = &"display")
 	_tween.tween_interval(DISPLAY_SECONDS)
@@ -147,23 +151,26 @@ func _make_card(owned: OwnedCard) -> Control:
 	snapshot.position = -CARD_SIZE * 0.5 - snapshot.get_card_origin_in_texture()
 	var white := ShaderMaterial.new()
 	white.shader = WHITE_SHADER
+	white.set_shader_parameter("jelly_pivot", snapshot.get_card_origin_in_texture() + CARD_SIZE * 0.5)
 	snapshot.get_texture_control().material = white
 	return center
 
-func _set_whiten(visual: Control, amount: float) -> void:
+func _effect(visual: Control) -> ShaderMaterial:
 	var snapshot := visual.get_child(0) as CardSnapshotVisual
-	(snapshot.get_texture_control().material as ShaderMaterial).set_shader_parameter("white_amount", amount)
+	return snapshot.get_texture_control().material as ShaderMaterial
 
-func _whiten_materials(progress: float) -> void:
-	for visual: Control in _materials:
-		_set_whiten(visual, progress)
+func _set_whiten(visual: Control, amount: float) -> void:
+	_effect(visual).set_shader_parameter("white_amount", amount)
 
 func _collide_materials(progress: float) -> void:
 	# 三次曲线让两侧卡缓慢起步、越接近中间卡越快；中间卡始终固定。
 	var travel := progress * progress * progress
 	# GIF前半程保持原色，接近重合时才在约一帧内变白。
-	_whiten_materials(clampf((progress - WHITE_START_PROGRESS) * COLLIDE_SECONDS / WHITE_SECONDS, 0.0, 1.0))
+	var whiten := clampf((progress - WHITE_START_PROGRESS) * COLLIDE_SECONDS / WHITE_SECONDS, 0.0, 1.0)
+	var jelly := smoothstep(JELLY_START_PROGRESS, 1.0, progress)
 	for index: int in _materials.size():
+		_set_whiten(_materials[index], whiten)
+		_effect(_materials[index]).set_shader_parameter("jelly_amount", jelly)
 		var offset := (index - 1) * (CARD_SIZE.x * MATERIAL_SCALE + MATERIAL_GAP + PULLBACK_PIXELS * MATERIAL_SCALE)
 		_materials[index].position = size * 0.5 + Vector2(offset * (1.0 - travel), 0)
 
@@ -175,6 +182,9 @@ func _begin_reveal() -> void:
 
 func _reveal_reward(progress: float) -> void:
 	_set_whiten(_reward, 1.0 - progress)
+
+func _settle_reward(progress: float) -> void:
+	_effect(_reward).set_shader_parameter("jelly_progress", progress)
 
 func _finish() -> void:
 	stage = &"finished"

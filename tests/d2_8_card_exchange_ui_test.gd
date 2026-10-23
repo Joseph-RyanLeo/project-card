@@ -128,10 +128,10 @@ func run() -> void:
 	var original: CardView = original_slot.get_child(0)
 	await click(original.get_global_rect().get_center())
 	await click(main._shop_exchange_slots[0].get_global_rect().get_center())
-	check(main._shop_exchange_slots[0]._card_view == original and original_slot.get_child_count() == 0 and not original.is_snapshot_mode(), "实际单击携带放入置换槽，原卡面移入且来源为空")
+	check(main._shop_exchange_slots[0]._card_view == original and main._find_collection_slot_for_owned_card(materials[0]) == null and not original.is_snapshot_mode(), "实际单击携带放入置换槽，原卡面移入且来源为空")
 	check(not main._shop_exchange_slots[1]._can_drop_data(Vector2.ZERO, {"kind": &"card", "owned_card": materials[0]}), "不能把同一实例重复放入两个材料槽")
 	var higher: OwnedCard = main.owned_card_collection.create_card(load("res://resources/cards/shieldwall_private.tres"))
-	check(not main._shop_exchange_slots[1]._can_drop_data(Vector2.ZERO, {"kind": &"card", "owned_card": higher}), "不同品级不能混放")
+	check(main._shop_exchange_slots[1]._can_drop_data(Vector2.ZERO, {"kind": &"card", "owned_card": higher}), "不同品级可入槽，确认时再检查融合资格")
 	main._sync_legacy_collection_cards()
 	var initial_page: int = main.current_collection_page
 	var other_page: int = (initial_page + 1) % main.get_collection_spread_count()
@@ -142,7 +142,7 @@ func run() -> void:
 	main.turn_collection_page(initial_page)
 	await create_timer(0.4).timeout
 	original_slot = main._find_collection_slot_for_owned_card(materials[0])
-	check(original_slot != null and original_slot.get_child_count() == 0 and main._shop_exchange_slots[0]._source.parent == original_slot, "翻回来源页保留空位置，归还地址更新至新容器")
+	check(original_slot == null and main._shop_exchange_slots[0]._card_view == original, "翻回来源页不留空位，真实卡仍在槽内")
 	var source: Vector2 = original.get_global_rect().get_center()
 	await motion(source)
 	await button(source, true)
@@ -151,7 +151,7 @@ func run() -> void:
 	await motion(Vector2(1000, 620), true)
 	await button(Vector2(1000, 620), false)
 	await create_timer(0.2).timeout
-	check(main._shop_exchange_ids[0].is_empty() and original.get_parent() == original_slot and original_slot.get_child_count() == 1, "原生拖回收藏恢复同一个卡面并清空材料槽")
+	check(main._shop_exchange_ids[0].is_empty() and main._find_collection_slot_for_owned_card(materials[0]) != null, "原生拖回收藏清空材料槽且保留原实例")
 	# 新产物不继承材料的贴纸和成长，战场上的装备归还收藏。
 	materials[0].apply_permanent_growth(OwnedCard.STAT_MAX_HEALTH, 8)
 	materials[0].set_emblem_slot(0, {"instance_id": &"economy_material_bread", "emblem_id": &"面包", "temporary": false})

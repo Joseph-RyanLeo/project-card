@@ -1,14 +1,16 @@
 class_name SpellPreparationIconStyle
 extends RefCounted
 
-## 将法术启动类别的底座与对应品级图案裁切、居中，合成为准备栏图标。
+## 底色表示阵营，中央图案表示启动类别与品级；共用于令牌、拖拽和落位预览。
 
-const BASE_TEXTURES: Array[Texture2D] = [
-	preload("res://assets/ui/board_revision_20261019/spell_base_conditional.png"),
-	preload("res://assets/ui/board_revision_20261019/spell_base_prepared.png"),
-	preload("res://assets/ui/board_revision_20261019/spell_base_instant.png"),
-]
-const LABYRINTH_BASE: Texture2D = preload("res://assets/ui/board_revision_20261019/spell_base_labyrinth.png")
+const FACTION_BASES := {
+	CardFaction.Id.RADIANT_ALLIANCE: preload("res://assets/ui/board_revision_20261019/spell_base_prepared.png"),
+	CardFaction.Id.HANSA_FEDERATION: preload("res://assets/ui/board_revision_20261019/spell_base_conditional.png"),
+	CardFaction.Id.WILD_BEAST_NEST: preload("res://assets/ui/board_revision_20261019/spell_base_instant.png"),
+	CardFaction.Id.LABYRINTH: preload("res://assets/ui/board_revision_20261019/spell_base_labyrinth.png"),
+}
+const PATHFINDER_COLOR := Color("d67a22") # 寻路者协会使用橙色内底，保留原生边框
+const UNALIGNED_COLOR := Color("777777") # 未归属法术使用灰色内底
 const ICON_ATLAS: Texture2D = preload("res://assets/card_ui/spells/source/preparation_icons.png")
 const DISPLAY_SIZE := Vector2(42.0, 42.0) # 法术准备栏图标保持底座原生42×42像素
 const ICON_X := [0, 64, 126] # 图案原图从左到右：条件、准备、即时
@@ -32,17 +34,22 @@ static func source_column_for_trigger(kind: CardData.SpellTriggerKind) -> int:
 
 
 static func get_texture(source_column: int, rarity: CardData.Rarity, faction: CardFaction.Id = CardFaction.Id.UNALIGNED) -> Texture2D:
-	if source_column < 0 or source_column >= BASE_TEXTURES.size():
+	if source_column < 0 or source_column >= ICON_X.size():
 		return null
 	var rarity_index := int(rarity)
 	if rarity_index < 0 or rarity_index >= ICON_Y.size():
 		return null
-	var labyrinth := faction == CardFaction.Id.LABYRINTH
-	var cache_key := Vector3i(source_column, rarity_index, int(labyrinth))
+	var cache_key := Vector3i(source_column, rarity_index, int(faction))
 	if _texture_cache.has(cache_key):
 		return _texture_cache[cache_key] as Texture2D
-	var base_texture := LABYRINTH_BASE if labyrinth else BASE_TEXTURES[source_column]
+	var base_texture: Texture2D = FACTION_BASES.get(faction, FACTION_BASES[CardFaction.Id.RADIANT_ALLIANCE])
 	var base := base_texture.get_image().duplicate() as Image
+	if not FACTION_BASES.has(faction):
+		var original_color := base.get_pixel(10, 10)
+		var faction_color := PATHFINDER_COLOR if faction == CardFaction.Id.PATHFINDER_ASSOCIATION else UNALIGNED_COLOR
+		for y: int in base.get_height():
+			for x: int in base.get_width():
+				if base.get_pixel(x, y).is_equal_approx(original_color): base.set_pixel(x, y, faction_color)
 	var icon := ICON_ATLAS.get_image().get_region(
 		Rect2i(ICON_X[source_column], ICON_Y[rarity_index], ICON_WIDTH[source_column], ICON_HEIGHT)
 	)

@@ -1,6 +1,6 @@
 extends "res://tests/d2_8_exchange_animation_ui_test.gd"
 
-## 正式显示壳与真实拖放，验证服务期间落点、来源虚影和当前页产物归位。
+## 正式显示壳与真实拖放，验证服务期间落点、收藏压缩和当前页产物归位。
 func run() -> void:
 	create_timer(60).timeout.connect(func(): push_error("服务放置回归超时"); quit(1))
 	shell = DISPLAY.instantiate()
@@ -54,11 +54,11 @@ func run() -> void:
 	check(slot._card_view == original and original.is_layout_animating() and original.position.distance_to(slot.CARD_POSITION) > 1, "真实点击入槽时同一张卡从释放位置平滑移动")
 	await create_timer(0.3).timeout
 	check(original.position.is_equal_approx(slot.CARD_POSITION), "入槽动画最终落到固定轮廓位置")
-	check(original_slot.get_child_count() == 1 and slot._source_ghost.get_parent() == original_slot and is_equal_approx(slot._source_ghost.modulate.a, CardView.COLLECTION_DRAG_GHOST_ALPHA) and slot._source_ghost.is_snapshot_mode() and slot._source_ghost.mouse_filter == Control.MOUSE_FILTER_IGNORE, "收藏原位置保留只有展示用途的半透明虚影")
+	check(main._find_collection_slot_for_owned_card(materials[0]).get_meta("is_deployed_ghost", false), "收藏保留槽内实例的不可交互虚影")
 	main._build_collection_cards()
 	await process_frame
 	original_slot = main._find_collection_slot_for_owned_card(materials[0])
-	check(slot._source_ghost.get_parent() == original_slot and slot._source_ghost.position == resting_position and slot._card_view == original, "重建收藏页保留正确位置的虚影和槽内真实卡")
+	check(original_slot != null and original_slot.get_meta("is_deployed_ghost", false) and slot._card_view == original, "重建收藏页保持槽内实体与收藏虚影")
 	await capture("placement-ghost")
 	var source := original.get_global_rect().get_center()
 	await motion(source)
@@ -67,7 +67,9 @@ func run() -> void:
 	await motion(Vector2(1000, 620), true)
 	await button(Vector2(1000, 620), false)
 	await create_timer(0.3).timeout
-	check(slot._card_view == null and original.get_parent() == original_slot and original_slot.get_child_count() == 1 and original.modulate.a == 1.0, "原生拖回收藏移除虚影并恢复原卡")
+	original_slot = main._find_collection_slot_for_owned_card(materials[0])
+	original = original_slot.get_child(0)
+	check(slot._card_view == null and original.get_owned_card() == materials[0] and original.modulate.a == 1.0, "原生取回保留拥有实例并清空槽位")
 	source = original.get_global_rect().get_center()
 	await motion(source)
 	await button(source, true)
@@ -75,7 +77,7 @@ func run() -> void:
 	await motion(slot.get_global_rect().get_center(), true)
 	await button(slot.get_global_rect().get_center(), false)
 	check(slot._card_view == original and original.is_layout_animating(), "原生长按拖入融合槽也播放平滑位移动画")
-	check(is_equal_approx(original_slot.modulate.a, 1.0) and is_equal_approx(slot._source_ghost.modulate.a, CardView.COLLECTION_DRAG_GHOST_ALPHA), "原生拖入后来源容器恢复不透明，虚影只应用一次透明度")
+	check(main._find_collection_slot_for_owned_card(materials[0]).get_meta("is_deployed_ghost", false), "原生拖入后收藏保留虚影")
 	select_materials(materials)
 	await create_timer(0.3).timeout
 	main._execute_shop_exchange()
@@ -134,10 +136,10 @@ func test_enhancement() -> void:
 	await click(source.get_global_rect().get_center())
 	await click(maze._enhancement_slot.get_global_rect().get_center())
 	await create_timer(0.3).timeout
-	check(maze._enhancement_slot._card_view == source and source.position == maze._enhancement_slot.CARD_POSITION and source_slot.get_child_count() == 1 and is_equal_approx(maze._enhancement_slot._source_ghost.modulate.a, CardView.COLLECTION_DRAG_GHOST_ALPHA), "强化同样平滑入槽并在收藏保留虚影")
+	check(maze._enhancement_slot._card_view == source and source.position == maze._enhancement_slot.CARD_POSITION and main._find_collection_slot_for_owned_card(owned).get_meta("is_deployed_ghost", false), "强化同样平滑入槽并保留收藏虚影")
 	maze.complete_event(false)
 	await process_frame
 	var returned_slot: Control = main._find_collection_slot_for_owned_card(owned)
-	check(source.get_parent() == returned_slot and returned_slot.get_child_count() == 1 and source.modulate.a == 1.0 and main.front_row.can_receive_card_drag(data), "离开强化移除虚影、归还原卡并恢复部署")
+	check(returned_slot != null and returned_slot.get_child(0).get_owned_card() == owned and not main._is_owned_card_deployed(owned) and main.front_row.can_receive_card_drag(data), "离开强化移除虚影、归还原卡并恢复部署")
 	shell.queue_free()
 	await process_frame

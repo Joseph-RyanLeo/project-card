@@ -1,15 +1,17 @@
 class_name ShopOfferView
 extends Control
 
-## 商品图片与说明共用一个点击区域；视觉抬起不改变原始命中范围。
+## 商品图面独立倾斜，价格与原始点击区域保持固定。
 signal purchase_requested
 signal inspection_requested
 
-const TILE_SIZE := Vector2(112, 174) # 单行商品仅预留图片与独立价格的高度
+const TILE_SIZE := Vector2(112, 212) # 单行商品仅预留图片与独立价格的高度
 const REFLOW_SECONDS: float = 0.24 # 售出商品后剩余图片和价格横向补位的秒数
-const ART_HEIGHT: float = 140.0 # 商品图片区域高度
-const HOVER_LIFT: float = 5.0 # 指向商品时向上抬起的距离
-const HOVER_DURATION: float = 0.15 # 商品抬起和回落的秒数
+const ART_HEIGHT: float = 188.0 # 锦缎从棋盘y79至y267，商品在此固定高度内上下居中
+const PRICE_TOP: float = 198.0 # 价格左上角位于锦缎底边下方10像素
+const IDLE_FORCE_LIMIT: float = 0.22 # 闲置透视倾斜强度，为检视最大倾斜的22%
+const IDLE_SECONDS_MIN: float = 1.8 # 一次随机倾斜变化的最短秒数
+const IDLE_SECONDS_MAX: float = 3.4 # 一次随机倾斜变化的最长秒数
 const PACK_RENDER_SCALE: float = 2.0 # 商店贴纸封皮按2倍精度计算高光，适配2K窗口
 
 var _reflow_tween: Tween
@@ -17,15 +19,19 @@ var _reflow_offset := 0.0
 var _visual: Control
 var _hovered := false
 var _left_pressed := false
-var _hover_tween: Tween
 var _hover_surface: InspectionCardSurface
+var _idle_rng := RandomNumberGenerator.new()
+var _idle_from := Vector2.ZERO
+var _idle_target := Vector2.ZERO
+var _idle_elapsed := 0.0
+var _idle_duration := 1.0
 var inspectable := false
 
 
 func configure(art: Control, price: Control, is_inspectable: bool, enabled: bool, stacked: bool = false, service_name: String = "") -> void:
 	var compact := not service_name.is_empty()
 	if compact: art.size = Vector2(32, 32) # 棋盘下沿服务图标缩至32像素，点击与价格保持独立
-	var art_height := maxf(ART_HEIGHT, art.size.y)
+	var art_height := ART_HEIGHT
 	var footprint := Vector2(148, 48) if compact else (Vector2(art.size.x, art_height) if stacked else Vector2(maxf(TILE_SIZE.x, art.size.x), art_height + TILE_SIZE.y - ART_HEIGHT))
 	custom_minimum_size = footprint
 	size = footprint
@@ -34,6 +40,7 @@ func configure(art: Control, price: Control, is_inspectable: bool, enabled: bool
 	inspectable = is_inspectable
 	_visual = Control.new()
 	_visual.size = Vector2(40, footprint.y) if compact else Vector2(footprint.x, art_height)
+	_visual.pivot_offset = _visual.size * 0.5
 	_visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_visual)
 	art.position = ((_visual.size - art.size) * 0.5).round()
@@ -45,8 +52,8 @@ func configure(art: Control, price: Control, is_inspectable: bool, enabled: bool
 	if stacked:
 		price.free()
 	else:
-		price.position = Vector2(40, 22) if compact else Vector2(0, art_height + 4)
-		price.size = Vector2(footprint.x - 40, 28) if compact else Vector2(footprint.x, 28)
+		price.position = Vector2(40, 22) if compact else Vector2(0, PRICE_TOP)
+		price.size = Vector2(footprint.x - 40, 28) if compact else Vector2(footprint.x, 14)
 		add_child(price)
 		if compact:
 			var caption := Label.new()
@@ -81,8 +88,10 @@ func _ready() -> void:
 			_hover_surface.effect.set_shader_parameter("use_pack_foil", true)
 		_hover_surface.set_process(false)
 		_set_mouse_ignore_recursive(_hover_surface)
-	# _process会在入树时自动启用，因此在_ready阶段关闭未悬停商品的处理。
-	set_process(_hovered)
+		# 外观使用独立随机源，不能推进报价、开包或战斗的随机序列。
+		_idle_rng.randomize()
+		_next_idle_tilt()
+	set_process(_hover_surface != null)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -108,24 +117,30 @@ func set_pointer_hover(entered: bool) -> void:
 		return
 	_hovered = entered
 	_left_pressed = false
-	if is_instance_valid(_hover_tween):
-		_hover_tween.kill()
-	_hover_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	_hover_tween.tween_property(_visual, "position:y", -HOVER_LIFT if entered else 0.0, HOVER_DURATION)
-	set_process(_hover_surface != null)
+	if not entered and _hover_surface != null:
+		_next_idle_tilt()
+
+
+func _next_idle_tilt() -> void:
+	_idle_from = _hover_surface.force
+	_idle_target = Vector2(_idle_rng.randf_range(-IDLE_FORCE_LIMIT, IDLE_FORCE_LIMIT), _idle_rng.randf_range(-IDLE_FORCE_LIMIT, IDLE_FORCE_LIMIT))
+	_idle_elapsed = 0.0
+	_idle_duration = _idle_rng.randf_range(IDLE_SECONDS_MIN, IDLE_SECONDS_MAX)
 
 
 func _process(delta: float) -> void:
 	var target := Vector2.ZERO
 	if _hovered:
-		# 忽略抬起后的y偏移，避免视觉变形反过来影响鼠标归一化与叠包命中。
+		# 从固定商品区域取鼠标坐标，视觉倾斜不能反过来移动命中区域。
 		var pointer := get_local_mouse_position() - Vector2(_visual.position.x, 0.0) - _hover_surface.position - _hover_surface.content_padding
 		var art_size := _hover_surface.size - _hover_surface.content_padding * 2.0
 		target = ((pointer / art_size - Vector2.ONE * 0.5) * 2.0).clamp(-Vector2.ONE, Vector2.ONE)
+	else:
+		_idle_elapsed = minf(_idle_elapsed + delta, _idle_duration)
+		target = _idle_from.lerp(_idle_target, smoothstep(0.0, _idle_duration, _idle_elapsed))
+		if _idle_elapsed >= _idle_duration:
+			_next_idle_tilt()
 	_hover_surface.update_pointer_force(target, delta)
-	if not _hovered and _hover_surface.force.length() < 0.001:
-		_hover_surface.update_pointer_force(Vector2.ZERO, 1.0)
-		set_process(false)
 
 
 func _set_mouse_ignore_recursive(node: Node) -> void:
@@ -150,7 +165,7 @@ func animate_reflow_from(previous_canvas_origin: Vector2) -> void:
 
 
 func _set_reflow_offset(value: float) -> void:
-	# 所有直系可视子节点一起补位，悬停只修改图片的y，不干扰静态价格。
+	# 所有直系可视子节点一起补位；图面的独立旋转不干扰价格。
 	for child: Node in get_children():
 		if child is Control:
 			child.position.x += value - _reflow_offset

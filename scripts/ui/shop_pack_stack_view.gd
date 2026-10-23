@@ -8,7 +8,6 @@ const HOVER_Z: int = 100 # 目标卡包在本堆内提升的绘制层，不跨�
 var _offers: Array[ShopOfferView] = []
 var _hover_offer: ShopOfferView
 var _pressed_offer: ShopOfferView
-var _price_reflow: Tween
 var _description: Control
 
 
@@ -46,7 +45,7 @@ func remove_offer(offer: ShopOfferView) -> void:
 func _layout_offers() -> void:
 	var pack_size := Vector2(99, ShopOfferView.ART_HEIGHT)
 	for offer: ShopOfferView in _offers:
-		pack_size = pack_size.max(offer._visual.size)
+		pack_size.x = maxf(pack_size.x, offer._visual.size.x)
 	var width := maxf(ShopOfferView.TILE_SIZE.x, pack_size.x + PACK_STEP * maxi(0, _offers.size() - 1))
 	custom_minimum_size = Vector2(width, pack_size.y + ShopOfferView.TILE_SIZE.y - ShopOfferView.ART_HEIGHT)
 	size = custom_minimum_size
@@ -54,8 +53,8 @@ func _layout_offers() -> void:
 	for index: int in _offers.size():
 		_offers[index].position = Vector2(left + index * PACK_STEP, 0)
 		_offers[index].z_index = HOVER_Z if _offers[index] == _hover_offer else index
-	_description.position = Vector2(2, pack_size.y + 2)
-	_description.size = Vector2(width - 4, size.y - pack_size.y - 2)
+	_description.position = Vector2(0, ShopOfferView.PRICE_TOP)
+	_description.size = Vector2(width, 14) # 价格单独居中，所有包装共用固定纵坐标
 
 
 func _pick_offer(point: Vector2) -> ShopOfferView:
@@ -102,15 +101,6 @@ func _gui_input(event: InputEvent) -> void:
 				if is_instance_valid(target) and target == _hover_offer and bool(target.get_meta("purchase_enabled", true)):
 					target.purchase_requested.emit()
 		accept_event()
-
-
-func animate_price_reflow_from(previous_canvas_origin: Vector2) -> void:
-	if is_instance_valid(_price_reflow):
-		_price_reflow.kill()
-	var delta := get_global_transform_with_canvas().basis_xform_inv(previous_canvas_origin - _description.get_global_transform_with_canvas().origin)
-	_description.position.x += delta.x
-	_price_reflow = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_price_reflow.tween_property(_description, "position:x", 2.0, ShopOfferView.REFLOW_SECONDS)
 
 
 func reorder_offers() -> void:

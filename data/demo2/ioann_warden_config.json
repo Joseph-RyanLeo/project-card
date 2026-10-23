@@ -60,7 +60,7 @@
     "sentry_guard": {
       "level": 1,
       "display_name": "护",
-      "source_text": "哨位获得战吼：额外为前排卡牌提供1×等级点护甲。",
+      "source_text": "哨位获得突击：额外为前排卡牌提供1×等级点护甲。",
       "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
       "confirmed_rules": {
         "target": "all_friendly_front_squads",
@@ -85,7 +85,7 @@
     "sentry_sharp": {
       "level": 1,
       "display_name": "锐",
-      "source_text": "哨位获得亡语：为随机一张友方卡牌提供+（0.5×等级）/+（1×等级）。",
+      "source_text": "哨位获得遗愿：为随机一张友方卡牌提供+（0.5×等级）/+（1×等级）。",
       "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
       "confirmed_rules": {
         "triggers": [
@@ -103,7 +103,7 @@
     "sentry_spell": {
       "level": 1,
       "display_name": "咒",
-      "source_text": "哨位获得战吼：随机获得1张属于辉光同盟的法术。",
+      "source_text": "哨位获得突击：随机获得1张属于辉光同盟的法术。",
       "boundary_status": "已确认并接入第一层运行时；数值仍可后续调整",
       "confirmed_rules": {
         "trigger": "rush",
@@ -247,7 +247,7 @@
       }
     }
   },
-  "terminology_notes": "战吼已由用户明确确认对应突击（rush），亡语沿用遗愿（last_wish）；超星爆燃的本次描述对应已有supernova/超星燃爆同一天赋。",
+  "terminology_notes": "天赋统一使用突击（rush）与遗愿（last_wish）；超星爆燃的本次描述对应已有supernova/超星燃爆同一天赋。",
   "experience": {
     "level_thresholds": [
       0,

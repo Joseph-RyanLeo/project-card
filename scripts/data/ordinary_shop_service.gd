@@ -225,7 +225,7 @@ func capture_state() -> Dictionary:
 
 func refresh_price() -> int:
 	var refresh_config := config.get("refresh", {}) as Dictionary
-	return int(refresh_config.get("initial_price", 1)) * int(refresh_config.get("price_multiplier", 2)) ** refresh_count
+	return int(refresh_config.get("initial_price", 1)) + int(refresh_config.get("price_increment", 1)) * refresh_count
 
 
 func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_definitions: Array[Dictionary], held_stickers: Array[Dictionary]) -> bool:

@@ -15,7 +15,7 @@ const CardServiceSlot = preload("res://scripts/ui/card_service_slot.gd")
 const TEXT_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const SentryStyle = preload("res://scripts/ui/sentry_indicator_style.gd")
 const SENTRY_MOVE_SECONDS: float = 0.30 # 哨位从鼠标落点移动到区域角落的时长
-const PANEL_POSITION := Vector2(189, -6) # 普通事件的固定屏幕位置；战斗介绍换算后固定在上半世界
+const PANEL_POSITION := Vector2(189, 0) # 普通事件与上半世界共用原稿顶边
 const PANEL_SIZE := Vector2(902, 351) # 新事件棋盘原生尺寸
 var run := RunState.new()
 var hero := Progress.new()
@@ -38,6 +38,7 @@ var _body: VBoxContainer
 var _status: Control
 var _enhancement_slot: Control
 var _enhancement_card_id: StringName = &""
+var _enhancement_options: VBoxContainer
 var _sentry_bar: Control
 var _sentry_zones: Dictionary = {}
 var _before_battle: Dictionary = {}
@@ -213,6 +214,8 @@ func select_path(id: String) -> bool:
 			seen_events.append(id)
 	if not _commit_transaction(previous):
 		return false
+	if run.get_round_kind() == "shop":
+		enter_selected_shop()
 	return true
 
 
@@ -238,7 +241,7 @@ func _grant_emblem(id: String, receipt: String) -> void:
 
 
 func complete_event(take_reward: bool = true, discard_confirmed: bool = false) -> bool:
-	if run.step != RunState.Step.EVENT or run.get_round_kind() == "shop" or (take_reward and run.selected_path.get("reward") in ["enhance_card", "story"] and not run.selected_path.has("story_result")):
+	if run.step != RunState.Step.EVENT or run.get_round_kind() == "shop" or (take_reward and run.selected_path.get("reward") in ["enhance_card", "story"] and not run.selected_path.has("story_result") and not run.selected_path.has("enhancement_result")):
 		return false
 	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(complete_event.bind(take_reward, true)): return false
 	var previous := _capture_transaction()
@@ -600,6 +603,7 @@ func restore_state(snapshot: Dictionary) -> bool:
 	if not validate_state(snapshot):
 		return false
 	run.restore_state(snapshot.run)
+	_enhancement_card_id = StringName(run.selected_path.get("enhancement_result", {}).get("instance_id", ""))
 	# 路径内还有一份固定遭遇快照；同步迁移并保存它，避免下次部署恢复旧槽数。
 	var saved_paths: Array = run.paths.duplicate()
 	if not run.selected_path.is_empty(): saved_paths.append(run.selected_path)
@@ -632,6 +636,8 @@ func restore_ui() -> void:
 	_main._update_phase_label()
 	_main.set_world_view(_main.WorldView.BATTLEFIELDS, false)
 	refresh()
+	if run.step == RunState.Step.EVENT and run.get_round_kind() == "shop":
+		enter_selected_shop()
 
 
 func reward_summary() -> String:
@@ -701,6 +707,7 @@ func _build_ui() -> void:
 	_panel.position = PANEL_POSITION
 	_panel.size = PANEL_SIZE
 	_panel.z_index = 2400 # 流程面板覆盖战场图标，位于商店弹层下方
+	_panel.z_as_relative = false
 	_panel.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	_main.add_child(_panel)
 	var panel_host := Control.new()
@@ -767,13 +774,9 @@ func _input(event: InputEvent) -> void:
 func refresh() -> void:
 	if not is_instance_valid(_panel):
 		return
-	# 战斗介绍属于上半战场，切到收藏视角时必须让出我方阵容；其余事件仍固定屏幕。
-	var battle_intro := run.step == RunState.Step.BATTLE_PREPARE and hero.pending_talent_levels.is_empty()
-	var panel_parent: Control = _main.world_content if battle_intro else _main
-	if _panel.get_parent() != panel_parent:
-		_panel.reparent(panel_parent, false)
-	_panel.position = PANEL_POSITION + _main.BATTLEFIELD_VIEW_ORIGIN if battle_intro else PANEL_POSITION
+	_main._sync_tabletop_panel_anchors()
 	_update_status()
+	_main._refresh_enemy_side_trays()
 	var choice_key := "%d:%d:%s" % [run.day, run.round_index, JSON.stringify(run.paths)] if run.step == RunState.Step.CHOOSING else ""
 	if is_instance_valid(_event_table) and not choice_key.is_empty() and choice_key == _last_dealt_key and hero.pending_talent_levels.is_empty():
 		_panel.visible = not _main.ordinary_shop_open
@@ -819,8 +822,8 @@ func refresh() -> void:
 		_event_table.show_choices(run.paths, choice_key != _last_dealt_key)
 		_last_dealt_key = choice_key
 	elif run.step in [RunState.Step.EVENT, RunState.Step.BATTLE_PREPARE]:
-		show_panel = true
-		_build_selected_event()
+		show_panel = run.get_round_kind() != "shop"
+		if show_panel: _build_selected_event()
 	elif run.step == RunState.Step.ENDED:
 		show_panel = true
 		_build_plain_event_board()
@@ -888,10 +891,6 @@ func _build_selected_event() -> void:
 	_detail_body = _event_table.detail_body
 	var event: Dictionary = run.selected_path
 	match run.get_round_kind():
-		"shop":
-			_label("迷宫商人")
-			_label(String(event.hint) + "\n挑选商品，完成后离店继续今天的旅程。")
-			_button("进入商店", enter_selected_shop)
 		"battle":
 			_label("Boss战" if run.is_boss_day() else "战斗遭遇")
 			_label(String(event.hint) + "\n可以先调整我方阵容，准备后点击右下方开始战斗。")
@@ -1073,7 +1072,7 @@ func hero_description() -> String:
 
 
 func can_select_enhancement_card(data: Dictionary) -> bool:
-	if run.step != RunState.Step.EVENT or run.selected_path.get("reward") != "enhance_card" or _main.current_phase != _main.GamePhase.PREPARE:
+	if run.step != RunState.Step.EVENT or run.selected_path.get("reward") != "enhance_card" or run.selected_path.has("enhancement_result") or _main.current_phase != _main.GamePhase.PREPARE:
 		return false
 	var owned := data.get("owned_card") as OwnedCard
 	return data.get("kind") == &"card" and owned != null and owned.card_data.card_type == CardData.CardType.MINION and _main.owned_card_collection.get_by_instance_id(owned.instance_id) == owned
@@ -1084,7 +1083,7 @@ func select_enhancement_card(data: Dictionary) -> bool:
 		return false
 	var entry_position := CardServiceSlot.get_entry_position(data)
 	_enhancement_card_id = (data.owned_card as OwnedCard).instance_id
-	refresh()
+	_refresh_enhancement_card()
 	_enhancement_slot.animate_entry_from_global_position(entry_position)
 	return true
 
@@ -1094,7 +1093,7 @@ func is_enhancement_drop_at(pointer: Vector2) -> bool:
 
 func _on_enhancement_card_returned() -> void:
 	_enhancement_card_id = &""
-	refresh.call_deferred()
+	_refresh_enhancement_card.call_deferred()
 
 
 func _enhancement_option_text(option: Dictionary) -> String:
@@ -1105,37 +1104,55 @@ func _enhancement_option_text(option: Dictionary) -> String:
 	return "%s：%s" % ["免费" if int(option.cost) == 0 else "%d金币" % int(option.cost), "、".join(values)]
 
 
+func _refresh_enhancement_card() -> void:
+	if not is_instance_valid(_enhancement_slot): return
+	var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id)
+	_enhancement_slot.show_card(owned)
+	if is_instance_valid(_enhancement_options):
+		for button: Node in _enhancement_options.find_children("*", "Button", true, false):
+			if button is Button and button.has_meta("enhancement_option"):
+				var option: Dictionary = run.selected_path.options[int(button.get_meta("enhancement_option"))]
+				button.disabled = owned == null or _main.run_reward_state.gold < int(option.cost)
+	_main._refresh_drag_availability()
+
+
 func _build_enhancement_interface() -> void:
-	_label(String(run.selected_path.name) + " · 本局永久强化")
+	var finished := run.selected_path.has("enhancement_result")
+	_label(String(run.selected_path.name) + (" · 强化完成" if finished else " · 本局永久强化"))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 24) # 强化选项和右侧卡槽的间距
 	(_detail_body if is_instance_valid(_detail_body) else _body).add_child(row)
-	var options := VBoxContainer.new()
-	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(options)
+	_enhancement_options = VBoxContainer.new()
+	_enhancement_options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_enhancement_options)
 	var tip := Label.new()
-	tip.text = "把一张随从拖到右侧，再选择一次强化。"
-	options.add_child(tip)
-	for index: int in run.selected_path.options.size():
-		var option: Dictionary = run.selected_path.options[index]
-		var button := _button(_enhancement_option_text(option), apply_card_enhancement.bind(index), options)
-		button.disabled = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id) == null or _main.run_reward_state.gold < int(option.cost)
-	_button("放弃强化并继续", complete_event.bind(false), options)
+	tip.text = "卡牌已强化，可拖回战场，或继续旅程后回收藏。" if finished else "把一张随从拖到右侧，再选择一次强化。"
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_enhancement_options.add_child(tip)
+	if finished:
+		_button("继续旅程", complete_event.bind(true), _enhancement_options)
+	else:
+		for index: int in run.selected_path.options.size():
+			var option: Dictionary = run.selected_path.options[index]
+			var button := _button(_enhancement_option_text(option), apply_card_enhancement.bind(index), _enhancement_options)
+			button.set_meta("enhancement_option", index)
+		_button("放弃强化并继续", complete_event.bind(false), _enhancement_options)
 	var slot := CardServiceSlot.new()
+	slot.allow_deployment = finished
 	slot.accepts_card = can_select_enhancement_card
-	slot.resolve_card_view = _main._find_service_card_view
+	slot.resolve_card_view = _main._take_service_card_view
+	slot.release_card_view = _main._release_service_card_view
 	slot.card_selected.connect(select_enhancement_card)
 	slot.card_returned.connect(_on_enhancement_card_returned)
 	slot.name = "EnhancementCardSlot"
 	slot.custom_minimum_size = Vector2(130, 155) # 右侧强化卡槽尺寸
 	row.add_child(slot)
 	_enhancement_slot = slot
-	var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id)
-	slot.show_card(owned)
+	_refresh_enhancement_card()
 
 
 func apply_card_enhancement(option_index: int, discard_confirmed: bool = false) -> bool:
-	if run.step != RunState.Step.EVENT or run.selected_path.get("reward") != "enhance_card" or option_index < 0 or option_index >= run.selected_path.options.size():
+	if run.step != RunState.Step.EVENT or run.selected_path.get("reward") != "enhance_card" or run.selected_path.has("enhancement_result") or option_index < 0 or option_index >= run.selected_path.options.size():
 		return false
 	var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id)
 	var option: Dictionary = run.selected_path.options[option_index]
@@ -1149,9 +1166,6 @@ func apply_card_enhancement(option_index: int, discard_confirmed: bool = false) 
 	for stat: StringName in [OwnedCard.STAT_MAX_HEALTH, OwnedCard.STAT_BASE_ARMOR, OwnedCard.STAT_BASE_VALUE]:
 		if option.has(String(stat)):
 			owned.apply_permanent_growth(stat, float(option[String(stat)]))
-	if not run.complete_event():
-		_rollback_transaction(previous)
-		return false
-	_generate_paths()
-	_enhancement_card_id = &""
+	run.selected_path["enhancement_result"] = {"instance_id": String(owned.instance_id), "option_index": option_index}
+	run.selected_path["reward_claimed"] = true
 	return _commit_transaction(previous)

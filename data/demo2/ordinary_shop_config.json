@@ -89,7 +89,7 @@
   },
   "refresh": {
     "initial_price": 1,
-    "price_multiplier": 2
+    "price_increment": 1
   },
   "temporary_offer_weights": {
     "_说明": "用户授权暂定。暗单八类提示对当前有合法候选的类型采用相同权重；不适用的提示先排除。非稀有度提示沿用统一价格，轮播不影响报价或随机状态。",

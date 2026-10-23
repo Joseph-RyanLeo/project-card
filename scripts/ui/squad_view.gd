@@ -90,6 +90,7 @@ var _active_drag_kind: StringName = &"card"
 var _locked_drag_kind: StringName = &""
 var _locked_drag_card: CardData
 var _drag_hidden_card: CardData
+var _service_ghost_ids: Array[StringName] = []
 var _last_clicked_card: CardData
 var _mode_timer: Timer
 var _squad_shadow: Panel
@@ -171,6 +172,7 @@ func is_preview() -> bool:
 
 
 func _get_card_preview_alpha(card_data: CardData) -> float:
+	if _is_service_ghost(card_data): return CardView.COLLECTION_DRAG_GHOST_ALPHA
 	return (
 		PREVIEW_ALPHA
 		if is_preview()
@@ -620,6 +622,33 @@ func get_stack_target_snapshot_count() -> int:
 	)
 
 
+func detach_card_view(view: CardView) -> void:
+	# 服务接收后原小队不再拥有该节点，后续同步/释放不能销毁它。
+	for definition: CardData in _card_views.keys():
+		if _card_views[definition] == view:
+			_card_views.erase(definition)
+			return
+
+func set_service_ghosts(instance_ids: Array[StringName]) -> void:
+	var selected: Array[StringName] = []
+	if squad_data != null:
+		for definition: CardData in squad_data.horizontal_cards:
+			var owned := squad_data.get_owned_card(definition)
+			if owned != null and instance_ids.has(owned.instance_id): selected.append(owned.instance_id)
+		var equipment := squad_data.get_equipped_item()
+		if equipment != null and instance_ids.has(equipment.instance_id): selected.append(equipment.instance_id)
+	if selected == _service_ghost_ids: return
+	_service_ghost_ids = selected
+	_refresh()
+
+func has_service_ghosts() -> bool:
+	return not _service_ghost_ids.is_empty()
+
+func _is_service_ghost(definition: CardData) -> bool:
+	var owned := get_display_data().get_owned_card(definition) if get_display_data() != null else null
+	return owned != null and _service_ghost_ids.has(owned.instance_id)
+
+
 func get_card_views() -> Array[CardView]:
 	var views: Array[CardView] = []
 	var data := get_display_data()
@@ -659,20 +688,19 @@ func configure_drag_source(enabled: bool, source_row: Node = null) -> void:
 	_source_row = source_row
 	for card_data: CardData in _card_views:
 		var card_view := _card_views[card_data] as CardView
-		if card_view.has_meta("card_service_slot"): continue
-		card_view.configure_drag_source(_drag_enabled, &"board", source_row, self)
+		card_view.configure_drag_source(_drag_enabled and not _is_service_ghost(card_data), &"board", source_row, self)
 	if is_instance_valid(_equipment_indicator):
 		_equipment_indicator.call(
 			"configure",
 			get_display_data().get_equipped_item() if get_display_data() != null else null,
 			_source_row,
 			self,
-			_drag_enabled
+			_drag_enabled and not has_service_ghosts()
 		)
 	if not _drag_enabled:
 		reset_hover_feedback()
 	for view: CelestialIndicatorView in _celestial_views.values():
-		view.drag_enabled = _drag_enabled
+		view.drag_enabled = _drag_enabled and not has_service_ghosts()
 		view.source_row = _source_row
 
 
@@ -826,8 +854,7 @@ func _refresh() -> void:
 	var display_data := get_current_visual_squad_data()
 	if display_data.horizontal_cards.is_empty():
 		for card_view: CardView in _card_views.values():
-			if not card_view.has_meta("card_service_slot"):
-				card_view.visible = false
+			card_view.visible = false
 		visible = false
 		return
 	visible = true
@@ -876,7 +903,6 @@ func _refresh() -> void:
 	for horizontal_index: int in display_data.horizontal_cards.size():
 		var card_data := display_data.horizontal_cards[horizontal_index]
 		var card_view := get_card_view(card_data)
-		if card_view.has_meta("card_service_slot"): continue
 		card_view.visible = true
 		card_view.set_layout_position(
 			Vector2(x_positions[horizontal_index], 0.0)
@@ -898,18 +924,18 @@ func _refresh() -> void:
 			card_data == display_data.get_effect_source(),
 			INACTIVE_ATTRIBUTE_ALPHA
 		)
-		card_view.configure_drag_source(_drag_enabled, &"board", _source_row, self)
+		card_view.configure_drag_source(_drag_enabled and not _is_service_ghost(card_data), &"board", _source_row, self)
 		card_view.modulate.a = _get_card_preview_alpha(card_data)
 		card_view.mouse_filter = (
 			Control.MOUSE_FILTER_IGNORE
-			if is_preview()
+			if is_preview() or _is_service_ghost(card_data)
 			else Control.MOUSE_FILTER_STOP
 		)
 
 	for layer_index: int in display_data.layer_cards.size():
 		var layer_card := display_data.layer_cards[layer_index]
 		var layer_view := get_card_view(layer_card)
-		if layer_view != null and not layer_view.has_meta("card_service_slot"):
+		if layer_view != null:
 			# 每张卡内部还有卡框、名字、属性等 0～20 的相对层级。
 			# 整卡之间拉开固定大间隔，才能保证下层卡的任何子节点都不会穿过上层卡。
 			layer_view.set_resting_z_index(
@@ -921,7 +947,7 @@ func _refresh() -> void:
 	var draw_child_index: int = 0
 	for layer_index: int in range(display_data.layer_cards.size() - 1, -1, -1):
 		var ordered_view := get_card_view(display_data.layer_cards[layer_index])
-		if ordered_view != null and not ordered_view.has_meta("card_service_slot"):
+		if ordered_view != null:
 			card_visual_layer.move_child(ordered_view, draw_child_index)
 			draw_child_index += 1
 	if _stack_target_feedback_strength > 0.0:
@@ -959,13 +985,13 @@ func _refresh_equipment_indicator(data: SquadData) -> void:
 		- EQUIPMENT_INDICATOR_SIZE * 0.5
 	)
 	_sync_equipment_indicator_hover_offset()
-	_equipment_indicator.modulate.a = PREVIEW_ALPHA if is_preview() else 1.0
+	_equipment_indicator.modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA if _service_ghost_ids.has(equipped_item.instance_id) or has_service_ghosts() and data.get_card_count() == 1 else PREVIEW_ALPHA if is_preview() else 1.0
 	_equipment_indicator.call(
 		"configure",
 		equipped_item,
 		_source_row,
 		self,
-		_drag_enabled and not is_preview()
+		_drag_enabled and not is_preview() and not has_service_ghosts()
 	)
 	_equipment_indicator.visible = true
 
@@ -1002,11 +1028,11 @@ func refresh_celestial_indicators(data: SquadData) -> void:
 				card_visual_layer.add_child(view)
 				view.click_carry_requested.connect(_on_card_click_carry_requested)
 				_celestial_views[item.instance_id] = view
-			view.drag_enabled = _drag_enabled and not is_preview()
+			view.drag_enabled = _drag_enabled and not is_preview() and not has_service_ghosts()
 			view.source_row = _source_row
 			var point: Vector2 = attachment["position"] + data._get_effect_source_horizontal_offset()
 			view.set_meta("rest_position", point - view.size * 0.5)
-			view.modulate.a = PREVIEW_ALPHA if is_preview() else 1.0
+			view.modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA if has_service_ghosts() and data.get_card_count() == 1 else PREVIEW_ALPHA if is_preview() else 1.0
 	for key: Variant in _celestial_views.keys():
 		if not retained.has(key):
 			(_celestial_views[key] as Control).visible = false
@@ -1267,8 +1293,7 @@ func _sync_card_views(data: SquadData) -> Array[CardData]:
 		created_cards.append(card_data)
 
 	for stored_view: CardView in _card_views.values():
-		if not stored_view.has_meta("card_service_slot"):
-			stored_view.visible = false
+		stored_view.visible = false
 	return created_cards
 
 
@@ -1423,8 +1448,6 @@ func _create_squad_shadow() -> void:
 
 
 func _on_card_clicked(_ignored: CardData, clicked_card: CardData) -> void:
-	var clicked_view := get_card_view(clicked_card)
-	if clicked_view != null and clicked_view.has_meta("card_service_slot"): return
 	_last_clicked_card = clicked_card
 	squad_clicked.emit(self, clicked_card)
 
@@ -1444,8 +1467,6 @@ func _on_card_click_carry_requested(data: Dictionary, pointer_global_position: V
 
 
 func _on_card_mouse_entered(card_data: CardData) -> void:
-	var view := get_card_view(card_data)
-	if view != null and view.has_meta("card_service_slot"): return
 	if not _drag_enabled or is_preview():
 		return
 	_hovered_card = card_data
@@ -1508,7 +1529,7 @@ func _get_immediate_drag_kind() -> StringName:
 
 
 func _get_lockable_drag_kind() -> StringName:
-	return &"card" if _is_single_card_squad() else _active_drag_kind
+	return &"card" if _is_single_card_squad() or has_service_ghosts() else _active_drag_kind
 
 
 func _is_single_card_squad() -> bool:
@@ -1543,6 +1564,5 @@ func _apply_squad_lift_position() -> void:
 	squad_lift_layer.position = Vector2.ZERO
 	var lift := SQUAD_LIFT_OFFSET if _squad_feedback_active else 0.0
 	for card_view: CardView in get_card_views():
-		if card_view.has_meta("card_service_slot"): continue
 		card_view.set_external_lift(lift)
 	_sync_equipment_indicator_hover_offset()

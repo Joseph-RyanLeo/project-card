@@ -315,7 +315,7 @@ func preview_card_drop(
 		clear_drop_preview()
 		return false
 	reset_all_hover_feedback()
-	var drag_data := data as Dictionary
+	var drag_data := preload("res://scripts/ui/card_service_slot.gd").board_drag_data(data as Dictionary)
 	if drag_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
 		return _preview_equipment_drop(at_position, drag_data)
 	_clear_equipment_target_preview()
@@ -382,7 +382,7 @@ func commit_card_drop(at_position: Vector2, data: Variant) -> void:
 	if not can_receive_card_drag(data):
 		clear_drop_preview()
 		return
-	var incoming_data := data as Dictionary
+	var incoming_data := preload("res://scripts/ui/card_service_slot.gd").board_drag_data(data as Dictionary)
 	if incoming_data.get("kind") in [&"equipment_card", &"equipment_indicator"]:
 		if not preview_card_drop(at_position, data):
 			return
@@ -447,7 +447,7 @@ func commit_card_drop(at_position: Vector2, data: Variant) -> void:
 		return
 	var intent := _preview_intent.duplicate()
 	var insert_index := int(intent.get("squad_index", 0))
-	var drag_data := (data as Dictionary).duplicate()
+	var drag_data := incoming_data.duplicate()
 	drag_data["drop_intent"] = intent
 	var preview_offset: Vector2 = drag_data.get(
 		"drag_visual_offset",
@@ -511,6 +511,7 @@ func _preview_equipment_drop(at_position: Vector2, drag_data: Dictionary) -> boo
 	if (
 		target_slot == null
 		or target_squad == null
+		or target_slot.has_service_ghosts()
 		or (
 			target_squad.get_equipped_item() != null
 			and target_squad.get_equipped_item() != owned_item
@@ -820,6 +821,7 @@ func update_stack_target_feedback_global(
 	pointer_global_position: Vector2,
 	data: Dictionary
 ) -> void:
+	data = preload("res://scripts/ui/card_service_slot.gd").board_drag_data(data)
 	if not can_receive_card_drag(data) or not _can_build_stack_intent(data):
 		stop_stack_target_feedback()
 		return
@@ -1142,6 +1144,7 @@ func _intent_fits_capacity(intent: Dictionary, data: Dictionary) -> bool:
 	var kind := data.get("kind") as StringName
 	var card_data := data.get("card_data") as CardData
 	var target_slot := intent.get("target_slot") as BoardSlot
+	if is_instance_valid(target_slot) and target_slot.has_service_ghosts() and target_slot != source_slot: return false
 	if (
 		is_instance_valid(target_slot)
 		and target_slot != source_slot
@@ -2081,7 +2084,10 @@ func _is_drag_data(data: Variant) -> bool:
 	if not data is Dictionary:
 		return false
 	var drag_data := data as Dictionary
-	if drag_data.get("source_type") not in [&"collection", &"board"]:
+	if drag_data.get("source_type") == &"card_service":
+		var service := drag_data.get("source_slot") as Control
+		if not is_instance_valid(service) or not service.allow_deployment: return false
+	elif drag_data.get("source_type") not in [&"collection", &"board"]:
 		return false
 	if drag_data.get("kind") == &"card":
 		var card_data := drag_data.get("card_data") as CardData

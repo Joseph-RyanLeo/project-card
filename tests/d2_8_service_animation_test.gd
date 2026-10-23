@@ -89,6 +89,7 @@ func _run() -> void:
 	maze._enhancement_slot._drop_data(Vector2.ZERO, data)
 	check(not maze._enhancement_slot._empty_outline.visible and maze._enhancement_slot._card_view.get_owned_card() == owned, "强化槽显示拖入的原实例")
 	maze.apply_card_enhancement(0)
+	maze.complete_event()
 	maze.select_path(maze.run.paths[0].path_id)
 	measure("open_services", main._open_shop_card_services)
 	await process_frame
@@ -97,11 +98,13 @@ func _run() -> void:
 	check(main._shop_service_slot._can_drop_data(Vector2.ZERO, data), "商店槽原生拖放接收合法实例")
 	main._shop_service_slot._drop_data(Vector2.ZERO, data)
 	check(main._shop_service_card_id == owned.instance_id and not main._shop_service_slot._empty_outline.visible, "拖卡后商店选中正确实例")
-	var collection_slot: Control = main._shop_service_slot._source.parent
-	check(collection_slot.get_child_count() == 0, "原卡面移入服务槽后来源为空，不留下快照副本")
+	await process_frame
+	var collection_slot: Control = main._find_collection_slot_for_owned_card(owned)
+	check(collection_slot != null and collection_slot.get_meta("is_deployed_ghost", false), "入服务槽后收藏保留不可交互虚影")
 	await click(main._shop_service_slot._card_view.get_global_rect().get_center())
 	await click(Vector2(1000, 620))
-	check(main._shop_service_card_id.is_empty() and collection_slot.get_child_count() == 1, "服务槽中真实卡面可以抓取并归还收藏")
+	collection_slot = main._find_collection_slot_for_owned_card(owned)
+	check(main._shop_service_card_id.is_empty() and collection_slot != null and collection_slot.get_child_count() == 1, "服务槽中真实卡面可以抓取并归还收藏")
 	var source_view: CardView = collection_slot.get_child(0)
 	await click(source_view.get_global_rect().get_center())
 	check(not main._click_carry_data.is_empty(), "收藏卡牌真实单击进入携带")

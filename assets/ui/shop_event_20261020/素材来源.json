@@ -94,5 +94,29 @@
     "来源": "/Users/Zhuanz/1file/Godot素材保存文件夹/商店/事件/事件棋盘抽取事件时总览.png",
     "SHA256": "8d18835f50454ff463b86d15de2bf012edfa10d3ddaab4df1d816e71a100d2e9",
     "处理": "原生复制；子图仅在运行时使用AtlasTexture引用"
+  },
+  {
+    "文件": "refresh_press.png",
+    "来源": "/Users/Zhuanz/Library/Containers/com.tencent.qq/Data/Library/Application Support/QQ/nt_qq_df55436763b24c939118fc3592997bf2/nt_data/Pic/2026-10/Ori/e3e0efd626098a806fb6c8e3abf1da20.gif",
+    "SHA256": "db831dcd2837aa71e4875b11108a7ea3c1ef8aaaf847c32f92c81f1850557b72",
+    "处理": "GIF逐帧解码并无缩放纵向拼接；83×33，11帧，每帧50毫秒，第三帧为按住状态"
+  },
+  {
+    "文件": "rarity_beads.png",
+    "来源": "2026-10-20用户附件codex-clipboard-42031599-4c1e-4076-b350-b3c1111502b5.png",
+    "SHA256": "2207fc983c71cdaf62b9cf4304ff46dd72cc56bf0a2b46da651720d84e8c940f",
+    "处理": "60×13原生复制；I～IV级13×13玻璃珠运行时分别从x0、16、32、47裁切，不涉及V级"
+  },
+  {
+    "文件": "tabletop_park_bright.png",
+    "来源": "/Users/Zhuanz/Library/Containers/com.tencent.qq/Data/Library/Application Support/QQ/nt_qq_df55436763b24c939118fc3592997bf2/nt_data/Pic/2026-10/Ori/9f16deb205d243e1b9709e5dcb039de4.png",
+    "SHA256": "bb035adea689a4742c76e391e09e65734401768f5a7ce6527d15dc754800ca31",
+    "处理": "用户提供的亮／暗按钮原生复制，82×21像素，不拉伸、不覆盖文字"
+  },
+  {
+    "文件": "tabletop_park_dark.png",
+    "来源": "/Users/Zhuanz/Library/Containers/com.tencent.qq/Data/Library/Application Support/QQ/nt_qq_df55436763b24c939118fc3592997bf2/nt_data/Pic/2026-10/Ori/20e6fe05d4237cfa27076a15926ca47d.png",
+    "SHA256": "d01af0b5a2dcbcf58ddbf9d58374aac48c62b5a2d1a63b62257ee82b2b82ed26",
+    "处理": "用户提供的亮／暗按钮原生复制，82×21像素，不拉伸、不覆盖文字"
   }
 ]

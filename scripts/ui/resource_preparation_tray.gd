@@ -34,6 +34,12 @@ var _tile_nodes_by_id: Dictionary = {}
 var _icon_nodes_by_id: Dictionary = {}
 var _disabled_nodes: Array[TextureRect] = []
 var _enabled := true
+var _service_ghost_ids: Array[StringName] = []
+
+func set_service_ghosts(instance_ids: Array[StringName]) -> void:
+	if instance_ids == _service_ghost_ids: return
+	_service_ghost_ids.assign(instance_ids)
+	refresh()
 var _accepting_native_drag := false
 var _pressed_instance_id: StringName = &""
 var _hover_instance_id: StringName = &""
@@ -185,6 +191,7 @@ func refresh() -> void:
 			by_id.append(tile)
 		_tile_nodes_by_id[String(instance_id)] = by_id
 		_icon_nodes_by_id[String(instance_id)] = _create_piece_icons(owned, anchor, piece_cells)
+		if _service_ghost_ids.has(owned.instance_id): begin_carry(owned.instance_id)
 	if not previous_hover.is_empty() and _tile_nodes_by_id.has(String(previous_hover)):
 		_set_hover_instance(previous_hover)
 	_queue_overlay_redraw()
@@ -400,7 +407,7 @@ func _gui_input(event: InputEvent) -> void:
 			if hit_cell != null and _enabled:
 				var instance_id: StringName = _piece_by_cell.get(hit_cell, &"")
 				var owned := _owned_by_id.get(String(instance_id)) as OwnedCard
-				if owned != null and not board_state.is_level_resource(side, String(instance_id)):
+				if owned != null and not _service_ghost_ids.has(instance_id) and not board_state.is_level_resource(side, String(instance_id)):
 					_pending_press_position = button.position
 					_pending_press_cell = hit_cell
 					_pending_click_data = _build_piece_drag_data(owned, hit_cell, button.position)
@@ -427,7 +434,7 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 	if hit_cell == null: return null
 	var instance_id: StringName = _piece_by_cell.get(hit_cell, &"")
 	var owned := _owned_by_id.get(String(instance_id)) as OwnedCard
-	if owned == null or board_state.is_level_resource(side, String(instance_id)): return null
+	if owned == null or _service_ghost_ids.has(instance_id) or board_state.is_level_resource(side, String(instance_id)): return null
 	var data := _build_piece_drag_data(owned, hit_cell, _pending_press_position if _pending_press_cell != null else at_position)
 	_pending_click_data.clear()
 	_pending_press_cell = null

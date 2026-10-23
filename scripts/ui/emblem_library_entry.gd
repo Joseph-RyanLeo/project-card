@@ -22,6 +22,7 @@ var _missing_label: Label
 var _left_pressed := false
 var _press_position := Vector2.ZERO
 var _native_drag_started := false
+var _last_preview_center := Vector2.INF
 var _shadow: TextureRect
 var _lift_tween: Tween
 
@@ -175,7 +176,7 @@ func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictiona
 		"preview_texture": _icon.texture,
 	}
 	var placement_inset := Vector2(2.0, 2.0) if is_element_sticker() else Vector2.ZERO
-	return InspectionItemDrag.build(
+	var drag := InspectionItemDrag.build(
 		self,
 		preview,
 		grab_position,
@@ -184,6 +185,9 @@ func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictiona
 		install_preview,
 		placement_inset
 	)
+	_last_preview_center = Vector2.INF
+	preview.tree_exiting.connect(func(): _last_preview_center = preview.get_global_transform_with_canvas() * (preview.size * 0.5))
+	return drag
 
 
 func _request_front() -> void:
@@ -192,18 +196,19 @@ func _request_front() -> void:
 
 
 func _lift(lifted: bool, duration_override: float = -1.0) -> void:
-	if not is_instance_valid(_shadow) or (lifted and not drag_enabled): return
+	if not is_instance_valid(_icon) or (lifted and not drag_enabled): return
 	if is_instance_valid(_lift_tween): _lift_tween.kill()
 	var rest := (size - _icon.size) * 0.5
 	_lift_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD)
 	_lift_tween.set_ease(Tween.EASE_OUT if lifted else Tween.EASE_IN)
 	var duration := duration_override if duration_override > 0 else (EquipmentIndicator.HOVER_LIFT_DURATION if lifted else EquipmentIndicator.DROP_DURATION)
 	_lift_tween.tween_property(_icon, "position", rest + Vector2(0, -DROP_HOVER_LIFT if lifted else 0), duration)
-	_lift_tween.tween_property(_shadow, "position", rest + (DROP_LIFTED_SHADOW_OFFSET if lifted else EquipmentIndicatorStyle.SHADOW_OFFSET), duration)
+	if is_instance_valid(_shadow):
+		_lift_tween.tween_property(_shadow, "position", rest + (DROP_LIFTED_SHADOW_OFFSET if lifted else EquipmentIndicatorStyle.SHADOW_OFFSET), duration)
 
 
 func play_return_feedback(global_center: Vector2 = Vector2.INF) -> void:
-	if is_instance_valid(_shadow) and global_center.is_finite():
+	if is_instance_valid(_icon) and global_center.is_finite():
 		_icon.position = get_global_transform_with_canvas().affine_inverse() * global_center - _icon.size * 0.5
 	_lift(false, EquipmentIndicator.RETURN_DURATION)
 
@@ -217,11 +222,12 @@ func _notification(what: int) -> void:
 	elif what == NOTIFICATION_DRAG_END:
 		visible = true
 		var data: Variant = get_viewport().gui_get_drag_data()
-		if data is Dictionary and data.get("source_entry") == self and not get_viewport().gui_is_drag_successful():
-			var preview := data.get("drag_visual") as Control
-			play_return_feedback(preview.get_global_transform_with_canvas() * (preview.size * 0.5) if is_instance_valid(preview) else Vector2.INF)
+		if _native_drag_started and not get_viewport().gui_is_drag_successful():
+			var preview := data.get("drag_visual") as Control if data is Dictionary else null
+			play_return_feedback(preview.get_global_transform_with_canvas() * (preview.size * 0.5) if is_instance_valid(preview) else _last_preview_center)
 		else:
 			_lift(false)
+		_native_drag_started = false
 
 
 func _can_drop_data(at_position: Vector2, data: Variant) -> bool:

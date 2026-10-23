@@ -3,7 +3,7 @@ extends RefCounted
 ## 商店与事件共用原生素材、图集按钮；AtlasTexture只引用区域，不改写源图。
 const DIR := "res://assets/ui/shop_event_20261020/"
 const BOARD_SIZE := Vector2(902, 351) # 商店与事件棋盘的原生尺寸
-const SCREEN_POSITION := Vector2(189, -6) # 世界(189,-3)减去上半视角原点(0,3)后的固定屏幕位置
+const SCREEN_POSITION := Vector2(189, 0) # 原稿顶边完整显示，不再叠加世界视角和素材的上移补偿
 
 static func atlas(file: String, region: Rect2) -> AtlasTexture:
 	var texture := AtlasTexture.new()

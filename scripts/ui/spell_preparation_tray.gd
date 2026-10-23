@@ -24,6 +24,7 @@ const COLUMN_WIDTH: float = 52.0 # 三类法术各自的滚动列宽
 const COLUMN_STEP: float = 58.0 # 三列图标之间的水平间距
 const ICON_STEP: float = 21.0 # 同类图标步长为图标高度的一半
 const ICON_POSITION := Vector2(5.0, 0.0) # 图标在各滚动列内的左侧留白
+const ENEMY_ICON_LEFT: float = 1.0 # 右侧镜像底板的图标与分类标题共用左边距，比我方少4像素
 const PANEL_INSET: float = 15.0 # 图标栏相对外框的内边距
 const LIST_TOP: float = 65.0 # 三列图标滚动区在面板中的顶部位置
 const LIST_HEIGHT: float = 237.0 # 三列图标的可见高度
@@ -51,6 +52,12 @@ var _preview_order: Array[OwnedCard] = []
 var _target_positions: Dictionary = {}
 var _hovered_instance_id: StringName = &""
 var _carried_instance_id: StringName = &""
+var _service_ghost_ids: Array[StringName] = []
+
+func set_service_ghosts(instance_ids: Array[StringName]) -> void:
+	if instance_ids == _service_ghost_ids: return
+	_service_ghost_ids.assign(instance_ids)
+	if is_inside_tree(): _refresh_cards()
 var _hover_card_popup: CardView
 
 
@@ -93,7 +100,9 @@ func set_drop_enabled(enabled: bool) -> void:
 		_clear_insertion_preview()
 		clear_hover_card()
 	for icon: Control in _icons_by_instance_id.values():
-		icon.call("set_drag_enabled", enabled)
+		var ghost := _service_ghost_ids.has(icon.owned_card.instance_id)
+		icon.call("set_drag_enabled", enabled and not ghost)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE if ghost else Control.MOUSE_FILTER_STOP
 
 
 func _build_columns() -> void:
@@ -117,7 +126,7 @@ func _build_columns() -> void:
 		add_child(column)
 		var header := TextureRect.new()
 		header.texture = HEADERS[column_index]
-		header.position = Vector2(1 if enemy_display else 6, 9) # 对齐原稿分类图标；右侧仍使用左侧完整图
+		header.position = Vector2(ENEMY_ICON_LEFT if enemy_display else 6, 9) # 对齐原稿分类图标；右侧仍使用左侧完整图
 		header.size = HEADERS[column_index].get_size()
 		header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		column.add_child(header)
@@ -401,13 +410,16 @@ func _refresh_cards() -> void:
 				if column_index == _hovered_column_index() and card_index > _hovered_row_index(column_index)
 				else 0.0
 			)
-			var target_position := Vector2(ICON_POSITION.x, card_index * ICON_STEP + hover_offset)
+			var target_position := Vector2(ENEMY_ICON_LEFT if enemy_display else ICON_POSITION.x, card_index * ICON_STEP + hover_offset)
 			_target_positions[owned.instance_id] = target_position
 			if icon.get_parent() != icon_list:
 				var old_global := icon.get_global_transform_with_canvas() * Vector2.ZERO
 				icon.reparent(icon_list)
 				icon.position = icon_list.get_global_transform_with_canvas().affine_inverse() * old_global
-			icon.call("set_drag_enabled", _drop_enabled)
+			var ghost := _service_ghost_ids.has(owned.instance_id)
+			icon.call("set_drag_enabled", _drop_enabled and not ghost)
+			icon.modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA if ghost else 1.0
+			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE if ghost else Control.MOUSE_FILTER_STOP
 			icon.z_index = card_index
 			icon_list.move_child(icon, card_index)
 			_animate_icon_to_position(icon, target_position)
@@ -419,12 +431,15 @@ func _refresh_cards() -> void:
 
 
 func _process(_delta: float) -> void:
-	if _drop_enabled and _carried_instance_id.is_empty() and _preview_instance_id.is_empty():
+	if not is_visible_in_tree() or (enemy_display and not bool(get_meta("expanded", false))):
+		clear_hover_card()
+		return
+	if _carried_instance_id.is_empty() and _preview_instance_id.is_empty():
 		_update_hover_from_pointer()
 
 
 func _set_hovered_instance(instance_id: StringName) -> void:
-	if not _drop_enabled or instance_id == _hovered_instance_id or not _carried_instance_id.is_empty():
+	if instance_id == _hovered_instance_id or not _carried_instance_id.is_empty():
 		return
 	var icon := _icons_by_instance_id.get(instance_id) as Control
 	var owned := icon.get("owned_card") as OwnedCard if is_instance_valid(icon) else null
@@ -447,7 +462,7 @@ func _set_hovered_instance(instance_id: StringName) -> void:
 
 
 func clear_hover_card() -> void:
-	if _hovered_instance_id.is_empty() and not is_instance_valid(_hover_card_popup):
+	if _hovered_instance_id.is_empty():
 		return
 	_hovered_instance_id = &""
 	if is_instance_valid(_hover_card_popup):
@@ -480,7 +495,7 @@ func _position_hover_card_popup() -> void:
 	var tray_transform := get_global_transform_with_canvas()
 	var icon_global := icon.get_global_rect()
 	var icon_local_top_left := tray_transform.affine_inverse() * icon_global.position
-	_hover_card_popup.position = icon_local_top_left + Vector2(icon.size.x + 5.0, 0.0)
+	_hover_card_popup.position = icon_local_top_left + Vector2(-104.0 if enemy_display else icon.size.x + 5.0, 0.0) # 敌方卡片向左展开，99像素卡宽与图标间隔5像素
 	_hover_card_popup.size = Vector2(99.0, 136.0)
 
 
@@ -524,7 +539,7 @@ func _update_hover_from_pointer() -> void:
 				list_transform * target_position,
 				SPELL_ICON_SCRIPT.ICON_SIZE
 			)
-			if icon_rect.has_point(pointer):
+			if icon_rect.has_point(pointer) and _scrolls[column_index].get_global_rect().has_point(pointer):
 				next_instance_id = owned.instance_id
 				break
 		if not next_instance_id.is_empty():
