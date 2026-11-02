@@ -787,12 +787,17 @@ func clear_drag_hidden_card() -> void:
 
 func animate_from_global_position(
 	previous_global_position: Vector2,
-	include_preview: bool = false
+	include_preview: bool = false,
+	keep_origin_ghost: bool = false # 归还原战场位置时保留卡牌虚影；普通排版让位不创建
 ) -> void:
 	if not visible or (is_preview() and not include_preview):
 		return
 	if _layout_tween != null and _layout_tween.is_valid():
 		_layout_tween.kill()
+	for view: CardView in get_card_views(): view.clear_return_ghost()
+	if keep_origin_ghost:
+		card_visual_layer.position = Vector2.ZERO
+		for view: CardView in get_card_views(): view.begin_return_ghost(card_visual_layer.get_parent() as Control)
 	# previous_global_position 属于画布坐标；CardVisualLayer.position 属于父节点
 	# 本地坐标，不能直接相减，否则不同输出缩放下会产生错误位移。
 	var visual_parent := card_visual_layer.get_parent() as CanvasItem
@@ -813,6 +818,9 @@ func animate_from_global_position(
 		Vector2.ZERO,
 		LAYOUT_TWEEN_DURATION
 	)
+	if keep_origin_ghost:
+		_layout_tween.finished.connect(func():
+			for view: CardView in get_card_views(): view.clear_return_ghost())
 
 
 func is_layout_animating() -> bool:
@@ -1519,7 +1527,7 @@ func _on_mode_switch_timeout() -> void:
 
 func _clear_member_pointer_hover_feedback() -> void:
 	for card_view: CardView in get_card_views():
-		card_view.clear_pointer_hover_feedback()
+		card_view.clear_pointer_hover_feedback(card_view.card_data == _hovered_card)
 
 
 func _get_immediate_drag_kind() -> StringName:

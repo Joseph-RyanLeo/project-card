@@ -19,4 +19,7 @@ race_type = 2
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(11, 21)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(7, 21)
+})
 effect_text = "获得时随机获得一张Ⅱ级及其以下的远程物品卡。"

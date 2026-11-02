@@ -227,6 +227,12 @@ func refresh_price() -> int:
 	var refresh_config := config.get("refresh", {}) as Dictionary
 	return int(refresh_config.get("initial_price", 1)) + int(refresh_config.get("price_increment", 1)) * refresh_count
 
+func sticker_sale_price(definition: Dictionary) -> int:
+	var rarity := int(definition.get("rarity", -1))
+	if rarity < 0 or rarity >= CardData.Rarity.size(): return -1
+	var prices: Dictionary = config.get("sticker_sale", {}).get("prices_by_rarity", {})
+	return int(prices.get(_rarity_key(rarity), -1))
+
 
 func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_definitions: Array[Dictionary], held_stickers: Array[Dictionary]) -> bool:
 	var next_rng := _copy_rng(rng)

@@ -18,4 +18,7 @@ runes = Array[int]([0, 1, 2])
 race_type = 5
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-7, 4)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-7, 14)
+})
 effect_text = "开采。攻击命中随从时，目标基础护甲永久-1。"

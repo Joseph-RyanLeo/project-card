@@ -1,6 +1,6 @@
 extends SceneTree
 
-## D2-9 正式法术资源：验证飞书只读快照、效果目录绑定和灰烬征册收藏入口。
+## D2-9 正式法术资源：验证飞书只读快照、效果目录绑定和灰烬证册收藏入口。
 
 const EFFECT_DATA_PATH := "res://data/demo2/ash_ledger_effect_samples.json"
 const SOURCE_SNAPSHOT_PATH := "res://data/demo2/formal_spells_source_snapshot.json"
@@ -51,7 +51,7 @@ func _test_formal_resources() -> void:
 	for card_id: StringName in FORMAL_SPELLS:
 		var expected := FORMAL_SPELLS[card_id] as Dictionary
 		var card := load("res://resources/cards/%s.tres" % card_id) as CardData
-		_expect(card != null and card.pack_id == &"ash_ledger" and card.is_available, "正式法术资源进入灰烬征册：%s" % card_id)
+		_expect(card != null and card.pack_id == &"ash_ledger" and card.is_available, "正式法术资源进入灰烬证册：%s" % card_id)
 		if card == null:
 			continue
 		_expect(card.display_name == expected["name"] and card.rarity == expected["rarity"] and card.spell_type == expected["spell_type"] and card.spell_trigger_kind == expected["trigger"], "正式法术字段来自已确认记录：%s" % card_id)

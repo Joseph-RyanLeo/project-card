@@ -9,13 +9,16 @@ const MAIN_SCENE_PATH := "res://scenes/Main.tscn"
 const CARD_PREVIEW_SHADER: Shader = preload(
 	"res://shaders/card_preview_3d.gdshader"
 )
+const FINISH_PREVIEW = preload("res://scripts/ui/card_finish_preview.gd")
 const PREVIEW_EFFECT_PADDING_BOTTOM_RIGHT := Vector2(4.0, 4.0) # 在卡面真实越界范围外为 3D 投影额外保留的右下透明边
 const PREVIEW_POINTER_RESPONSE: float = 12.0 # 鼠标进入、离开时 3D 倾斜追随与回正速度
 const PREVIEW_MAX_TILT_DEGREES: float = 10.0 # 4× 预览跟随鼠标时的最大倾斜角度
+const PREVIEW_FOV_DEGREES: float = 72.0 # 整卡与全息层共用的相机视野角，越大近大远小越明显
 const PREVIEW_PROJECTION_INSET: float = 0.0 # 透视补偿内缩量；0 保持开关 3D 前后的卡面尺寸一致
 const PREVIEW_FLASH_SPACING: float = 7.0 # 扫光条纹密度；越大，同屏出现的光带越多
 const PREVIEW_FLASH_WIDTH: float = 2.4 # 扫光指数；越大光带越窄，越小光带越宽
 const PREVIEW_FLASH_INTENSITY: float = 0.32 # 扫光叠加亮度；建议在 0.2～0.6 之间微调
+const FINISH_RENDER_SCALE := 4.0 # 内层动态压纹按4倍采样计算，源图仍使用最近邻保持像素边缘
 const CARD_RESOURCE_DIRECTORY := "res://resources/cards"
 const ALL_PACK_ID: StringName = &"__all_packs__"
 const ALL_CARD_TYPES: int = -2 # 全部种类的选项ID；避开OptionButton把-1解释为自动编号
@@ -39,10 +42,13 @@ var _active_pack_id: StringName = ALL_PACK_ID
 		_card_data = value
 		if value != null:
 			var key := _draft_key(value)
-			if not _drafts.has(key): _drafts[key] = value.duplicate() as CardData
+			if not _drafts.has(key):
+				var draft := value.duplicate() as CardData
+				draft.art_finish_offsets = value.art_finish_offsets.duplicate()
+				_drafts[key] = draft
 			_preview_data = _drafts[key]
 		else: _preview_data = null
-		_preview_art_offset = _preview_data.art_offset if _preview_data != null else Vector2i.ZERO
+		_preview_art_offset = _preview_data.get_art_offset_for_finish(_selected_finish_key()) if _preview_data != null else Vector2i.ZERO
 		_sync_runtime_controls()
 		_queue_preview_refresh()
 		notify_property_list_changed()
@@ -50,10 +56,10 @@ var _active_pack_id: StringName = ALL_PACK_ID
 		return _card_data
 
 @export var preview_art_offset: Vector2i = Vector2i.ZERO:
-	# 临时预览值与 card_data.art_offset 分离，保存前不会修改真实资源。
+	# 只编辑当前工艺的草稿坐标，保存前不会修改真实资源。
 	set(value):
 		_preview_art_offset = value
-		if _preview_data != null: _preview_data.art_offset = value
+		if _preview_data != null: _preview_data.set_art_offset_for_finish(_selected_finish_key(), value)
 		_sync_offset_controls()
 		_queue_preview_refresh()
 	get:
@@ -74,6 +80,7 @@ var _refresh_queued: bool = false
 var _preview_effect_material: ShaderMaterial
 var _preview_pointer_force := Vector2.ZERO
 var _active_selector_card_type: int = -1
+var _finish_preview: CardFinishPreview
 
 @onready var preview_card: CardView = %PreviewCard
 @onready var preview_viewport: SubViewport = %PreviewViewport
@@ -99,17 +106,22 @@ var _active_selector_card_type: int = -1
 @onready var nudge_up_button: Button = %NudgeUpButton
 @onready var nudge_down_button: Button = %NudgeDownButton
 @onready var save_button: Button = %SaveButton
+@onready var save_all_finishes_button: Button = %SaveAllFinishesButton
 @onready var reload_button: Button = %ReloadButton
 @onready var reset_button: Button = %ResetButton
 @onready var use_3d_check: CheckButton = %Use3DCheck
 @onready var use_flash_check: CheckButton = %UseFlashCheck
 @onready var flash_type_selector: OptionButton = %FlashTypeSelector
+@onready var finish_selector: OptionButton = %FinishSelector
+@onready var finish_strength_spin: SpinBox = %FinishStrengthSpin
+@onready var finish_depth_spin: SpinBox = %FinishDepthSpin
+@onready var finish_density_spin: SpinBox = %FinishDensitySpin
 
 
 func _ready() -> void:
 	# 场景节点就绪后再连接信号，避免 @tool 属性 setter 访问空节点。
-	# 原始 CardView 在带透明安全边的 SubViewport 内以 1 倍渲染；显示节点再整体放大
-	# 4 倍并应用 Shader，保证边框、立绘、文字不会分别产生不同透视。
+	# 所有工艺按4倍采样，保证图标法线与投影细腻；显示尺寸仍是4倍原生卡面，
+	# 最后整卡统一透视，保证边框、立绘和文字不会分别倾斜。
 	preview_card.pivot_offset = Vector2.ZERO
 	_setup_effect_preview()
 	_reload_catalog()
@@ -141,6 +153,7 @@ func _process(delta: float) -> void:
 		"pointer_force",
 		_preview_pointer_force
 	)
+	_finish_preview.update_pointer(_preview_pointer_force)
 
 
 func _input(event: InputEvent) -> void:
@@ -171,12 +184,14 @@ func _input(event: InputEvent) -> void:
 
 
 func _setup_effect_preview() -> void:
-	var card_padding := preview_card.get_max_visual_capture_padding_top_left()
+	var shadow_padding := Vector2.ONE * CardFinishPreview.BADGE_SHADOW_PADDING
+	var card_padding := preview_card.get_max_visual_capture_padding_top_left() + shadow_padding
 	var render_size := (
 		card_padding
 		+ preview_card.card_size
 		+ preview_card.get_visual_capture_padding_bottom_right()
 		+ PREVIEW_EFFECT_PADDING_BOTTOM_RIGHT
+		+ shadow_padding
 	)
 	preview_card.set_layout_position(card_padding)
 	preview_viewport.size = Vector2i(render_size)
@@ -184,6 +199,8 @@ func _setup_effect_preview() -> void:
 	preview_display.texture = preview_viewport.get_texture()
 	_preview_effect_material = ShaderMaterial.new()
 	_preview_effect_material.shader = CARD_PREVIEW_SHADER
+	_preview_effect_material.set_shader_parameter("use_3d", false)
+	_preview_effect_material.set_shader_parameter("fov", PREVIEW_FOV_DEGREES)
 	_preview_effect_material.set_shader_parameter(
 		"card_texture_size_px",
 		render_size
@@ -209,6 +226,8 @@ func _setup_effect_preview() -> void:
 		PREVIEW_FLASH_INTENSITY
 	)
 	preview_display.material = _preview_effect_material
+	_finish_preview = FINISH_PREVIEW.new()
+	_finish_preview.setup(preview_card, _preview_effect_material)
 
 
 func _populate_effect_controls() -> void:
@@ -217,12 +236,17 @@ func _populate_effect_controls() -> void:
 	flash_type_selector.add_item("金色", 1)
 	flash_type_selector.add_item("彩虹", 2)
 	flash_type_selector.select(1)
+	finish_selector.clear()
+	for index: int in CardFinishPreview.LABELS.size():
+		finish_selector.add_item(CardFinishPreview.LABELS[index], index)
+	finish_selector.select(CardFinishPreview.Finish.FOIL)
 
 
 func _sync_effect_controls_to_material() -> void:
 	_on_use_3d_toggled(use_3d_check.button_pressed)
 	_on_use_flash_toggled(use_flash_check.button_pressed)
 	_on_flash_type_selected(flash_type_selector.selected)
+	_on_finish_controls_changed()
 
 
 static func discover_card_resource_paths(directory: String = CARD_RESOURCE_DIRECTORY) -> Array[String]:
@@ -315,7 +339,7 @@ func _draft_key(card: CardData) -> String:
 
 
 func _editable_fields(card: CardData) -> Array[StringName]:
-	var fields: Array[StringName] = [&"display_name", &"art_offset"]
+	var fields: Array[StringName] = [&"display_name"]
 	match card.card_type:
 		CardData.CardType.MINION: fields.append_array([&"base_value", &"max_health", &"armor"])
 		CardData.CardType.EQUIPMENT: fields.append_array([&"equipment_action_delta", &"equipment_health_delta", &"equipment_armor_delta"])
@@ -328,7 +352,14 @@ func _has_unsaved_changes(source: CardData) -> bool:
 	if draft == null: return false
 	for field: StringName in _editable_fields(source):
 		if draft.get(field) != source.get(field): return true
+	for finish_key: StringName in CardData.ART_FINISH_KEYS:
+		if draft.get_art_offset_for_finish(finish_key) != source.get_art_offset_for_finish(finish_key): return true
 	return false
+
+
+func _selected_finish_key() -> StringName:
+	var finish := _finish_preview.finish if _finish_preview != null else CardFinishPreview.Finish.FOIL
+	return CardData.ART_FINISH_KEYS[int(finish)]
 
 
 func _on_name_changed(value: String) -> void:
@@ -366,11 +397,15 @@ func _connect_runtime_controls() -> void:
 	nudge_up_button.pressed.connect(_nudge_preview.bind(Vector2i.UP))
 	nudge_down_button.pressed.connect(_nudge_preview.bind(Vector2i.DOWN))
 	save_button.pressed.connect(_save_card_to_resource)
+	save_all_finishes_button.pressed.connect(_save_card_to_resource.bind(true))
 	reload_button.pressed.connect(_reload_card_from_resource)
 	reset_button.pressed.connect(_reset_preview_offset)
 	use_3d_check.toggled.connect(_on_use_3d_toggled)
 	use_flash_check.toggled.connect(_on_use_flash_toggled)
 	flash_type_selector.item_selected.connect(_on_flash_type_selected)
+	finish_selector.item_selected.connect(func(_index: int) -> void: _on_finish_controls_changed())
+	for spin: SpinBox in [finish_strength_spin, finish_depth_spin, finish_density_spin]:
+		spin.value_changed.connect(func(_value: float) -> void: _on_finish_controls_changed())
 
 
 func _sync_runtime_controls() -> void:
@@ -449,6 +484,7 @@ func _sync_card_fields() -> void:
 		spin.tooltip_text = "法术数值由各自效果定义，不使用这组基础属性。" if _preview_data != null and _preview_data.card_type == CardData.CardType.SPELL else ""
 		spin.set_block_signals(false)
 	save_button.disabled = _preview_data == null
+	save_all_finishes_button.disabled = _preview_data == null
 
 
 func _on_offset_x_changed(value: float) -> void:
@@ -465,10 +501,35 @@ func _nudge_preview(direction: Vector2i) -> void:
 
 func _on_use_3d_toggled(enabled: bool) -> void:
 	_preview_effect_material.set_shader_parameter("use_3d", enabled)
+	_finish_preview.refresh()
 
 
 func _on_use_flash_toggled(enabled: bool) -> void:
-	_preview_effect_material.set_shader_parameter("use_flash", enabled)
+	_finish_preview.enabled = enabled
+	_update_finish_render_scale()
+	_refresh_preview()
+
+
+func _on_finish_controls_changed() -> void:
+	_finish_preview.finish = finish_selector.get_selected_id() as CardFinishPreview.Finish
+	_preview_art_offset = _preview_data.get_art_offset_for_finish(_selected_finish_key()) if _preview_data != null else Vector2i.ZERO
+	_sync_offset_controls()
+	_finish_preview.strength = finish_strength_spin.value
+	_finish_preview.depth = finish_depth_spin.value
+	_finish_preview.density = finish_density_spin.value
+	_update_finish_render_scale()
+	flash_type_selector.disabled = _finish_preview.finish not in [CardFinishPreview.Finish.FOIL, CardFinishPreview.Finish.OVERFRAME]
+	finish_strength_spin.editable = _finish_preview.finish in [CardFinishPreview.Finish.HOLOGRAPHIC, CardFinishPreview.Finish.EMBOSSED, CardFinishPreview.Finish.FRACTURED]
+	finish_density_spin.editable = finish_strength_spin.editable
+	finish_depth_spin.editable = _finish_preview.finish == CardFinishPreview.Finish.HOLOGRAPHIC
+	_refresh_preview()
+
+
+func _update_finish_render_scale() -> void:
+	var render_scale := FINISH_RENDER_SCALE
+	preview_viewport.size = Vector2i((preview_display.size * render_scale).round())
+	preview_viewport.canvas_transform = Transform2D.IDENTITY.scaled(Vector2.ONE * render_scale)
+	_preview_effect_material.set_shader_parameter("texture_render_scale", render_scale)
 
 
 func _on_flash_type_selected(item_index: int) -> void:
@@ -476,6 +537,9 @@ func _on_flash_type_selected(item_index: int) -> void:
 		"flash_type",
 		flash_type_selector.get_item_id(item_index)
 	)
+	if _finish_preview.finish in [CardFinishPreview.Finish.FOIL, CardFinishPreview.Finish.OVERFRAME]:
+		_finish_preview.surface_finish = (CardAppearance.Surface.SILVER + flash_type_selector.get_item_id(item_index)) as CardAppearance.Surface
+		_finish_preview.refresh()
 
 
 func _on_back_button_pressed() -> void:
@@ -488,9 +552,9 @@ func _on_back_button_pressed() -> void:
 		and display_shell.is_ancestor_of(self)
 		and display_shell.has_method("close_card_art_tuner")
 	):
-		display_shell.call("close_card_art_tuner")
+		display_shell.change_screen(Callable(display_shell, "close_card_art_tuner"))
 		return
-	get_tree().change_scene_to_file(MAIN_SCENE_PATH)
+	preload("res://scripts/ui/screen_transition.gd").change_scene(get_tree(), MAIN_SCENE_PATH)
 
 
 func _queue_preview_refresh() -> void:
@@ -509,50 +573,23 @@ func _refresh_preview() -> void:
 
 	if card_data == null:
 		preview_card.set_card_data(null)
+		_finish_preview.refresh()
 		status_label.text = "当前筛选没有卡牌。可更换卡包、种类或搜索条件。"
 		return
 
 	# 每张卡保留独立草稿，刷新只重画草稿，不改写真实资源。
-	var preview_data := _preview_data
+	# CardView仍按原有art_offset取景；显示副本使用当前工艺坐标，草稿保留各自的数据。
+	var preview_data := _preview_data.duplicate() as CardData
+	preview_data.art_offset = preview_art_offset
 	preview_card.set_card_data(preview_data)
 	preview_card.configure_drag_source(false)
-	_refresh_effect_textures(preview_data)
-	var normal_status := (
-		"法线增强：已启用"
-		if preview_data.art_normal_texture != null
-		else "法线增强：未提供（不影响 3D / 扫光）"
-	)
+	_finish_preview.refresh()
 	status_label.text = "%s · %s · %s | 偏移 %s | %s" % [
 		preview_data.display_name, CardPackRegistry.get_display_name(card_data.pack_id) if not card_data.pack_id.is_empty() else "未指定卡包",
 		card_data.get_card_type_name(), preview_art_offset,
-		"有未保存修改" if _has_unsaved_changes(card_data) else normal_status,
+		("有未保存修改 · " if _has_unsaved_changes(card_data) else "") + _finish_preview.get_description(),
 	]
 	_update_current_list_label()
-
-
-func _refresh_effect_textures(preview_data: CardData) -> void:
-	var has_art := preview_data.art_texture != null
-	if has_art:
-		_preview_effect_material.set_shader_parameter(
-			"mask_origin_px",
-			preview_card.position
-			+ preview_card.art_panel.position
-			+ preview_card.art_texture.position
-		)
-		_preview_effect_material.set_shader_parameter(
-			"mask_size_px",
-			preview_card.art_texture.size
-		)
-	var has_normal := preview_data.art_normal_texture != null
-	_preview_effect_material.set_shader_parameter(
-		"use_normal_texture",
-		has_normal
-	)
-	if has_normal:
-		_preview_effect_material.set_shader_parameter(
-			"normal_texture",
-			preview_data.art_normal_texture
-		)
 
 
 func _update_current_list_label() -> void:
@@ -564,7 +601,7 @@ func _update_current_list_label() -> void:
 			return
 
 
-func _save_card_to_resource() -> void:
+func _save_card_to_resource(all_finishes: bool = false) -> void:
 	if card_data == null or card_data.resource_path.is_empty():
 		_set_status("请选择有独立资源文件的卡牌。")
 		return
@@ -578,6 +615,13 @@ func _save_card_to_resource() -> void:
 		return
 	for field: StringName in _editable_fields(card_data):
 		if _preview_data.get(field) != card_data.get(field): saved.set(field, _preview_data.get(field))
+	if all_finishes:
+		saved.set_art_offset_for_all_finishes(preview_art_offset)
+	else:
+		# 按工艺逐项合并，避免覆盖磁盘上其他工艺的新取景。
+		for finish_key: StringName in CardData.ART_FINISH_KEYS:
+			var offset := _preview_data.get_art_offset_for_finish(finish_key)
+			if offset != card_data.get_art_offset_for_finish(finish_key): saved.set_art_offset_for_finish(finish_key, offset)
 	var error := ResourceSaver.save(saved, card_data.resource_path)
 	if error != OK:
 		_set_status("保存失败（错误码%d）；预览草稿仍保留。" % error)
@@ -589,7 +633,7 @@ func _save_card_to_resource() -> void:
 	card_data = _card_data
 	card_resource_saved.emit(card_data)
 	_refresh_preview()
-	_set_status("已保存：%s（名称、适用属性及取景；ID保持不变）" % card_data.display_name)
+	_set_status("已保存：%s（%s）" % [card_data.display_name, "当前坐标已用于全部六种卡面" if all_finishes else "各罕贵度取景分别保留"])
 
 
 func _reload_card_from_resource() -> void:

@@ -199,6 +199,7 @@ func _run() -> void:
 
 func _new_main():
 	var main = MAIN_SCENE.instantiate()
+	main.run_save_path = SAVE_PATH
 	root.add_child(main)
 	await process_frame
 	await process_frame

@@ -112,8 +112,8 @@ func _run() -> void:
 	main.set_world_view(main.WorldView.BATTLEFIELDS, false)
 	check(main._tabletop_park_button.texture_disabled.resource_path.ends_with("tabletop_park_dark.png") and main._tabletop_park_button.disabled and main._tabletop_park_button.size == Vector2(82, 21), "上半视角使用用户暗按钮及82×21原生尺寸")
 	main.set_world_view(main.WorldView.COLLECTION, false)
-	check(not main._tabletop_park_button.disabled and main._tabletop_park_button.texture_normal.resource_path.ends_with("tabletop_park_bright.png") and main._tabletop_park_button.global_position == Vector2(599, 349), "下半视角使用亮按钮且世界坐标保持599,713")
-	await capture("origin-button-bright")
+	check(main._tabletop_park_button.disabled and main._tabletop_park_button.texture_disabled.resource_path.ends_with("tabletop_park_dark.png") and main._tabletop_park_button.global_position == Vector2(599, 349), "关店后下半视角无板时按钮禁用并使用暗图，世界坐标保持599,713")
+	await capture("origin-button-disabled")
 	shell.queue_free()
 	await process_frame
 	await verify_enhancement()

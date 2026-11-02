@@ -21,4 +21,7 @@ race_type = 1
 rarity = 3
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(5, 31)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(0, 31)
+})
 effect_text = "均衡。突击：双方各小队光每净多1枚，永久+2生命；暗每净多1枚，永久+1数值。"

@@ -67,7 +67,10 @@
     "sticker_bonus": 1,
     "revealed_rune_bonus": 1,
     "wound_penalty": 1,
-    "minimum_price": 1
+    "minimum_price": 1,
+    "_外观说明": "先按品级、耐久、贴纸、符文、伤势和最低卖价计算，再追加两维外观金币；外观加价不按耐久折算。",
+    "surface_bonuses": {"plain": 0, "silver": 1, "gold": 2, "rainbow": 4, "embossed": 8, "fractured": 8},
+    "art_bonuses": {"plain": 0, "holographic": 8, "overframe": 8}
   },
   "sticker_pack": {
     "price": 15,
@@ -86,6 +89,10 @@
       "2": 5,
       "3": 10
     }
+  },
+  "sticker_sale": {
+    "_说明": "独立工具箱中的普通纹章与元素贴纸按品级出售；未配置品级不可出售，伤势不可出售。",
+    "prices_by_rarity": {"I": 1, "II": 3, "III": 6, "V": 4}
   },
   "refresh": {
     "initial_price": 1,

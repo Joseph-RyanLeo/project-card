@@ -9,15 +9,16 @@ id = &"theran_shadowmoon"
 display_name = "瑟兰·影月"
 pack_id = &"silvermoon_chapter"
 content_effect = &"theran_shadowmoon"
-card_type = 0
-rarity = 3
-effect_text = "远程行动同时视为近战；两类伤害分别计算，取较高值。"
 action_type = 1
 base_value = 12
-max_health = 20
-armor = 0
 cooldown_seconds = 6.0
-race_type = 1
+max_health = 20
 runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 3
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(3, 20)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(1, 23)
+})
+effect_text = "远程行动同时视为近战；两类伤害分别计算，取较高值。"

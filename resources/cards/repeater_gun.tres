@@ -15,4 +15,7 @@ equipment_action_delta = -1
 equipment_zeal_delta = -10
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-10, -4)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(0, 21)
+})
 effect_text = "远程行动后，以40%效能锁定原目标追加2次。"

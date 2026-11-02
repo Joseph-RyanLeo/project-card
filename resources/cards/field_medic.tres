@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://cyqbxg084bj3p"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://do4mjpgo08o4v" path="res://assets/card_art/field_medic.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/field_medic.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -19,4 +19,7 @@ race_type = 1
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-1, 28)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-7, 28)
+})
 effect_text = "治疗行动会临时遮蔽目标一处伤势，持续至战斗结束。"

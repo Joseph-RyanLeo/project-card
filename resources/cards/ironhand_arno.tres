@@ -19,4 +19,7 @@ race_type = 2
 rarity = 3
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(3, 13)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(3, 14)
+})
 effect_text = "友方造物阵亡后原位修复，延迟等于战前基础生命（全队每场5次）。"

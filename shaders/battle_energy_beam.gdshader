@@ -1,17 +1,13 @@
 /*
  * Project Card 的曲线攻击尾迹。
  *
- * 普通尾迹外形取自静态灰度遮罩；水流与灵魂光带由数学轮廓生成。
+ * 水流与灵魂光带由数学轮廓生成。
  * 流动由程序噪声生成；水流读取可暂停的 effect_time，其他样式沿用 TIME。
- * 这种职责分工对应 Unity Trail Renderer 教程中的主纹理与 Gradient Noise。
  * 世界坐标像素锁定仍改编自 Godot Shaders 的 2D pixel-perfect 示例。
  */
 shader_type canvas_item;
 render_mode unshaded;
 
-uniform sampler2D trail_mask : filter_linear, repeat_disable;
-uniform bool flip_mask_x = false;
-uniform bool soul_ribbon = false;
 uniform bool water_flow = false;
 uniform float wave_opacity = 0.0; // 短水波出现与命中后消散的透明度
 uniform float wave_width = 112.0; // 波面横向宽度，供三层厚度保持统一像素比例
@@ -110,10 +106,6 @@ void fragment() {
 		0.0,
 		1.0
 	);
-	vec2 texture_uv = mask_uv;
-	if (flip_mask_x) {
-		texture_uv.x = 1.0 - texture_uv.x;
-	}
 	float painted_mask;
 	float soul_core = 0.0;
 	float water_layer = 0.0;
@@ -131,7 +123,7 @@ void fragment() {
 		float thickness = wave_width * (WATER_FRONT_WIDTH + WATER_MIDDLE_WIDTH + rear_width) * taper;
 		water_layer = behind / max(wave_width * taper, 0.001);
 		painted_mask = step(side, 0.999) * step(0.0, behind) * step(behind, thickness);
-	} else if (soul_ribbon) {
+	} else {
 		// 外形由数学轮廓生成，无需借用参考视频的纹理或素材。
 		float along = clamp(trail_position, 0.0, 1.0);
 		float rounded_head = sqrt(max(1.0 - pow(max((along - 0.90) / 0.10, 0.0), 2.0), 0.0));
@@ -144,13 +136,10 @@ void fragment() {
 		float core_width = half_width * soul_core_width;
 		soul_core = (1.0 - smoothstep(core_width * 0.45, max(core_width, 0.001), cross_distance));
 		soul_core *= step(0.001, soul_core_width);
-	} else {
-		vec3 mask_sample = texture(trail_mask, texture_uv).rgb;
-		painted_mask = dot(mask_sample, vec3(0.299, 0.587, 0.114));
 	}
 	painted_mask = max(painted_mask - mask_cutoff, 0.0) / max(1.0 - mask_cutoff, 0.001);
 	painted_mask = pow(clamp(painted_mask, 0.0, 1.0), mask_power);
-	// 只收紧低透明度轮廓；主体仍保留原图内部的灰度层次和动态流动。
+	// 只收紧低透明度轮廓，主体保留动态流动。
 	float crisp_boundary = smoothstep(
 		max(edge_threshold - edge_softness, 0.0),
 		min(edge_threshold + edge_softness, 1.0),
@@ -192,9 +181,7 @@ void fragment() {
 		head_color,
 		clamp(trail_position, 0.0, 1.0)
 	);
-	if (soul_ribbon) {
-		result.rgb = mix(result.rgb, vec3(1.0), soul_core * 0.68);
-	}
+	result.rgb = mix(result.rgb, vec3(1.0), soul_core * 0.68);
 	if (water_flow) {
 		vec3 light = mix(head_color.rgb, vec3(1.0), 0.64);
 		result.rgb = water_layer < WATER_FRONT_WIDTH ? light : (water_layer < WATER_FRONT_WIDTH + WATER_MIDDLE_WIDTH ? head_color.rgb : tail_color.rgb);

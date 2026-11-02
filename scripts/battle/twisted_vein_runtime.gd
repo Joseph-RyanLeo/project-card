@@ -130,7 +130,7 @@ func on_mining(event: BattleEffectEvent) -> void:
 	var mineral: bool = event.resource_target.owned_card.card_data.resource_type == CardData.ResourceType.MINERAL
 	if mineral: mineral_events += 1
 	var owner := BattleEffectOwnerRef.for_state(event.source, BattleEffectDefinition.OwnerKind.OWNING_PLAYER)
-	controller.record_pending_run_reward(owner, BattleRunRewardLedger.KIND_MINING_COUNT, 1, &"successful_mining", event.source.runtime_id, roundi(controller.elapsed_seconds * 1000000.0))
+	controller.record_pending_run_reward(owner, BattleRunRewardLedger.KIND_MINING_COUNT, 1, &"successful_mining", event.source.runtime_id, roundi(controller.elapsed_seconds * 1000000.0), {"resource_card_id": String(event.resource_target.owned_card.card_data.id)})
 	# 条件法术先结算，再派发开采监听；两次双开采有两份独立事件。
 	for spell: OwnedCard in controller._get_all_prepared_spell_instances():
 		if spell == null or spell.card_data == null: continue
@@ -142,13 +142,17 @@ func on_mining(event: BattleEffectEvent) -> void:
 			var events: Array[BattleEffectEvent] = []
 			for target: BattleSquadState in controller.get_all_states():
 				if target.alive and target.current_health > 0.0 and not target.has_effective_shadow():
-					events.append(make_event(null, target, 2.0, CardData.ActionType.MAGIC, false, "矿道坍塌"))
+					var damage_event := make_event(null, target, 2.0, CardData.ActionType.MAGIC, false, "矿道坍塌")
+					damage_event.source_owned_card_instance_id = spell.instance_id
+					events.append(damage_event)
 			controller.resolve_content_batch(events)
 			spawn_random_resource(false)
 		else:
 			for target: BattleSquadState in controller.get_all_states():
 				if not target.alive or target.current_health <= 0.0 or target.has_effective_shadow(): continue
-				target.apply_armor_exact(2.0)
+				var armor_event := BattleEffectEvent.new()
+				armor_event.source_owned_card_instance_id = spell.instance_id
+				target.apply_armor_exact(2.0, null, armor_event)
 				if target.squad_data.get_equipped_item() != null: add_modifier(target, BattleModifier.Stat.ACTION_VALUE, 2.0, key)
 	controller.effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.ADJACENT_ALLY_MINED, {"actor": event.source, "adjacent_allies": adjacent_allies})
 	controller.effect_runtime.process_due(controller.elapsed_seconds)

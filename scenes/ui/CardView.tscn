@@ -79,21 +79,21 @@ stretch_mode = 5
 
 [node name="NameClip" type="Control" parent="TopRow" unique_id=1972551488]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(61, 10)
+custom_minimum_size = Vector2(61, 9)
 clip_contents = true
 anchors_preset = 0
 offset_left = 21.0
-offset_top = 5.0
+offset_top = 6.0
 offset_right = 82.0
 offset_bottom = 15.0
 mouse_filter = 2
 
 [node name="NameLabel" type="Label" parent="TopRow/NameClip" unique_id=1264126970]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(61, 10)
+custom_minimum_size = Vector2(61, 9)
 layout_mode = 0
 offset_right = 61.0
-offset_bottom = 10.0
+offset_bottom = 9.0
 theme_override_colors/font_color = Color(0.20784314, 0.14509805, 0.10980392, 1)
 theme_override_fonts/font = ExtResource("2_d0r2e")
 theme_override_font_sizes/font_size = 8
@@ -179,11 +179,11 @@ expand_mode = 1
 unique_name_in_owner = true
 visible = false
 z_index = 8
-custom_minimum_size = Vector2(84, 10)
+custom_minimum_size = Vector2(83, 13)
 layout_mode = 0
 offset_top = 4.0
-offset_right = 84.0
-offset_bottom = 14.0
+offset_right = 83.0
+offset_bottom = 17.0
 mouse_filter = 2
 texture = ExtResource("4_ov1un")
 expand_mode = 1

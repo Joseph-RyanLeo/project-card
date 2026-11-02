@@ -17,4 +17,7 @@ armor = 2
 runes = Array[int]([0, 1, 2])
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(14, 37)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(9, 38)
+})
 effect_text = "回响（命中后）：目标相邻随从各受1点法术伤害。"

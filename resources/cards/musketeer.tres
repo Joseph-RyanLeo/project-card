@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://dub7ke83lo4ic"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://cv8x31oxjomhb" path="res://assets/card_art/musketeer.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/musketeer.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -16,7 +16,9 @@ cooldown_seconds = 8.0
 max_health = 4
 runes = Array[int]([2, 3, 0])
 race_type = 2
-rarity = 0
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-3, 12)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-4, 17)
+})
 effect_text = "乡邻：本卡受击优先级-3。"

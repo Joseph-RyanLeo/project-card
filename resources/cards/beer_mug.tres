@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_data")
 id = &"beer_mug"
-display_name = "啤酒杯🍺"
+display_name = "啤酒杯"
 pack_id = &"ironwall_inscription"
 content_effect = &"beer_mug"
 card_type = 1

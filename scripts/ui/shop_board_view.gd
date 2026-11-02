@@ -8,6 +8,8 @@ const StatusStyle = preload("res://scripts/ui/status_indicator_style.gd")
 const RuneStyle = preload("res://scripts/ui/rune_sticker_style.gd")
 const RuneNumber = preload("res://scripts/ui/rune_number_display.gd")
 const STICKER_FLIGHT_SECONDS: float = 0.30 # 贴纸从卡面飞往环绕点的时长
+const SALE_REGION := Rect2(626, 40, 246, 267) # 工具箱打开时保持原亮度的右侧出售区域
+const SALE_STICKER_SCALE: float = 4.0 # 待售纹章与元素贴纸使用原生图案4倍显示
 const BEADS: Texture2D = preload("res://assets/ui/shop_event_20261020/rarity_beads.png")
 const BEAD_X: Array[int] = [0, 16, 32, 47] # 用户原图I～IV级13×13玻璃珠的裁切起点
 const EXCHANGE_CENTERS: Array[Vector2] = [Vector2(317, 87), Vector2(331, 87), Vector2(345, 87), Vector2(373, 87)] # 原图三个材料圆点及右侧产物圆点的中心
@@ -24,6 +26,9 @@ var _exchange_mark: TextureRect
 var _selection: Array[StringName] = []
 var _shown_id: StringName = &""
 var _shown_stickers: Array[Dictionary] = []
+var _sale_root: Control
+var _sale_background: TextureRect
+var _sale_sticker: EmblemLibraryEntry
 
 func initialize(owner_main: Control) -> void:
 	main = owner_main
@@ -96,6 +101,17 @@ func initialize(owner_main: Control) -> void:
 		dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		main._shop_exchange_panel.add_child(dot)
 		_rarity_dots.append(dot)
+	_sale_root = Control.new()
+	_sale_root.name = "ShopSaleRegion"
+	_sale_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	main._shop_card_service_panel.add_child(_sale_root)
+	_sale_background = TextureRect.new()
+	_sale_background.name = "SaleRegionBackground"
+	_sale_background.texture = Art.atlas("service_board.png", SALE_REGION)
+	_sale_background.position = SALE_REGION.position
+	_sale_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_sale_background.visible = false
+	_sale_root.add_child(_sale_background)
 	main._shop_service_slot = Slot.new()
 	main._shop_service_slot.name = "ShopCardServiceSlot"
 	main._shop_service_slot.use_board_art = true
@@ -105,18 +121,26 @@ func initialize(owner_main: Control) -> void:
 	main._shop_service_slot.release_card_view = main._release_service_card_view
 	main._shop_service_slot.card_selected.connect(main._select_shop_service_card)
 	main._shop_service_slot.card_returned.connect(main._on_shop_service_card_returned)
-	main._shop_card_service_panel.add_child(main._shop_service_slot)
+	_sale_root.add_child(main._shop_service_slot)
+	_sale_sticker = EmblemLibraryEntry.new()
+	_sale_sticker.name = "StickerForSale"
+	_sale_sticker.keep_carry_ghost = false
+	_sale_sticker.drop_target = main._shop_service_slot
+	_sale_sticker.click_carry_requested.connect(main._on_click_carry_requested)
+	_sale_sticker.native_drag_finished.connect(_return_sale_sticker)
+	_sale_sticker.visible = false
+	main._shop_service_slot._empty_outline.get_parent().add_child(_sale_sticker)
 	_sticker_host = Control.new()
 	_sticker_host.name = "ServiceStickers"
 	_sticker_host.z_index = CardView.CARD_LAYER_Z_STEP # 飞行与环绕贴纸高于服务卡的全部内部图层
 	_sticker_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	main._shop_card_service_panel.add_child(_sticker_host)
-	_service_action = Art.button(main._shop_card_service_panel, "出售", Vector2(702, 257), load(Art.DIR + "service_button.png"), _execute_service)
+	_sale_root.add_child(_sticker_host)
+	_service_action = Art.button(_sale_root, "出售", Vector2(702, 257), load(Art.DIR + "service_button.png"), _execute_service)
 	_service_action.name = "SellOrExtractButton"
-	Art.art(main._shop_card_service_panel, "price_coin.png", Vector2(780, 91))
+	Art.art(_sale_root, "price_coin.png", Vector2(780, 91))
 	_amount = RuneNumber.new()
 	_amount.name = "ServiceAmount"
-	main._shop_card_service_panel.add_child(_amount)
+	_sale_root.add_child(_amount)
 	main._shop_card_service_panel.visible = false
 	main._shop_exchange_panel.visible = false
 
@@ -187,6 +211,35 @@ func sync_service(owned: OwnedCard) -> void:
 			_sticker_host.add_child(button)
 		_fly_service_stickers.call_deferred(owned, id)
 	_update_service_action()
+	var state: Dictionary = main.emblem_library.get_inventory_item(main._shop_service_sticker_id)
+	_sale_sticker.visible = not state.is_empty()
+	if _sale_sticker.visible:
+		var sticker_id := StringName(String(state.emblem_id))
+		if _sale_sticker.definition.get("returned_state", {}) != state:
+			for definition: Dictionary in EmblemLibraryData.get_definitions():
+				if StringName(String(definition.id)) != sticker_id: continue
+				var selected := definition.duplicate(true)
+				selected["returned_state"] = state
+				_sale_sticker.configure(selected, true)
+				break
+			_sale_sticker.scale = Vector2.ONE * SALE_STICKER_SCALE
+			_sale_sticker.size = _sale_sticker._icon.size
+			_sale_sticker.update_layout_visuals()
+			_sale_sticker.position = main._shop_service_slot.SLOT_SIZE * 0.5 - _sale_sticker.size * SALE_STICKER_SCALE * 0.5
+		_sale_sticker.set_drag_enabled(main._shop_sticker_sale_available())
+	else:
+		_sale_sticker.definition = {}
+
+func _return_sale_sticker(_committed: bool, release_center: Vector2) -> void:
+	main._return_shop_service_sticker(release_center)
+
+func set_sale_overlay(host: Control = null) -> void:
+	var parent: Control = host if host != null else main._shop_card_service_panel
+	if _sale_root.get_parent() != parent:
+		_sale_root.reparent(parent, true)
+		if host == null: _sale_root.position = Vector2.ZERO
+	_sale_background.visible = host != null
+	_sticker_host.z_index = 25 if host != null else CardView.CARD_LAYER_Z_STEP # 保留卡面上方绘制，同时低于4096的鼠标携带层
 
 func _fly_service_stickers(owned: OwnedCard, id: StringName) -> void:
 	if owned == null or not is_inside_tree() or id != _shown_id: return
@@ -222,8 +275,16 @@ func _update_service_action() -> void:
 		var delta := int(main._shop_service_undo.gold_delta)
 		_service_action.text = "撤销"
 		_service_action.disabled = main.run_reward_state.gold < delta
-		_service_action.tooltip_text = "返还原卡与全部贴纸，%s%d金币；离页、放入新卡或使用提取贴纸后失效" % ["扣回" if delta > 0 else "退还", absi(delta)]
+		_service_action.tooltip_text = ("返还原纹章，扣回%d金币" % delta) if main._shop_service_undo.has("sold_sticker") else "返还原卡与全部贴纸，%s%d金币；离页、放入新卡或使用提取贴纸后失效" % ["扣回" if delta > 0 else "退还", absi(delta)]
 		_amount.text = ("-" if delta > 0 else "+") + str(absi(delta))
+		_amount.position = Vector2(776 - _amount.size.x, 88)
+		return
+	if main._shop_service_sticker_id != &"":
+		var price: int = main._shop_sticker_sale_price(main.emblem_library.get_inventory_item(main._shop_service_sticker_id))
+		_service_action.text = "出售"
+		_service_action.disabled = price < 0 or not main._shop_sticker_sale_available()
+		_service_action.tooltip_text = "出售这枚纹章，获得%d金币" % price
+		_amount.text = "+%d" % price if price >= 0 else ""
 		_amount.position = Vector2(776 - _amount.size.x, 88)
 		return
 	var owned: OwnedCard = main.owned_card_collection.get_by_instance_id(_shown_id)
@@ -244,6 +305,9 @@ func _execute_service() -> void:
 	if _service_action.disabled: return
 	if not main._shop_service_undo.is_empty():
 		main._undo_shop_card_service()
+		return
+	if main._shop_service_sticker_id != &"":
+		main._execute_shop_sticker_sale()
 		return
 	var owned: OwnedCard = main.owned_card_collection.get_by_instance_id(_shown_id)
 	if owned == null: return

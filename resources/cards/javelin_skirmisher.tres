@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://b5umjlyylcoks"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://spcnd38h84xm" path="res://assets/card_art/javelin_skirmisher.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/javelin_skirmisher.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -16,7 +16,9 @@ cooldown_seconds = 5.0
 max_health = 3
 armor = 2
 runes = Array[int]([2, 3, 0])
-rarity = 0
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(6, 31)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-7, 41)
+})
 effect_text = "突击：进行一次远程攻击，随后变为近战并且数值减半。"

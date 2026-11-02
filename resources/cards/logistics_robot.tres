@@ -19,4 +19,7 @@ race_type = 3
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-37, 22)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-34, 29)
+})
 effect_text = "每5秒：相邻小队各获得1d4强化（共用骰值）。"

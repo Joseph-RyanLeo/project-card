@@ -29,6 +29,7 @@ func click(point: Vector2) -> void:
 		event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
 		root.push_input(event, true)
 		await process_frame
+	if shell.screen_transition.busy: await shell.screen_transition.finished
 
 func key(code: Key, unicode: int = 0) -> void:
 	for pressed: bool in [true, false]:
@@ -38,6 +39,7 @@ func key(code: Key, unicode: int = 0) -> void:
 		event.pressed = pressed
 		root.push_input(event)
 		await process_frame
+	if shell.screen_transition.busy: await shell.screen_transition.finished
 
 func menu_button(text: String) -> Button:
 	for node: Node in main._escape_pause_menu.find_children("*", "Button", true, false):
@@ -46,6 +48,8 @@ func menu_button(text: String) -> Button:
 
 func _run() -> void:
 	shell = DISPLAY.instantiate()
+	DirAccess.make_dir_recursive_absolute("/private/tmp/project-card-escape-input")
+	shell.run_slots.directory = "/private/tmp/project-card-escape-input"
 	main = shell.get_node("RenderContainer/InternalViewport/DesignCanvas/Main")
 	main.run_save_path = "/private/tmp/project-card-menu-input-save.json"
 	root.add_child(shell)
@@ -57,6 +61,10 @@ func _run() -> void:
 	for text: String in ["攻击特效调试器", "卡面调整器", "战斗实验室"]:
 		await key(KEY_ESCAPE)
 		check(paused and main._escape_pause_menu.is_menu_open(), "Esc暂停并打开菜单")
+		await click(shell.render_container.get_global_transform_with_canvas() * menu_button("开发工具").get_global_rect().get_center())
+		if text == "攻击特效调试器" and OS.get_cmdline_user_args().has("screenshots"):
+			await RenderingServer.frame_post_draw
+			shell.internal_viewport.get_texture().get_image().save_png("res://docs/previews/d3_1_menu_20261102/06_tools.png")
 		var button := menu_button(text)
 		var point: Vector2 = shell.render_container.get_global_transform_with_canvas() * button.get_global_rect().get_center()
 		var received: Array[bool] = []
@@ -70,6 +78,7 @@ func _run() -> void:
 		check(main.visible and not paused, "真实Esc关闭工具回到可操作Main")
 		await process_frame
 	await key(KEY_ESCAPE)
+	await click(shell.render_container.get_global_transform_with_canvas() * menu_button("开发工具").get_global_rect().get_center())
 	await click(shell.render_container.get_global_transform_with_canvas() * menu_button("导出诊断日志").get_global_rect().get_center())
 	var dialog: FileDialog = main._run_diagnostic_dialog
 	check(dialog != null and dialog.visible, "真实点击打开诊断文件框")
@@ -96,7 +105,8 @@ func _run() -> void:
 		if message != null:
 			await click(Vector2(message.position) + message.get_ok_button().get_global_rect().get_center())
 			check(not message.visible, "真实点击关闭导出结果提示")
-	await click(shell.render_container.get_global_transform_with_canvas() * menu_button("返回").get_global_rect().get_center())
+	await key(KEY_ESCAPE)
+	await click(shell.render_container.get_global_transform_with_canvas() * menu_button("继续游戏").get_global_rect().get_center())
 	await process_frame
 	check(not paused, "关闭菜单恢复运行")
 	shell.queue_free()

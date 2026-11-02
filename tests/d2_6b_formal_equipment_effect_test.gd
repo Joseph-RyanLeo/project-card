@@ -1,6 +1,6 @@
 extends SceneTree
 
-## 五件灰烬征册装备使用真实CardData、OwnedCard、小队与战斗效果运行时验证。
+## 五件灰烬证册装备使用真实CardData、OwnedCard、小队与战斗效果运行时验证。
 
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const OwnedCardCollection = preload("res://scripts/data/owned_card_collection.gd")

@@ -56,6 +56,7 @@ var remaining_cooldown: float = 0.0:
 			var interval := get_action_interval()
 			cooldown_progress = clampf(1.0 - remaining_cooldown / interval, 0.0, 1.0) if interval > 0.0 else 1.0
 signal damage_taken(amount: float, source_state: BattleSquadState, event: BattleEffectEvent)
+signal lifetime_stat_resolved(channel: StringName, amount: float, source_state: BattleSquadState, event: BattleEffectEvent, target: BattleSquadState)
 signal armor_gained(amount: float)
 signal protection_changed(before: int, after: int)
 
@@ -108,6 +109,7 @@ var battle_participated: bool = false
 var battle_ever_defeated: bool = false
 var permanently_destroyed: bool = false
 var battle_summoned: bool = false
+var statistics_source_id: StringName = &"" # 衍生召唤物的战绩归原召唤卡，非持久状态
 var runtime_base_target_multiplier: float = 1.0
 var death_action_value: float = 0.0
 var death_action_snapshot: Dictionary = {}
@@ -814,6 +816,7 @@ func apply_damage_exact(amount: float, source_state: BattleSquadState = null, ev
 	# 所有普通攻击、疲劳直伤与效果伤害最终都经过这里。把统计放在实际
 	# 扣减入口，避免某类调用绕过 BattleController 后出现卡面承伤漏记。
 	if total_damage > 0.0:
+		lifetime_stat_resolved.emit(&"damage_dealt", total_damage, source_state, event, self)
 		battle_damage_taken += total_damage
 		if source_state != null:
 			var source_action_type := (
@@ -858,6 +861,7 @@ func apply_healing_exact(amount: float, source_state: BattleSquadState = null, e
 	_set_exact_health(current_health + effective)
 	if effective > 0.0:
 		_accumulate(CHANNEL_HEALING, effective, source_state, event)
+		lifetime_stat_resolved.emit(&"healing_done", effective, source_state, event, self)
 	if before <= 0.0 and current_health > 0.0:
 		displayed_health = clampi(floori(current_health + 0.000001), 0, get_max_health())
 		pending_kill_source = null
@@ -874,6 +878,7 @@ func apply_armor_exact(amount: float, source_state: BattleSquadState = null, eve
 	_set_exact_armor(current_armor + effective)
 	if effective > 0.0:
 		_accumulate(CHANNEL_ARMOR_GAIN, effective, source_state, event)
+		lifetime_stat_resolved.emit(&"armor_granted", effective, source_state, event, self)
 		armor_gained.emit(effective)
 	if current_armor >= float(CardData.MAXIMUM_ARMOR):
 		displayed_armor = CardData.MAXIMUM_ARMOR

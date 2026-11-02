@@ -132,6 +132,7 @@ func play_return_feedback(release_global_center: Vector2) -> void:
 
 
 func _on_mouse_entered() -> void:
+	if CardViewScript.EffectPopup.interaction_blocked(get_tree()): return
 	show_pointer_hover_feedback()
 	if owned_item == null or is_instance_valid(_hover_card): return
 	_hover_card = preload("res://scenes/ui/CardView.tscn").instantiate() as CardView
@@ -152,6 +153,7 @@ func _on_mouse_entered() -> void:
 	_hover_card.position = host.get_global_transform_with_canvas().affine_inverse() * viewport_point
 	_hover_card.z_index = -200 if host != self else 400 # 主场景详情层低于暂停与检视
 	_set_hover_mouse_ignore(_hover_card)
+	_hover_card.show_effect_popup()
 
 func _set_hover_mouse_ignore(node: Node) -> void:
 	if node is Control: (node as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -161,7 +163,9 @@ func _clear_hover_card(force: bool = false) -> void:
 	# Main检视暂时隐藏来源弹窗，保留它供关闭动画返回原位置。
 	if not force and is_instance_valid(_hover_card) and not _hover_card.visible:
 		return
-	if is_instance_valid(_hover_card): _hover_card.queue_free()
+	if is_instance_valid(_hover_card):
+		_hover_card.hide_effect_popup()
+		_hover_card.queue_free()
 	_hover_card = null
 
 func _exit_tree() -> void:
@@ -315,8 +319,4 @@ func _update_cursor_and_tooltip() -> void:
 	mouse_default_cursor_shape = (
 		Control.CURSOR_DRAG if drag_enabled else Control.CURSOR_ARROW
 	)
-	tooltip_text = (
-		"%s\n拖回收藏可卸下" % owned_item.card_data.display_name
-		if owned_item != null and owned_item.card_data != null
-		else "装备指示物"
-	)
+	tooltip_text = "" # 完整装备卡与统一效果框承担说明，避免原生长提示盖住卡面

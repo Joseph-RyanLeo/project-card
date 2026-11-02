@@ -25,8 +25,8 @@ func _run() -> void:
 func _test_project_window_defaults() -> void:
 	_expect(
 		ProjectSettings.get_setting("application/run/main_scene")
-		== "res://scenes/GameDisplay.tscn",
-		"项目从 1×内部画布显示壳启动"
+		== "res://scenes/StartMenu.tscn",
+		"项目从带开始菜单的1×内部画布显示壳启动"
 	)
 	_expect(
 		ProjectSettings.get_setting("display/window/size/mode")
@@ -42,6 +42,8 @@ func _test_project_window_defaults() -> void:
 
 func _test_display_scene() -> void:
 	var display := DISPLAY_SCENE.instantiate() as GameDisplay
+	DirAccess.make_dir_recursive_absolute("/private/tmp/project-card-display-test")
+	display.run_slots.directory = "/private/tmp/project-card-display-test"
 	root.add_child(display)
 	await process_frame
 	await process_frame
@@ -186,6 +188,7 @@ func _test_display_scene() -> void:
 		"无窗口测试中也能确定性切换显示模式状态"
 	)
 	main._on_card_art_tuner_button_pressed()
+	await display.screen_transition.finished
 	await process_frame
 	await process_frame
 	_expect(
@@ -197,6 +200,7 @@ func _test_display_scene() -> void:
 	)
 	var tuner := display.design_canvas.get_node("CardArtTuner") as CardArtTuner
 	tuner._on_back_button_pressed()
+	await display.screen_transition.finished
 	await process_frame
 	_expect(
 		not display.is_card_art_tuner_open()
@@ -205,6 +209,7 @@ func _test_display_scene() -> void:
 		"从卡面调整器返回时恢复原 Main，显示菜单与当前界面不被销毁"
 	)
 	main._on_battle_lab_button_pressed()
+	await display.screen_transition.finished
 	await process_frame
 	_expect(
 		display.is_battle_lab_open()
@@ -214,6 +219,7 @@ func _test_display_scene() -> void:
 	)
 	var lab := display.design_canvas.get_node("BattleLab") as BattleLab
 	lab.close_requested.emit()
+	await display.screen_transition.finished
 	await process_frame
 	_expect(
 		not display.is_battle_lab_open()
@@ -221,6 +227,7 @@ func _test_display_scene() -> void:
 		"从战斗实验室返回时恢复原 Main"
 	)
 	main._on_attack_effect_lab_button_pressed()
+	await display.screen_transition.finished
 	await process_frame
 	await process_frame
 	_expect(
@@ -231,6 +238,7 @@ func _test_display_scene() -> void:
 	)
 	var effect_lab := display.design_canvas.get_node("AttackEffectLab") as AttackEffectLab
 	effect_lab.close_requested.emit()
+	await display.screen_transition.finished
 	await process_frame
 	_expect(
 		not display.is_attack_effect_lab_open()

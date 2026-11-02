@@ -19,16 +19,14 @@ func _ready() -> void:
 	start_battle_button.hide()
 	# 隔离商店只开放开包工具；其他实验室依赖正式Main的场景切换。
 	for button: Button in _escape_pause_menu.find_children("*", "Button", true, false):
-		if button.text in ["攻击特效调试器", "卡面调整器", "战斗实验室", "还原"]: button.hide()
+		if button.text in ["攻击特效调试器", "卡面调整器", "战斗实验室", "还原", "保存并返回主菜单"]: button.hide()
 
 func _refresh_ordinary_shop_panel() -> void:
 	super._refresh_ordinary_shop_panel()
 	if not ordinary_shop_service is RareShopService: return
-	ordinary_shop_panel.find_child("OrdinaryShopTitle", true, false).text = "稀有商店 · 开包特效测试"
-	for button_name: String in ["SellCardsButton", "ActionProcurementButton", "CardExchangeButton"]:
-		ordinary_shop_panel.find_child(button_name, true, false).hide()
+	_shop_procurement_button.hide()
+	_shop_board_view.get_node("CardServicesTab").hide()
 	debug_new_shop_button.hide()
-	continue_run_button.hide()
 	ordinary_shop_entry_button.hide()
 	for stack: ShopPackStackView in ordinary_shop_offer_list.find_children("ShopPackStack_*", "Control", true, false):
 		if stack.has_meta("rare_caption") or stack._offers.is_empty(): continue

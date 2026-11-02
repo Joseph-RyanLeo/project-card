@@ -15,6 +15,10 @@ func enter_text(input: LineEdit, value: String) -> void:
 	# LineEdit程序赋值不会发出text_changed；发出与用户输入相同的控件信号。
 	input.text = value
 	input.text_changed.emit(value)
+func select_finish(finish: int) -> void:
+	tuner.finish_selector.select(finish)
+	tuner.finish_selector.item_selected.emit(finish)
+
 func select_pack(pack: StringName) -> void:
 	for index: int in tuner.pack_selector.item_count:
 		if tuner.pack_selector.get_item_metadata(index) == pack:
@@ -112,7 +116,7 @@ func _run() -> void:
 	check(tuner.preview_art_offset == Vector2i(1, -3), "无输入框焦点时方向键微调")
 	tuner.save_button.pressed.emit()
 	var persisted := ResourceLoader.load(FIXTURE_PATH, "", ResourceLoader.CACHE_MODE_IGNORE) as CardData
-	check(persisted.display_name == "新的名称" and persisted.base_value == 7 and persisted.max_health == 12 and persisted.armor == 9 and persisted.art_offset == Vector2i(1, -3), "显式保存后磁盘读回五字段")
+	check(persisted.display_name == "新的名称" and persisted.base_value == 7 and persisted.max_health == 12 and persisted.armor == 9 and persisted.get_art_offset_for_finish(&"foil") == Vector2i(1, -3) and persisted.art_offset == Vector2i.ZERO, "显式保存后磁盘读回五字段")
 	check(persisted.id == &"tuner_edit_fixture" and persisted.cooldown_seconds == 6 and persisted.content_effect == &"kept_effect" and persisted.keywords == [&"kept_keyword"], "保存保留稳定ID冷却效果与关键词")
 	check(not tuner._has_unsaved_changes(source), "保存清除当前草稿脏标记")
 	enter_text(tuner.name_input, "")
@@ -129,6 +133,7 @@ func _run() -> void:
 	tuner.save_button.pressed.emit()
 	persisted = ResourceLoader.load(FIXTURE_PATH, "", ResourceLoader.CACHE_MODE_IGNORE) as CardData
 	check(persisted.display_name == "仅修改名称" and persisted.armor == 15 and persisted.effect_text == "外部更新规则", "只叠加实际编辑字段，保留磁盘新资料")
+	await test_finish_offsets(source)
 	var equipment := (load("res://resources/cards/sentry_pistol.tres") as CardData).duplicate() as CardData
 	tuner.card_data = equipment
 	tuner.value_spin_box.value = -2
@@ -145,6 +150,53 @@ func _run() -> void:
 	DirAccess.remove_absolute(FIXTURE_PATH)
 	print("卡面调整器重构：%d条断言，%d失败" % [assertions, failures])
 	quit(1 if failures else 0)
+
+
+func test_finish_offsets(source: CardData) -> void:
+	var disk_before := FileAccess.get_file_as_bytes(FIXTURE_PATH)
+	var base := source.art_offset
+	select_finish(CardFinishPreview.Finish.OVERFRAME)
+	check(tuner.preview_art_offset == base, "旧资源未配置的工艺继承原取景")
+	tuner.preview_art_offset = Vector2i(7, -9)
+	await process_frame
+	check(source.get_art_offset_for_finish(&"overframe") == base and FileAccess.get_file_as_bytes(FIXTURE_PATH) == disk_before, "特殊取景草稿不污染原资源字典或磁盘")
+	select_finish(CardFinishPreview.Finish.FOIL)
+	check(tuner.preview_art_offset == Vector2i(1, -3), "切回闪卡恢复自己的取景")
+	tuner.preview_art_offset = Vector2i(2, 4)
+	select_finish(CardFinishPreview.Finish.PLAIN)
+	tuner.preview_art_offset = Vector2i(-2, 8)
+	select_finish(CardFinishPreview.Finish.OVERFRAME)
+	check(tuner.preview_art_offset == Vector2i(7, -9), "普通卡取景修改不带动超框卡")
+	tuner.save_button.pressed.emit()
+	var persisted := ResourceLoader.load(FIXTURE_PATH, "", ResourceLoader.CACHE_MODE_IGNORE) as CardData
+	check(persisted.art_offset == Vector2i(-2, 8) and persisted.get_art_offset_for_finish(&"foil") == Vector2i(2, 4) and persisted.get_art_offset_for_finish(&"overframe") == Vector2i(7, -9), "普通卡、闪卡、超框卡分别写入真实资源")
+	for key: StringName in [&"holographic", &"embossed", &"fractured"]:
+		check(persisted.get_art_offset_for_finish(key) == base, "未调整的工艺保留原坐标：" + String(key))
+	tuner.card_data = load("res://resources/cards/militia.tres")
+	tuner.card_data = source
+	tuner.reload_button.pressed.emit()
+	check(tuner.preview_art_offset == Vector2i(7, -9), "切卡和重新载入后，超框坐标恢复")
+	# 外部修改其他工艺后，只保存当前改动不能覆盖它。
+	persisted.set_art_offset_for_finish(&"holographic", Vector2i(31, 42))
+	ResourceSaver.save(persisted, FIXTURE_PATH)
+	select_finish(CardFinishPreview.Finish.FOIL)
+	tuner.preview_art_offset = Vector2i(-6, 3)
+	tuner.save_button.pressed.emit()
+	persisted = ResourceLoader.load(FIXTURE_PATH, "", ResourceLoader.CACHE_MODE_IGNORE) as CardData
+	check(persisted.get_art_offset_for_finish(&"foil") == Vector2i(-6, 3) and persisted.get_art_offset_for_finish(&"holographic") == Vector2i(31, 42), "按工艺合并位置，保留磁盘上其他工艺的新坐标")
+	select_finish(CardFinishPreview.Finish.OVERFRAME)
+	tuner.preview_art_offset = Vector2i(12, 13)
+	tuner.save_all_finishes_button.pressed.emit()
+	persisted = ResourceLoader.load(FIXTURE_PATH, "", ResourceLoader.CACHE_MODE_IGNORE) as CardData
+	for key: StringName in CardData.ART_FINISH_KEYS:
+		check(persisted.get_art_offset_for_finish(key) == Vector2i(12, 13), "批量按钮将当前坐标写到全部工艺：" + String(key))
+	check(not tuner._has_unsaved_changes(source), "批量保存后清除脏标记")
+	select_finish(CardFinishPreview.Finish.PLAIN)
+	tuner.preview_art_offset = Vector2i(-11, -12)
+	tuner.save_button.pressed.emit()
+	persisted = ResourceLoader.load(FIXTURE_PATH, "", ResourceLoader.CACHE_MODE_IGNORE) as CardData
+	check(persisted.art_offset == Vector2i(-11, -12) and persisted.get_art_offset_for_finish(&"overframe") == Vector2i(12, 13) and persisted.get_art_offset_for_finish(&"foil") == Vector2i(12, 13), "批量保存后仍可独立修改普通卡，其余工艺不变")
+
 
 
 func test_main_save_refresh(source: CardData) -> void:

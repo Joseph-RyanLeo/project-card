@@ -7,13 +7,19 @@ extends RefCounted
 const INSTANCE_ID_PREFIX: String = "run_card_"
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
 
+signal card_removing(owned: OwnedCard)
+
+var acquired_discoveries: Dictionary = {} # 随本局快照回滚，保留已卖出卡的真实获得记录
+var acquisition_context: Dictionary = {}
+var recruiting_hero: String = ""
+
 signal card_removed(instance_id: StringName)
 
 var _cards: Array[OwnedCard] = []
 var _next_instance_sequence: int = 1
 
 
-func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null, reserved_cards: Array[CardData] = []) -> OwnedCard:
+func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null, reserved_cards: Array[CardData] = [], pack_appearance: bool = false, source: Dictionary = {}) -> OwnedCard:
 	if card_data == null:
 		return null
 	var owned_card := OwnedCard.new()
@@ -23,8 +29,13 @@ func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null
 		_cards.size(),
 		instance_rng
 	)
+	owned_card.acquisition_source = (source if not source.is_empty() else acquisition_context).duplicate(true)
+	owned_card.recruited_by = recruiting_hero
 	_assign_member_identity(owned_card, _cards)
+	if pack_appearance: owned_card.roll_pack_appearance(instance_rng)
 	_cards.append(owned_card)
+	if not card_data.is_derived or card_data.card_type == CardData.CardType.RESOURCE:
+		acquired_discoveries[String(card_data.id)] = "resources" if card_data.card_type == CardData.CardType.RESOURCE else "cards"
 	_grant_acquisition_cards(owned_card, instance_rng, reserved_cards)
 	return owned_card
 
@@ -60,6 +71,7 @@ func remove_by_instance_id(instance_id: StringName) -> OwnedCard:
 		if _cards[card_index].instance_id != instance_id:
 			continue
 		var removed := _cards[card_index]
+		card_removing.emit(removed)
 		_cards.remove_at(card_index)
 		card_removed.emit(instance_id)
 		for companion: OwnedCard in get_cards():
@@ -93,6 +105,7 @@ func capture_state() -> Dictionary:
 	for owned_card: OwnedCard in _cards:
 		card_states.append(owned_card.capture_state())
 	return {
+		"acquired_discoveries": acquired_discoveries.duplicate(true),
 		"next_instance_sequence": _next_instance_sequence,
 		"cards": card_states,
 	}
@@ -126,6 +139,7 @@ func restore_state(snapshot: Dictionary) -> bool:
 		_assign_member_identity(owned_card, restored_cards)
 		restored_cards.append(owned_card)
 		seen_ids[instance_id] = true
+	acquired_discoveries = (snapshot.get("acquired_discoveries", {}) as Dictionary).duplicate(true)
 	_cards.assign(restored_cards)
 	_next_instance_sequence = maxi(int(snapshot.get("next_instance_sequence", 1)), 1)
 	return true
@@ -161,6 +175,7 @@ func _grant_acquisition_cards(owned: OwnedCard, rng: RandomNumberGenerator, rese
 		for id: String in ["skirmish_formation", "rally_formation"]:
 			var companion := create_card(load("res://resources/cards/%s.tres" % id), rng)
 			companion.companion_source_id = owned.instance_id
+			companion.acquisition_source = {"kind": "card_effect", "card_id": String(owned.card_data.id), "name": owned.card_data.display_name}
 	elif owned.card_data.content_effect == &"gunsmith_master":
 		var candidates: Array[CardData] = []
 		var selector := OrdinaryShopService.new()
@@ -182,4 +197,5 @@ func _grant_acquisition_cards(owned: OwnedCard, rng: RandomNumberGenerator, rese
 			source = RandomNumberGenerator.new()
 			source.randomize()
 		selector.load_config()
-		create_card(selector.draw_card_candidate(candidates, source, held_counts), source)
+		var granted := create_card(selector.draw_card_candidate(candidates, source, held_counts), source)
+		if granted != null: granted.acquisition_source = {"kind": "card_effect", "card_id": String(owned.card_data.id), "name": owned.card_data.display_name}

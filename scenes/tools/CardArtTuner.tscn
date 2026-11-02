@@ -63,7 +63,7 @@ offset_top = 58.0
 offset_right = 1030.0
 offset_bottom = 102.0
 theme_override_font_sizes/font_size = 16
-text = "筛选卡包与种类，编辑名称、属性与立绘取景。\n切换卡牌保留草稿；点击保存后生效，重新载入可放弃当前修改。"
+text = "筛选卡包与种类，编辑名称、属性与立绘取景。\n五种工艺仅作预览；切卡保留编辑草稿，点击保存才写入卡牌资料。"
 horizontal_alignment = 1
 
 [node name="PreviewCaption" type="Label" parent="CenterContainer/Workspace"]
@@ -91,10 +91,10 @@ mouse_filter = 2
 unique_name_in_owner = true
 texture_filter = 1
 layout_mode = 0
-offset_left = 67.0
-offset_top = 134.0
-offset_right = 67.0
-offset_bottom = 134.0
+offset_left = 55.0
+offset_top = 122.0
+offset_right = 55.0
+offset_bottom = 122.0
 mouse_filter = 2
 scale = Vector2(4, 4)
 expand_mode = 1
@@ -110,11 +110,64 @@ mouse_filter = 2
 [node name="CardLabel" type="Label" parent="CenterContainer/Workspace"]
 layout_mode = 0
 offset_left = 660.0
-offset_top = 140.0
-offset_right = 1180.0
-offset_bottom = 167.0
+offset_top = 128.0
+offset_right = 705.0
+offset_bottom = 162.0
 theme_override_font_sizes/font_size = 16
-text = "卡牌筛选 · 名称后 * 表示未保存修改"
+text = "强度"
+
+[node name="FinishStrengthSpin" type="SpinBox" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 707.0
+offset_top = 128.0
+offset_right = 810.0
+offset_bottom = 162.0
+tooltip_text = "全息、浮雕、碎闪的反光强度；闪卡沿用原扫光参数。"
+max_value = 1.5
+step = 0.05
+value = 0.75
+
+[node name="FinishDepthLabel" type="Label" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 835.0
+offset_top = 128.0
+offset_right = 880.0
+offset_bottom = 162.0
+text = "景深"
+
+[node name="FinishDepthSpin" type="SpinBox" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 882.0
+offset_top = 128.0
+offset_right = 985.0
+offset_bottom = 162.0
+tooltip_text = "控制全息人物、卡框与背景之间的前后距离；三层保持相同倾角。"
+max_value = 5.0
+step = 0.25
+value = 2.5
+
+[node name="FinishDensityLabel" type="Label" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 1010.0
+offset_top = 128.0
+offset_right = 1055.0
+offset_bottom = 162.0
+text = "纹理"
+
+[node name="FinishDensitySpin" type="SpinBox" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 1057.0
+offset_top = 128.0
+offset_right = 1180.0
+offset_bottom = 162.0
+tooltip_text = "越大纹理越细；碎闪调低可显示大块镜碎。"
+min_value = 5.0
+max_value = 90.0
+step = 1.0
+value = 32.0
 
 [node name="CardTypeSelector" type="OptionButton" parent="CenterContainer/Workspace"]
 unique_name_in_owner = true
@@ -137,6 +190,7 @@ select_mode = 0
 allow_reselect = true
 
 [node name="EffectTitle" type="Label" parent="CenterContainer/Workspace"]
+visible = false
 layout_mode = 0
 offset_left = 660.0
 offset_top = 566.0
@@ -149,9 +203,9 @@ vertical_alignment = 1
 [node name="Use3DCheck" type="CheckButton" parent="CenterContainer/Workspace"]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 765.0
+offset_left = 660.0
 offset_top = 566.0
-offset_right = 875.0
+offset_right = 760.0
 offset_bottom = 600.0
 theme_override_font_sizes/font_size = 16
 button_pressed = true
@@ -160,18 +214,27 @@ text = "3D"
 [node name="UseFlashCheck" type="CheckButton" parent="CenterContainer/Workspace"]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 875.0
+offset_left = 765.0
 offset_top = 566.0
-offset_right = 995.0
+offset_right = 885.0
 offset_bottom = 600.0
 theme_override_font_sizes/font_size = 16
 button_pressed = true
-text = "扫光"
+text = "材质"
+
+[node name="FinishSelector" type="OptionButton" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 890.0
+offset_top = 566.0
+offset_right = 1045.0
+offset_bottom = 600.0
+theme_override_font_sizes/font_size = 16
 
 [node name="FlashTypeSelector" type="OptionButton" parent="CenterContainer/Workspace"]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 1000.0
+offset_left = 1050.0
 offset_top = 566.0
 offset_right = 1180.0
 offset_bottom = 600.0
@@ -268,17 +331,29 @@ unique_name_in_owner = true
 layout_mode = 0
 offset_left = 660.0
 offset_top = 612.0
-offset_right = 860.0
+offset_right = 780.0
 offset_bottom = 650.0
 theme_override_font_sizes/font_size = 16
-text = "保存卡牌修改"
+text = "保存修改"
+tooltip_text = "保存本卡的资料与各罕贵度自己的取景，不互相覆盖。"
+
+[node name="SaveAllFinishesButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 790.0
+offset_top = 612.0
+offset_right = 990.0
+offset_bottom = 650.0
+theme_override_font_sizes/font_size = 16
+text = "保存到所有罕贵度卡面"
+tooltip_text = "把当前X、Y写入本卡全部六种卡面，同时保存本卡资料。"
 
 [node name="ReloadButton" type="Button" parent="CenterContainer/Workspace"]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 870.0
+offset_left = 1000.0
 offset_top = 612.0
-offset_right = 1020.0
+offset_right = 1085.0
 offset_bottom = 650.0
 theme_override_font_sizes/font_size = 16
 text = "重新载入"
@@ -286,7 +361,7 @@ text = "重新载入"
 [node name="ResetButton" type="Button" parent="CenterContainer/Workspace"]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 1030.0
+offset_left = 1095.0
 offset_top = 612.0
 offset_right = 1180.0
 offset_bottom = 650.0

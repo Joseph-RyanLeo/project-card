@@ -22,9 +22,12 @@ const FUSION_HALO_MARGIN := 1.0 # 可合成目标紫光超出原纹章的原生�
 
 func setup(value: CardView, handler: Callable, tooltip: Callable) -> void:
 	card = value
+	if CardView.TextDisplaySettings.is_popup_mode(): render_scale = maxf(render_scale, 4.0) # 黑体卡名用4倍合成，放大检视不放大低分辨率字形
+	if card.get_owned_card() != null and card.get_owned_card().has_special_appearance(): render_scale = 4.0
 	drop_handler = handler
 	tooltip_handler = tooltip
 	_setup_content(card, card.card_size)
+	card.bind_finish_surface(effect)
 	_drop_preview = TextureRect.new()
 	_drop_preview.name = "InspectionStickerPreview"
 	_drop_preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -45,12 +48,21 @@ func setup_art(value: Control, padding: Vector2 = PADDING, texture_scale: float 
 	render_scale = texture_scale
 	_setup_content(value, value.size)
 
+
+func refresh_text_resolution() -> void:
+	if not CardView.TextDisplaySettings.is_popup_mode() or render_scale >= 4.0: return
+	render_scale = 4.0 # 已打开的商品或检视切换为黑体时，同步提高字形采样精度
+	viewport.size = Vector2i((size * render_scale).round())
+	viewport.canvas_transform = Transform2D.IDENTITY.scaled(Vector2.ONE * render_scale)
+	effect.set_shader_parameter("texture_render_scale", render_scale)
+
 func _setup_content(value: Control, content_size: Vector2) -> void:
 	size = content_size + content_padding * 2.0
 	viewport = SubViewport.new()
 	viewport.size = Vector2i((size * render_scale).round())
 	viewport.transparent_bg = true
 	viewport.disable_3d = true
+	viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST # 内层放大原画仍保留硬像素；不能只设置最终纹理的采样
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(viewport)
 	value.reparent(viewport)
@@ -67,6 +79,7 @@ func _setup_content(value: Control, content_size: Vector2) -> void:
 	effect.set_shader_parameter("use_3d", true)
 	effect.set_shader_parameter("use_flash", true)
 	effect.set_shader_parameter("max_tilt_degrees", TILT)
+	effect.set_shader_parameter("fov", 72.0)
 	effect.set_shader_parameter("inset", 0.0)
 	effect.set_shader_parameter("stripe_spacing", 14.0)
 	effect.set_shader_parameter("stripe_width", 10.0)
@@ -87,8 +100,12 @@ func _process(delta: float) -> void:
 
 func update_pointer_force(target: Vector2, delta: float) -> void:
 	# 商店从固定商品区域提供归一化坐标，检视从自身区域提供；共用同一套平滑。
-	force = force.lerp(target, 1.0 - exp(-FOLLOW_SPEED * delta))
+	set_pointer_force(force.lerp(target, 1.0 - exp(-FOLLOW_SPEED * delta)))
+
+func set_pointer_force(value: Vector2) -> void:
+	force = value
 	effect.set_shader_parameter("pointer_force", force)
+	if is_instance_valid(card): card.update_finish_pointer(force)
 
 func card_point(point: Vector2) -> Vector2:
 	var perspective := tan(deg_to_rad(72.0) * 0.5)

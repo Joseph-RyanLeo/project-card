@@ -31,7 +31,8 @@ func settle(
 	owned_change_entries: Array[Dictionary] = [],
 	card_registry: Dictionary = {},
 	resource_board_state: ResourceBoardState = null,
-	random_card_resolver: Callable = Callable()
+	random_card_resolver: Callable = Callable(),
+	card_statistics: Dictionary = {}
 ) -> Dictionary:
 	if (
 		snapshot == null
@@ -93,6 +94,12 @@ func settle(
 	var random_requests_queued := 0
 	var emblem_instances_queued := 0
 	var resource_cards_awarded := 0
+	# 先累加再消耗法术，耗尽回调冻结的实例才包含本场战绩；重入在journal检查处返回。
+	for id: String in card_statistics:
+		var owned := owned_collection.get_by_instance_id(StringName(id))
+		if owned == null: continue
+		for key: String in card_statistics[id]:
+			owned.lifetime_stats[key] = float(owned.lifetime_stats.get(key, 0)) + float(card_statistics[id][key])
 	for entry: Dictionary in growth_entries:
 		if int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER:
 			continue

@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://dc8ux83uhnngp"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://pwb1hxn8m6s1" path="res://assets/card_art/fireman.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/fireman.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -20,4 +20,7 @@ race_type = 4
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-7, 27)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-8, 33)
+})
 effect_text = "耀眼。突击：场上每有一个生效的火符文，此卡获得2点生命值。"

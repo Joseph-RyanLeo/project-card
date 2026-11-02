@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bmb5pkayoppsf"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Texture2D" uid="uid://dx503oculkh3s" path="res://assets/card_art/equipment/stormstring_bow.png" id="1_d3p8m"]
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_h5enp"]
+[ext_resource type="Texture2D" path="res://assets/card_art/equipment/stormstring_bow.png" id="1_d3p8m"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="2_h5enp"]
 
 [resource]
 script = ExtResource("2_h5enp")
+is_available = false
 id = &"stormstring_bow"
 display_name = "风暴弓"
 faction = 1
@@ -18,4 +19,7 @@ equipment_health_delta = 2
 equipment_armor_delta = 1
 art_texture = ExtResource("1_d3p8m")
 art_offset = Vector2i(0, 4)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(4, 18)
+})
 effect_text = "占位：远程武器；行动-1，热诚+1，生命+2，护甲+1。"

@@ -13,6 +13,7 @@ const PREVIEW_CARD: PackedScene = preload("res://scenes/ui/CardView.tscn")
 const FIRE_FIELDS := {&"duration": "预览持续时间", &"beam_height": "火焰高度", &"pixel_size": "像素块大小", &"flow_speed": "火焰上升速度", &"flow_frequency": "焰尖噪声密度", &"warp_strength": "焰尖摆动强度"} # 火焰仅展示会生效的外观参数
 const WATER_FIELDS := {&"duration": "播放时间", &"speed_variation_strength": "变速强度", &"beam_height": "波面宽度", &"pixel_size": "像素块大小", &"trail_length": "命中节奏长度", &"trail_softness": "命中节奏柔化", &"flow_strength": "两端后拖强度", &"flow_speed": "尾波流动速度", &"flow_frequency": "尾波噪声密度", &"warp_strength": "尾缘起伏强度"} # 噪声只改变半透明尾缘，节奏参数沿用既有命中计算
 const SAMPLE_FIELDS := {&"duration": "播放时间", &"speed_variation_strength": "变速强度", &"beam_height": "原画显示宽度", &"trail_length": "命中节奏长度", &"trail_softness": "命中节奏柔化"} # 原画样板只展示生效参数，保留朋友的配色和像素
+const WATER_SHOCKWAVE_FIELDS := {&"duration": "发射节奏时间", &"speed_variation_strength": "变速强度", &"beam_height": "命中水花大小", &"trail_length": "命中节奏长度", &"trail_softness": "命中节奏柔化", &"water_ball_size": "水球直径", &"water_tail_length": "尾流长度", &"water_contact_offset": "边界前后偏移", &"water_wall_x": "原画墙面X", &"water_impact_frame": "水花起始帧", &"water_playback_speed": "水花播放速度"} # 水球、卡边接触和水花可分别调节
 const WOOD_PREVIEW_GAP := 186.0 # 木穿刺预览中上下两排目标的中心距离
 const DARK_PREVIEW_COUNT := 3 # 调试器示范三次真实事件的外观，正式次数由战斗规则决定
 const DARK_PREVIEW_INTERVAL := 0.20 # 预览中相邻两次斩击的起始间隔（秒）
@@ -48,6 +49,8 @@ var _preview_start := Vector2.ZERO
 var _preview_end := Vector2.ZERO
 var _import_dialog: FileDialog
 var _export_dialog: FileDialog
+var _water_freeze_button: CheckButton
+var _water_boundary_guide: ColorRect
 
 var profile_option: OptionButton
 var mask_option: OptionButton
@@ -202,6 +205,17 @@ func _build_settings_panel() -> Control:
 	sample_preset.tooltip_text = "木：每次一刺，随机选一种原画角度。暗：每次真实连击一斩，角度随机。保留当前命中时间。"
 	sample_preset.pressed.connect(_apply_element_sample_preset)
 	layout.add_child(sample_preset)
+	_water_freeze_button = CheckButton.new()
+	_water_freeze_button.name = "FreezeWaterImpact"
+	_water_freeze_button.text = "定格命中水花"
+	_water_freeze_button.tooltip_text = "停在刚接触卡边的第一张水花帧；修改尺寸、墙面X或偏移会立即更新定格画面。"
+	_water_freeze_button.toggled.connect(func(value: bool) -> void:
+		if value:
+			_auto_play = false
+			auto_play_button.text = "循环：关"
+		_restart_preview()
+	)
+	layout.add_child(_water_freeze_button)
 	var separator := HSeparator.new()
 	layout.add_child(separator)
 	var numeric_title := Label.new()
@@ -307,8 +321,15 @@ func _build_preview_panel() -> Control:
 	preview_canvas.add_child(target_marker)
 	_preview_card = _make_preview_card()
 	_wood_target_card = _make_preview_card()
+	_water_boundary_guide = ColorRect.new()
+	_water_boundary_guide.name = "WaterCardBoundary"
+	_water_boundary_guide.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_water_boundary_guide.color = Color(0.3, 0.95, 1.0, 0.8) # 调试参考线标出真实迎面卡边，不参与正式画面
+	_water_boundary_guide.z_index = 29
+	_water_boundary_guide.hide()
+	preview_canvas.add_child(_water_boundary_guide)
 	var help := Label.new()
-	help.text = "木：完整原帧穿过两张真实卡牌，原图两段留白各对应一张卡牌，保留全部残影与碎屑。暗：白闪接紫色斩痕，每斩随机角度；这里演示三连击，实战按真实次数播放。保存并应用后用于战斗，手绘样板保留原画配色。"
+	help.text = "水冲击波：小水球飞向迎面卡边，青线标出接触边界。可定格命中，分别调水球、尾流、水花尺寸和原画墙面；边界偏移正数进入卡内，负数停在卡外。木穿过两张卡，暗按真实连击次数播放。保存后用于正式战斗。"
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	help.add_theme_color_override("font_color", Color("a9bac8"))
 	layout.add_child(help)
@@ -385,9 +406,12 @@ func _layout_preview() -> void:
 	source_marker.position = _preview_start - source_marker.custom_minimum_size * 0.5
 	target_marker.position = _preview_end - target_marker.custom_minimum_size * 0.5
 	_preview_card.position = (canvas_size - _preview_card.size * FIRE_PREVIEW_CARD_SCALE) * 0.5 + _preview_card.pivot_offset * (FIRE_PREVIEW_CARD_SCALE - 1.0)
-	if mask == &"wood_thorns":
+	if mask in [&"wood_thorns", &"water_shockwave"]:
 		_preview_card.position = _preview_start - _preview_card.size * 0.5
 		_wood_target_card.position = _preview_end - _wood_target_card.size * 0.5
+	if mask == &"water_shockwave":
+		_water_boundary_guide.position = _wood_target_card.position
+		_water_boundary_guide.size = Vector2(1.0, _wood_target_card.size.y) # 1个逻辑像素宽的卡边参考线
 	var center_guide := preview_canvas.get_node("CenterGuide") as ColorRect
 	center_guide.position = Vector2(0.0, canvas_size.y * 0.5 - 1.0)
 	center_guide.size = Vector2(canvas_size.x, 2.0)
@@ -409,20 +433,23 @@ func _load_profile_into_controls(profile_id: StringName) -> void:
 	var sample := BattleAttackTrailRenderer.is_sample_style(profile["mask_kind"])
 	var dark: bool = profile["mask_kind"] == &"dark_slash" and not fire
 	var wood: bool = profile["mask_kind"] == &"wood_thorns" and not fire
+	var shockwave: bool = profile["mask_kind"] == &"water_shockwave" and not fire
 	mask_option.disabled = fire
 	(find_child("SoulRibbonPresetButton", true, false) as Button).disabled = fire
 	(find_child("WaterFlowPresetButton", true, false) as Button).disabled = fire
 	(find_child("ElementSamplePresetButton", true, false) as Button).visible = profile_id in [&"wood_pierce", &"dark_repeat"]
-	source_marker.visible = not fire and not dark and not wood
-	target_marker.visible = not fire and not dark and not wood
+	_water_freeze_button.visible = shockwave
+	_water_boundary_guide.visible = shockwave
+	source_marker.visible = not fire and not dark and not wood and not shockwave
+	target_marker.visible = not fire and not dark and not wood and not shockwave
 	source_marker.z_index = 0 if water or sample else 20
 	target_marker.z_index = 0 if water or sample else 20
 	(source_marker.get_child(0) as Label).text = "承载目标" if profile["mask_kind"] == &"wood_thorns" else "攻击方"
 	(target_marker.get_child(0) as Label).text = "另一排目标" if profile["mask_kind"] == &"wood_thorns" else "目标"
-	_preview_card.visible = fire or dark or wood
-	_preview_card.scale = Vector2.ONE * (1.0 if wood else FIRE_PREVIEW_CARD_SCALE)
-	_wood_target_card.visible = wood
-	effect_layer.z_index = 30 if dark or wood else 10
+	_preview_card.visible = fire or dark or wood or shockwave
+	_preview_card.scale = Vector2.ONE * (1.0 if wood or shockwave else FIRE_PREVIEW_CARD_SCALE)
+	_wood_target_card.visible = wood or shockwave
+	effect_layer.z_index = 30 if dark or wood or shockwave else 10
 	head_color_option.disabled = fire or sample
 	tail_color_option.disabled = fire or sample
 	if profile_id == &"water_spread":
@@ -432,15 +459,19 @@ func _load_profile_into_controls(profile_id: StringName) -> void:
 	for field: Dictionary in BattleAttackEffectProfiles.NUMERIC_FIELDS:
 		var key := StringName(field["key"])
 		var controls := _numeric_controls[key] as Dictionary
-		var field_names: Dictionary = FIRE_FIELDS if fire else (SAMPLE_FIELDS if sample else (WATER_FIELDS if water else {}))
-		(controls.row as Control).visible = field_names.is_empty() or field_names.has(key)
+		var field_names: Dictionary = FIRE_FIELDS if fire else (WATER_SHOCKWAVE_FIELDS if shockwave else (SAMPLE_FIELDS if sample else (WATER_FIELDS if water else {})))
+		(controls.row as Control).visible = (field_names.is_empty() or field_names.has(key)) and field.get("style", profile["mask_kind"]) == profile["mask_kind"]
 		(controls.label as Label).text = String(field_names.get(key, field.label))
+		(controls.label as Label).tooltip_text = String(field.get("hint", ""))
 		if wood and key == &"beam_height":
 			(controls.label as Label).text = "木刺宽度"
 			(controls.label as Label).tooltip_text = "70为原图比例；只调整横向宽度，两段卡牌长度始终按真实卡高对齐。"
 		elif wood and key == &"duration":
 			(controls.label as Label).text = "发射节奏时间"
 			(controls.label as Label).tooltip_text = "沿用原命中时刻；命中后的原画单独保持每帧50毫秒，完整播放长刺与残影。"
+		elif profile["mask_kind"] == &"water_shockwave" and key == &"duration":
+			(controls.label as Label).text = "发射节奏时间"
+			(controls.label as Label).tooltip_text = "保持真实命中时刻；命中后按原GIF每帧40毫秒完整播放水花与消散。"
 		(controls["slider"] as HSlider).value = float(profile[String(key)])
 		(controls["spin"] as SpinBox).value = float(profile[String(key)])
 	_loading_controls = false
@@ -537,15 +568,20 @@ func _play_preview(clear_previous: bool) -> void:
 		if profile["mask_kind"] == &"dark_slash":
 			profile["beam_height"] = float(profile["beam_height"]) * FIRE_PREVIEW_CARD_SCALE # 暗斩与两倍样板卡面同比放大，草稿仍保存逻辑尺寸
 		for index: int in count:
+			var bounds := _water_target_bounds() if profile["mask_kind"] == &"water_shockwave" else Rect2()
 			var effect := BattleAttackTrailRenderer.play(
 				effect_layer,
 				PackedVector2Array([_preview_start, _preview_end]),
 				profile,
 				PREVIEW_COLORS[head_color_option.selected],
 				PREVIEW_COLORS[tail_color_option.selected],
-				Callable(), 1.0, -1, -1.0, index, _fire_preview_bounds().size.y
+				Callable(), 1.0, -1, -1.0, index, _fire_preview_bounds().size.y, bounds
 			)
 			if effect != null: preview_duration = maxf(preview_duration, float(effect.get_meta("visual_duration", preview_duration)))
+			if effect != null and profile["mask_kind"] == &"water_shockwave" and _water_freeze_button.button_pressed:
+				var tween := effect.get_meta("flight_tween") as Tween
+				tween.pause()
+				tween.custom_step(float(effect.get_meta("logical_impact_delay")) + 0.0001)
 			# 只在预览串起三个独立斩击；不创建另一套战斗次数计算。
 			if count > 1 and effect != null:
 				var tween := effect.get_meta("flight_tween") as Tween
@@ -560,6 +596,12 @@ func _play_preview(clear_previous: bool) -> void:
 func _fire_preview_bounds() -> Rect2:
 	# CardView绕中心缩放，必须先取实际画布矩形，再转换到特效层。
 	var rect := _preview_card.get_global_rect()
+	var inverse := effect_layer.get_global_transform_with_canvas().affine_inverse()
+	return Rect2(inverse * rect.position, inverse.basis_xform(rect.size))
+
+
+func _water_target_bounds() -> Rect2:
+	var rect := _wood_target_card.get_global_rect()
 	var inverse := effect_layer.get_global_transform_with_canvas().affine_inverse()
 	return Rect2(inverse * rect.position, inverse.basis_xform(rect.size))
 

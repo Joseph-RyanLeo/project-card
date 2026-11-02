@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bvf86pn743dfn"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://ceycrjq6reeos" path="res://assets/card_art/armorsmith.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/armorsmith.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -17,7 +17,9 @@ max_health = 3
 armor = 3
 runes = Array[int]([4, 0, 2])
 race_type = 2
-rarity = 0
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-12, 11)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-14, 11)
+})
 effect_text = "相邻友军每进行一次开采，前排友军获得1点护甲。"

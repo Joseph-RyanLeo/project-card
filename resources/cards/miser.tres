@@ -19,4 +19,7 @@ race_type = 6
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-8, -4)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-11, 5)
+})
 effect_text = "回响：偷取敌方2金币，玩家获胜后返还其被偷金币。"

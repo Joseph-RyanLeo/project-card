@@ -19,4 +19,7 @@ race_type = 2
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-16, 21)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-12, 18)
+})
 effect_text = "保护1。遗愿：召唤一张诡雷。"

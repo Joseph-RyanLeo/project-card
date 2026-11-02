@@ -17,4 +17,7 @@ race_type = 4
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-5, 1)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-8, 3)
+})
 effect_text = "突击：此卡两个元素符文临时变为火符文。"

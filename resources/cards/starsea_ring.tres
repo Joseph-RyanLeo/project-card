@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bccinr607pff8"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Texture2D" uid="uid://clrlrhy3yqi28" path="res://assets/card_art/equipment/starsea_ring.png" id="1_tg5wn"]
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_xgh0q"]
+[ext_resource type="Texture2D" path="res://assets/card_art/equipment/starsea_ring.png" id="1_tg5wn"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="2_xgh0q"]
 
 [resource]
 script = ExtResource("2_xgh0q")
+is_available = false
 id = &"starsea_ring"
 display_name = "星海戒"
 faction = 1
@@ -18,4 +19,7 @@ equipment_zeal_delta = -1
 equipment_health_delta = 1
 art_texture = ExtResource("1_tg5wn")
 art_offset = Vector2i(0, 7)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(0, 32)
+})
 effect_text = "占位：饰品；行动+1，热诚-1，生命+1，护甲+0。"

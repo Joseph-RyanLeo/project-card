@@ -17,4 +17,7 @@ equipment_action_delta = 1
 equipment_zeal_delta = -2
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-2, -5)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-2, 6)
+})
 effect_text = "开采1。成功开采后召唤一张诡雷。"

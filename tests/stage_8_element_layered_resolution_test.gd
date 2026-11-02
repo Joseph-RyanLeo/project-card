@@ -792,8 +792,7 @@ func _test_formula_popup_ui() -> void:
 		and beam_material.shader.resource_path == "res://shaders/battle_energy_beam.gdshader"
 		and is_equal_approx(float(beam_material.get_shader_parameter("pixel_size")), float(water_profile["pixel_size"]))
 		and is_equal_approx(float(beam_material.get_shader_parameter("trail_length")), float(water_profile["trail_length"]))
-		and beam_material.get_shader_parameter("trail_mask") == BattleAttackTrailRenderer.BATTLE_TRAIL_ENERGY_TEXTURE
-		and bool(beam_material.get_shader_parameter("flip_mask_x"))
+		and bool(beam_material.get_shader_parameter("water_flow"))
 		and beam_material.get_shader_parameter("head_color") == water_color
 		and beam_material.get_shader_parameter("tail_color") == water_color
 		and is_equal_approx(
@@ -840,11 +839,10 @@ func _test_formula_popup_ui() -> void:
 		"三种随机弹道速度曲线保持相同总时间与终点，并分别形成前、中、后段速度峰值"
 	)
 	_expect(
-		BattleAttackTrailRenderer.get_mask_texture(&"projectile") == BattleAttackTrailRenderer.BATTLE_TRAIL_PROJECTILE_TEXTURE
-		and BattleAttackEffectProfiles.get_profile(&"ranged_attack")["mask_kind"] == &"projectile"
-		and BattleAttackEffectProfiles.get_profile(&"wood_pierce")["mask_kind"] == &"projectile"
-		and BattleAttackEffectProfiles.get_profile(&"light_reflect")["mask_kind"] == &"projectile",
-		"远程、木穿刺和光折射使用原图尖头弹体遮罩"
+		BattleAttackEffectProfiles.get_profile(&"ranged_attack")["mask_kind"] == &"soul_ribbon"
+		and BattleAttackEffectProfiles.get_profile(&"wood_pierce")["mask_kind"] == &"wood_thorns"
+		and BattleAttackEffectProfiles.get_profile(&"light_reflect")["mask_kind"] == &"soul_ribbon",
+		"远程与光折射使用灵魂光带，木穿刺保留独立原画"
 	)
 	var full_house_actor := _state(
 		_squad_with_runes([

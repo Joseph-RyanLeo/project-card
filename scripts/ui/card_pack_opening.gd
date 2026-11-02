@@ -28,6 +28,7 @@ var _background_cards: Array[InspectionCardSurface] = []
 var _drag_start := 0.0
 var _drag_progress := 0.0
 var _dragging := false
+var _drag_moved := false
 var _auto_tearing := false
 var _host: Control
 var _host_origin := Vector2.ZERO
@@ -53,6 +54,7 @@ func begin(acquired: Array[OwnedCard], host: Control, pack_surface: InspectionCa
 	surface.viewport.add_child(tear_art)
 	tear_art.setup(art)
 	tear_art.position = surface.PADDING
+	tear_art.configure_inspection(surface)
 	glow = _make_glow()
 	accept_purchase(acquired)
 	glow.rare = has_rare
@@ -96,7 +98,6 @@ func _prepare_next_card() -> void:
 	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	back.tilt_locked = true
 	back.set_process(false)
-	back.effect.set_shader_parameter("use_flash", false)
 	_background_cards.append(back)
 	if phase == Phase.SEALED and _background_cards.size() == cards.size():
 		allow_tearing()
@@ -106,7 +107,7 @@ func allow_tearing() -> void:
 	if phase in [Phase.ENLARGING, Phase.POSITIONING, Phase.SEALED]:
 		phase = Phase.SEALED
 		surface.set_process(true)
-		_set_help("点击左侧购买按钮；右键退出检视" if cards.is_empty() else "左键单击包装自动开包；也可按住顶部封口横向撕开")
+		_set_help("点击左侧购买按钮；右键退出检视" if cards.is_empty() else "单击自动开包；按住封口横拉可撕开，未拉到底前可往回拉")
 		if not cards.is_empty() and _background_cards.size() < cards.size():
 			_set_help("正在准备卡面…")
 
@@ -129,6 +130,7 @@ func handle_input(event: InputEvent) -> bool:
 				if Rect2(0, -8, tear_art.size.x, SEAL_HIT_HEIGHT).has_point(point):
 					phase = Phase.TEARING
 					_dragging = true
+					_drag_moved = false
 					_drag_pointer = mouse.position
 					_press_pointer = mouse.position
 					_drag_start = point.x
@@ -137,7 +139,7 @@ func handle_input(event: InputEvent) -> bool:
 				elif Rect2(Vector2.ZERO, tear_art.size).has_point(point):
 					auto_tear()
 			else:
-				var was_click := _dragging and _press_pointer.distance_to(mouse.position) <= TEAR_DRAG_THRESHOLD and is_equal_approx(tear_art.progress, _drag_progress)
+				var was_click := _dragging and not _drag_moved
 				_dragging = false
 				if was_click: auto_tear()
 			return true
@@ -151,12 +153,13 @@ func handle_input(event: InputEvent) -> bool:
 
 
 func _advance_tear() -> void:
-	if _press_pointer.distance_to(_drag_pointer) <= TEAR_DRAG_THRESHOLD:
-		return
+	if not _drag_moved:
+		if _press_pointer.distance_to(_drag_pointer) <= TEAR_DRAG_THRESHOLD: return
+		_drag_moved = true
 	var point := surface.card_point(surface.get_global_transform_with_canvas().affine_inverse() * _drag_pointer)
 	var distance: float = (point.x - _drag_start) * (1.0 if tear_art.from_left else -1.0)
 	var remaining_distance: float = tear_art.size.x - _drag_start if tear_art.from_left else _drag_start
-	tear_art.progress = maxf(tear_art.progress, _drag_progress + (1.0 - _drag_progress) * distance / maxf(1.0, remaining_distance * DRAG_FRACTION))
+	tear_art.progress = _drag_progress + (1.0 - _drag_progress) * distance / maxf(1.0, remaining_distance * DRAG_FRACTION)
 	if tear_art.progress >= 1.0: _burst()
 
 
@@ -205,8 +208,7 @@ func show_card(card_surface: InspectionCardSurface, toolbox_expanded: bool = fal
 	if current_index > 0:
 		surface.position = _stack_origin
 		surface.scale = _stack_scale
-		surface.force = previous_force
-		surface.effect.set_shader_parameter("pointer_force", previous_force)
+		surface.set_pointer_force(previous_force)
 	for back: InspectionCardSurface in _background_cards:
 		back.reparent(overlay)
 		back.visible = true
@@ -241,9 +243,8 @@ func _extract_stack(toolbox_expanded: bool) -> void:
 	_pack_surface.z_index = 26
 	var target_origin := _stack_origin
 	_stack_origin = _pack_surface.position + (_pack_surface.size - surface.size) * _stack_scale * 0.5
-	surface.force = _pack_surface.force
+	surface.set_pointer_force(_pack_surface.force)
 	_stack_force = surface.force
-	surface.effect.set_shader_parameter("pointer_force", surface.force)
 	surface.position = _stack_origin
 	surface.scale = _stack_scale
 	_update_stack_layout()
@@ -270,7 +271,6 @@ func _reveal_card(toolbox_expanded: bool) -> void:
 	var rare: bool = cards[current_index].card_data.rarity == CardData.Rarity.IV
 	glow.rare = rare
 	glow.strength = 1.0 if rare else 0.0
-	surface.effect.set_shader_parameter("use_flash", rare)
 	if rare:
 		animation = create_tween()
 		animation.tween_property(glow, "strength", 0.0, effects.rare_reveal_seconds)
@@ -280,7 +280,9 @@ func _reveal_card(toolbox_expanded: bool) -> void:
 func update_inspection_help(toolbox_expanded: bool) -> void:
 	if phase == Phase.INSPECTING:
 		var tools_help := "左侧工具包可处理当前卡；" if cards[current_index].card_data.card_type == CardData.CardType.MINION else "当前卡无法使用工具；"
-		_set_help("鼠标移动检视；" + tools_help + ("先收起工具箱，再点击卡面显示下一张" if toolbox_expanded else "点击卡面收起并显示下一张"))
+		var owned := cards[current_index]
+		var appearance := "%s／%s；" % [CardAppearance.SURFACE_LABELS[owned.surface_finish], CardAppearance.ART_LABELS[owned.art_finish]]
+		_set_help(appearance + "鼠标移动检视；" + tools_help + ("先收起工具箱，再点击卡面显示下一张" if toolbox_expanded else "点击卡面收起并显示下一张"))
 
 
 func collect_current() -> void:
@@ -374,8 +376,7 @@ func _update_stack_layout() -> void:
 		back.z_index = surface.z_index - 1 - index
 		back.position = _stack_origin - _stack_force * Vector2(effects.stack_parallax_x, effects.stack_parallax_y) * float(index + 1)
 		back.scale = _stack_scale
-		back.force = _stack_force
-		back.effect.set_shader_parameter("pointer_force", _stack_force)
+		back.set_pointer_force(_stack_force)
 
 
 func cancel() -> void:

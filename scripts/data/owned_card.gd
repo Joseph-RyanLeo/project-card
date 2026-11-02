@@ -17,6 +17,12 @@ const RUNE_SCRAPE_BYTE_COUNT: int = (RUNE_SCRAPE_PIXEL_COUNT + 7) / 8
 const EmblemLibraryDataScript = preload("res://scripts/data/emblem_library_data.gd")
 const CardSlotLayoutScript = preload("res://scripts/data/card_slot_layout.gd")
 const ResourceHexLayoutScript = preload("res://scripts/data/resource_hex_layout.gd")
+const Appearance = preload("res://scripts/data/card_appearance.gd")
+
+var acquired_at: int = 0 # 局内获得时的Unix秒；旧档未知时保留0
+var acquisition_source: Dictionary = {} # 获得途径及可核实的卡包、事件、来源卡身份
+var recruited_by: String = "" # 获得时的英雄稳定标识；旧档不猜测
+var lifetime_stats: Dictionary = {} # 从获得后累计的正式提交战绩；未接入项留空，不伪造历史
 
 var _battlefield_card: CardData
 
@@ -29,6 +35,8 @@ func get_battlefield_card() -> CardData:
 @export var instance_id: StringName = &"" # 本局内稳定且唯一的卡牌实例身份
 @export var card_data: CardData # 共享卡牌定义；不得把永久变化直接写回此资源
 @export var is_new: bool = true # 新获得卡牌右上角绿点，首次悬停后消除
+@export var surface_finish: Appearance.Surface = Appearance.Surface.PLAIN # 本实例获得时确定的卡面工艺
+@export var art_finish: Appearance.Art = Appearance.Art.PLAIN # 本实例获得时确定的普通／全息／超框卡图
 @export var companion_source_id: StringName = &"" # 专属衍生法术所属主卡实例；空值表示独立拥有
 @export var acquisition_order: int = -1 # 同稀有度收藏排序使用的获得先后
 @export var resolved_action_type: int = -1 # 多行动方式卡获得时确定的结果；-1表示沿用定义
@@ -54,9 +62,15 @@ func initialize(
 	order: int,
 	instance_rng: RandomNumberGenerator = null
 ) -> void:
+	acquired_at = int(Time.get_unix_time_from_system())
+	acquisition_source = {}
+	recruited_by = ""
+	lifetime_stats = {}
 	card_data = definition
 	_battlefield_card = null
 	is_new = true
+	surface_finish = Appearance.Surface.PLAIN
+	art_finish = Appearance.Art.PLAIN
 	instance_id = stable_instance_id
 	companion_source_id = &""
 	acquisition_order = order
@@ -103,6 +117,25 @@ func initialize(
 		for _rune_index: int in definition.runes.size():
 			rune_revealed.append(false)
 			rune_scrape_masks.append("")
+
+
+func roll_pack_appearance(source_rng: RandomNumberGenerator) -> void:
+	var appearance_rng := RandomNumberGenerator.new()
+	if source_rng != null:
+		# 派生独立外观随机流，不推进卡池、符文、槽位或战斗随机流；事务回滚后可重现。
+		appearance_rng.seed = ("pack_appearance:%s:%s:%d" % [instance_id, card_data.id, source_rng.state]).hash()
+	else:
+		appearance_rng.randomize()
+	surface_finish = Appearance.pick_ticket(Appearance.SURFACE_WEIGHTS, appearance_rng.randi_range(1, 100)) as Appearance.Surface
+	art_finish = Appearance.pick_ticket(Appearance.ART_WEIGHTS, appearance_rng.randi_range(1, 100)) as Appearance.Art
+
+
+func get_art_finish_key() -> StringName:
+	return Appearance.offset_key(surface_finish, art_finish)
+
+
+func has_special_appearance() -> bool:
+	return surface_finish != Appearance.Surface.PLAIN or art_finish != Appearance.Art.PLAIN
 
 
 func set_acquired_action_type(value: int) -> void:
@@ -344,11 +377,17 @@ func capture_state() -> Dictionary:
 	# 快照保留资源引用只用于当前运行中的精确恢复；以后写入磁盘时再由存档层
 	# 把 card_data 转换成稳定 card_id / resource_path，而不是在这里猜存档格式。
 	return {
+		"acquired_at": acquired_at,
+		"acquisition_source": acquisition_source.duplicate(true),
+		"recruited_by": recruited_by,
+		"lifetime_stats": lifetime_stats.duplicate(true),
 		"instance_id": instance_id,
 		"card_data": card_data,
 		"companion_source_id": companion_source_id,
 		"acquisition_order": acquisition_order,
 		"is_new": is_new,
+		"surface_finish": int(surface_finish),
+		"art_finish": int(art_finish),
 		"resolved_action_type": resolved_action_type,
 		"resolved_runes": resolved_runes.duplicate(),
 		"equipment_durability": equipment_durability,
@@ -369,6 +408,7 @@ func capture_state() -> Dictionary:
 
 
 func restore_state(snapshot: Dictionary) -> bool:
+	if not Appearance.is_valid(snapshot.get("surface_finish", 0), snapshot.get("art_finish", 0)): return false
 	var snapshot_instance_id := snapshot.get("instance_id", &"") as StringName
 	var snapshot_card_data := snapshot.get("card_data") as CardData
 	var resolved_runes_value: Variant = snapshot.get("resolved_runes", snapshot_card_data.runes if snapshot_card_data != null else [])
@@ -405,9 +445,15 @@ func restore_state(snapshot: Dictionary) -> bool:
 		return false
 	if not instance_id.is_empty() and instance_id != snapshot_instance_id:
 		return false
+	acquired_at = int(snapshot.get("acquired_at", 0))
+	acquisition_source = (snapshot.get("acquisition_source", {}) as Dictionary).duplicate(true)
+	recruited_by = String(snapshot.get("recruited_by", ""))
+	lifetime_stats = (snapshot.get("lifetime_stats", {}) as Dictionary).duplicate(true)
 	instance_id = snapshot_instance_id
 	card_data = snapshot_card_data
 	is_new = bool(snapshot.get("is_new", false))
+	surface_finish = int(snapshot.get("surface_finish", 0)) as Appearance.Surface
+	art_finish = int(snapshot.get("art_finish", 0)) as Appearance.Art
 	companion_source_id = StringName(snapshot.get("companion_source_id", ""))
 	acquisition_order = int(snapshot.get("acquisition_order", -1))
 	set_acquired_action_type(resolved_action_type)

@@ -63,7 +63,7 @@ func _run() -> void:
 	check((load("res://resources/cards/greed_demon.tres") as CardData).rarity == CardData.Rarity.III, "贪魔正式品级改III")
 	check(manifest.cards.size() == 36, "36张唯一确认卡")
 	check((load("res://resources/cards/golden_golem.tres") as CardData).cooldown_seconds == 10.0, "黄金魔像保留10秒冷却")
-	check((load("res://resources/cards/rallying_mine_bell.tres") as CardData).race_type == CardData.RaceType.NONE, "矿铃无种族")
+	check((load("res://resources/cards/rallying_mine_bell.tres") as CardData).race_type == CardData.RaceType.CONSTRUCT, "矿铃种族为造物")
 	check((load("res://resources/cards/guard_remains.tres") as CardData).max_health == 2, "守卫残骸修正生命2")
 	test_mining()
 	test_economy()

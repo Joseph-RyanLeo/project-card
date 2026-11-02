@@ -15,4 +15,7 @@ spell_trigger_kind = 3
 spell_preparation_seconds = 5.0
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(16, -4)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(5, 21)
+})
 effect_text = "准备5秒：后排远程友军立即行动1次。"

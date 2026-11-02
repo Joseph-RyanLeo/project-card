@@ -5,6 +5,7 @@
 
 [resource]
 script = ExtResource("2_77auh")
+is_available = false
 id = &"restoration_flask"
 display_name = "复苏药剂"
 faction = 1

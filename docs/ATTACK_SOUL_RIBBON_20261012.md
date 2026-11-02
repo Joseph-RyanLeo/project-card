@@ -25,7 +25,7 @@
 - `scripts/battle/battle_attack_effect_profiles.gd`：保存样式清单、参数范围和默认值。`make_soul_ribbon_profile()` 在当前配置上应用光带外观预设；`mask_kind = soul_ribbon` 表示使用光带。
 - `scripts/tools/attack_effect_lab.gd`：`_drafts` 保存每种行动的草稿；`_apply_soul_ribbon_preset()` 应用预设并刷新控件；`_play_preview()` 使用草稿重播。
 - `scripts/battle/battle_attack_trail_renderer.gd`：`sample_curve()` 生成路径；光带的控制点靠近发射端，起点和终点固定在攻击方、目标中心。`play()` 创建网格与材质，并沿用暂停、倍速、一次命中和结束清理。
-- `shaders/battle_energy_beam.gdshader`：`soul_ribbon` 选择程序轮廓；`soul_taper` 控制细尾过渡；`soul_core_width` 控制亮芯；`impact_progress` 表示吸收点；`travel_progress` 表示虚拟头部进度。
+- `shaders/battle_energy_beam.gdshader`：除像素水流外直接使用光带程序轮廓；`soul_taper` 控制细尾过渡；`soul_core_width` 控制亮芯；`impact_progress` 表示吸收点；`travel_progress` 表示虚拟头部进度。
 
 建议先调整“尾迹高度”“整体弧度”“像素块大小”，再调整收尾指数和亮芯宽度。光带会忽略“首尾延伸”，以免越过目标中心。
 

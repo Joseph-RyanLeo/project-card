@@ -5,6 +5,7 @@
 
 [resource]
 script = ExtResource("2_l14xw")
+is_available = false
 id = &"disruption_counterspell"
 display_name = "法术反制"
 card_type = 2

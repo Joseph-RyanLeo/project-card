@@ -18,4 +18,7 @@ race_type = 3
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-6, 37)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-6, 53)
+})
 effect_text = "一个造物被消灭时，相邻友军获得强化+2。"

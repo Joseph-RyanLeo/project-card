@@ -16,4 +16,7 @@ runes = Array[int]([0, 1, 2])
 race_type = 7
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(4, 13)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(0, 22)
+})
 effect_text = "攻击行动命中时，目标本场受击优先级+2。"

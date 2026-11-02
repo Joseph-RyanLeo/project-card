@@ -17,6 +17,20 @@ func _init() -> void:
 func _run() -> void:
 	root.size = Vector2i(1280, 720)
 	BattleAttackEffectProfiles.reload_profiles(false)
+	_expect(
+		BattleAttackEffectProfiles.MASK_IDS == [&"soul_ribbon", &"water_flow", &"wood_thorns", &"dark_slash", &"water_shockwave"]
+		and not FileAccess.file_exists("res://assets/effects/battle_trail_energy.png")
+		and not FileAccess.file_exists("res://assets/effects/battle_trail_projectile.png"),
+		"两种旧尾迹的样式入口和素材已删除"
+	)
+	for profile_id: StringName in BattleAttackEffectProfiles.PROFILE_IDS:
+		var defaults := BattleAttackEffectProfiles.get_default_profile(profile_id)
+		for removed_style: StringName in [&"energy", &"projectile"]:
+			var old_profile := defaults.duplicate(true)
+			old_profile["mask_kind"] = removed_style
+			old_profile["duration"] = 0.91
+			var normalized := BattleAttackEffectProfiles.normalize_profile(profile_id, old_profile)
+			_expect(normalized["mask_kind"] == defaults["mask_kind"] and is_equal_approx(float(normalized["duration"]), 0.91), "旧本机样式恢复行动默认值并保留时长：%s/%s" % [profile_id, removed_style])
 	var lab := LAB_SCENE.instantiate() as AttackEffectLab
 	root.add_child(lab)
 	await process_frame
@@ -45,7 +59,7 @@ func _run() -> void:
 		and is_equal_approx(float(material.get_shader_parameter("warp_strength")), 0.275)
 		and is_equal_approx(float(material.get_shader_parameter("edge_threshold")), float(current_profile["edge_threshold"]))
 		and is_equal_approx(float(material.get_shader_parameter("edge_softness")), float(current_profile["edge_softness"]))
-		and bool(material.get_shader_parameter("flip_mask_x")),
+		and not bool(material.get_shader_parameter("water_flow")),
 		"拖动参数后草稿与屏幕上的 Shader 同帧更新"
 	)
 	lab._on_mask_selected(1)
@@ -54,10 +68,9 @@ func _run() -> void:
 	beam_mesh = newest_effect.get_node("BeamMesh") as MeshInstance2D
 	material = beam_mesh.material as ShaderMaterial
 	_expect(
-		material.get_shader_parameter("trail_mask")
-		== BattleAttackTrailRenderer.BATTLE_TRAIL_PROJECTILE_TEXTURE
-		and not bool(material.get_shader_parameter("flip_mask_x")),
-		"尾迹遮罩切换立即作用于预览"
+		bool(material.get_shader_parameter("water_flow"))
+		and lab.mask_option.get_item_text(1) == "像素水流",
+		"切换现存样式立即使用程序水流预览"
 	)
 	var save_error := BattleAttackEffectProfiles.save_snapshot(SNAPSHOT_PATH)
 	var saved_config := ConfigFile.new()

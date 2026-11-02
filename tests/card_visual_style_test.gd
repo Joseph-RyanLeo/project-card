@@ -41,8 +41,9 @@ func _run() -> void:
 		)
 		_expect(
 			card.card_name_frame.texture == NAME_FRAME_TEXTURE
-			and NAME_FRAME_TEXTURE.get_size() == Vector2(83, 11),
-			"卡名显示框替换为 83×11 新素材"
+			and NAME_FRAME_TEXTURE.get_size() == Vector2(83, 13)
+			and card.card_name_frame.size == Vector2(83, 13),
+			"卡名显示框使用原生83×13新素材"
 		)
 		_expect(
 			card.name_label.horizontal_alignment
@@ -50,8 +51,11 @@ func _run() -> void:
 			"卡牌名字在现有文本区域内水平居中"
 		)
 		_expect(
-			card.name_clip.position == Vector2(21, 5),
-			"卡牌名字文本框在原位置基础上向下移动 1px"
+			card.name_clip.position == Vector2(21, 6)
+			and card.name_clip.size == Vector2(61, 9)
+			and card.name_clip.position.y - card.card_name_frame.position.y == 2
+			and card.card_name_frame.get_rect().end.y - card.name_clip.get_rect().end.y == 2,
+			"卡名区域保持61×9并下移1px，在名称牌上下各留2px"
 		)
 		_expect(
 			card.art_background.texture == ART_BACKGROUND_TEXTURE

@@ -17,4 +17,7 @@ runes = Array[int]([0, 1, 2])
 race_type = 5
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(4, 30)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(1, 34)
+})
 effect_text = "遗愿：消灭此卡牌的随从获得2层疲劳。"

@@ -19,4 +19,7 @@ race_type = 5
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-8, 17)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-9, 19)
+})
 effect_text = "突击：立即行动1次。遗愿：再行动1次！"

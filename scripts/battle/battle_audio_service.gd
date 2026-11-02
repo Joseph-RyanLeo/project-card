@@ -68,7 +68,7 @@ func play_action_hit(action_type: CardData.ActionType) -> void:
 	_play_pool("%s_hit" % phase)
 
 
-func set_master_volume_percent(percent: float) -> void:
+static func set_master_volume_percent(percent: float) -> void:
 	var bus_index := AudioServer.get_bus_index("Master")
 	if bus_index < 0:
 		return

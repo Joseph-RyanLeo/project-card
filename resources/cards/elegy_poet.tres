@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://vnw38qhw6par"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://dgisuhoh1supr" path="res://assets/card_art/elegy_poet.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/elegy_poet.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -10,14 +10,14 @@ display_name = "悲歌诗人"
 pack_id = &"ash_ledger"
 effect_ids = Array[StringName]([&"elegy_poet.effect.01"])
 keywords = Array[StringName]([&"ally_death", &"battle_growth"])
-action_type = 0
-base_value = 1
 cooldown_seconds = 5.0
 max_health = 4
 armor = 2
 runes = Array[int]([0, 1, 3])
 race_type = 1
-rarity = 0
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(0, 38)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-1, 44)
+})
 effect_text = "每有一个友军被消灭，相邻友军获得热诚+1。"

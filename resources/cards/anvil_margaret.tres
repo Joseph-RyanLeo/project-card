@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://c2a7bmte4rnsx"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://cpvqljuubmk40" path="res://assets/card_art/anvil_margaret.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/anvil_margaret.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -19,4 +19,7 @@ runes = Array[int]([1, 2, 4])
 rarity = 3
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-2, 25)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(4, 37)
+})
 effect_text = "友军获得护甲×2；有护甲时热诚-4。"

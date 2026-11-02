@@ -5,6 +5,7 @@
 
 [resource]
 script = ExtResource("2_32fcb")
+is_available = false
 id = &"blessing_vitality"
 display_name = "生命祝福"
 card_type = 2

@@ -20,4 +20,7 @@ race_type = 1
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-5, 31)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-11, 33)
+})
 effect_text = "无法堆叠。休眠30秒；任意随从获得金币时，立即为其治疗1次。"

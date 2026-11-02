@@ -189,7 +189,7 @@ func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
 		if card.instance_id == owned.instance_id:
 			already_prepared = true
 			break
-	if not already_prepared and _prepared_cards.size() >= _capacity:
+	if not _drop_index_resolver.is_valid() and not already_prepared and _prepared_cards.size() >= _capacity:
 		_clear_insertion_preview()
 		return false
 	var index := _insertion_index(at_position, owned)
@@ -431,6 +431,8 @@ func _refresh_cards() -> void:
 
 
 func _process(_delta: float) -> void:
+	if not _hovered_instance_id.is_empty() and is_instance_valid(_hover_card_popup) and not _hover_card_popup.visible:
+		return
 	if not is_visible_in_tree() or (enemy_display and not bool(get_meta("expanded", false))):
 		clear_hover_card()
 		return
@@ -452,16 +454,20 @@ func _set_hovered_instance(instance_id: StringName) -> void:
 		_hover_card_popup.configure_drag_source(false)
 		_hover_card_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_hover_card_popup.z_index = 1000
+		_hover_card_popup.set_meta("inspection_hover_owner", self)
 		add_child(_hover_card_popup)
 	_hover_card_popup.set_card_data(owned.card_data)
 	_hover_card_popup.set_owned_card(owned)
 	_hover_card_popup.visible = true
 	call_deferred("_set_mouse_filter_recursive", _hover_card_popup)
 	_position_hover_card_popup()
+	_hover_card_popup.show_effect_popup()
 	_refresh_cards()
 
 
 func clear_hover_card() -> void:
+	if not _hovered_instance_id.is_empty() and is_instance_valid(_hover_card_popup) and not _hover_card_popup.visible:
+		return
 	if _hovered_instance_id.is_empty():
 		return
 	_hovered_instance_id = &""
@@ -525,8 +531,8 @@ func _hovered_row_index(column_index: int) -> int:
 	return -1
 
 
-func _update_hover_from_pointer() -> void:
-	var pointer := get_viewport().get_mouse_position()
+func _update_hover_from_pointer(pointer_override: Vector2 = Vector2.INF) -> void:
+	var pointer := pointer_override if pointer_override.is_finite() else get_viewport().get_mouse_position()
 	var next_instance_id: StringName = &""
 	for column_index: int in _lists.size():
 		for card_index: int in range(_prepared_cards.size() - 1, -1, -1):
@@ -583,8 +589,17 @@ func _on_icon_click_carry_requested(data: Dictionary, pointer_global_position: V
 
 
 func _on_icon_inspection_requested(card_data: CardData, owned_card: OwnedCard) -> void:
-	clear_hover_card()
-	inspection_requested.emit(null, card_data, owned_card)
+	_set_hovered_instance(owned_card.instance_id)
+	inspection_requested.emit(_hover_card_popup, card_data, owned_card)
+
+
+func finish_hover_inspection(source: CardView, pointer_position: Vector2) -> void:
+	if source != _hover_card_popup or not is_instance_valid(source) or not source.visible:
+		return
+	if not is_visible_in_tree() or (enemy_display and not bool(get_meta("expanded", false))):
+		clear_hover_card()
+	else:
+		_update_hover_from_pointer(pointer_position)
 
 
 func _update_insertion_preview(owned: OwnedCard, insertion_index: int) -> void:

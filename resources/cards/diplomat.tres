@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://spjdvitkktqj"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://bs7tpftcqg5hx" path="res://assets/card_art/diplomat.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/diplomat.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -19,4 +19,7 @@ race_type = 1
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(8, 21)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(4, 29)
+})
 effect_text = "所有非精灵友军生命值+2。"

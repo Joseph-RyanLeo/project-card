@@ -1487,7 +1487,7 @@ func _restore_hidden_source_slot(return_global_position: Variant = null) -> void
 func _animate_restored_slot_return(slot_value: Variant, return_global_position: Vector2) -> void:
 	await get_tree().process_frame
 	if is_instance_valid(slot_value):
-		(slot_value as BoardSlot).animate_from_global_position(return_global_position)
+		(slot_value as BoardSlot).animate_from_global_position(return_global_position, false, true)
 
 
 func _connect_slot(slot: BoardSlot) -> void:

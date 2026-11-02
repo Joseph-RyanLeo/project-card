@@ -80,6 +80,18 @@ func show_card(owned: OwnedCard) -> void:
 	_card_view.configure_drag_source(true, &"card_service", null, self)
 	_empty_outline.visible = false
 
+func take_card_view() -> CardView:
+	var view := _card_view
+	_card_view = null
+	_selected_card = null
+	if is_instance_valid(view):
+		view.set_service_stickers_detached(false)
+		view.clear_pointer_hover_feedback()
+	if is_instance_valid(_empty_outline): _empty_outline.visible = not use_board_art and not allow_deployment
+	card_returned.emit()
+	return view
+
+
 func return_card(notify: bool = true, release_position: Vector2 = Vector2.INF) -> void:
 	var view := _card_view
 	var owned := _selected_card
@@ -134,7 +146,7 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE: return_card(false)
 
 func _can_drop_data(_point: Vector2, data: Variant) -> bool:
-	return data is Dictionary and accepts_card.is_valid() and accepts_card.call(data)
+	return data is Dictionary and data.get("source_slot") != self and accepts_card.is_valid() and accepts_card.call(data)
 
 func _drop_data(_point: Vector2, data: Variant) -> void:
 	if _can_drop_data(Vector2.ZERO, data):

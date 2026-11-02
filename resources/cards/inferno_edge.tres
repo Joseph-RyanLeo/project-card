@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://be8lk7ixy47l6"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Texture2D" uid="uid://dfqyog5ootme2" path="res://assets/card_art/equipment/inferno_edge.png" id="1_ttubc"]
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_ctdjo"]
+[ext_resource type="Texture2D" path="res://assets/card_art/equipment/inferno_edge.png" id="1_ttubc"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="2_ctdjo"]
 
 [resource]
 script = ExtResource("2_ctdjo")
+is_available = false
 id = &"inferno_edge"
 display_name = "炼狱之刃"
 faction = 1
@@ -17,4 +18,7 @@ equipment_zeal_delta = -1
 equipment_armor_delta = 2
 art_texture = ExtResource("1_ttubc")
 art_offset = Vector2i(-10, 12)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-3, 16)
+})
 effect_text = "占位：近战武器；行动+2，热诚-1，生命+0，护甲+2。"

@@ -36,3 +36,40 @@ func _get_next_event_delay() -> float:
 	var result := super._get_next_event_delay()
 	_measure("_get_next_event_delay", began)
 	return result
+
+func _resolve_ready_projectile_batch() -> void:
+	var began := Time.get_ticks_usec()
+	super._resolve_ready_projectile_batch()
+	_measure("_resolve_ready_projectile_batch", began)
+
+func _select_base_actions(actors: Array[BattleSquadState], living_snapshot: Array) -> Array[Dictionary]:
+	var began := Time.get_ticks_usec()
+	var result := super._select_base_actions(actors, living_snapshot)
+	_measure("_select_base_actions", began)
+	return result
+
+func _capture_action_base_sources(state: BattleSquadState) -> Array[Dictionary]:
+	var began := Time.get_ticks_usec()
+	var result := super._capture_action_base_sources(state)
+	_measure("_capture_action_base_sources", began)
+	return result
+
+func _sync_emblem_registration_visibility() -> void:
+	var began := Time.get_ticks_usec()
+	super._sync_emblem_registration_visibility()
+	_measure("_sync_emblem_registration_visibility", began)
+
+func _sync_wound_registration_visibility() -> void:
+	var began := Time.get_ticks_usec()
+	super._sync_wound_registration_visibility()
+	_measure("_sync_wound_registration_visibility", began)
+
+func _ensure_formula_source_snapshots(event: BattleEffectEvent) -> void:
+	var began := Time.get_ticks_usec()
+	super._ensure_formula_source_snapshots(event)
+	_measure("_ensure_formula_source_snapshots", began)
+
+func _finalize_batch() -> void:
+	var began := Time.get_ticks_usec()
+	super._finalize_batch()
+	_measure("_finalize_batch", began)

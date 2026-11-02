@@ -48,9 +48,28 @@ func _notification(what: int) -> void:
 
 func _update_cursor_and_tooltip() -> void:
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if drag_enabled else Control.CURSOR_ARROW
-	if indicator_data != null:
-		tooltip_text = CelestialIndicator.NAMES[indicator_data.kind] + "\n" + [
+	tooltip_text = ""
+
+func can_show_effect_popup() -> bool:
+	return indicator_data != null
+
+func prefers_effect_popup() -> bool:
+	return true
+
+func get_effect_popup_title() -> String:
+	return CelestialIndicator.NAMES[indicator_data.kind]
+
+func get_effect_popup_text() -> String:
+	return [
 			"基础护甲+8、影蔽；行动时失去影蔽，3秒后恢复，期间再次行动不刷新。",
 			"数值+1、耀眼；遗愿转移给随机友军，并使其本场数值额外+1。",
 			"生命+6、数值+3、耀眼；除太阳携带者外，双方其他耀眼失效。",
 		][indicator_data.kind]
+
+func _on_mouse_entered() -> void:
+	super()
+	if can_show_effect_popup(): CardViewScript.EffectPopup.shared(get_tree()).show_card(self)
+
+func _on_mouse_exited() -> void:
+	CardViewScript.EffectPopup.shared(get_tree()).hide_card(self)
+	super()

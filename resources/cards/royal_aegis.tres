@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://lnm4o3k52l3y"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Texture2D" uid="uid://c62epc1yiybeq" path="res://assets/card_art/equipment/royal_aegis.png" id="1_81svi"]
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_wuhdq"]
+[ext_resource type="Texture2D" path="res://assets/card_art/equipment/royal_aegis.png" id="1_81svi"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="2_wuhdq"]
 
 [resource]
 script = ExtResource("2_wuhdq")
+is_available = false
 id = &"royal_aegis"
 display_name = "苍穹礼甲"
 faction = 1
@@ -19,4 +20,7 @@ equipment_health_delta = 3
 equipment_armor_delta = 1
 art_texture = ExtResource("1_81svi")
 art_offset = Vector2i(5, 15)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(4, 23)
+})
 effect_text = "占位：防具；行动-2，热诚+1，生命+3，护甲+1。"

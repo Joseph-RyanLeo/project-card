@@ -134,6 +134,7 @@ var _side_by_side_grants: Array[Dictionary] = []
 var _next_spell_modifier_source_id: int = -10000000
 var _death_sequence: int = 0
 var _death_history: Array[Dictionary] = []
+var owned_card_statistics: Dictionary = {} # 本场待提交单卡战绩；重开时清空，正式结算才累计
 var _death_wound_checked: Dictionary = {}
 
 
@@ -404,6 +405,7 @@ func _initialize_battle_state(player_formation: Array[Dictionary], enemy_formati
 	_side_by_side_grants.clear()
 	_death_sequence = 0
 	_death_history.clear()
+	owned_card_statistics.clear()
 	_death_wound_checked.clear()
 	_opening_spell_queue.clear()
 	_opening_spell_active = false
@@ -933,6 +935,8 @@ func _release_current_states() -> void:
 			state.integer_settlement_committed.disconnect(_on_integer_settlement_committed)
 		if state.health_lost_accumulated.is_connected(_on_health_lost_accumulated):
 			state.health_lost_accumulated.disconnect(_on_health_lost_accumulated)
+		if state.lifetime_stat_resolved.is_connected(_on_owned_stat_resolved):
+			state.lifetime_stat_resolved.disconnect(_on_owned_stat_resolved)
 	player_states.clear()
 	enemy_states.clear()
 
@@ -1439,19 +1443,22 @@ func resolve_next_batch() -> bool:
 
 func choose_weighted_target(candidates: Array[BattleSquadState], forced_roll: int = -1) -> BattleSquadState:
 	var valid: Array[BattleSquadState] = []
+	var weights: Array[int] = []
 	var total_weight := 0
 	for candidate: BattleSquadState in candidates:
 		if candidate != null and candidate.alive and candidate.current_health > 0.0 and not candidate.is_banished:
 			valid.append(candidate)
-			total_weight += get_effective_target_weight(candidate)
+			var weight := get_effective_target_weight(candidate)
+			weights.append(weight)
+			total_weight += weight
 	if valid.is_empty() or total_weight <= 0:
 		return null
 	var roll := clampi(forced_roll, 0, total_weight - 1) if forced_roll >= 0 else _random.randi_range(0, total_weight - 1)
 	var boundary := 0
-	for candidate: BattleSquadState in valid:
-		boundary += get_effective_target_weight(candidate)
+	for index in valid.size():
+		boundary += weights[index]
 		if roll < boundary:
-			return candidate
+			return valid[index]
 	return valid[-1]
 
 
@@ -1468,21 +1475,21 @@ func choose_base_target(
 		return null
 	var preference := actor.get_target_action_type_preference()
 	var beast_attack := actor.has_effective_race(CardData.RaceType.BEAST)
+	var ignores_dazzling := silvermoon != null and silvermoon.active(actor, &"moonblade_scimitar", true)
+	var sun_active := _has_active_sun_indicator()
 	var candidates_by_tier: Array[Array] = [[], [], [], [], []]
 	for candidate: BattleSquadState in candidates:
 		if candidate == null or not candidate.alive or candidate.current_health <= 0.0 or candidate.is_banished or candidate.has_effective_shadow():
 			continue
-		var tier := _attack_target_tier(candidate, preference, beast_attack, silvermoon != null and silvermoon.active(actor, &"moonblade_scimitar", true))
+		var tier := _attack_target_tier(candidate, preference, beast_attack, ignores_dazzling, sun_active)
 		(candidates_by_tier[tier] as Array).append(candidate)
 	for tier: int in range(5):
 		var tier_candidates: Array[BattleSquadState] = []
 		for candidate: BattleSquadState in candidates_by_tier[tier]:
 			tier_candidates.append(candidate)
-		var total_weight := 0
-		for candidate: BattleSquadState in tier_candidates:
-			total_weight += get_effective_target_weight(candidate)
-		if total_weight > 0:
-			return choose_weighted_target(tier_candidates, forced_roll)
+		var target := choose_weighted_target(tier_candidates, forced_roll)
+		if target != null:
+			return target
 	return null
 
 
@@ -1493,11 +1500,13 @@ func _choose_attack_target_with_resources(
 ) -> Dictionary:
 	var preference := actor.get_target_action_type_preference()
 	var beast_attack := actor.has_effective_race(CardData.RaceType.BEAST)
+	var ignores_dazzling := silvermoon != null and silvermoon.active(actor, &"moonblade_scimitar", true)
+	var sun_active := _has_active_sun_indicator()
 	var squad_tiers: Array[Array] = [[], [], [], [], []]
 	for candidate: BattleSquadState in candidates:
 		if candidate == null or not candidate.alive or candidate.current_health <= 0.0 or candidate.is_banished or candidate.has_effective_shadow():
 			continue
-		(squad_tiers[_attack_target_tier(candidate, preference, beast_attack, silvermoon != null and silvermoon.active(actor, &"moonblade_scimitar", true))] as Array).append(candidate)
+		(squad_tiers[_attack_target_tier(candidate, preference, beast_attack, ignores_dazzling, sun_active)] as Array).append(candidate)
 	if twisted_vein != null and twisted_vein.has_lamp_aura(actor): resources = []
 	var resource_tier := 3 if preference >= 0 else 1
 	for tier in 5:
@@ -1507,26 +1516,32 @@ func _choose_attack_target_with_resources(
 				if not resource.get("destroyed") and int(resource.get("current_health")) > 0:
 					available_resources.append(resource)
 		var tier_weight := available_resources.size()
+		var weights: Array[int] = []
 		for candidate: BattleSquadState in squad_tiers[tier]:
-			tier_weight += get_effective_target_weight(candidate)
+			var weight := get_effective_target_weight(candidate)
+			weights.append(weight)
+			tier_weight += weight
 		if tier_weight <= 0:
 			continue
 		var roll := _random.randi_range(0, tier_weight - 1)
 		var boundary := 0
-		for candidate: BattleSquadState in squad_tiers[tier]:
-			boundary += get_effective_target_weight(candidate)
+		for index in (squad_tiers[tier] as Array).size():
+			boundary += weights[index]
 			if roll < boundary:
-				return {"target": candidate, "resource_target": null}
+				return {"target": squad_tiers[tier][index], "resource_target": null}
 		roll -= boundary
 		return {"target": null, "resource_target": available_resources[roll]}
 	return {"target": null, "resource_target": null}
 
 
-func _attack_target_tier(candidate: BattleSquadState, preference: int, beast_attack: bool, ignores_dazzling: bool = false) -> int:
+func _attack_target_tier(candidate: BattleSquadState, preference: int, beast_attack: bool, ignores_dazzling: bool, sun_active: bool) -> int:
 	# “野兽不会优先攻击”高于耀眼及常规类型偏好，但并不使目标永久不可选。
 	if beast_attack and candidate.has_targeting_keyword(&"beast_last"):
 		return 4
-	var dazzling := not ignores_dazzling and has_effective_dazzling(candidate)
+	var dazzling := not ignores_dazzling and (
+		candidate.squad_data.has_indicator(CelestialIndicator.Kind.SUN)
+		or (not sun_active and _has_non_sun_dazzling(candidate))
+	)
 	if preference >= 0:
 		if candidate.get_effective_action_type() == preference:
 			return 0 if dazzling else 1
@@ -1537,9 +1552,17 @@ func _attack_target_tier(candidate: BattleSquadState, preference: int, beast_att
 func has_effective_dazzling(candidate: BattleSquadState) -> bool:
 	if candidate.squad_data.has_indicator(CelestialIndicator.Kind.SUN):
 		return true
+	return not _has_active_sun_indicator() and _has_non_sun_dazzling(candidate)
+
+
+func _has_active_sun_indicator() -> bool:
 	for state: BattleSquadState in get_all_states():
 		if state.alive and state.current_health > 0.0 and state.squad_data.has_indicator(CelestialIndicator.Kind.SUN):
-			return false
+			return true
+	return false
+
+
+func _has_non_sun_dazzling(candidate: BattleSquadState) -> bool:
 	return candidate.squad_data.has_indicator(CelestialIndicator.Kind.STAR) or candidate.has_targeting_keyword(&"dazzling")
 
 
@@ -1798,6 +1821,7 @@ func _create_states(formation: Array[Dictionary], side: int) -> Array[BattleSqua
 			elapsed_seconds
 		)
 		state.integer_settlement_committed.connect(_on_integer_settlement_committed)
+		state.lifetime_stat_resolved.connect(_on_owned_stat_resolved)
 		state.health_lost_accumulated.connect(_on_health_lost_accumulated)
 		state.armor_depleted.connect(_on_state_armor_depleted)
 		state.card_destruction_requested.connect(_on_content_card_destroyed)
@@ -1805,6 +1829,58 @@ func _create_states(formation: Array[Dictionary], side: int) -> Array[BattleSqua
 		state.direct_damage_guard = try_protect_direct_damage
 		states.append(state)
 	return states
+
+
+func _statistics_owner(state: BattleSquadState, event: BattleEffectEvent = null) -> StringName:
+	# 法术事件保留自己的实例；其余小队事件统一归最上层效果卡。
+	if event != null and not event.source_owned_card_instance_id.is_empty() and int(_spell_side_by_instance.get(event.source_owned_card_instance_id, -1)) == BattleSquadState.Side.PLAYER:
+		return event.source_owned_card_instance_id
+	if state == null or state.side != BattleSquadState.Side.PLAYER or state.squad_data == null: return &""
+	if not state.statistics_source_id.is_empty(): return state.statistics_source_id
+	var owned := state.squad_data.get_effect_source_instance()
+	return owned.instance_id if owned != null and not owned.card_data.is_derived else &""
+
+
+func _record_owned_stat(id: StringName, channel: StringName, amount: float) -> void:
+	if id.is_empty() or amount <= 0: return
+	var stats: Dictionary = owned_card_statistics.get(String(id), {})
+	stats[String(channel)] = float(stats.get(String(channel), 0)) + amount
+	owned_card_statistics[String(id)] = stats
+
+
+func _on_owned_stat_resolved(channel: StringName, amount: float, source: BattleSquadState, event: BattleEffectEvent, target: BattleSquadState) -> void:
+	_record_owned_stat(_statistics_owner(source, event), channel, amount)
+	if channel == &"damage_dealt": _record_owned_stat(_statistics_owner(target), &"damage_taken", amount)
+
+
+func get_owned_card_statistics() -> Dictionary:
+	var result := owned_card_statistics.duplicate(true)
+	var owners: Dictionary = {}
+	var dead: Dictionary = {}
+	for state: BattleSquadState in player_states:
+		if state.battle_summoned or not state.battle_participated: continue
+		var id := String(_statistics_owner(state))
+		if id.is_empty(): continue
+		owners[id] = true
+		if state.battle_ever_defeated: dead[id] = true
+	for spell: OwnedCard in _prepared_spell_instances: owners[String(spell.instance_id)] = true
+	for id: String in owners:
+		var stats: Dictionary = result.get(id, {})
+		stats["battles"] = 1
+		if dead.has(id): stats["deaths"] = 1
+		result[id] = stats
+	for entry: Dictionary in run_reward_ledger.get_entries():
+		if entry.get("kind") not in [&"gold", &"mining_count"] or int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER: continue
+		var actor: BattleSquadState
+		for state: BattleSquadState in player_states:
+			if state.runtime_id == int(entry.get("source_runtime_id", -1)): actor = state; break
+		var id := String(_statistics_owner(actor))
+		if id.is_empty(): continue
+		var stats: Dictionary = result.get(id, {})
+		var key := "gold_generated" if entry.kind == &"gold" else "mining_successes"
+		stats[key] = float(stats.get(key, 0)) + float(entry.amount)
+		result[id] = stats
+	return result
 
 
 func _on_state_armor_depleted(state: BattleSquadState) -> void:
@@ -2427,7 +2503,9 @@ func _resolve_elapsed_spell(spell: OwnedCard) -> void:
 			if target.alive and target.current_health > 0.0 and not target.has_effective_shadow(): targets.append(target)
 		if not targets.is_empty() and notify_spell_triggered(spell.instance_id, 0):
 			_present_nonpausing_spell(spell)
-			launch_content_effect(twisted_vein.make_event(null, targets[_random.randi_range(0, targets.size() - 1)], 20.0, CardData.ActionType.MAGIC, true, "巨型落石"))
+			var event := twisted_vein.make_event(null, targets[_random.randi_range(0, targets.size() - 1)], 20.0, CardData.ActionType.MAGIC, true, "巨型落石")
+			event.source_owned_card_instance_id = spell.instance_id
+			launch_content_effect(event)
 		return
 	for effect_index: int in spell.card_data.effect_ids.size():
 		var definition := effect_catalog.get_definition(spell.card_data.effect_ids[effect_index])
@@ -4476,6 +4554,7 @@ func _finalize_batch() -> void:
 		if defeated.is_empty(): break
 		defeated.sort_custom(_is_actor_before)
 		for state: BattleSquadState in defeated:
+			_record_owned_stat(_statistics_owner(state.pending_kill_source, state.pending_kill_event), &"kills", 1)
 			state.alive = false
 			state.battle_ever_defeated = true
 			state.force_boundary_sync()
@@ -5121,6 +5200,7 @@ func summon_content_minion(source: BattleSquadState, definition: CardData) -> Ba
 	var formation: Array[Dictionary] = [{"squad_data": squad, "row_key": source.row_key, "formation_index": insert_index}]
 	var created := _create_states(formation, source.side)[0]
 	created.battle_summoned = true
+	created.statistics_source_id = _statistics_owner(source)
 	if silvermoon != null: silvermoon.initialize_state(created)
 	if ironwall != null: ironwall.initialize_state(created)
 	created.initial_formation_index = -1

@@ -40,7 +40,8 @@ func _measure_load(movement: bool) -> void:
 	root.add_child(main)
 	await process_frame
 	await process_frame
-	main.battle_controller.set_script(CONTROLLER_PROFILE)
+	var verify_targets := "--verify-targets" in OS.get_cmdline_user_args()
+	main.battle_controller.set_script(load("res://tests/performance/battle_target_parity_controller.gd") if verify_targets else CONTROLLER_PROFILE)
 	main.battle_controller.use_projectile_timing = true
 	var rows: Array[BattlefieldRow] = [main.front_row, main.back_row, main.enemy_front_row, main.enemy_back_row]
 	for row: BattlefieldRow in rows: row.clear_squads()
@@ -100,6 +101,9 @@ func _measure_load(movement: bool) -> void:
 				if arg.begins_with("--snapshot="): root.get_texture().get_image().save_png(arg.trim_prefix("--snapshot="))
 		peak_effects = maxi(peak_effects, main.battle_effect_layer.get_child_count())
 	check(battle.current_result == BattleController.Result.NONE, "压力场次采样期间未提前结束")
+	if verify_targets:
+		check(battle.get("parity_checks") > 0 and battle.get("parity_failures") == 0, "旧版逐次目标及随机状态完全一致")
+		print("目标对照次数：", battle.get("parity_checks"))
 	var record: Dictionary = main._battle_diagnostic_recorder.get_record_copy()
 	var signature: Array = []
 	for event: Dictionary in record.get("timeline", []):

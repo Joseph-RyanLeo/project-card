@@ -102,7 +102,7 @@ func _test_resource_card_face() -> void:
 
 func _test_formal_equipment() -> void:
 	var catalog := BattleEffectCatalog.load_from_file(EFFECT_DATA_PATH)
-	_expect(catalog.is_valid(), "灰烬征册正式效果目录仍可严格解析")
+	_expect(catalog.is_valid(), "灰烬证册正式效果目录仍可严格解析")
 	for card_id: StringName in FORMAL_EQUIPMENT:
 		var card := load("res://resources/cards/%s.tres" % card_id) as CardData
 		var expected := FORMAL_EQUIPMENT[card_id] as Dictionary

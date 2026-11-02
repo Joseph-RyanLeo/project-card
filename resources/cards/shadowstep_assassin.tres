@@ -16,4 +16,7 @@ runes = Array[int]([0, 1, 2])
 race_type = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(1, 31)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-5, 34)
+})
 effect_text = "荣耀：获得保护1。"

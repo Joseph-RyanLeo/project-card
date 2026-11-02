@@ -44,13 +44,13 @@ func run_checks() -> void:
 	check(profile["mask_kind"] == &"soul_ribbon" and lab.mask_option.get_item_text(lab.mask_option.selected) == "灵魂光带", "预设选中灵魂光带样式")
 	for variant: int in Timing.TRAVEL_SPEED_VARIANT_COUNT:
 		check(is_equal_approx(Timing.calculate_impact_delay(old_profile, variant), Timing.calculate_impact_delay(profile, variant)), "变速%d的命中时刻保持一致" % variant)
-	check((lab._drafts[&"melee_attack"] as Dictionary)["mask_kind"] == &"energy" and (lab._drafts[&"ranged_attack"] as Dictionary)["mask_kind"] == &"projectile", "预设只作用于当前行动，旧默认样式保留")
+	check(lab._drafts[&"melee_attack"] == Profiles.get_default_profile(&"melee_attack") and lab._drafts[&"ranged_attack"] == Profiles.get_default_profile(&"ranged_attack"), "预设只作用于当前行动，其他行动参数保持原值")
 	var controls := lab._numeric_controls[&"soul_taper"] as Dictionary
 	(controls["slider"] as HSlider).value = 1.25
 	await process_frame
 	var preview := lab.effect_layer.get_child(-1) as Node2D
 	var material := (preview.get_node("BeamMesh") as MeshInstance2D).material as ShaderMaterial
-	check(bool(material.get_shader_parameter("soul_ribbon")) and is_equal_approx(float(material.get_shader_parameter("soul_taper")), 1.25), "亮芯和收尾参数接入实际预览材质")
+	check(not bool(material.get_shader_parameter("water_flow")) and is_equal_approx(float(material.get_shader_parameter("soul_taper")), 1.25), "亮芯和收尾参数接入实际预览材质")
 	# 保存到临时路径并从真实 ConfigFile 读回，不覆盖开发者的 user:// 配置。
 	Profiles._profiles[&"magic_attack"] = profile.duplicate(true)
 	check(Profiles.save_snapshot(SNAPSHOT) == OK, "光带配置写入临时快照")

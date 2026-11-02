@@ -877,7 +877,8 @@ func _on_projectile_launched(event: BattleEffectEvent) -> void:
 		event.projectile_speed_variant,
 		event.projectile_impact_delay,
 		event.sequence_index,
-		inverse.basis_xform(target_slot.get_global_rect().size).y
+		inverse.basis_xform(target_slot.get_global_rect().size).y,
+		Rect2(inverse * target_slot.get_global_rect().position, inverse.basis_xform(target_slot.get_global_rect().size))
 	)
 
 

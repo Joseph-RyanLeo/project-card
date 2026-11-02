@@ -25,7 +25,7 @@ func _run() -> void:
 	_test_real_sticker_pool_and_uniqueness()
 	_test_instance_acquisition_state()
 	_test_service_rng_and_state_roundtrip()
-	await _test_main_transactions_and_save()
+	_expect((await _test_main_transactions_and_save()) == true, "完整商店交易检查执行到末尾")
 	print("D2-7 ordinary shop failures: ", failures)
 	quit(1 if failures else 0)
 
@@ -205,7 +205,7 @@ func _test_service_rng_and_state_roundtrip() -> void:
 	_expect(service.refresh_price() == 4, "同一商店第四次刷新费用为4金币")
 
 
-func _test_main_transactions_and_save() -> void:
+func _test_main_transactions_and_save() -> bool:
 	var main := load("res://scenes/Main.tscn").instantiate() as MainScript
 	var test_save_path := "/private/tmp/project-card-d2-7-transaction-slot.json"
 	main.run_save_path = test_save_path
@@ -263,14 +263,16 @@ func _test_main_transactions_and_save() -> void:
 	var cards_before_pack := main.owned_card_collection.get_cards().size()
 	main._on_ordinary_shop_offer_pressed(pack_index)
 	var latest_cards := main.owned_card_collection.get_cards()
+	var pack_cards: Array[OwnedCard] = main._card_pack_opening.cards
 	var gained_rarities: Array[int] = []
-	for index: int in range(cards_before_pack, latest_cards.size()):
-		gained_rarities.append(int(latest_cards[index].card_data.rarity))
+	var all_received := true
+	for card: OwnedCard in pack_cards:
+		gained_rarities.append(int(card.card_data.rarity))
+		all_received = all_received and main.owned_card_collection.get_by_instance_id(card.instance_id) == card
 	var large_guarantee: bool = pack_offer.get("size") != "large"
-	if not large_guarantee:
-		for rarity: int in gained_rarities:
-			large_guarantee = large_guarantee or rarity >= CardData.Rarity.II
-	_expect(latest_cards.size() == cards_before_pack + pack_size and main.run_reward_state.gold == 100 - pack_price and large_guarantee and bool(service.offers[pack_index].get("sold", false)), "成功购买真实卡包按价格扣款、准确发卡并满足大包保底")
+	for rarity: int in gained_rarities:
+		if rarity >= CardData.Rarity.II: large_guarantee = true
+	_expect(pack_cards.size() == pack_size and all_received and latest_cards.size() >= cards_before_pack + pack_size and main.run_reward_state.gold == 100 - pack_price and large_guarantee and bool(service.offers[pack_index].get("sold", false)), "主包准确收入规定张数并满足保底，获得时赠卡另行生效，扣款准确")
 	_expect(main.owned_card_collection.get_by_instance_id(held_equipment.instance_id) == held_equipment and equipment_slot.get_squad_data().get_equipped_item() == held_equipment and main.owned_card_collection.get_by_instance_id(prepared_spell.instance_id) == prepared_spell and main.prepared_spell_instance_ids.has(prepared_spell.instance_id), "开包保留已有装备实例、装备引用与准备中法术")
 	_expect(main._shop_pack_opening, "成功交易后进入不可重复提交的开包动画")
 	# 本测试专验事务；完整撕包和逐张揭卡的真实输入由card_pack_opening_test覆盖。
@@ -370,8 +372,8 @@ func _test_main_transactions_and_save() -> void:
 	main._on_ordinary_shop_offer_pressed(scraper_index)
 	main._on_ordinary_shop_offer_pressed(scraper_index)
 	_expect(main.scraper_count == scraper_count_before + 2 and main.run_reward_state.gold == scraper_gold_before - 4, "固定2金币刮刀商品可连续无限购买")
-	await _test_tear_confirmation_and_equipment_return(main)
-	await _test_shop_sale(main)
+	_expect((await _test_tear_confirmation_and_equipment_return(main)) == true, "提取服务检查执行到末尾")
+	_expect((await _test_shop_sale(main)) == true, "出售服务检查执行到末尾")
 	var temp_save := "/private/tmp/project-card-d2-7-roundtrip.json"
 	main.run_reward_state.gold = 7
 	var expected_scraper_count := main.scraper_count
@@ -438,13 +440,18 @@ func _test_main_transactions_and_save() -> void:
 	DirAccess.remove_absolute(failure_path)
 	DirAccess.remove_absolute(temp_save)
 	DirAccess.remove_absolute(test_save_path)
+	main._close_card_inspection(true)
+	await create_timer(0.6).timeout
 	main.free()
 	await process_frame
 	await process_frame
+	return true
 
 
-func _test_tear_confirmation_and_equipment_return(main: MainScript) -> void:
+func _test_tear_confirmation_and_equipment_return(main: MainScript) -> bool:
 	main.emblem_library.restore_inventory_state([])
+	main.front_row.clear_squads()
+	main.back_row.clear_squads()
 	var owned: OwnedCard
 	for candidate: OwnedCard in main.owned_card_collection.get_cards():
 		if candidate.card_data.card_type == CardData.CardType.MINION and candidate.emblem_slots.size() >= 2 and candidate.rune_stickers.size() > 0:
@@ -452,15 +459,16 @@ func _test_tear_confirmation_and_equipment_return(main: MainScript) -> void:
 			break
 	if owned == null:
 		_expect(false, "找到真实带有足够槽位的卡牌以验证撕卡服务")
-		return
+		return false
 	var selected := {"instance_id": &"tear_selected", "emblem_id": &"火把", "element_sticker": false}
 	var destroyed := {"instance_id": &"tear_destroyed", "emblem_id": &"长剑", "element_sticker": false}
 	var rune_destroyed := {"instance_id": &"tear_rune_destroyed", "emblem_id": &"光贴纸", "element_sticker": true, "element": 3}
 	_expect(owned.set_emblem_slot(0, selected) and owned.set_emblem_slot(1, destroyed) and owned.set_rune_sticker(0, rune_destroyed), "撕卡验收卡牌附着真实普通贴纸与元素贴纸")
+	main._remove_owned_instance_from_rows(owned.instance_id)
 	var squad := SquadData.from_owned_card(owned)
 	var equipment_definition: CardData
 	for definition: CardData in main._get_shop_card_definitions():
-		if definition.card_type == CardData.CardType.EQUIPMENT:
+		if definition.is_available and definition.card_type == CardData.CardType.EQUIPMENT and not definition.has_keyword(&"squad_equipment") and main.owned_card_collection.find_first_by_definition(definition) == null:
 			equipment_definition = definition
 			break
 	var equipment := main.owned_card_collection.create_card(equipment_definition, main.ordinary_shop_service.rng) if equipment_definition != null else null
@@ -474,58 +482,50 @@ func _test_tear_confirmation_and_equipment_return(main: MainScript) -> void:
 	var same_name_member := same_name_owned.get_battlefield_card()
 	_expect(same_name_slot != null and same_name_slot.get_squad_data().get_card_data_for_owned_instance(same_name_owned.instance_id) == same_name_member and same_name_slot.get_squad_data().get_owned_card(same_name_member) == same_name_owned, "同名卡以另一个OwnedCard实例部署到另一小队")
 	main.run_reward_state.gold = 20
-	# 从真实服务按钮进入选择框，避免跳过数组构建和信号绑定路径。
-	main._open_shop_tear_selection(null)
-	_expect(main.ordinary_shop_status.text == "没有带有可返还贴纸的卡牌" and not is_instance_valid(main._shop_tear_dialog), "空卡牌走无可返还提示，不创建选择框")
-	main._open_shop_tear_selection(same_name_owned)
-	_expect(main.ordinary_shop_status.text == "没有带有可返还贴纸的卡牌" and not is_instance_valid(main._shop_tear_dialog), "无贴纸卡牌走空列表分支，不发生数组类型错误")
 	main.ordinary_shop_open = true
 	main._open_shop_card_services()
+	main._shop_service_slot.return_card()
+	await process_frame
+	await process_frame
+	_expect(main._shop_board_view._service_action.disabled, "空服务槽禁用交易，不创建旧版选择弹窗")
+	main._select_shop_service_card({"kind": &"card", "owned_card": same_name_owned})
+	_expect(main._shop_board_view._shown_stickers.is_empty() and main._shop_board_view._service_action.text == "出售", "无贴纸卡只显示出售，不提供空提取选项")
+	main._shop_service_slot.return_card()
+	await process_frame
+	await process_frame
 	main._select_shop_service_card({"kind": &"card", "owned_card": owned})
-	var tear_button := main._shop_card_service_actions.get_node("ServiceTearButton") as Button
-	_expect(not tear_button.disabled, "拖入带贴纸单卡后真实撕卡按钮可用")
-	tear_button.pressed.emit()
-	var selection := main._shop_tear_dialog
-	_expect(is_instance_valid(selection) and selection.title == "撕卡：选择返还贴纸", "真实撕卡按钮信号成功打开贴纸选择框")
-	if not is_instance_valid(selection): return
-	var card_picker := selection.find_child("TearCardPicker", true, false) as OptionButton
-	_expect(card_picker != null and card_picker.item_count == 1 and card_picker.get_item_metadata(0) == String(owned.instance_id), "选择框只包含槽内指定OwnedCard实例")
-	var pickers: Array[OptionButton] = []
-	for node: Node in selection.find_children("*", "OptionButton", true, false):
-		if node != card_picker: pickers.append(node as OptionButton)
-	_expect(pickers.size() == 3 and pickers[0].item_count == 4, "选择框提供三个返还位，列出普通和元素贴纸")
-	card_picker.item_selected.emit(0)
-	_expect(pickers[0].item_count == 4, "卡牌选择信号绑定的强类型候选数组可正常刷新贴纸")
-	pickers[0].select(1)
-	selection.get_ok_button().pressed.emit()
-	var confirm := main.ordinary_shop_layer.get_children().filter(func(node: Node) -> bool: return node is ConfirmationDialog and (node as ConfirmationDialog).title == "确认撕卡")
-	var exact_confirmation := not confirm.is_empty() and (confirm[0] as ConfirmationDialog).dialog_text.contains("火把") and (confirm[0] as ConfirmationDialog).dialog_text.contains("长剑") and (confirm[0] as ConfirmationDialog).dialog_text.contains("光贴纸") and (confirm[0] as ConfirmationDialog).dialog_text.contains("2金币")
-	_expect(exact_confirmation, "二次确认列出卡牌、返还贴纸、销毁贴纸和精确费用")
-	if exact_confirmation:
-		(confirm[0] as ConfirmationDialog).emit_signal("confirmed")
-		await process_frame
-	_expect(main.owned_card_collection.get_by_instance_id(owned.instance_id) == null and main.emblem_library.get_inventory_item(&"tear_selected").size() > 0, "确认后销毁宿主卡并只将选择贴纸返还工具箱")
-	_expect(main.owned_card_collection.get_by_instance_id(equipment.instance_id) == equipment, "撕卡宿主携带的装备实例仍留在收藏且保有唯一资格")
-	_expect(main.owned_card_collection.get_by_instance_id(same_name_owned.instance_id) == same_name_owned and same_name_slot.get_squad_data().get_card_data_for_owned_instance(same_name_owned.instance_id) == same_name_member and same_name_slot.get_squad_data().get_owned_card(same_name_member) == same_name_owned, "撕卡仅移除所选OwnedCard，不拆除另一队同名卡或误返装备")
-	if is_instance_valid(card_picker):
-		card_picker.free()
-	for picker: OptionButton in pickers:
-		if is_instance_valid(picker):
-			picker.free()
-	if is_instance_valid(main._shop_tear_dialog):
-		main._shop_tear_dialog.queue_free()
+	var board: Control = main._shop_board_view
+	_expect(board._sticker_host.get_child_count() == 3, "当前服务页列出宿主的普通及元素贴纸")
+	board._sticker_host.get_child(0).pressed.emit()
+	_expect(board._service_action.text == "提取" and board._amount.text == "-2", "选择一枚贴纸后实际按钮显示提取及2金币费用")
+	main._shop_service_slot.return_card()
+	await process_frame
+	await process_frame
+	_expect(main.owned_card_collection.get_by_instance_id(owned.instance_id) == owned and main.run_reward_state.gold == 20 and owned.emblem_slots[0] == selected, "取消服务预览保留卡牌、贴纸与金币")
+	main._select_shop_service_card({"kind": &"card", "owned_card": owned})
+	board._sticker_host.get_child(0).pressed.emit()
+	board._service_action.pressed.emit()
+	await process_frame
+	_expect(main.owned_card_collection.get_by_instance_id(owned.instance_id) == null and not main.emblem_library.get_inventory_item(&"tear_selected").is_empty() and main.run_reward_state.gold == 18, "当前提取按钮信号销毁宿主、返还选中贴纸并扣2金币（余额%d，状态%s）" % [main.run_reward_state.gold, main.ordinary_shop_status.text])
+	_expect(main.emblem_library.get_inventory_item(&"tear_destroyed").is_empty() and main.emblem_library.get_inventory_item(&"tear_rune_destroyed").is_empty(), "未选贴纸随宿主销毁，不额外返还")
+	_expect(main.owned_card_collection.get_by_instance_id(equipment.instance_id) == equipment and main._get_squad_for_owned_instance(equipment.instance_id) == null, "提取宿主时装备返回收藏，不遗留部署引用")
+	_expect(main.owned_card_collection.get_by_instance_id(same_name_owned.instance_id) == same_name_owned and same_name_slot.get_squad_data().get_owned_card(same_name_member) == same_name_owned, "提取只移除所选实例，不误拆同名卡")
+	main._finish_shop_card_service_undo()
+	return true
 
 
-func _test_shop_sale(main: MainScript) -> void:
+func _test_shop_sale(main: MainScript) -> bool:
 	var definition: CardData
 	for candidate: CardData in main._get_shop_card_definitions():
-		if candidate.card_type == CardData.CardType.MINION and candidate.runes.size() > 0:
+		if candidate.is_available and candidate.card_type == CardData.CardType.MINION and candidate.runes.size() > 0:
 			definition = candidate
 			break
 	if definition == null:
 		_expect(false, "找到有符文的随从定义以验证出售")
-		return
+		return false
 	var owned := main.owned_card_collection.create_card(definition, main.ordinary_shop_service.rng)
+	owned.surface_finish = CardAppearance.Surface.PLAIN
+	owned.art_finish = CardAppearance.Art.PLAIN
 	var sibling_definition: CardData
 	for candidate: CardData in main._get_shop_card_definitions():
 		if candidate.card_type == CardData.CardType.MINION and candidate != definition:
@@ -539,43 +539,38 @@ func _test_shop_sale(main: MainScript) -> void:
 		squad.bind_owned_card(sibling_definition, sibling)
 		squad_slot = main.front_row.add_squad(squad, main.front_row.get_squad_count())
 	var gold_before_rejected_sale: int = main.run_reward_state.gold
-	main._confirm_shop_sale(owned.instance_id)
-	var rejected_dialog := main.ordinary_shop_layer.get_children().filter(func(node: Node) -> bool: return node is ConfirmationDialog and (node as ConfirmationDialog).title == "确认出售卡牌")
-	_expect(squad_slot != null and rejected_dialog.is_empty() and main.owned_card_collection.get_by_instance_id(owned.instance_id) == owned and main.run_reward_state.gold == gold_before_rejected_sale, "多成员小队的成员不能出售且不弹出确认框")
+	main._execute_shop_sale(owned.instance_id, main._shop_card_sale_price(owned))
+	_expect(main.owned_card_collection.get_by_instance_id(owned.instance_id) == owned and main.run_reward_state.gold == gold_before_rejected_sale, "未进入服务槽时拒绝直接出售堆叠成员")
 	main._remove_owned_instance_from_rows(owned.instance_id)
 	main._remove_owned_instance_from_rows(sibling.instance_id)
 	main.owned_card_collection.remove_by_instance_id(sibling.instance_id)
-	var attached := {"instance_id": &"sale_sticker", "emblem_id": &"火把", "element_sticker": false}
-	owned.set_emblem_slot(0, attached)
+	owned.set_emblem_slot(0, {"instance_id": &"sale_sticker", "emblem_id": &"火把", "element_sticker": false})
 	owned.rune_revealed[0] = true
 	var wound_penalty := 0
 	if not owned.wound_slots.is_empty():
-		owned.wound_slots[0] = {"instance_id": &"sale_wound", "wound_id": &"裂伤", "level": 1}
+		owned.wound_slots[0] = {"instance_id": &"sale_wound", "wound_id": &"中毒Ⅰ", "kind": "wound"}
 		wound_penalty = 1
-	var sale_config := main.ordinary_shop_service.config.get("card_sale", {}) as Dictionary
-	var base_prices := sale_config.get("base_prices", {}) as Dictionary
+	var sale_config: Dictionary = main.ordinary_shop_service.config.card_sale
 	var rarity_key: String = ["I", "II", "III", "IV", "V"][int(definition.rarity)]
-	var expected_price := int(base_prices[rarity_key]) + 1 + 1 - wound_penalty
+	var expected_price := int(sale_config.base_prices[rarity_key]) + 1 + 1 - wound_penalty
 	_expect(main._shop_card_sale_price(owned) == expected_price, "出售价格包含基础价、贴纸、揭晓符文和伤势修正")
 	main.run_reward_state.gold = 6
-	main._confirm_shop_sale(owned.instance_id)
-	var confirmations := main.ordinary_shop_layer.get_children().filter(func(node: Node) -> bool: return node is ConfirmationDialog and (node as ConfirmationDialog).title == "确认出售卡牌")
-	_expect(not confirmations.is_empty() and (confirmations[0] as ConfirmationDialog).dialog_text.contains(str(expected_price)), "出售确认显示计算后的卖价")
-	if not confirmations.is_empty():
-		(confirmations[0] as ConfirmationDialog).emit_signal("canceled")
-		await process_frame
-		await process_frame
-	_expect(main.owned_card_collection.get_by_instance_id(owned.instance_id) == owned and main.run_reward_state.gold == 6, "取消出售确认后保留卡牌与金币")
-	main._confirm_shop_sale(owned.instance_id)
-	confirmations = main.ordinary_shop_layer.get_children().filter(func(node: Node) -> bool: return node is ConfirmationDialog and (node as ConfirmationDialog).title == "确认出售卡牌")
-	if not confirmations.is_empty():
-		(confirmations[0] as ConfirmationDialog).emit_signal("confirmed")
-		await process_frame
-	_expect(main.owned_card_collection.get_by_instance_id(owned.instance_id) == null and main.run_reward_state.gold == 6 + expected_price, "确认出售后销毁卡牌并按报价增加金币")
+	main._select_shop_service_card({"kind": &"card", "owned_card": owned})
+	var board: Control = main._shop_board_view
+	_expect(board._service_action.text == "出售" and board._amount.text == "+%d" % expected_price, "当前服务页显示出售动作与计算后的卖价")
+	main._shop_service_slot.return_card()
+	await process_frame
+	await process_frame
+	_expect(main.owned_card_collection.get_by_instance_id(owned.instance_id) == owned and main.run_reward_state.gold == 6, "移出出售预览后保留卡牌与金币")
+	main._select_shop_service_card({"kind": &"card", "owned_card": owned})
+	board._service_action.pressed.emit()
+	await process_frame
+	_expect(main.owned_card_collection.get_by_instance_id(owned.instance_id) == null and main.run_reward_state.gold == 6 + expected_price, "当前出售按钮信号销毁卡牌并按报价增加金币")
+	main._finish_shop_card_service_undo()
 	var equipment_definition: CardData
 	var equipment_host_definition: CardData
 	for candidate: CardData in main._get_shop_card_definitions():
-		if candidate.card_type == CardData.CardType.EQUIPMENT and equipment_definition == null:
+		if candidate.is_available and candidate.card_type == CardData.CardType.EQUIPMENT and not candidate.has_keyword(&"squad_equipment") and equipment_definition == null and main.owned_card_collection.find_first_by_definition(candidate) == null:
 			equipment_definition = candidate
 		elif candidate.card_type == CardData.CardType.MINION and equipment_host_definition == null:
 			equipment_host_definition = candidate
@@ -587,11 +582,14 @@ func _test_shop_sale(main: MainScript) -> void:
 		host_slot = main.back_row.add_squad(host_squad, main.back_row.get_squad_count())
 	var equipment_price: int = main._shop_card_sale_price(equipment) if equipment != null else 0
 	if host_slot != null:
-		main._execute_shop_sale(equipment.instance_id, equipment_price)
+		main._select_shop_service_card({"kind": &"card", "owned_card": equipment})
+		main._shop_board_view._service_action.pressed.emit()
+		main._finish_shop_card_service_undo()
 	_expect(host_slot != null and main.owned_card_collection.get_by_instance_id(equipment.instance_id) == null and host_slot.get_squad_data().get_equipped_item() == null, "出售装备后从宿主小队解除装备实例引用")
 	if host != null:
 		main._remove_owned_instance_from_rows(host.instance_id)
 		main.owned_card_collection.remove_by_instance_id(host.instance_id)
+	return true
 
 
 func _find_offer(offers: Array[Dictionary], kind: String) -> int:

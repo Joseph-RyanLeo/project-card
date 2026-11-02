@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bu0fohj6tfi1"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://bnfnb1tfrucce" path="res://assets/card_art/militia.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/militia.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -10,12 +10,13 @@ display_name = "民兵"
 pack_id = &"ash_ledger"
 effect_ids = Array[StringName]([&"militia.effect.01"])
 keywords = Array[StringName]([&"neighbor", &"human"])
-base_value = 1
 cooldown_seconds = 4.0
 max_health = 2
 armor = 2
 runes = Array[int]([3, 4, 1])
-rarity = 0
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-4, 33)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-1, 32)
+})
 effect_text = "乡邻：本卡与相邻人类数值+1（同名不叠加）。"

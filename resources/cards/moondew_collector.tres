@@ -17,4 +17,7 @@ runes = Array[int]([0, 1, 2])
 race_type = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(3, 33)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-2, 33)
+})
 effect_text = "开采。成功开采后，为数值最高的友方随从充能0.5秒，可选自身。"

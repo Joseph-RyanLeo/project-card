@@ -18,6 +18,9 @@ runes = Array[int]([0, 1, 2])
 race_type = 7
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(12, 1)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(1, 14)
+})
 effect_text = "均衡。前排时，热诚+4。后排时，数值+1。"
 front_effect_text = "均衡。前排时，热诚+4。"
 back_effect_text = "均衡。后排时，数值+1。"

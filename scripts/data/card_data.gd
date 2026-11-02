@@ -8,6 +8,7 @@ extends Resource
 
 const CardFactionScript = preload("res://scripts/data/card_faction.gd")
 const CardPackRegistryScript = preload("res://scripts/data/card_pack_registry.gd")
+const ART_FINISH_KEYS: Array[StringName] = [&"plain", &"foil", &"holographic", &"embossed", &"fractured", &"overframe"] # 六种卡面工艺的稳定保存键，顺序对应调整器选项
 
 enum CardType {
 	MINION,
@@ -145,9 +146,29 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export var art_texture: Texture2D # 卡牌人物立绘
 @export var art_normal_texture: Texture2D # 可选立绘法线贴图；为空时预览仍保留 3D 与整卡扫光
 @export var art_offset: Vector2i = Vector2i.ZERO # 立绘在裁切窗口内的像素偏移
+@export var art_finish_offsets: Dictionary[StringName, Vector2i] = {} # 各特殊工艺的独立取景；未调整时沿用普通卡art_offset
 @export_multiline var effect_text: String = "" # 收藏、商店等非战场的效果说明
 @export_multiline var front_effect_text: String = "" # 前排效果说明；空文本沿用通用说明
 @export_multiline var back_effect_text: String = "" # 后排效果说明；空文本沿用通用说明
+
+
+func get_art_offset_for_finish(finish: StringName) -> Vector2i:
+	return art_offset if finish == &"plain" else art_finish_offsets.get(finish, art_offset)
+
+
+func set_art_offset_for_finish(finish: StringName, value: Vector2i) -> void:
+	if finish == &"plain":
+		# 普通卡改位置前，固定其他工艺继承的旧位置，避免一起跟着变化。
+		for key: StringName in ART_FINISH_KEYS:
+			if key != &"plain" and not art_finish_offsets.has(key): art_finish_offsets[key] = art_offset
+		art_offset = value
+	else:
+		art_finish_offsets[finish] = value
+
+
+func set_art_offset_for_all_finishes(value: Vector2i) -> void:
+	art_offset = value
+	art_finish_offsets.clear()
 
 
 func get_effect_text_for_row(row: StringName = &"") -> String:

@@ -13,6 +13,7 @@ func _initialize() -> void:
 func _run() -> void:
 	root.size = Vector2i(1280, 720)
 	var main = MAIN_SCENE.instantiate()
+	main.run_save_path = "/private/tmp/project-card-escape-startup-restore.json"
 	root.add_child(main)
 	await process_frame
 	await process_frame
@@ -135,7 +136,7 @@ func _run() -> void:
 			and int(main.battle_seed_spin.value) == startup_seed,
 			"连续还原结果一致且基准保持不变"
 		)
-	var return_button := _find_button(main._escape_pause_menu, "返回")
+	var return_button := _find_button(main._escape_pause_menu, "继续游戏")
 	if return_button != null:
 		return_button.pressed.emit()
 	_check(not main.get_tree().paused, "返回只释放 Esc 菜单持有的暂停")

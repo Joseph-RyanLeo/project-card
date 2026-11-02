@@ -42,7 +42,7 @@ func generate_level_resources(resource_definitions: Array[CardData], rng: Random
 	var sorted_definitions := resource_definitions.duplicate()
 	sorted_definitions.sort_custom(func(left: CardData, right: CardData) -> bool: return String(left.id) < String(right.id))
 	for definition: CardData in sorted_definitions:
-		if definition != null and definition.card_type == CardData.CardType.RESOURCE and int(definition.rarity) in pools:
+		if definition != null and definition.is_available and not definition.is_derived and definition.card_type == CardData.CardType.RESOURCE and int(definition.rarity) in pools:
 			pools[int(definition.rarity)].append(definition)
 
 	var next_cards: Dictionary = {"player": {}, "enemy": {}}

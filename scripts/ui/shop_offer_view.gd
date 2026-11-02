@@ -12,7 +12,8 @@ const PRICE_TOP: float = 198.0 # 价格左上角位于锦缎底边下方10像素
 const IDLE_FORCE_LIMIT: float = 0.22 # 闲置透视倾斜强度，为检视最大倾斜的22%
 const IDLE_SECONDS_MIN: float = 1.8 # 一次随机倾斜变化的最短秒数
 const IDLE_SECONDS_MAX: float = 3.4 # 一次随机倾斜变化的最长秒数
-const PACK_RENDER_SCALE: float = 2.0 # 商店贴纸封皮按2倍精度计算高光，适配2K窗口
+const PACK_RENDER_SCALE: float = 2.0 # 商店卡包凹凸和贴纸封皮按2倍精度计算光影，适配2K窗口
+const PackArt = preload("res://scripts/ui/pack_tear_art.gd")
 
 var _reflow_tween: Tween
 var _reflow_offset := 0.0
@@ -77,15 +78,20 @@ func _ready() -> void:
 		var art := _visual.get_child(0) as Control
 		var art_position := art.position
 		var padding := InspectionCardSurface.PADDING if art is CardView else Vector2.ZERO
+		if not art is CardView and not art.has_method("configure_inspection"):
+			var pack := PackArt.new()
+			_visual.add_child(pack)
+			pack.setup(art)
+			art = pack
 		# 单卡留边容纳数值角标；向外扩展画布，不改变原商品占位和价格。
 		_hover_surface.card = art as CardView
-		_hover_surface.setup_art(art, padding, PACK_RENDER_SCALE if art.has_method("configure_inspection") else 1.0)
+		var texture_scale := PACK_RENDER_SCALE if art.has_method("configure_inspection") else 1.0
+		if art is CardView and CardView.TextDisplaySettings.is_popup_mode(): texture_scale = 4.0 # 黑体卡名保留高分辨率采样
+		_hover_surface.setup_art(art, padding, texture_scale)
 		_hover_surface.position = art_position - padding
 		_hover_surface.effect.set_shader_parameter("use_flash", false)
 		if art.has_method("configure_inspection"):
 			art.configure_inspection(_hover_surface)
-		elif not art is CardView:
-			_hover_surface.effect.set_shader_parameter("use_pack_foil", true)
 		_hover_surface.set_process(false)
 		_set_mouse_ignore_recursive(_hover_surface)
 		# 外观使用独立随机源，不能推进报价、开包或战斗的随机序列。
@@ -98,6 +104,8 @@ func _gui_input(event: InputEvent) -> void:
 	if not event is InputEventMouseButton:
 		return
 	var mouse := event as InputEventMouseButton
+	if mouse.pressed and _hover_surface != null and is_instance_valid(_hover_surface.card):
+		_hover_surface.card.hide_effect_popup()
 	if mouse.button_index == MOUSE_BUTTON_RIGHT and mouse.pressed:
 		if inspectable:
 			inspection_requested.emit()
@@ -117,6 +125,9 @@ func set_pointer_hover(entered: bool) -> void:
 		return
 	_hovered = entered
 	_left_pressed = false
+	if _hover_surface != null and is_instance_valid(_hover_surface.card):
+		if entered: _hover_surface.card.show_effect_popup(self)
+		else: _hover_surface.card.hide_effect_popup()
 	if not entered and _hover_surface != null:
 		_next_idle_tilt()
 

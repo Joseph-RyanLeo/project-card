@@ -5,8 +5,6 @@ extends RefCounted
 ## 正式战斗与调试器都调用 play()，避免预览效果与实战实现分叉。
 
 const BATTLE_ENERGY_BEAM_SHADER: Shader = preload("res://shaders/battle_energy_beam.gdshader")
-const BATTLE_TRAIL_ENERGY_TEXTURE: Texture2D = preload("res://assets/effects/battle_trail_energy.png")
-const BATTLE_TRAIL_PROJECTILE_TEXTURE: Texture2D = preload("res://assets/effects/battle_trail_projectile.png")
 
 const SampleVisual = preload("res://scripts/battle/battle_element_sample_visual.gd")
 
@@ -29,11 +27,15 @@ static func play(
 	speed_variant: int = -1,
 	logical_impact_delay: float = -1.0,
 	sequence_index: int = 0,
-	card_height: float = 136.0
+	card_height: float = 136.0,
+	target_bounds: Rect2 = Rect2()
 ) -> Node2D:
 	if not is_instance_valid(parent) or control_points.size() < 2:
 		return null
 	var mask_kind := profile["mask_kind"] as StringName
+	if mask_kind == &"water_shockwave":
+		control_points = control_points.duplicate()
+		control_points[-1] = water_contact_point(control_points[0], control_points[-1], target_bounds, float(profile["water_contact_offset"]))
 	var sample := is_sample_style(mask_kind)
 	var path_points := PackedVector2Array([control_points[0], control_points[-1]]) if sample or mask_kind == &"water_flow" else sample_curve(control_points, profile)
 	if not sample and polyline_length(path_points) < 1.0:
@@ -59,7 +61,13 @@ static func play(
 			impact_delay = BattleProjectileTiming.calculate_impact_delay(profile, resolved_speed_variant)
 		# 只延长原画显示寿命，逻辑命中仍使用控制器给定的时刻。
 		duration = maxf(duration, impact_delay + (16.0 - SampleVisual.WOOD_IMPACT_FRAME) * SampleVisual.WOOD_FRAME_SECONDS)
+	elif mask_kind == &"water_shockwave":
+		if impact_delay < 0.0:
+			impact_delay = BattleProjectileTiming.calculate_impact_delay(profile, resolved_speed_variant)
+		# 飞行沿用逻辑命中时刻；水花按原帧时长完整展开、消散，不压缩进原尾迹寿命。
+		duration = maxf(duration, impact_delay + (SampleVisual.WATER_FRAME_COUNT - float(profile["water_impact_frame"])) * SampleVisual.WATER_FRAME_SECONDS / float(profile["water_playback_speed"]))
 	effect_root.set_meta("visual_duration", duration)
+	effect_root.set_meta("logical_impact_delay", impact_delay)
 	var terminal_progress := (
 		1.0
 		+ float(profile["trail_length"])
@@ -111,7 +119,16 @@ static func play(
 
 
 static func is_sample_style(mask_kind: StringName) -> bool:
-	return mask_kind in [&"wood_thorns", &"dark_slash"]
+	return mask_kind in [&"wood_thorns", &"dark_slash", &"water_shockwave"]
+
+
+static func water_contact_point(from: Vector2, center: Vector2, bounds: Rect2, offset: float = 0.0) -> Vector2:
+	var direction := (center - from).normalized()
+	var edge_distance := 0.0
+	if bounds.has_area():
+		var half := bounds.size * 0.5
+		edge_distance = minf(half.x / maxf(absf(direction.x), 0.0001), half.y / maxf(absf(direction.y), 0.0001))
+	return center + direction * (offset - edge_distance)
 
 
 static func _add_beam_mesh(effect_root: Node2D, path_points: PackedVector2Array, profile: Dictionary, head_color: Color, tail_color: Color) -> ShaderMaterial:
@@ -126,16 +143,12 @@ static func _add_beam_mesh(effect_root: Node2D, path_points: PackedVector2Array,
 		effect_root.rotation = (path_points[-1] - path_points[0]).angle()
 	var material := ShaderMaterial.new()
 	material.shader = BATTLE_ENERGY_BEAM_SHADER
-	material.set_shader_parameter("soul_ribbon", mask_kind == &"soul_ribbon")
 	material.set_shader_parameter("water_flow", mask_kind == &"water_flow")
 	if water:
 		material.set_shader_parameter("wave_width", height)
 		material.set_shader_parameter("wave_depth", height * WATER_DEPTH_RATIO)
 	material.set_shader_parameter("soul_taper", float(profile.get("soul_taper", 0.75)))
 	material.set_shader_parameter("soul_core_width", float(profile.get("soul_core_width", 0.30)))
-	material.set_shader_parameter("trail_mask", get_mask_texture(mask_kind))
-	# 宽能量原图的头在左侧；沿攻击路径绘制时翻转采样，让素材头部朝向目标。
-	material.set_shader_parameter("flip_mask_x", mask_kind == &"energy")
 	material.set_shader_parameter("head_color", head_color)
 	material.set_shader_parameter("tail_color", tail_color)
 	material.set_shader_parameter("noise_seed", float(Time.get_ticks_msec() % 997) * 0.013)
@@ -345,7 +358,3 @@ static func build_ribbon(path_points: PackedVector2Array, ribbon_height: float) 
 	var ribbon := ArrayMesh.new()
 	ribbon.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLE_STRIP, arrays)
 	return ribbon
-
-
-static func get_mask_texture(mask_kind: StringName) -> Texture2D:
-	return BATTLE_TRAIL_PROJECTILE_TEXTURE if mask_kind == &"projectile" else BATTLE_TRAIL_ENERGY_TEXTURE

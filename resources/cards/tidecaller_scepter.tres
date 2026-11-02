@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://cobrmepwo2r87"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Texture2D" uid="uid://dck67yldn1ssd" path="res://assets/card_art/equipment/tidecaller_scepter.png" id="1_cau3r"]
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_w0iq3"]
+[ext_resource type="Texture2D" path="res://assets/card_art/equipment/tidecaller_scepter.png" id="1_cau3r"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="2_w0iq3"]
 
 [resource]
 script = ExtResource("2_w0iq3")
+is_available = false
 id = &"tidecaller_scepter"
 display_name = "潮汐权杖"
 faction = 1
@@ -19,4 +20,7 @@ equipment_health_delta = 3
 equipment_armor_delta = 1
 art_texture = ExtResource("1_cau3r")
 art_offset = Vector2i(-2, 22)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(7, 20)
+})
 effect_text = "占位：法器；行动-2，热诚+1，生命+3，护甲+1。"

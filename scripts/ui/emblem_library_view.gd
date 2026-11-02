@@ -34,6 +34,7 @@ var _sticker_inventory: Variant = StickerInventoryScript.new()
 var _scraper_count: int = 0
 var fusion_busy := false
 var _hidden_item_ids: Array[StringName] = []
+var _reserved_item_ids: Array[StringName] = []
 var _drop_stack_order: Array[StringName] = []
 
 
@@ -117,7 +118,12 @@ func set_drag_enabled(value: bool) -> void:
 	if is_instance_valid(_scraper):
 		_scraper.enabled = value and not fusion_busy and _scraper_count > 0
 	for entry: Variant in _entries:
-		entry.set_drag_enabled(value and not fusion_busy)
+		_sync_entry_state(entry)
+
+func _sync_entry_state(entry: Control) -> void:
+	var id := StringName(String(entry.definition.returned_state.instance_id))
+	entry.set_drag_enabled(_drag_enabled and not fusion_busy and not id in _reserved_item_ids)
+	entry.modulate.a = 0.0 if id in _hidden_item_ids else CardView.COLLECTION_DRAG_GHOST_ALPHA if id in _reserved_item_ids else 1.0
 
 
 func set_scraper_count(value: int) -> void:
@@ -411,7 +417,7 @@ func _refresh_entries() -> void:
 	for definition: Dictionary in display_definitions:
 		var entry: Variant = EmblemLibraryEntryScript.new()
 		entry.configure(definition, _drag_enabled and not fusion_busy)
-		entry.modulate.a = 0.0 if StringName(String(definition.returned_state.instance_id)) in _hidden_item_ids else 1.0
+		_sync_entry_state(entry)
 		entry.click_carry_requested.connect(_on_item_click_carry_requested)
 		entry.front_requested.connect(bring_dropped_sticker_to_front)
 		_grid.add_child(entry)
@@ -456,6 +462,12 @@ func get_item_canvas_rect(instance_id: StringName) -> Rect2:
 			return Rect2(entry._icon.get_global_transform_with_canvas().origin, entry._icon.size * entry._icon.get_global_transform_with_canvas().get_scale())
 	return Rect2()
 
+func animate_sticker_return(instance_id: StringName, release_center: Vector2) -> void:
+	for entry: Control in _entries:
+		if StringName(String(entry.definition.returned_state.instance_id)) == instance_id:
+			entry.play_return_feedback(release_center)
+			return
+
 
 func set_fusion_busy(value: bool, hidden_ids: Array[StringName] = []) -> void:
 	fusion_busy = value
@@ -467,7 +479,11 @@ func set_hidden_item_ids(instance_ids: Array[StringName]) -> void:
 	# 只隐藏演出中的实例图标，库存与格位不变；合成和开包共用这一显示接口。
 	_hidden_item_ids.assign(instance_ids)
 	for entry: Control in _entries:
-		entry.modulate.a = 0.0 if StringName(String(entry.definition.returned_state.instance_id)) in _hidden_item_ids else 1.0
+		_sync_entry_state(entry)
+
+func set_reserved_item_ids(instance_ids: Array) -> void:
+	_reserved_item_ids.assign(instance_ids)
+	set_drag_enabled(_drag_enabled)
 
 
 func commit_fusion_onto_card(source_id: StringName, owned: OwnedCard, slot_index: int, target_id: StringName) -> Dictionary:

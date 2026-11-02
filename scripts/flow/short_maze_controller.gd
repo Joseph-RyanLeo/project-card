@@ -12,7 +12,7 @@ const SentryView = preload("res://scripts/ui/sentry_indicator_view.gd")
 const EventTable = preload("res://scripts/ui/event_card_table.gd")
 const StoryEvents = preload("res://scripts/data/maze_story_event_service.gd")
 const CardServiceSlot = preload("res://scripts/ui/card_service_slot.gd")
-const TEXT_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
+static var TEXT_FONT: Font = preload("res://scripts/ui/ui_typography.gd").font()
 const SentryStyle = preload("res://scripts/ui/sentry_indicator_style.gd")
 const SENTRY_MOVE_SECONDS: float = 0.30 # 哨位从鼠标落点移动到区域角落的时长
 const PANEL_POSITION := Vector2(189, 0) # 普通事件与上半世界共用原稿顶边
@@ -64,6 +64,11 @@ func initialize(main: Control) -> bool:
 
 
 func new_run(seed_value: int) -> void:
+	if _main.profile_progress.run.stage in ["selection", "preview"]: return
+	# D3-1保留Demo2的开局流程，仅重置本局部分，局外数据持续保留。
+	_main.profile_progress.run.stage = "hub"
+	_main.profile_progress.start_run()
+	_main._profile_before_battle.clear()
 	_main._close_shop_card_services()
 	_main._return_service_cards()
 	_enhancement_card_id = &""
@@ -105,9 +110,11 @@ func new_run(seed_value: int) -> void:
 	_main.battle_result_panel.visible = false
 	_main._clear_battle_log()
 	_main.owned_card_collection = OwnedCardCollection.new()
+	_main._bind_profile_collection()
 	var registry: Dictionary = _main._build_card_definition_registry()
+	var no_reserved_cards: Array[CardData] = []
 	for id: String in rewards.config.initial_card_ids:
-		_main.owned_card_collection.create_card(registry[StringName(id)], run.rng)
+		_main.owned_card_collection.create_card(registry[StringName(id)], run.rng, no_reserved_cards, false, {"kind": "starting_supplies"})
 	_main.run_reward_state = RunRewardState.new()
 	_main.run_reward_state.gold = int(rewards.config.initial_gold)
 	for row: BattlefieldRow in [_main.front_row, _main.back_row, _main.enemy_front_row, _main.enemy_back_row]:
@@ -117,6 +124,8 @@ func new_run(seed_value: int) -> void:
 	_main._build_collection_cards()
 	_main._update_phase_label()
 	_main.set_world_view(_main.WorldView.BATTLEFIELDS, false)
+	_main._collect_progress_discoveries(_main.profile_progress, _main.owned_card_collection.capture_state())
+	_main.profile_progress.commit_discoveries()
 	refresh()
 
 
@@ -231,7 +240,7 @@ func _grant_pack(large: bool) -> bool:
 	if not bool(result.get("success", false)):
 		return false
 	for card: CardData in result.cards:
-		_main.owned_card_collection.create_card(card, run.rng, result.cards)
+		_main.owned_card_collection.create_card(card, run.rng, result.cards, true)
 	return true
 
 
@@ -240,10 +249,11 @@ func _grant_emblem(id: String, receipt: String) -> void:
 	_main.emblem_library.receive_stickers([state])
 
 
-func complete_event(take_reward: bool = true, discard_confirmed: bool = false) -> bool:
+func complete_event(take_reward: bool = true, discard_confirmed: bool = false, source_button: BaseButton = null) -> bool:
 	if run.step != RunState.Step.EVENT or run.get_round_kind() == "shop" or (take_reward and run.selected_path.get("reward") in ["enhance_card", "story"] and not run.selected_path.has("story_result") and not run.selected_path.has("enhancement_result")):
 		return false
-	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(complete_event.bind(take_reward, true)): return false
+	if not is_instance_valid(source_button): source_button = _find_exit_button(complete_event.bind(take_reward))
+	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(source_button): return false
 	var previous := _capture_transaction()
 	_main._close_toolbox_inspection(false)
 	_main.emblem_library.discard_dropped_stickers()
@@ -284,7 +294,7 @@ func complete_event(take_reward: bool = true, discard_confirmed: bool = false) -
 		_rollback_transaction(previous)
 		return false
 	_generate_paths()
-	return _commit_transaction(previous)
+	return _commit_transaction(previous, true)
 
 
 func choose_story_option(index: int) -> bool:
@@ -321,7 +331,7 @@ func choose_story_option(index: int) -> bool:
 func leave_shop(discard_confirmed: bool = false) -> bool:
 	if run.step != RunState.Step.EVENT or run.get_round_kind() != "shop":
 		return false
-	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(_main._toggle_ordinary_shop.bind(true)): return false
+	if not discard_confirmed and not _main.confirm_shop_leave(): return false
 	var previous := _capture_transaction()
 	_main._close_toolbox_inspection(false)
 	_main.emblem_library.discard_dropped_stickers()
@@ -329,7 +339,7 @@ func leave_shop(discard_confirmed: bool = false) -> bool:
 		_rollback_transaction(previous)
 		return false
 	_generate_paths()
-	return _commit_transaction(previous)
+	return _commit_transaction(previous, true)
 
 
 func _enemy_revealed_count() -> int:
@@ -469,17 +479,16 @@ func settle_battle(won: bool, battle_id: String, runtime: HeroRuntime) -> bool:
 			last_reward["fortify_completed"] = true
 	deployed.clear() # 正常战后全数消费；未投入的库存保留。清理不触发锐。
 	run.settle_battle(won)
-	_main._sync_legacy_collection_cards()
-	_main._build_collection_cards()
-	refresh()
 	return true
 
 
 func continue_after_battle(discard_confirmed: bool = false) -> bool:
 	_main._record_run_diagnostic("next_day_requested", {}, true)
+	if run.step in [RunState.Step.BATTLE_RESULT, RunState.Step.ENDED] and not run.battle_results.is_empty() and not String(run.battle_results.back().ending).is_empty():
+		return _main.finish_maze_run()
 	if run.step != RunState.Step.BATTLE_RESULT or not hero.pending_talent_levels.is_empty():
 		return false
-	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(continue_after_battle.bind(true)): return false
+	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(_main.continue_next_level_button): return false
 	var previous := _capture_transaction()
 	_main._close_toolbox_inspection(false)
 	_main.emblem_library.discard_dropped_stickers()
@@ -654,11 +663,12 @@ func reward_summary() -> String:
 
 
 func _capture_transaction() -> Dictionary:
-	return {"maze": capture_state(), "cards": _main.owned_card_collection.capture_state(), "reward": _main.run_reward_state.capture_state(), "inventory": _main.emblem_library.get_inventory_state(), "shop": _main.ordinary_shop_service.capture_state(), "resources": _main.resource_board_state.capture_state(), "rows": _main._current_rows_for_save(), "phase": _main.current_phase, "chaos_day": _main._last_chaos_reroll_day_token, "journal": _main.settlement_journal.capture_state(), "celestial": _main.celestial_indicators.capture_state(), "scrapers": _main.scraper_count, "battle_sequence": _main._next_battle_instance_sequence, "settlement": _main._last_battle_settlement_result.duplicate(true), "battle_snapshot": _main._battle_snapshot, "prepared_spells": _main.prepared_spell_instance_ids.duplicate()}
+	return {"profile": _main.profile_progress.capture_state(), "maze": capture_state(), "cards": _main.owned_card_collection.capture_state(), "reward": _main.run_reward_state.capture_state(), "inventory": _main.emblem_library.get_inventory_state(), "shop": _main.ordinary_shop_service.capture_state(), "resources": _main.resource_board_state.capture_state(), "rows": _main._current_rows_for_save(), "phase": _main.current_phase, "chaos_day": _main._last_chaos_reroll_day_token, "journal": _main.settlement_journal.capture_state(), "celestial": _main.celestial_indicators.capture_state(), "scrapers": _main.scraper_count, "battle_sequence": _main._next_battle_instance_sequence, "settlement": _main._last_battle_settlement_result.duplicate(true), "battle_snapshot": _main._battle_snapshot, "prepared_spells": _main.prepared_spell_instance_ids.duplicate()}
 
 
 func _rollback_transaction(previous: Dictionary) -> void:
 	_main._return_service_cards()
+	_main.profile_progress.restore_state(previous.profile)
 	restore_state(previous.maze)
 	_main.owned_card_collection.restore_state(previous.cards)
 	_main.run_reward_state.restore_state(previous.reward)
@@ -682,9 +692,9 @@ func _rollback_transaction(previous: Dictionary) -> void:
 	refresh()
 
 
-func _commit_transaction(previous: Dictionary) -> bool:
+func _commit_transaction(previous: Dictionary, commit_discoveries: bool = false) -> bool:
 	_refresh_collection()
-	if _main.save_run_to_path(_main.run_save_path) != OK:
+	if _main.save_run_to_path(_main.run_save_path, commit_discoveries) != OK:
 		_rollback_transaction(previous)
 		_main.play_area_label.text = "保存失败，本次选择与奖励已回退，请重试。"
 		return false
@@ -758,9 +768,25 @@ func _button(text: String, callback: Callable, parent: Node = null) -> Button:
 	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	button.add_theme_font_size_override("font_size", 13) # 纸面选项使用紧凑字号，长句在可用宽度内换行
 	button.tooltip_text = text
-	button.pressed.connect(callback)
+	if callback.is_valid(): button.pressed.connect(callback)
 	(parent if parent != null else (_detail_body if is_instance_valid(_detail_body) else _body)).add_child(button)
 	return button
+
+
+func _exit_button(text: String, callback: Callable, parent: Node = null) -> Button:
+	var button := _button(text, Callable(), parent)
+	button.set_meta("exit_action", callback)
+	# 连续bind会反向追加参数；显式保留原动作参数，再附加确认状态与原按钮。
+	var arguments := callback.get_bound_arguments()
+	arguments.append_array([false, button])
+	button.pressed.connect(Callable(callback.get_object(), callback.get_method()).bindv(arguments))
+	return button
+
+
+func _find_exit_button(action: Callable) -> BaseButton:
+	for button: Button in _panel.find_children("*", "Button", true, false):
+		if button.get_meta("exit_action", Callable()) == action: return button
+	return null
 
 
 func _input(event: InputEvent) -> void:
@@ -772,6 +798,7 @@ func _input(event: InputEvent) -> void:
 
 
 func refresh() -> void:
+	_main._bind_profile_collection()
 	if not is_instance_valid(_panel):
 		return
 	_main._sync_tabletop_panel_anchors()
@@ -781,6 +808,7 @@ func refresh() -> void:
 	if is_instance_valid(_event_table) and not choice_key.is_empty() and choice_key == _last_dealt_key and hero.pending_talent_levels.is_empty():
 		_panel.visible = not _main.ordinary_shop_open
 		_status.visible = not _panel.visible and not _main.ordinary_shop_open
+		_refresh_sentry_views(_main.current_phase == _main.GamePhase.PREPARE)
 		return
 	var preparing: bool = _main.current_phase == _main.GamePhase.PREPARE
 	var choosing_talent := not hero.pending_talent_levels.is_empty()
@@ -838,6 +866,10 @@ func refresh() -> void:
 	_status.visible = not _panel.visible and not _main.ordinary_shop_open
 	# 父节点隐藏会连带隐藏全部敌方卡面；每次阶段变化都重新设置，不能只在准备阶段隐藏。
 	_main.get_node("WorldContent/EnemyBoardSection").visible = _main.current_phase in [_main.GamePhase.BATTLE, _main.GamePhase.RESULT] and not choosing_talent and not _main.ordinary_shop_open
+	_refresh_sentry_views(preparing)
+
+
+func _refresh_sentry_views(preparing: bool) -> void:
 	for child: Node in _sentry_bar.get_children():
 		if child == _sentry_zones.stock:
 			continue
@@ -904,10 +936,10 @@ func _build_selected_event() -> void:
 				var reward_text: String = {"gold": "获得3金币", "emblem": "获得1枚随机I级纹章", "minion": "获得1张随机灰烬证册I级随从", "pack": "获得1个灰烬证册小卡包（立即打开）", "wound": "随机拥有且有空槽的随从新增1处I级伤势；无目标不执行"}[event.reward]
 				_label(reward_text)
 				var cost := int(event.cost)
-				var take := _button("继续" if bool(event.get("reward_claimed", false)) else ("花费%d金币" % cost if cost > 0 else "领取并继续"), complete_event.bind(true))
+				var take := _exit_button("继续" if bool(event.get("reward_claimed", false)) else ("花费%d金币" % cost if cost > 0 else "领取并继续"), complete_event.bind(true))
 				take.disabled = not bool(event.get("reward_claimed", false)) and _main.run_reward_state.gold < cost
 				if cost > 0 and not bool(event.get("reward_claimed", false)):
-					_button("放弃，不花金币", complete_event.bind(false))
+					_exit_button("放弃，不花金币", complete_event.bind(false))
 
 
 func _build_story_choices(event: Dictionary) -> void:
@@ -917,7 +949,7 @@ func _build_story_choices(event: Dictionary) -> void:
 		var outcome: Dictionary = event.options[int(result.option_index)].outcomes[int(result.outcome_index)]
 		_label(("骰子点数：%d\n" % int(result.roll) if result.has("roll") else "") + String(outcome.text))
 		_label(String(outcome.effect_text))
-		_button("继续旅程", complete_event.bind(true))
+		_exit_button("继续旅程", complete_event.bind(true))
 		return
 	_label(String(event.description))
 	for index: int in event.options.size():
@@ -963,7 +995,7 @@ func _create_sentry_view(sentry: Dictionary, region: String, host: Control, prep
 
 
 func can_drop_sentry(id: String, region: String) -> bool:
-	if _main.current_phase != _main.GamePhase.PREPARE or run.step in [RunState.Step.BATTLE_RESULT, RunState.Step.ENDED] or not hero.pending_talent_levels.is_empty() or _main.ordinary_shop_open:
+	if _main.current_phase != _main.GamePhase.PREPARE or run.step in [RunState.Step.BATTLE_RESULT, RunState.Step.ENDED] or not hero.pending_talent_levels.is_empty():
 		return false
 	var source_region := ""
 	for sentry: Dictionary in stock:
@@ -1130,13 +1162,13 @@ func _build_enhancement_interface() -> void:
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_enhancement_options.add_child(tip)
 	if finished:
-		_button("继续旅程", complete_event.bind(true), _enhancement_options)
+		_exit_button("继续旅程", complete_event.bind(true), _enhancement_options)
 	else:
 		for index: int in run.selected_path.options.size():
 			var option: Dictionary = run.selected_path.options[index]
-			var button := _button(_enhancement_option_text(option), apply_card_enhancement.bind(index), _enhancement_options)
+			var button := _exit_button(_enhancement_option_text(option), apply_card_enhancement.bind(index), _enhancement_options)
 			button.set_meta("enhancement_option", index)
-		_button("放弃强化并继续", complete_event.bind(false), _enhancement_options)
+		_exit_button("放弃强化并继续", complete_event.bind(false), _enhancement_options)
 	var slot := CardServiceSlot.new()
 	slot.allow_deployment = finished
 	slot.accepts_card = can_select_enhancement_card
@@ -1151,14 +1183,15 @@ func _build_enhancement_interface() -> void:
 	_refresh_enhancement_card()
 
 
-func apply_card_enhancement(option_index: int, discard_confirmed: bool = false) -> bool:
+func apply_card_enhancement(option_index: int, discard_confirmed: bool = false, source_button: BaseButton = null) -> bool:
 	if run.step != RunState.Step.EVENT or run.selected_path.get("reward") != "enhance_card" or run.selected_path.has("enhancement_result") or option_index < 0 or option_index >= run.selected_path.options.size():
 		return false
 	var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id)
 	var option: Dictionary = run.selected_path.options[option_index]
 	if owned == null or owned.card_data.card_type != CardData.CardType.MINION or _main.run_reward_state.gold < int(option.cost):
 		return false
-	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(apply_card_enhancement.bind(option_index, true)): return false
+	if not is_instance_valid(source_button): source_button = _find_exit_button(apply_card_enhancement.bind(option_index))
+	if not discard_confirmed and not _main.confirm_temporary_sticker_discard(source_button): return false
 	var previous := _capture_transaction()
 	_main._close_toolbox_inspection(false)
 	_main.emblem_library.discard_dropped_stickers()

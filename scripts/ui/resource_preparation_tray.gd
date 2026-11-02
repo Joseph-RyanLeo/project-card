@@ -568,6 +568,7 @@ func _refresh_hover_card() -> void:
 		_hover_card.z_index = 400
 		add_child(_hover_card)
 	_set_mouse_ignore_recursive(_hover_card)
+	_hover_card.show_effect_popup()
 
 func _find_hover_card_host() -> Control:
 	var ancestor: Node = self

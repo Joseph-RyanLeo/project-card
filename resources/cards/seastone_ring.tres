@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://dyjwg22a3cl00"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Texture2D" uid="uid://cstwy1bqa38j8" path="res://assets/card_art/equipment/seastone_ring.png" id="1_dmm2x"]
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="2_p7dhg"]
+[ext_resource type="Texture2D" path="res://assets/card_art/equipment/seastone_ring.png" id="1_dmm2x"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="2_p7dhg"]
 
 [resource]
 script = ExtResource("2_p7dhg")
+is_available = false
 id = &"seastone_ring"
 display_name = "海晶戒"
 faction = 1
@@ -18,4 +19,7 @@ equipment_zeal_delta = -1
 equipment_armor_delta = 2
 art_texture = ExtResource("1_dmm2x")
 art_offset = Vector2i(5, 6)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(4, 21)
+})
 effect_text = "占位：饰品；行动+2，热诚-1，生命+0，护甲+2。"

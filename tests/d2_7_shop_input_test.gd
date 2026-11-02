@@ -149,9 +149,8 @@ func _run() -> void:
 	_check(main.ordinary_shop_panel.visible and JSON.stringify(main.ordinary_shop_service.offers) == retained_offers and main.ordinary_shop_service.refresh_count == 1, "重新进入同一家商店保留刷新后的原报价")
 	await _click(main.ordinary_shop_panel.find_child("OrdinaryShopCloseButton", true, false).get_global_rect().get_center(), transform)
 	await create_timer(main.SHOP_CLOSE_DURATION + 0.1).timeout
-	if main.continue_run_button.visible:
-		await _click(main.continue_run_button.get_global_rect().get_center(), transform)
-	_check(not main.ordinary_shop_panel.visible and main.run_reward_state.gold == retained_gold and main.scraper_count == retained_scrapers, "真实鼠标继续游戏恢复离店存档且不重复扣费或发货")
+	_check(main.load_run_from_path(test_save_path), "正式读档接口恢复离店存档")
+	_check(not main.ordinary_shop_panel.visible and main.run_reward_state.gold == retained_gold and main.scraper_count == retained_scrapers, "恢复离店存档不重复扣费或发货")
 	var panel_rect: Rect2 = main.ordinary_shop_panel.get_global_rect()
 	_check(panel_rect.position.x >= 0 and panel_rect.end.x <= 1280 and panel_rect.position.y >= 0 and panel_rect.end.y <= 720, "商店面板完整位于720p逻辑画布内")
 	DirAccess.remove_absolute(test_save_path)

@@ -30,7 +30,7 @@ static func button(parent: Node, title: String, origin: Vector2, texture: Textur
 		var style := StyleBoxTexture.new()
 		style.texture = texture
 		view.add_theme_stylebox_override(state, style)
-	view.add_theme_font_override("font", preload("res://assets/fonts/chill_7.ttf"))
+	view.add_theme_font_override("font", preload("res://scripts/ui/ui_typography.gd").font())
 	view.add_theme_font_size_override("font_size", 14) # 新棋盘小按钮文字字号
 	view.add_theme_color_override("font_color", Color("ead2ae"))
 	view.add_theme_color_override("font_hover_color", Color("fff1ca"))

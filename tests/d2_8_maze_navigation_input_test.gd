@@ -138,7 +138,7 @@ func _run() -> void:
 	root.size = Vector2i(2560, 1440) if "2k" in OS.get_cmdline_user_args() else Vector2i(1280, 720)
 	await open_game()
 	if "resume" in OS.get_cmdline_user_args():
-		await click(main.continue_run_button.get_global_rect().get_center())
+		check(main.load_run_from_path(main.run_save_path), "通过正式读档接口恢复迷宫")
 		check(main.maze_controller.run.day == 2 and main.maze_controller.hero.has_talent("sentry_spell") and main.ordinary_shop_open, "独立进程重启恢复第二天商店与咒天赋")
 		await create_timer(main.SHOP_OPEN_DURATION + main.SHOP_REBOUND_DURATION).timeout
 		var leave := find_button(main.ordinary_shop_panel, "离开")
@@ -193,9 +193,9 @@ func _run() -> void:
 		shell.queue_free()
 		await process_frame
 		await open_game()
-		await click(main.continue_run_button.get_global_rect().get_center())
+		check(main.load_run_from_path(main.run_save_path), "通过正式读档接口恢复迷宫")
 		maze = main.maze_controller
-		check(JSON.parse_string(JSON.stringify(maze.capture_state())) == JSON.parse_string(JSON.stringify(saved)) and maze._panel.is_visible_in_tree(), "重启显示壳后点击继续，恢复第二天与已选天赋")
+		check(JSON.parse_string(JSON.stringify(maze.capture_state())) == JSON.parse_string(JSON.stringify(saved)) and maze._panel.is_visible_in_tree(), "重启显示壳后读档，恢复第二天与已选天赋")
 		var cards_before: int = main.owned_card_collection.size()
 		await click_flow()
 		check(main.ordinary_shop_open and main.owned_card_collection.size() == cards_before + 5, "重启后第二天仍可进入商店并领取一份大包")

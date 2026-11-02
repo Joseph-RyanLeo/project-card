@@ -85,8 +85,10 @@ func _run() -> void:
 		await process_frame
 	check(not is_instance_valid(main._sticker_pack_opening) and bag.has_dropped_stickers(), "开包演出完整飞向临时区域，结束后仍保留待整理实例")
 	main._toggle_ordinary_shop()
-	check(is_instance_valid(main._temporary_discard_dialog), "没有商店入口时，离店提示仍可返回整理")
-	main._temporary_discard_dialog.canceled.emit()
+	check(main._hero_speech.visible and main.find_child("TemporaryStickerDiscardConfirmation", true, false) == null, "没有商店缩略入口时，离店由英雄说话提示")
+	await click(Vector2(480, 340))
+	main._open_toolbox_inspection()
+	check(not main._hero_speech.is_confirming(main._shop_leave_button), "取消离店提示后仍可展开同一工具箱，保留临时贴纸")
 	check(bag.scale.x < 4.0, "返回整理时同一工具箱从原布局平滑展开")
 	await create_timer(main.TOOLBOX_OPEN_SECONDS + 0.05).timeout
 	check(is_instance_valid(main._toolbox_overlay) and bag._drag_enabled and bag.scale == Vector2(4, 4), "独立工具箱在左侧4倍展开并启用拖拽")
@@ -124,12 +126,13 @@ func _run() -> void:
 	main.run_save_path = "/private/tmp/project-card-toolbox-overflow-save.json"
 	main.ordinary_shop_open = true
 	main._toggle_ordinary_shop()
-	check(main.ordinary_shop_open and is_instance_valid(main._temporary_discard_dialog) and main._temporary_discard_dialog.dialog_text == "临时区域仍有纹章，是否确认丢弃", "离店有掉落时先提示，保持商店与贴纸")
-	main._temporary_discard_dialog.canceled.emit()
+	check(main.ordinary_shop_open and main._hero_speech.visible and main._hero_speech.text_label.text == "临时区域仍有纹章，是否真的要离开", "离店有掉落时英雄先提示，保持商店与贴纸")
+	main._hero_speech.dismiss()
+	main._open_toolbox_inspection()
 	await process_frame
 	check(main.ordinary_shop_open and bag.has_dropped_stickers() and is_instance_valid(main._toolbox_overlay), "取消丢弃后保留贴纸，并展开工具箱供整理")
 	main._toggle_ordinary_shop()
-	main._temporary_discard_dialog.confirmed.emit()
+	main._toggle_ordinary_shop()
 	await create_timer(0.3).timeout
 	check(not main.ordinary_shop_open and not bag.has_dropped_stickers() and main.run_reward_state.gold == gold, "确认离店只销毁临时区域，金币不返还，格内贴纸保留")
 	# 真实迷宫事件奖励：满箱领取停留，继续时才确认，读档不会重领。
@@ -137,16 +140,17 @@ func _run() -> void:
 	main.add_child(maze)
 	main.maze_controller = maze
 	check(maze.initialize(main), "初始化真实迷宫流程验证事件与结算退出")
+	check(maze.hero.choose_talent("sentry_guard"), "首级天赋完成后显示真实事件按钮")
 	maze.run.initialize(43)
-	maze.run.round_index = 1
+	maze.run.round_index = 0
 	maze.run.step = ShortMazeRunState.Step.EVENT
 	for event: Dictionary in maze.content.free_events:
 		if event.reward == "emblem": maze.run.selected_path = event.duplicate(true); break
 	bag.restore_inventory_state(_layout(false))
 	check(maze.complete_event() and maze.run.step == ShortMazeRunState.Step.EVENT and maze.run.selected_path.get("reward_claimed", false) and bag.has_dropped_stickers(), "事件满箱奖励先保留在当前事件，不立即退出销毁")
 	check(main.find_child("ToolboxLauncher", true, false) == null, "事件界面不保留工具箱缩略入口")
-	check(not maze.complete_event() and is_instance_valid(main._temporary_discard_dialog), "已领取事件继续时弹出临时贴纸丢弃确认")
-	main._temporary_discard_dialog.confirmed.emit()
+	check(not maze.complete_event() and main._hero_speech.visible, "已领取事件继续时由英雄提示临时贴纸丢弃")
+	maze.complete_event()
 	await process_frame
 	check(maze.run.step == ShortMazeRunState.Step.CHOOSING and not bag.has_dropped_stickers() and bag.get_inventory_state().size() == 28, "确认结束事件不重复发奖，只丢弃临时贴纸")
 	# 结算退出共用相同确认。
@@ -155,15 +159,18 @@ func _run() -> void:
 	main._last_battle_settlement_result = {"success": true}
 	main.current_phase = main.GamePhase.RESULT
 	maze.run.round_index = 3
+	maze.run.paths.clear()
+	maze.run.selected_path = maze.content.enemies[0].duplicate(true)
+	maze.run.selected_path["battle_seed"] = 123
 	maze.run.step = ShortMazeRunState.Step.BATTLE_ACTIVE
 	maze.run.settle_battle(true)
 	check(main.find_child("ToolboxLauncher", true, false) == null, "战斗结算不保留工具箱缩略入口")
-	check(not maze.continue_after_battle() and is_instance_valid(main._temporary_discard_dialog), "退出战斗结算同样先提示临时区域")
-	if is_instance_valid(main._temporary_discard_dialog): main._temporary_discard_dialog.canceled.emit()
+	check(not maze.continue_after_battle() and main._hero_speech.visible, "退出战斗结算同样先提示临时区域")
+	main._hero_speech.dismiss()
 	await process_frame
 	check(main.current_phase == main.GamePhase.RESULT and bag.has_dropped_stickers(), "取消结算退出后仍在结算，贴纸可继续整理")
-	check(not maze.continue_after_battle() and is_instance_valid(main._temporary_discard_dialog), "再次继续结算仍需确认，不会因取消而放行")
-	main._temporary_discard_dialog.confirmed.emit()
+	check(not maze.continue_after_battle() and main._hero_speech.visible, "再次继续结算仍需确认，不会因取消而放行")
+	maze.continue_after_battle()
 	await process_frame
 	check(main.current_phase == main.GamePhase.PREPARE and not bag.has_dropped_stickers() and maze.run.day == 2, "确认结算退出销毁临时贴纸并正常进入下一天")
 	main._close_toolbox_inspection(false)

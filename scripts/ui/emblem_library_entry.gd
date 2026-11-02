@@ -3,6 +3,7 @@ extends Control
 
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 signal front_requested(instance_id: StringName)
+signal native_drag_finished(committed: bool, release_center: Vector2)
 
 ## 同一贴纸实例在格内／临时区域中的表现，身份保存在returned_state。
 
@@ -17,6 +18,8 @@ const DROP_LIFTED_SHADOW_OFFSET := Vector2(1.5, 2.5) # 临时贴纸轻微离开�
 
 var definition: Dictionary = {}
 var drag_enabled: bool = false
+var keep_carry_ghost: bool = true # 工具箱拖起后立即留原位虚影；出售槽关闭此项以保持槽内空白
+var drop_target: Control
 var _icon: TextureRect
 var _missing_label: Label
 var _left_pressed := false
@@ -25,9 +28,12 @@ var _native_drag_started := false
 var _last_preview_center := Vector2.INF
 var _shadow: TextureRect
 var _lift_tween: Tween
+var _return_visual: Polygon2D
+var _return_tween: Tween
 
 
 func configure(value: Dictionary, enabled: bool) -> void:
+	_finish_return_feedback()
 	definition = value.duplicate(true)
 	drag_enabled = enabled
 	var is_wound: bool = String(definition.get("status_kind", "emblem")) == "wound"
@@ -41,12 +47,31 @@ func configure(value: Dictionary, enabled: bool) -> void:
 
 func set_drag_enabled(value: bool) -> void:
 	drag_enabled = value
-	mouse_filter = Control.MOUSE_FILTER_STOP if value else Control.MOUSE_FILTER_PASS
+	if not value: _finish_return_feedback()
+	mouse_filter = Control.MOUSE_FILTER_IGNORE if is_instance_valid(_return_visual) else Control.MOUSE_FILTER_STOP if value else Control.MOUSE_FILTER_PASS
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if value else Control.CURSOR_ARROW
 
 
 func is_element_sticker() -> bool:
 	return definition.get("target", "emblem") == "rune"
+
+
+func begin_carry() -> void:
+	if not keep_carry_ghost:
+		visible = false
+		return
+	if is_instance_valid(_lift_tween): _lift_tween.kill()
+	update_layout_visuals()
+	_icon.self_modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA
+	if is_instance_valid(_shadow): _shadow.self_modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+func end_carry() -> void:
+	visible = true
+	_icon.self_modulate.a = 1.0
+	if is_instance_valid(_shadow): _shadow.self_modulate.a = 1.0
+	set_drag_enabled(drag_enabled)
 
 
 func update_layout_visuals() -> void:
@@ -140,6 +165,7 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 
 
 func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictionary:
+	_finish_return_feedback()
 	_request_front()
 	var preview := TextureRect.new()
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -197,6 +223,7 @@ func _request_front() -> void:
 
 func _lift(lifted: bool, duration_override: float = -1.0) -> void:
 	if not is_instance_valid(_icon) or (lifted and not drag_enabled): return
+	if is_instance_valid(_return_visual): return
 	if is_instance_valid(_lift_tween): _lift_tween.kill()
 	var rest := (size - _icon.size) * 0.5
 	_lift_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD)
@@ -208,31 +235,91 @@ func _lift(lifted: bool, duration_override: float = -1.0) -> void:
 
 
 func play_return_feedback(global_center: Vector2 = Vector2.INF) -> void:
-	if is_instance_valid(_icon) and global_center.is_finite():
-		_icon.position = get_global_transform_with_canvas().affine_inverse() * global_center - _icon.size * 0.5
-	_lift(false, EquipmentIndicator.RETURN_DURATION)
+	_finish_return_feedback()
+	if not is_instance_valid(_icon): return
+	if is_instance_valid(_lift_tween): _lift_tween.kill()
+	update_layout_visuals()
+	if not global_center.is_finite() or _icon.texture == null or not is_visible_in_tree(): return
+	# 与卡牌粘贴相同：插值四边形顶点，避开4倍父节点下Control位置的像素步进。
+	# 动画直接挂到当前Viewport，既不继承工具箱缩放，也不会被库存裁切或兄弟贴纸遮挡。
+	var canvas_inverse := get_viewport().get_canvas_transform().affine_inverse()
+	var icon_transform := canvas_inverse * _icon.get_global_transform_with_canvas()
+	var target := PackedVector2Array([
+		icon_transform * Vector2.ZERO,
+		icon_transform * Vector2(_icon.size.x, 0),
+		icon_transform * _icon.size,
+		icon_transform * Vector2(0, _icon.size.y),
+	])
+	var offset := canvas_inverse * global_center - (target[0] + target[2]) * 0.5
+	var start := PackedVector2Array()
+	for point: Vector2 in target: start.append(point + offset)
+	_return_visual = Polygon2D.new()
+	_return_visual.name = "StickerReturnFlight"
+	_return_visual.texture = _icon.texture
+	_return_visual.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_return_visual.polygon = start
+	var texture_size := _icon.texture.get_size()
+	_return_visual.uv = PackedVector2Array([Vector2.ZERO, Vector2(texture_size.x, 0), texture_size, Vector2(0, texture_size.y)])
+	_return_visual.z_index = RenderingServer.CANVAS_ITEM_Z_MAX # 飞行期间置于出售框、工具箱和其他贴纸之上
+	_return_visual.z_as_relative = false
+	_return_visual.color = modulate * _icon.modulate
+	get_viewport().add_child(_return_visual)
+	_icon.visible = keep_carry_ghost
+	_icon.self_modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA if keep_carry_ghost else 1.0
+	if is_instance_valid(_shadow): _shadow.self_modulate.a = _icon.self_modulate.a
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_return_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_return_tween.tween_property(_return_visual, "polygon", target, EquipmentIndicator.RETURN_DURATION)
+	_return_tween.finished.connect(_finish_return_feedback)
+
+
+func _finish_return_feedback() -> void:
+	if is_instance_valid(_return_tween): _return_tween.kill()
+	_return_tween = null
+	if is_instance_valid(_return_visual): _return_visual.queue_free()
+	_return_visual = null
+	if is_instance_valid(_icon):
+		_icon.visible = _icon.texture != null
+		_icon.self_modulate.a = 1.0
+	if is_instance_valid(_shadow): _shadow.self_modulate.a = 1.0
+	mouse_filter = Control.MOUSE_FILTER_STOP if drag_enabled else Control.MOUSE_FILTER_PASS
+
+
+func _exit_tree() -> void:
+	_finish_return_feedback()
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_DRAG_BEGIN:
+	if what == NOTIFICATION_VISIBILITY_CHANGED:
+		if not is_visible_in_tree(): _finish_return_feedback()
+	elif what == NOTIFICATION_DRAG_BEGIN:
 		var data: Variant = get_viewport().gui_get_drag_data()
 		if data is Dictionary and data.get("source_entry") == self:
 			_left_pressed = false
-			visible = false
+			begin_carry()
 	elif what == NOTIFICATION_DRAG_END:
-		visible = true
+		if not _native_drag_started: return
+		end_carry()
 		var data: Variant = get_viewport().gui_get_drag_data()
-		if _native_drag_started and not get_viewport().gui_is_drag_successful():
-			var preview := data.get("drag_visual") as Control if data is Dictionary else null
-			play_return_feedback(preview.get_global_transform_with_canvas() * (preview.size * 0.5) if is_instance_valid(preview) else _last_preview_center)
+		var preview := data.get("drag_visual") as Control if data is Dictionary else null
+		var release_center := preview.get_global_transform_with_canvas() * (preview.size * 0.5) if is_instance_valid(preview) else _last_preview_center
+		var committed := get_viewport().gui_is_drag_successful()
+		if not committed:
+			play_return_feedback(release_center)
 		else:
 			_lift(false)
 		_native_drag_started = false
+		native_drag_finished.emit(committed, release_center)
 
 
 func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
+	if is_instance_valid(drop_target):
+		return drop_target._can_drop_data(drop_target.get_global_transform_with_canvas().affine_inverse() * (get_global_transform_with_canvas() * at_position), data)
 	return get_parent()._can_drop_data(position + at_position, data)
 
 
 func _drop_data(at_position: Vector2, data: Variant) -> void:
+	if is_instance_valid(drop_target):
+		drop_target._drop_data(drop_target.get_global_transform_with_canvas().affine_inverse() * (get_global_transform_with_canvas() * at_position), data)
+		return
 	get_parent()._drop_data(position + at_position, data)

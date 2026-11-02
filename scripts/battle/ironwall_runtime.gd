@@ -309,7 +309,9 @@ func release_spell(spell: OwnedCard, side: int) -> bool:
 			if key == &"skirmish_formation": add(state, BattleModifier.Stat.ZEAL, 4, key)
 			else:
 				add(state, BattleModifier.Stat.ACTION_VALUE, 2, key)
-				state.apply_armor_exact(4)
+				var armor_event := BattleEffectEvent.new()
+				armor_event.source_owned_card_instance_id = spell.instance_id
+				state.apply_armor_exact(4, null, armor_event)
 		for source: BattleSquadState in allies:
 			if active(source, &"augustus_ironwall"):
 				for state: BattleSquadState in allies: state.grant_protection(&"augustus_ironwall", 2)

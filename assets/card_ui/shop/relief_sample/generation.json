@@ -1,0 +1,26 @@
+{
+  "description": "Sprite Normals 官方 WASM 生成；袋身使用用户原始高度图，不叠加自动轮廓体积或预设折痕；金纹保持独立。",
+  "tool": "https://www.spritefusion.com/sprite-normals",
+  "wasm_url": "https://www.spritefusion.com/_app/immutable/workers/assets/spritefusion_sprite_normals_bg-DtB4nPko.wasm",
+  "worker_url": "https://www.spritefusion.com/_app/immutable/workers/worker-Cllu-FMn.js",
+  "wasm_sha256": "a750bf962595c8229c80fe0b4766559d1b5891ed9f1ac4a43e07116aa5729846",
+  "worker_sha256": "2b627b5dbf9dab1eee1380f4e28697203c324f997c0b02c8094438c08833470f",
+  "source_sha256": "e470704d5f4b7fd74878dba92d64dd134a780c59dce6e367f65f7890769e456e",
+  "settings": {
+    "body": {
+      "strength": 1.4,
+      "detail": 6,
+      "smoothing": 0.85,
+      "volume": 0,
+      "directx": false
+    },
+    "gold": {
+      "strength": 1,
+      "detail": 0,
+      "smoothing": 0.6,
+      "volume": 0.5,
+      "directx": false
+    }
+  },
+  "height_sha256": "1624176820028249cde22eed49c6abd2688d07235c690063315eaf119043e7c3"
+}

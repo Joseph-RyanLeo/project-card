@@ -16,4 +16,7 @@ runes = Array[int]([0, 1, 2])
 race_type = 7
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(6, 0)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(5, 6)
+})
 effect_text = "攻击命中时，此卡与目标同时休眠3秒。"

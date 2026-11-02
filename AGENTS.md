@@ -1,15 +1,15 @@
-# Project Card Agents Guide
+# 余烬秘渊 / Embersea Arcana Agents Guide
 
 本文件补充上层 `/Users/Zhuanz/Documents/Codex/AGENTS.md`。
 如有冲突，以本文件为准。
 
 ## 项目定位
 
-Project Card 是一个像素风格的卡牌自走棋游戏，计划使用 Godot 开发。
+《余烬秘渊》（Embersea Arcana）是一个像素风格的卡牌自走棋游戏，使用 Godot 开发。
 
 游戏强调轻量操作、非即时反应压力，以及围绕卡牌、阵容、堆叠、元素符文、牌型和自动战斗形成的策略体验。目标用户是喜欢像素风格、卡牌构筑和自走棋玩法的玩家。
 
-项目名称暂定为 Project Card，后续可能调整。
+游戏中文名为《余烬秘渊》，英文名为 Embersea Arcana（2026-11-02 确认，取代旧暂定名《灰烬迷宫》）；Project Card 继续作为当前工程目录名。
 
 ## 当前阶段
 
@@ -75,6 +75,7 @@ Codex 需要检查回答和练习结果；若仍有关键理解缺口，应先�
 设计资料按任务范围按需读取，不要每轮整份加载：
 
 - `GAMEPLAY_DESIGN.md`：底层规则，默认入口。
+- `docs/灰烬迷宫.txt`：用户提供的世界观背景原文，涉及神祇、地理、阵营、迷宫背景及英雄身世时按需读取。
 - `docs/GAMEPLAY_RULE_DETAILS.md`：通用规则详则与界面规格。
 - `docs/CARD_CHARACTER_DESIGN.md`：具体角色、卡牌、纹章、伤势与指示物。
 - `docs/GAMEPLAY_DECISIONS.md`：逐轮确认与取代记录。
@@ -92,7 +93,6 @@ Codex 需要检查回答和练习结果；若仍有关键理解缺口，应先�
 
 ## 待补充
 
-- 最终项目名称。
 - Godot 项目目录结构。
 - 核心数据结构。
 - 初始英雄、阵营和卡包设定。

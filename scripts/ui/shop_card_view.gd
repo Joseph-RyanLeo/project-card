@@ -67,6 +67,10 @@ func _ready() -> void:
 		_start_carousel()
 
 
+func can_show_effect_popup() -> bool:
+	return not _hidden_offer and card_data != null
+
+
 func _refresh() -> void:
 	super._refresh()
 	if not _hidden_offer:

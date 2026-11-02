@@ -6,7 +6,7 @@ extends RefCounted
 const CardFactionScript = preload("res://scripts/data/card_faction.gd")
 
 const PACKS := {
-	&"ash_ledger": {"name": "灰烬征册", "faction": CardFactionScript.Id.RADIANT_ALLIANCE},
+	&"ash_ledger": {"name": "灰烬证册", "faction": CardFactionScript.Id.RADIANT_ALLIANCE},
 	&"ironwall_inscription": {"name": "铁壁铭刻", "faction": CardFactionScript.Id.RADIANT_ALLIANCE},
 	&"silvermoon_chapter": {"name": "银月之章", "faction": CardFactionScript.Id.RADIANT_ALLIANCE},
 	&"arcane_codex": {"name": "秘枢典籍", "faction": CardFactionScript.Id.HANSA_FEDERATION},

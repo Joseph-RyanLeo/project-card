@@ -12,6 +12,7 @@ const RunSettlementJournal = preload("res://scripts/data/run_settlement_journal.
 const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 const ResourceHexLayout = preload("res://scripts/data/resource_hex_layout.gd")
 const ResourceBoardState = preload("res://scripts/data/resource_board_state.gd")
+const Appearance = preload("res://scripts/data/card_appearance.gd")
 
 const SCHEMA_VERSION: int = 9
 const STATUS_SLOT_MIGRATION_VERSION: int = 2
@@ -80,26 +81,22 @@ func save_checkpoint(path: String, checkpoint: Dictionary) -> Error:
 	var absolute_backup := ProjectSettings.globalize_path(backup_path)
 	var had_previous := FileAccess.file_exists(path)
 	if had_previous:
-		DirAccess.remove_absolute(absolute_backup)
-		var backup_error := DirAccess.rename_absolute(absolute_path, absolute_backup)
+		var backup_error := DirAccess.copy_absolute(absolute_path, absolute_backup)
 		if backup_error != OK:
 			DirAccess.remove_absolute(absolute_temporary)
 			return backup_error
 	var replace_error := DirAccess.rename_absolute(absolute_temporary, absolute_path)
 	if replace_error != OK:
-		if had_previous:
-			DirAccess.rename_absolute(absolute_backup, absolute_path)
 		DirAccess.remove_absolute(absolute_temporary)
 		return replace_error
-	if had_previous:
-		DirAccess.remove_absolute(absolute_backup)
 	return OK
 
 
 func load_checkpoint(path: String) -> Dictionary:
-	if path.is_empty() or not FileAccess.file_exists(path):
+	if path.is_empty() or (not FileAccess.file_exists(path) and not FileAccess.file_exists(path + ".bak")):
 		return _failure("save_file_missing")
-	var file := FileAccess.open(path, FileAccess.READ)
+	var read_path := path if FileAccess.file_exists(path) else path + ".bak"
+	var file := FileAccess.open(read_path, FileAccess.READ)
 	if file == null:
 		return _failure("save_file_open_failed")
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
@@ -263,13 +260,20 @@ func _encode_collection_state(collection_state: Dictionary) -> Dictionary:
 		var instance_id := state.get("instance_id", &"") as StringName
 		if card_data == null or instance_id.is_empty() or card_data.id.is_empty():
 			return {}
+		if not Appearance.is_valid(state.get("surface_finish", 0), state.get("art_finish", 0)): return {}
 		encoded_cards.append({
 			"instance_id": String(instance_id),
 			"card_id": String(card_data.id),
 			"card_resource_path": card_data.resource_path,
 			"companion_source_id": String(state.get("companion_source_id", "")),
 			"acquisition_order": int(state.get("acquisition_order", -1)),
+			"acquired_at": int(state.get("acquired_at", 0)),
+			"acquisition_source": _json_safe(state.get("acquisition_source", {})),
+			"recruited_by": String(state.get("recruited_by", "")),
+			"lifetime_stats": _json_safe(state.get("lifetime_stats", {})),
 			"is_new": bool(state.get("is_new", false)),
+			"surface_finish": Appearance.SURFACE_KEYS[int(state.get("surface_finish", 0))],
+			"art_finish": Appearance.ART_KEYS[int(state.get("art_finish", 0))],
 			"resolved_action_type": int(state.get("resolved_action_type", -1)),
 			"resolved_runes": _json_safe(state.get("resolved_runes", [])),
 			"equipment_durability": int(state.get("equipment_durability", 0)),
@@ -287,6 +291,7 @@ func _encode_collection_state(collection_state: Dictionary) -> Dictionary:
 			"resource_shape": _json_safe(state.get("resource_shape", [])),
 		})
 	return {
+		"acquired_discoveries": collection_state.get("acquired_discoveries", {}).duplicate(true),
 		"next_instance_sequence": maxi(int(collection_state.get("next_instance_sequence", 1)), 1),
 		"cards": encoded_cards,
 	}
@@ -330,6 +335,11 @@ func _decode_collection_state(
 	migrate_rune_reveals: bool = false,
 	migrate_minion_rune_slots: bool = false
 ) -> Dictionary:
+	if not data.get("acquired_discoveries", {}) is Dictionary:
+		return _failure("save_acquired_discoveries_invalid")
+	for card_id: Variant in data.get("acquired_discoveries", {}):
+		if not card_id is String or card_id.is_empty() or data.acquired_discoveries[card_id] not in ["cards", "resources"]:
+			return _failure("save_acquired_discoveries_invalid")
 	if not data.get("cards", []) is Array:
 		return _failure("save_collection_cards_invalid")
 	var card_states: Array[Dictionary] = []
@@ -339,6 +349,14 @@ func _decode_collection_state(
 		if not value is Dictionary:
 			return _failure("save_card_state_invalid")
 		var encoded := value as Dictionary
+		if not encoded.get("acquisition_source", {}) is Dictionary or not encoded.get("lifetime_stats", {}) is Dictionary or not encoded.get("recruited_by", "") is String:
+			return _failure("save_card_history_invalid")
+		for total: Variant in encoded.get("lifetime_stats", {}).values():
+			if not (total is int or total is float) or not is_finite(float(total)) or total < 0:
+				return _failure("save_card_statistics_invalid")
+		var acquired: Variant = encoded.get("acquired_at", 0)
+		if not (acquired is int or acquired is float) or not is_finite(float(acquired)) or acquired < 0 or acquired != floor(float(acquired)):
+			return _failure("save_card_acquired_at_invalid")
 		var instance_id := StringName(String(encoded.get("instance_id", "")))
 		var card_data := _resolve_card_definition(
 			String(encoded.get("card_id", "")),
@@ -347,6 +365,9 @@ func _decode_collection_state(
 		)
 		if instance_id.is_empty() or seen_instance_ids.has(instance_id) or card_data == null:
 			return _failure("save_card_identity_invalid")
+		var surface_finish := Appearance.SURFACE_KEYS.find(encoded.get("surface_finish", "plain"))
+		var art_finish := Appearance.ART_KEYS.find(encoded.get("art_finish", "plain"))
+		if surface_finish < 0 or art_finish < 0: return _failure("save_card_appearance_invalid")
 		var encoded_wound_slots := encoded.get("wound_slots", []) as Array
 		var encoded_emblem_slots := encoded.get("emblem_slots", []) as Array
 		var encoded_rune_revealed: Array = (encoded.get("rune_revealed", []) as Array).duplicate()
@@ -480,7 +501,13 @@ func _decode_collection_state(
 			"card_data": card_data,
 			"companion_source_id": StringName(encoded.get("companion_source_id", "")),
 			"acquisition_order": int(encoded.get("acquisition_order", -1)),
+			"acquired_at": int(encoded.get("acquired_at", 0)),
+			"acquisition_source": encoded.get("acquisition_source", {}).duplicate(true),
+			"recruited_by": String(encoded.get("recruited_by", "")),
+			"lifetime_stats": encoded.get("lifetime_stats", {}).duplicate(true),
 			"is_new": bool(encoded.get("is_new", false)),
+			"surface_finish": surface_finish,
+			"art_finish": art_finish,
 			"resolved_action_type": int(encoded.get("resolved_action_type", -1)),
 			"resolved_runes": _decode_int_array(encoded_resolved_runes),
 			"equipment_durability": int(encoded.get("equipment_durability", card_data.equipment_durability)),
@@ -506,6 +533,7 @@ func _decode_collection_state(
 		"success": true,
 		"migration_returns": migration_returns,
 		"state": {
+			"acquired_discoveries": data.get("acquired_discoveries", {}).duplicate(true),
 			"next_instance_sequence": maxi(int(data.get("next_instance_sequence", 1)), 1),
 			"cards": card_states,
 		},

@@ -18,6 +18,8 @@ signal collection_return_requested(
 )
 
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
+const Appearance = preload("res://scripts/data/card_appearance.gd")
+const APPEARANCE_SURFACE_SHADER = preload("res://shaders/card_preview_3d.gdshader")
 const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 const StatusSlotLayerScript = preload("res://scripts/ui/status_slot_layer.gd")
 const StatusIndicatorStyle = preload("res://scripts/ui/status_indicator_style.gd")
@@ -48,6 +50,7 @@ const COOLDOWN_HOURGLASS_TEXTURE: Texture2D = preload(
 const ZEAL_TEXTURE: Texture2D = preload("res://assets/stats/zeal.png")
 const ResourceIndicatorStyle = preload("res://scripts/ui/resource_indicator_style.gd")
 const ZEAL_ICON_OFFSET := Vector2(-1.0, -1.0) # 装备热诚图标左上角相对旧沙漏向左、向上各移动1px
+const ZEAL_ZERO_VALUE_OFFSET := Vector2(3, 0) # 无正负号的0向右3px，靠近热诚火焰中心
 const SPELL_RARITY_BADGE_TEXTURE: Texture2D = preload(
 	"res://assets/card_ui/placeholders/spell_rarity_badges.png"
 )
@@ -92,13 +95,14 @@ const CARD_NAME_FRAME_TEXTURE: Texture2D = preload(
 	"res://assets/card_ui/card_name_frame.png"
 )
 const CARD_TEXT_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
+const TextDisplaySettings = preload("res://scripts/ui/card_text_display_settings.gd")
+const EffectPopup = preload("res://scripts/ui/card_effect_popup.gd")
 static var _gold_amount_pattern: RegEx
 const LAYOUT_TWEEN_DURATION: float = 0.15 # 卡牌让位、归位和飞入目标位置的动画时长（秒）
 const INTERACTION_TWEEN_DURATION: float = 0.10 # 悬停、按压时阴影移动的动画时长（秒）
 const BATTLE_NUMBER_TWEEN_DURATION: float = 0.24 # 战斗数值从旧值快速起跳、减速抵达新值的时长（秒）
 const HOVER_PUNCH_ANGLE: float = 5.0 # 鼠标进入实体卡左/右半边时，同方向轻晃的最大角度
 const HOVER_PUNCH_DURATION: float = 0.16 # 悬停单方向轻晃并复位的总时长（秒）
-const COLLECTION_HOVER_LIFT_OFFSET: float = 7.0 # 收藏悬停时向上抽出的像素距离
 const HOVER_Z_OFFSET: int = 20 # 战场卡悬停时相对所在小队层级的提升量
 const COLLECTION_DRAG_GHOST_ALPHA: float = 0.32 # 收藏卡拖起后原槽虚影的透明度
 const RESTING_SHADOW_OFFSET := Vector2(6.0, 7.0) # 悬停状态下阴影相对卡牌的偏移
@@ -146,8 +150,8 @@ static var _attachment_fast_offset_cache: Dictionary = {}
 static var _attachment_blocked_mask_cache: Dictionary = {}
 @export_group("Card Pixel Layout")
 @export var card_size: Vector2 = Vector2(99, 136) # 裸卡的基准像素尺寸
-@export var title_area_position: Vector2 = Vector2(21, 5) # 卡牌名字文字区域整体下移 1px 后的左上角坐标
-@export var title_area_size: Vector2 = Vector2(61, 10) # 卡牌名字文字可使用的最大区域
+@export var title_area_position: Vector2 = Vector2(21, 6) # 卡名区域下移1px，在13px高名称牌内上下各留2px
+@export var title_area_size: Vector2 = Vector2(61, 9) # 卡名可用区域固定61×9px，不随名称牌背景加高
 @export var name_frame_position: Vector2 = Vector2(0, 4) # 卡牌名字框的左上角坐标
 @export var art_area_position: Vector2 = Vector2(10, 5) # 卡框内部立绘裁切窗口的左上角坐标
 @export var art_area_size: Vector2 = Vector2(79, 95) # 背景和人物只允许显示在卡框内部的区域
@@ -180,7 +184,7 @@ static var _attachment_blocked_mask_cache: Dictionary = {}
 
 @export_group("Card Effect Transition")
 @export_range(0.0, 1.0, 0.05) var effect_rune_dim_alpha: float = 0.2 # 描述模式下符文背景透明度；0为完全透明，1为完全不透明
-@export_range(0.05, 1.0, 0.05) var hover_effect_delay_seconds: float = 0.25 # 悬停多久后自动切换到描述模式（秒）
+@export_range(0.05, 1.0, 0.05) var hover_effect_delay_seconds: float = 0.25 # 悬停多久后显示卡面效果或独立弹窗（秒）
 @export_range(0.01, 1.0, 0.01) var effect_transition_duration: float = 0.2 # 符文与效果文字交叉淡化的动画时长（秒）
 
 @export var card_data: CardData:
@@ -203,6 +207,7 @@ var _active_drag_preview_offset: Vector2 = Vector2.ZERO
 var _active_drag_visual: CardDragPreview
 var _active_drag_last_position := Vector2.INF
 var _layout_tween: Tween
+var _return_ghost: CardView
 var _hover_punch_tween: Tween
 var _shadow_tween: Tween
 var _effect_transition_tween: Tween
@@ -219,6 +224,12 @@ var _stat_pulse_tweens: Dictionary = {}
 const STAT_PULSE_SCALE: float = 1.28 # 检视中数值变化时放大的倍率
 const STAT_CHANGE_SECONDS: float = 0.64 # 检视数字滚动与放大缩回共同使用的总时长
 var _owned_card: OwnedCard
+var _finish_controller: Variant
+var _finish_surface: ShaderMaterial
+var _finish_surface_composited := false
+var _collection_hover_surface: Control
+var _collection_hover_modulate := Color.WHITE
+static var _collection_hover_owner: CardView
 var _emblem_drop_handler: Callable
 var _external_lift: float = 0.0
 var _resting_z_index: int = 0
@@ -310,6 +321,9 @@ func _ready() -> void:
 	set_process(false)
 	_refresh()
 	_refresh_new_card_dot()
+	if _drag_source_type == &"collection":
+		var display := get_tree().get_first_node_in_group(&"game_display_shell")
+		if is_instance_valid(display): display.call_deferred("_prepare_collection_hover")
 
 
 func _process(_delta: float) -> void:
@@ -320,8 +334,11 @@ func _process(_delta: float) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and not _snapshot_mode:
+		update_finish_pointer(((event.position / card_size - Vector2(0.5, 0.5)) * 2.0).clamp(-Vector2.ONE, Vector2.ONE))
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
+		if mouse_event.pressed: _stop_collection_hover()
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
 				# 左键进入拖拽/堆叠预览时，取消尚未完成的悬停描述切换，避免预览结束后回写旧状态。
@@ -380,6 +397,7 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 	if not _drag_enabled or card_data == null:
 		return null
 	_cancel_hover_effect_display(true)
+	_stop_collection_hover()
 
 	var drag_data := _build_drag_data(at_position)
 	# Godot 把原生拖拽预览挂在当前 SubViewport 的拖拽层，而不是
@@ -410,6 +428,7 @@ func _apply_native_drag_visual_metrics(drag_data: Dictionary) -> void:
 
 
 func _build_drag_data(at_position: Vector2) -> Dictionary:
+	clear_return_ghost()
 	var drag_source_scale := scale
 	var owned_card: OwnedCard = _owned_card
 	if is_instance_valid(_drag_source_slot) and _drag_source_slot.has_meta("owned_card"):
@@ -421,7 +440,7 @@ func _build_drag_data(at_position: Vector2) -> Dictionary:
 			and _drag_source_type in [&"collection", &"card_service"]
 			else &"card"
 		),
-		"card_data": owned_card.get_battlefield_card() if owned_card != null and _drag_source_type == &"collection" and card_data.card_type == CardData.CardType.MINION else card_data,
+		"card_data": owned_card.get_battlefield_card() if owned_card != null and _drag_source_type in [&"collection", &"card_service"] and card_data.card_type == CardData.CardType.MINION else card_data,
 		"owned_card": owned_card,
 		"source_type": _drag_source_type,
 		"source_row": _drag_source_row,
@@ -642,6 +661,7 @@ func _on_mouse_entered() -> void:
 
 func show_pointer_hover_feedback(play_rotation_punch: bool = false) -> void:
 	_mouse_hovered = true
+	if EffectPopup.interaction_blocked(get_tree()): return
 	if _drag_enabled and not _left_button_pressed and not _snapshot_mode:
 		# 收藏中的卡牌必须作为一个整体高于相邻卡牌的全部子图层；
 		# 战场小队已经用 100 为整卡分层，只需要原有的小幅提升。
@@ -651,40 +671,40 @@ func show_pointer_hover_feedback(play_rotation_punch: bool = false) -> void:
 			else HOVER_Z_OFFSET
 		)
 		z_index = _resting_z_index + hover_z_offset
-		if _drag_source_type == &"card_service":
-			# 服务槽固定展示一张原卡面，悬停不再附加偏移阴影或旋转。
-			_set_interaction_shadow_visible(false)
-			return
-		_set_interaction_shadow_visible(true)
-		_animate_shadow_offset(RESTING_SHADOW_OFFSET)
-		_set_collection_hover_lift(true)
-		if play_rotation_punch:
-			_play_hover_rotation_punch()
+		if _drag_source_type == &"collection":
+			_set_collection_hover(true)
+		else:
+			_set_interaction_shadow_visible(true)
+			_animate_shadow_offset(RESTING_SHADOW_OFFSET)
+			if play_rotation_punch: _play_hover_rotation_punch()
 
 
 func _on_mouse_exited() -> void:
+	update_finish_pointer(Vector2.ZERO)
 	_mouse_hovered = false
 	_refresh_priority_label()
 	_cancel_hover_effect_display(true)
 	if _drag_enabled and not _left_button_pressed:
 		z_index = _resting_z_index
 		_set_interaction_shadow_visible(false)
-		_set_collection_hover_lift(false)
+		_set_collection_hover(false)
 
 
-func clear_pointer_hover_feedback() -> void:
+func clear_pointer_hover_feedback(preserve_effect: bool = false) -> void:
 	# Godot 开始另一次拖拽或点击携带时不一定会补发旧卡的 mouse_exited。
 	# 这里只清理持续反馈；已经开始的单次轻晃会自然回正，避免小队模式
 	# 在同一帧切换反馈对象时把战场卡的入场轻晃截断。
-	_mouse_hovered = false
-	_cancel_hover_effect_display(true)
+	if not preserve_effect:
+		_mouse_hovered = false
+		_cancel_hover_effect_display(true)
 	if not _left_button_pressed:
 		z_index = _resting_z_index
 		_set_interaction_shadow_visible(false)
-		_set_collection_hover_lift(false)
+		_set_collection_hover(false)
 
 
 func _reset_interaction_visual() -> void:
+	_stop_collection_hover()
 	_cancel_hover_effect_display(true)
 	z_index = _resting_z_index
 	if _hover_punch_tween != null and _hover_punch_tween.is_valid():
@@ -694,10 +714,39 @@ func _reset_interaction_visual() -> void:
 	set_external_lift(0.0)
 
 
-func _set_collection_hover_lift(value: bool) -> void:
-	# 战场卡的抽出距离由 SquadView 决定；CardView 只直接控制收藏。
-	if _drag_source_type == &"collection" and not is_set_as_top_level() and not is_layout_animating():
-		set_external_lift(COLLECTION_HOVER_LIFT_OFFSET if value else 0.0)
+func _set_collection_hover(value: bool) -> void:
+	if not value:
+		if is_instance_valid(_collection_hover_surface): _collection_hover_surface.call("return_to_rest")
+		return
+	if _drag_source_type != &"collection" or not _drag_enabled or _snapshot_mode or is_set_as_top_level() or is_layout_animating(): return
+	if is_instance_valid(_collection_hover_surface):
+		_collection_hover_surface.call("resume_hover")
+		return
+	if is_instance_valid(_collection_hover_owner): _collection_hover_owner._stop_collection_hover()
+	# 显示壳保留一份实际分辨率画布；单独运行Main时由当前Viewport保留同一份。
+	var display := get_tree().get_first_node_in_group(&"game_display_shell")
+	var hover: Control
+	if is_instance_valid(display):
+		hover = display.get_collection_hover_surface()
+	else:
+		hover = get_viewport().get_node_or_null("CollectionHoverSurface") as Control
+		if hover == null:
+			hover = load("res://scripts/ui/collection_card_hover.gd").new()
+			hover.name = "CollectionHoverSurface"
+			get_viewport().add_child(hover)
+	hover.setup_collection(self)
+	_collection_hover_modulate = modulate
+	modulate.a = 0.0
+	_collection_hover_surface = hover
+	_collection_hover_owner = self
+
+
+func _stop_collection_hover() -> void:
+	if is_instance_valid(_collection_hover_surface):
+		_collection_hover_surface.call("release_collection")
+		modulate = _collection_hover_modulate
+	_collection_hover_surface = null
+	if _collection_hover_owner == self: _collection_hover_owner = null
 
 
 func _create_interaction_shadow() -> void:
@@ -773,6 +822,49 @@ func _get_hover_punch_direction(pointer_local_x: float) -> float:
 	return -1.0 if pointer_local_x < card_size.x * 0.5 else 1.0
 
 
+func begin_return_ghost(ghost_parent: Control = null) -> void:
+	clear_return_ghost()
+	if ghost_parent == null: ghost_parent = get_parent() as Control
+	var ghost := (load("res://scenes/ui/CardView.tscn") as PackedScene).instantiate() as CardView
+	ghost.name = "OriginReturnGhost"
+	ghost.showing_effect = showing_effect
+	ghost.set_card_data(card_data)
+	ghost.set_owned_card(_owned_card)
+	ghost.copy_runtime_display_state_from(self)
+	ghost.set_snapshot_mode(true)
+	ghost.configure_drag_source(false)
+	ghost.modulate.a = COLLECTION_DRAG_GHOST_ALPHA
+	# 只复制显示，不新增OwnedCard；挂在来源布局层，随镜头移动而不跟随飞行卡面。
+	ghost_parent.add_child(ghost)
+	var target_transform := ghost_parent.get_global_transform().affine_inverse() * (get_parent() as CanvasItem).get_global_transform() * Transform2D(0.0, scale, 0.0, _layout_resting_position + Vector2(0.0, -_external_lift))
+	ghost.position = target_transform.origin
+	ghost.scale = target_transform.get_scale()
+	ghost.rotation = target_transform.get_rotation()
+	var effective_z := z_index
+	var ancestor := get_parent() as CanvasItem
+	var relative := z_as_relative
+	while relative and is_instance_valid(ancestor):
+		effective_z += ancestor.z_index
+		relative = ancestor.z_as_relative
+		ancestor = ancestor.get_parent() as CanvasItem
+	ghost.z_as_relative = false
+	ghost.set_resting_z_index(effective_z - 1)
+	_return_ghost = ghost
+
+
+func clear_return_ghost() -> void:
+	if is_instance_valid(_return_ghost):
+		_return_ghost.visible = false
+		_return_ghost.queue_free()
+	_return_ghost = null
+
+
+func _exit_tree() -> void:
+	_cancel_hover_effect_display(false)
+	_stop_collection_hover()
+	clear_return_ghost()
+
+
 func animate_from_global_position(previous_global_position: Vector2) -> void:
 	if not visible:
 		return
@@ -803,7 +895,7 @@ func animate_from_global_position(previous_global_position: Vector2) -> void:
 		_layout_resting_position + Vector2(0.0, -_external_lift),
 		LAYOUT_TWEEN_DURATION
 	)
-	_layout_tween.tween_callback(func(): _set_collection_hover_lift.call_deferred(_mouse_hovered))
+	_layout_tween.tween_callback(func(): _set_collection_hover.call_deferred(_mouse_hovered))
 
 
 func set_external_lift(pixels: float) -> void:
@@ -818,6 +910,7 @@ func set_external_lift(pixels: float) -> void:
 
 
 func set_layout_position(value: Vector2) -> void:
+	clear_return_ghost()
 	# 小队水平顺序变化时只更新长期存在的 CardView 静止坐标，
 	# 不销毁节点；这样原生 mouse_entered / mouse_exited 状态不会中断。
 	_layout_resting_position = value
@@ -948,7 +1041,10 @@ func toggle_effect_display() -> bool:
 
 
 func _schedule_hover_effect_display() -> void:
-	var can_display_hover_effect := _drag_source_type == &"collection"
+	if EffectPopup.interaction_blocked(get_tree()): return
+	var popup_mode := TextDisplaySettings.is_popup_mode()
+	var can_display_hover_effect := _drag_source_type in [&"collection", &"card_service"]
+	if popup_mode: can_display_hover_effect = mouse_filter != Control.MOUSE_FILTER_IGNORE
 	if (
 		_drag_source_type == &"board"
 		and is_instance_valid(_drag_source_slot)
@@ -961,8 +1057,8 @@ func _schedule_hover_effect_display() -> void:
 		_snapshot_mode
 		or not can_display_hover_effect
 		or card_data == null
-		or card_data.card_type != CardData.CardType.MINION
-		or showing_effect
+		or (not popup_mode and card_data.card_type != CardData.CardType.MINION)
+		or (not popup_mode and showing_effect)
 		or _left_button_pressed
 	):
 		return
@@ -974,12 +1070,13 @@ func _schedule_hover_effect_display() -> void:
 
 
 func _activate_hover_effect_display() -> void:
+	if EffectPopup.interaction_blocked(get_tree()): return
 	_hover_effect_delay_tween = null
 	if (
 		not _mouse_hovered
 		or _left_button_pressed
 		or _snapshot_mode
-		or showing_effect
+		or (not TextDisplaySettings.is_popup_mode() and showing_effect)
 		or (
 			_drag_source_type == &"board"
 			and is_instance_valid(_drag_source_slot)
@@ -988,12 +1085,18 @@ func _activate_hover_effect_display() -> void:
 		)
 	):
 		return
+	if TextDisplaySettings.is_popup_mode():
+		EffectPopup.shared(get_tree()).show_card(self)
+		return
 	_hover_effect_active = true
 	showing_effect = true
 	_animate_effect_transition()
 
 
 func _cancel_hover_effect_display(restore: bool) -> void:
+	if is_inside_tree():
+		var popup := get_tree().get_first_node_in_group(&"card_effect_popup")
+		if popup != null: popup.hide_card(self)
 	if _hover_effect_delay_tween != null and _hover_effect_delay_tween.is_valid():
 		_hover_effect_delay_tween.kill()
 	_hover_effect_delay_tween = null
@@ -1053,10 +1156,50 @@ func set_owned_card(value: OwnedCard) -> void:
 		_refresh_cooldown_text()
 		_refresh_status_slots()
 		_refresh_runes()
+		_apply_art_offset()
+		_refresh_owned_appearance()
 
 
 func get_owned_card() -> OwnedCard:
 	return _owned_card
+
+
+func copy_snapshot_from(source: CardView) -> void:
+	# 定义、实例和运行显示一次性绑定，再统一刷新，避免复用时多次重建卡面。
+	_card_data = source.card_data
+	_owned_card = source.get_owned_card()
+	showing_effect = source.showing_effect
+	copy_runtime_display_state_from(source)
+	if is_node_ready(): _refresh_new_card_dot()
+
+
+func bind_finish_surface(surface: ShaderMaterial) -> void:
+	_finish_surface = surface
+	_finish_surface_composited = true
+	_refresh_owned_appearance()
+
+
+func update_finish_pointer(force: Vector2) -> void:
+	if _finish_controller != null: _finish_controller.update_pointer(force)
+
+
+func _refresh_owned_appearance() -> void:
+	if _owned_card == null and _finish_controller == null: return
+	if _finish_surface == null and (_owned_card == null or not _owned_card.has_special_appearance()) and _finish_controller == null: return
+	if _finish_controller == null:
+		if _finish_surface == null:
+			_finish_surface = ShaderMaterial.new()
+			_finish_surface.shader = APPEARANCE_SURFACE_SHADER
+			_finish_surface.set_shader_parameter("use_3d", false)
+			_finish_surface.set_shader_parameter("max_tilt_degrees", 10.0)
+			_finish_surface.set_shader_parameter("fov", 72.0)
+			_finish_surface.set_shader_parameter("card_texture_size_px", card_size)
+		# 控制器持有CardView类型，延迟载入以免两个脚本相互预载。
+		_finish_controller = load("res://scripts/ui/card_finish_preview.gd").new()
+		_finish_controller.setup(self, _finish_surface)
+	_finish_controller.surface_finish = _owned_card.surface_finish if _owned_card != null else Appearance.Surface.PLAIN
+	_finish_controller.art_finish = _owned_card.art_finish if _owned_card != null else Appearance.Art.PLAIN
+	_finish_controller.bind_surface(_finish_surface, _finish_surface_composited)
 
 
 func _get_tooltip(point: Vector2) -> String:
@@ -1707,6 +1850,7 @@ func is_rune_waiting_for_next_flow(slot_index: int) -> bool:
 func _refresh() -> void:
 	if card_data == null:
 		_show_empty_card()
+		_refresh_owned_appearance()
 		return
 
 	_set_card_name(card_data.display_name)
@@ -1723,6 +1867,7 @@ func _refresh() -> void:
 	_refresh_race_icon()
 	_refresh_bottom_text()
 	_refresh_status_slots()
+	_refresh_owned_appearance()
 
 
 func _create_status_slot_layer() -> void:
@@ -1892,7 +2037,7 @@ func _refresh_cooldown_text() -> void:
 		return
 	if card_data.card_type == CardData.CardType.EQUIPMENT:
 		var layers := card_data.equipment_zeal_delta
-		cooldown_label.text = ("+" if layers >= 0 else "-") + str(absi(layers))
+		cooldown_label.text = ("+" if layers > 0 else "-" if layers < 0 else "") + str(absi(layers))
 		cooldown_icon.tooltip_text = "热诚 %s：每层改变5%%普通行动冷却速度" % cooldown_label.text
 	else:
 		var seconds := card_data.cooldown_seconds
@@ -1909,7 +2054,7 @@ func _refresh_cooldown_text() -> void:
 		cooldown_icon.tooltip_text = ""
 	_set_control_rect(
 		cooldown_label,
-		COOLDOWN_VALUE_POSITION,
+		COOLDOWN_VALUE_POSITION + (ZEAL_ZERO_VALUE_OFFSET if card_data.card_type == CardData.CardType.EQUIPMENT and card_data.equipment_zeal_delta == 0 else Vector2.ZERO),
 		cooldown_label.get_rendered_size()
 	)
 
@@ -1941,6 +2086,13 @@ func _refresh_bottom_text() -> void:
 		return
 	_stop_effect_transition()
 	effect_text_label.text = format_gold_symbols(_get_instance_effect_text())
+	if TextDisplaySettings.is_popup_mode():
+		rune_row.visible = card_data.card_type == CardData.CardType.MINION
+		if rune_row.visible: _refresh_runes()
+		rune_row.modulate.a = 1.0
+		effect_text_label.visible = false
+		effect_text_label.self_modulate.a = 0.0
+		return
 	if card_data.card_type != CardData.CardType.MINION:
 		showing_effect = false
 		rune_row.visible = false
@@ -1957,6 +2109,9 @@ func _refresh_bottom_text() -> void:
 
 
 func _animate_effect_transition() -> void:
+	if TextDisplaySettings.is_popup_mode():
+		_refresh_bottom_text()
+		return
 	_stop_effect_transition()
 	rune_row.visible = true
 	effect_text_label.visible = true
@@ -2061,8 +2216,10 @@ func _refresh_art() -> void:
 func _set_card_name(display_name: String) -> void:
 	name_label.text = display_name
 	var name_font := name_label.get_theme_font("font")
-	var fitted_size := title_font_size
-	while fitted_size > title_font_min_size:
+	var popup_mode := TextDisplaySettings.is_popup_mode()
+	var profile := TextDisplaySettings.get_name_profile()
+	var fitted_size := int(profile.get("size", TextDisplaySettings.NAME_FONT_SIZE if popup_mode else title_font_size))
+	while bool(profile.get("fit", true)) and fitted_size > title_font_min_size:
 		var text_size := name_font.get_string_size(
 			display_name,
 			HORIZONTAL_ALIGNMENT_CENTER,
@@ -2071,7 +2228,7 @@ func _set_card_name(display_name: String) -> void:
 		)
 		if (
 			text_size.x <= title_area_size.x
-			and name_font.get_height(fitted_size) <= title_area_size.y
+			and (not profile.is_empty() or popup_mode or name_font.get_height(fitted_size) <= title_area_size.y)
 		):
 			break
 		fitted_size -= 1
@@ -2080,13 +2237,15 @@ func _set_card_name(display_name: String) -> void:
 
 
 func _layout_name_label() -> void:
+	var profile := TextDisplaySettings.get_name_profile()
 	var label_height := maxf(
 		title_area_size.y,
-		name_label.get_combined_minimum_size().y
+		name_label.get_theme_font("font").get_height(name_label.get_theme_font_size("font_size"))
+		if not profile.is_empty() else name_label.get_combined_minimum_size().y
 	)
 	_set_control_rect(
 		name_label,
-		Vector2(0, floorf((title_area_size.y - label_height) * 0.5)),
+		Vector2(0, floorf((title_area_size.y - label_height) * 0.5) + float(profile.get("offset", 0))),
 		Vector2(title_area_size.x, label_height)
 	)
 
@@ -2102,7 +2261,7 @@ func _apply_art_offset() -> void:
 	)
 	_set_control_rect(
 		art_texture,
-		centered_position + Vector2(card_data.art_offset),
+		centered_position + Vector2(card_data.get_art_offset_for_finish(_owned_card.get_art_finish_key()) if _owned_card != null else card_data.art_offset),
 		texture_size
 	)
 
@@ -2730,7 +2889,7 @@ func _apply_pixel_layout() -> void:
 
 
 func _apply_card_typography() -> void:
-	name_label.add_theme_font_override("font", CARD_TEXT_FONT)
+	name_label.add_theme_font_override("font", TextDisplaySettings.card_name_font(CARD_TEXT_FONT))
 	effect_text_label.add_theme_font_override("font", CARD_TEXT_FONT)
 	# WORD_SMART 在没有空格的中文长句中会退回逐字断行，避免 Windows
 	# 把整句当成一个单词撑出卡框；最多显示三行。
@@ -3007,6 +3166,47 @@ func refresh_effect_text() -> void:
 	if is_node_ready() and card_data != null:
 		var text := format_gold_symbols(_get_instance_effect_text())
 		if effect_text_label.text != text: effect_text_label.text = text
+
+
+func apply_text_display_mode() -> void:
+	if not is_node_ready(): return
+	_cancel_hover_effect_display(true)
+	_apply_card_typography()
+	_refresh()
+	var surface := get_viewport().get_parent()
+	if surface != null and surface.has_method("refresh_text_resolution"):
+		surface.refresh_text_resolution()
+	if _mouse_hovered: _schedule_hover_effect_display()
+
+
+func apply_card_name_typography() -> void:
+	if not is_node_ready(): return
+	name_label.add_theme_font_override("font", TextDisplaySettings.card_name_font(CARD_TEXT_FONT))
+	_set_card_name(card_data.display_name if card_data != null else name_label.text)
+
+
+func get_effect_popup_text() -> String:
+	return _get_instance_effect_text()
+
+
+func can_show_effect_popup() -> bool:
+	return card_data != null
+
+func prefers_effect_popup() -> bool:
+	return TextDisplaySettings.is_popup_mode() or has_meta("inspection_hover_owner")
+
+func get_effect_popup_title() -> String:
+	return card_data.display_name if card_data != null else ""
+
+func show_effect_popup(anchor_control: Control = null) -> void:
+	if prefers_effect_popup() and can_show_effect_popup():
+		EffectPopup.shared(get_tree()).show_card(self, anchor_control)
+
+
+func hide_effect_popup() -> void:
+	if not is_inside_tree(): return
+	var popup := get_tree().get_first_node_in_group(&"card_effect_popup")
+	if popup != null: popup.hide_card(self)
 
 
 func _get_instance_effect_text() -> String:

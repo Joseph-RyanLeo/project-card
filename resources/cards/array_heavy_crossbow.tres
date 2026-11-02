@@ -17,4 +17,7 @@ equipment_zeal_delta = -3
 equipment_armor_delta = 2
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(6, 2)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(4, 7)
+})
 effect_text = "仅小队可装备；该小队造成的所有远程伤害穿甲。"

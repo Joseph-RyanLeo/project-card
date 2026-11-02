@@ -2,6 +2,8 @@ shader_type canvas_item;
 render_mode unshaded;
 
 #include "res://shaders/pixel_gold_foil.gdshaderinc"
+#include "res://shaders/card_projection.gdshaderinc"
+#include "res://shaders/card_finish.gdshaderinc"
 
 // 把合成后的整张卡当成一个平面做透视和扫光，避免多层节点各自变形。
 uniform bool use_3d = false;
@@ -12,6 +14,9 @@ uniform vec2 pointer_force = vec2(0.0);
 uniform vec2 visual_offset = vec2(0.0); // 合成后平面的局部视觉位移，默认不偏移；不改变节点命中区域
 
 uniform bool use_flash = false;
+uniform bool use_fractured = false;
+uniform float finish_strength = 0.75; // 整卡碎闪的反光强度
+uniform float finish_density = 32.0; // 整卡晶片的密度，所有图层共用同一图案
 uniform bool use_pack_foil = false; // 包装仅对中央图案三档金色做统一烫金反光
 uniform float pack_foil_strength = 0.85; // 包装烫金光带亮度，与贴纸封皮一致
 uniform int flash_type : hint_range(0, 2) = 0;
@@ -31,21 +36,6 @@ uniform float normal_light_strength : hint_range(0.0, 1.0, 0.05) = 0.32;
 varying vec4 item_modulate;
 
 
-mat3 inverse_rotation_matrix(vec2 force) {
-	float y_angle = radians(force.x * max_tilt_degrees);
-	float x_angle = radians(-force.y * max_tilt_degrees);
-	float sin_y = sin(y_angle);
-	float cos_y = cos(y_angle);
-	float sin_x = sin(x_angle);
-	float cos_x = cos(x_angle);
-	return mat3(
-		vec3(cos_y, 0.0, -sin_y),
-		vec3(sin_y * sin_x, cos_x, cos_y * sin_x),
-		vec3(sin_y * cos_x, -sin_x, cos_y * cos_x)
-	);
-}
-
-
 void vertex() {
 	item_modulate = COLOR;
 	if (use_3d) {
@@ -61,7 +51,7 @@ void fragment() {
 	vec2 sample_uv = UV;
 	if (use_3d) {
 		float perspective_scale = tan(radians(fov) * 0.5);
-		mat3 inverse_rotation = inverse_rotation_matrix(pointer_force);
+		mat3 inverse_rotation = card_inverse_rotation(pointer_force, max_tilt_degrees);
 		vec3 projected = inverse_rotation * vec3(
 			UV - vec2(0.5),
 			0.5 / perspective_scale
@@ -101,31 +91,12 @@ void fragment() {
 	}
 
 	if (use_flash) {
-		float flash_angle = radians(flash_angle_degrees);
-		vec2 flash_direction = vec2(cos(flash_angle), sin(flash_angle));
-		float flash_position = pointer_force.x * 1.35 + pointer_force.y * 0.35;
-		float stripe = sin(
-			dot(sample_uv, flash_direction) * stripe_spacing
-			+ flash_position * PI
-		) * 0.5 + 0.5;
 		// 扫光作用于 SubViewport 已经合成并裁切好的整张卡；透明留白仍由 source.a 控制。
-		float flash_amount = pow(stripe, stripe_width) * flash_intensity;
-		if (flash_type == 0) {
-			output_color += vec3(flash_amount);
-		} else if (flash_type == 1) {
-			output_color += vec3(1.0, 0.78, 0.24) * flash_amount;
-		} else {
-			// 彩虹颜色固定在卡牌空间，不跟着某一条光带移动；同一条光带经过
-			// 卡牌不同位置时会自然取得不同颜色。
-			float hue = fract(sample_uv.x * 0.85 + sample_uv.y * 0.55);
-			vec3 rainbow = vec3(
-				0.5 + 0.5 * sin(6.2831 * hue),
-				0.5 + 0.5 * sin(6.2831 * (hue + 0.33)),
-				0.5 + 0.5 * sin(6.2831 * (hue + 0.66))
-			);
-			output_color += rainbow * flash_amount;
-		}
+		output_color += card_flash_light(sample_uv, pointer_force, flash_type, stripe_spacing, stripe_width, flash_intensity, flash_angle_degrees);
 	}
 
+	if (use_fractured) {
+		output_color = fractured_finish(output_color, mask_uv, pointer_force, finish_strength, finish_density);
+	}
 	COLOR = vec4(output_color, source.a) * item_modulate;
 }

@@ -175,6 +175,7 @@ func _notification(what: int) -> void:
 			_native = true
 			_native_pointer = get_viewport().get_mouse_position()
 			_preview = _data["preview"] as CelestialDragPreview
+			get_parent().move_child(self, get_parent().get_child_count() - 1)
 			mouse_filter = Control.MOUSE_FILTER_STOP
 	elif what == NOTIFICATION_DRAG_END and _native:
 		if not _data.is_empty():

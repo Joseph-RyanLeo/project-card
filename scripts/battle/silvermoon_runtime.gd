@@ -323,13 +323,13 @@ func release_spell(spell: OwnedCard, side: int) -> bool:
 				for slot: Dictionary in state.get_active_rune_slots():
 					if int(slot.get("element", -1)) != CardData.ElementType.LIGHT: continue
 					state.runtime_rune_overrides[state._rune_slot_key(slot.card, int(slot.rune_index))] = CardData.ElementType.DARK
-					spell_damage(side, 1, random_target(1 - side), "日蚀")
+					spell_damage(spell, 1, random_target(1 - side), "日蚀")
 		&"moonfire":
 			var targets := eligible(1 - side)
 			var highest := 0.0
 			for target: BattleSquadState in targets: highest = maxf(highest, target.current_health)
 			targets = targets.filter(func(s: BattleSquadState) -> bool: return is_equal_approx(s.current_health, highest))
-			spell_damage(side, 6, controller.choose_weighted_target(targets), "月火术")
+			spell_damage(spell, 6, controller.choose_weighted_target(targets), "月火术")
 		&"starlight_fragments":
 			var targets: Array[BattleSquadState] = controller.get_living_states(1 - side)
 			var lowest := 100
@@ -341,11 +341,14 @@ func release_spell(spell: OwnedCard, side: int) -> bool:
 				target.moon_shadowed = false
 				target.moon_restore_time = INF
 				add(target, BattleModifier.Stat.TARGET_PRIORITY, 5, key)
-				spell_damage(side, 2, target, "星芒碎屑")
+				spell_damage(spell, 2, target, "星芒碎屑")
 	return true
 
-func spell_damage(_side: int, amount: float, target: BattleSquadState, label: String) -> void:
-	if target != null: controller.launch_content_effect(controller.twisted_vein.make_event(null, target, amount, CardData.ActionType.MAGIC, true, label))
+func spell_damage(spell: OwnedCard, amount: float, target: BattleSquadState, label: String) -> void:
+	if target == null: return
+	var event: BattleEffectEvent = controller.twisted_vein.make_event(null, target, amount, CardData.ActionType.MAGIC, true, label)
+	event.source_owned_card_instance_id = spell.instance_id
+	controller.launch_content_effect(event)
 
 func trigger(spell: OwnedCard) -> bool:
 	var count := int(spell_counts.get(spell.instance_id, 0))
@@ -360,7 +363,7 @@ func release_prepared_spell(spell: OwnedCard, side: int) -> bool:
 			# 只有首次释放参加准备队列，后续周期从首次准备完成时开始。
 			periodic_spells[spell.instance_id] = controller.elapsed_seconds + STARFIRE_PERIOD
 			var target := random_target(1 - side)
-			if target != null and trigger(spell): spell_damage(side, 1, target, "星火术")
+			if target != null and trigger(spell): spell_damage(spell, 1, target, "星火术")
 		&"nightfall":
 			used_spells[spell.instance_id] = true
 			if controller.elapsed_seconds < controller.fatigue_start_seconds and trigger(spell):
@@ -391,6 +394,7 @@ func check_health_spells() -> void:
 			for target: BattleSquadState in pool:
 				var event: BattleEffectEvent = controller.twisted_vein.make_event(null, target, 4, CardData.ActionType.HEAL, false, "银月之息")
 				event.effect_kind = BattleEffectEvent.EffectKind.HEALING
+				event.source_owned_card_instance_id = spell.instance_id
 				controller.launch_content_effect(event, false)
 
 func prelethal(event: BattleEffectEvent) -> bool:
@@ -412,7 +416,7 @@ func prelethal(event: BattleEffectEvent) -> bool:
 			used_spells[spell.instance_id] = true
 			if trigger(spell):
 				target.is_banished = true
-				banishments[target] = controller.elapsed_seconds + VEIL_SECONDS
+				banishments[target] = {"until": controller.elapsed_seconds + VEIL_SECONDS, "spell_id": spell.instance_id}
 				sync_auras()
 				controller.effect_runtime.recheck_continuous_conditions()
 				controller.effect_runtime.process_due(controller.elapsed_seconds)
@@ -424,7 +428,7 @@ func fatigue_multiplier(target: BattleSquadState) -> float:
 
 func next_delay(now: float) -> float:
 	var result := INF
-	for until: float in banishments.values(): result = minf(result, maxf(until - now, 0))
+	for entry: Dictionary in banishments.values(): result = minf(result, maxf(float(entry.until) - now, 0))
 	for spell: OwnedCard in controller._get_all_prepared_spell_instances():
 		if periodic_spells.has(spell.instance_id): result = minf(result, maxf(float(periodic_spells[spell.instance_id]) - now, 0))
 	if now < ELEMENT_OPENING_SECONDS and controller.get_all_states().any(func(s: BattleSquadState) -> bool: return active(s, &"twilight_elemental")): result = minf(result, ELEMENT_OPENING_SECONDS - now)
@@ -448,10 +452,12 @@ func advance_paused_timers(delta: float) -> void:
 
 func process_due() -> void:
 	for state: BattleSquadState in banishments.keys():
-		if float(banishments[state]) <= controller.elapsed_seconds + 0.0001:
+		if float(banishments[state].until) <= controller.elapsed_seconds + 0.0001:
+			var healing_event := BattleEffectEvent.new()
+			healing_event.source_owned_card_instance_id = StringName(banishments[state].spell_id)
 			banishments.erase(state)
 			state.is_banished = false
-			state.apply_healing_exact(float(state.get_max_health()) * 0.3)
+			state.apply_healing_exact(float(state.get_max_health()) * 0.3, null, healing_event)
 			controller.effect_runtime.recheck_continuous_conditions()
 	sync_auras()
 	for spell: OwnedCard in controller._get_all_prepared_spell_instances():
@@ -460,7 +466,7 @@ func process_due() -> void:
 		if key == &"starfire" and periodic_spells.has(spell.instance_id) and controller.elapsed_seconds + 0.0001 >= float(periodic_spells[spell.instance_id]):
 			periodic_spells[spell.instance_id] = float(periodic_spells[spell.instance_id]) + STARFIRE_PERIOD
 			var target := random_target(1 - side)
-			if target != null and trigger(spell): spell_damage(side, 1, target, "星火术")
+			if target != null and trigger(spell): spell_damage(spell, 1, target, "星火术")
 	check_health_spells()
 	var queued := extra_actions.duplicate()
 	extra_actions.clear()

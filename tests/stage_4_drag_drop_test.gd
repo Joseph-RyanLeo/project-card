@@ -313,9 +313,9 @@ func _test_card_pixel_layout() -> void:
 	_expect(
 		card_view.card_name_frame.visible
 		and card_view.card_name_frame.position == Vector2(0, 4)
-		and card_view.card_name_frame.size == Vector2(83, 11)
-		and card_view.card_name_frame.texture.get_size() == Vector2(83, 11),
-		"卡牌名框以原生 83×11px 紧贴左边并距离顶端 4px"
+		and card_view.card_name_frame.size == Vector2(83, 13)
+		and card_view.card_name_frame.texture.get_size() == Vector2(83, 13),
+		"卡牌名框以原生 83×13px 紧贴左边并距离顶端 4px"
 	)
 	var longest_name_card := layout_card.duplicate() as CardData
 	longest_name_card.display_name = "影弦游击手"
@@ -421,18 +421,18 @@ func _test_card_art_tuner_preview() -> void:
 	var workspace := tuner.get_node("CenterContainer/Workspace") as Control
 	_expect(
 		workspace.custom_minimum_size == Vector2(1280, 720)
-		and preview_viewport.size == Vector2i(123, 149)
+		and preview_viewport.size == Vector2i(516, 620)
 		and preview_card.scale == Vector2.ONE
 		and preview_card.position
-		== preview_card.get_max_visual_capture_padding_top_left()
+		== preview_card.get_max_visual_capture_padding_top_left() + Vector2(3, 3)
 		and preview_display.scale == Vector2(4, 4)
 		and preview_viewport.canvas_item_default_texture_filter
 		== Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
 		and preview_display.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST
 		and preview_card.pivot_offset == Vector2.ZERO,
-		"卡面调整器用最近邻把完整 SubViewport 精确放大 4 倍，保持像素边缘清晰"
+		"卡面调整器按4倍采样图标光影，保留3px投影安全边和原生像素显示尺寸"
 	)
-	var preview_bounds := Rect2(Vector2.ZERO, Vector2(preview_viewport.size))
+	var preview_bounds := Rect2(Vector2.ZERO, preview_display.size)
 	var preview_action_data := source_card.duplicate() as CardData
 	var all_action_visuals_inside := true
 	for action_type: CardData.ActionType in [
@@ -564,10 +564,10 @@ func _test_balatro_drag_preview_feel() -> void:
 	) as Panel
 	var hover_punch_tween := collection_card.get("_hover_punch_tween") as Tween
 	_expect(
-		interaction_shadow.visible
-		and hover_punch_tween != null
-		and hover_punch_tween.is_valid(),
-		"收藏鼠标进入时显示阴影并播放一次短促方向轻晃"
+		not interaction_shadow.visible
+		and (hover_punch_tween == null or not hover_punch_tween.is_valid())
+		and is_instance_valid(collection_card._collection_hover_surface),
+		"收藏鼠标进入时改用检视倾斜显示，不再播放平面轻晃"
 	)
 	_expect(
 		collection_card._get_hover_punch_direction(10.0) < 0.0
@@ -585,10 +585,8 @@ func _test_balatro_drag_preview_feel() -> void:
 		"收藏悬停会按整卡层级提升，避免与邻卡内部图层交错"
 	)
 	_expect(
-		collection_card.position.is_equal_approx(
-			resting_position + Vector2(0.0, -CardView.COLLECTION_HOVER_LIFT_OFFSET)
-		),
-		"收藏悬停时会像抽牌一样向上移出"
+		collection_card.position.is_equal_approx(resting_position),
+		"收藏悬停只倾斜显示，原位命中不向上移动"
 	)
 	collection_card._on_mouse_exited()
 	await create_timer(0.12).timeout

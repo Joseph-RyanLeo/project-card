@@ -17,4 +17,7 @@ runes = Array[int]([0, 1, 2])
 race_type = 6
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-1, 6)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-5, 16)
+})
 effect_text = "开采；开采行动可选2个目标。"

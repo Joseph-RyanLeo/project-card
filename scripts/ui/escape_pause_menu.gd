@@ -7,21 +7,50 @@ signal return_requested
 signal diagnostic_export_requested
 signal restore_requested
 signal target_priority_display_changed(enabled: bool)
+signal main_menu_requested
+signal abandon_requested
 
-const MENU_PANEL_SIZE := Vector2(360.0, 530.0) # 暂停菜单面板宽高，容纳移入的音量控件
-const MENU_BUTTON_SIZE := Vector2(260.0, 38.0) # 暂停菜单按钮宽高
-const MENU_BUTTON_SEPARATION: int = 8 # 菜单各按钮之间的垂直间距
-const ESCAPE_BUTTON_POSITION := Vector2(0.0, 0.0) # 位于左上角
-
+const Style = preload("res://scripts/ui/menu_style.gd")
+const SettingsPanel = preload("res://scripts/ui/game_settings_panel.gd")
+const MENU_PANEL_SIZE := Vector2(440, 450) # 对局暂停首页尺寸，容纳放弃入口
+const TOOLS_PANEL_SIZE := Vector2(440, 648) # 调试子页尺寸，完整落在720p画布内
+const MENU_BUTTON_SIZE := Vector2(360, 40) # 暂停与工具页按钮尺寸
+const TOOL_BUTTON_PADDING: int = 4 # 调试子页按钮上下留白，保证全部工具落在720p画布内
+const MENU_BUTTON_SEPARATION: int = 8 # 暂停菜单按钮间距
 var _menu: Control
+var _home: PanelContainer
+var _tools: PanelContainer
+var _settings: Control
 var _restore_button: Button
 var _target_priority_check: CheckButton
 
 
 func _ready() -> void:
+	add_to_group(&"escape_pause_menus")
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	theme = Style.make_theme()
 	_build_controls()
+
+
+func _panel(node_name: String, dimensions: Vector2) -> PanelContainer:
+	var result := PanelContainer.new()
+	result.name = node_name
+	result.position = (Vector2(1280, 720) - dimensions) * 0.5
+	result.size = dimensions
+	_menu.add_child(result)
+	return result
+
+
+func _body(parent: Control, title: String) -> VBoxContainer:
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", MENU_BUTTON_SEPARATION)
+	parent.add_child(body)
+	var label := Label.new()
+	label.text = title
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_child(label)
+	return body
 
 
 func _build_controls() -> void:
@@ -29,91 +58,87 @@ func _build_controls() -> void:
 	shortcut.name = "EscapeMenuButton"
 	shortcut.text = "Esc"
 	shortcut.tooltip_text = "打开暂停菜单"
-	shortcut.position = ESCAPE_BUTTON_POSITION
-	shortcut.size = Vector2(42.0, 30.0)
-	shortcut.pressed.connect(_on_escape_pressed)
+	shortcut.size = Vector2(42, 30) # 桌面左上角Esc快捷按钮尺寸
+	shortcut.pressed.connect(escape_pressed.emit)
 	add_child(shortcut)
-
 	_menu = Control.new()
 	_menu.name = "EscapeMenuOverlay"
 	_menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_menu.mouse_filter = Control.MOUSE_FILTER_STOP
-	_menu.visible = false
 	add_child(_menu)
-
 	var dim := ColorRect.new()
 	dim.name = "PauseDim"
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0.36, 0.38, 0.40, 0.82)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.color = Color(0, 0, 0, 0.72) # 暂停时底层桌面的压暗程度
 	_menu.add_child(dim)
-
-	var panel := PanelContainer.new()
-	panel.name = "PauseMenuPanel"
-	panel.position = (Vector2(1280.0, 720.0) - MENU_PANEL_SIZE) * 0.5
-	panel.size = MENU_PANEL_SIZE
-	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	_menu.add_child(panel)
-
-	var layout := VBoxContainer.new()
-	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layout.offset_left = 36.0
-	layout.offset_top = 22.0
-	layout.offset_right = -36.0
-	layout.offset_bottom = -22.0
-	layout.add_theme_constant_override("separation", MENU_BUTTON_SEPARATION)
-	panel.add_child(layout)
-
-	var title := Label.new()
-	title.text = "暂停菜单"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 18)
-	layout.add_child(title)
-	_add_menu_button(layout, "攻击特效调试器", &"attack_effect_lab")
-	_add_menu_button(layout, "开包特效调整器", &"pack_effect_tuner")
-	_add_menu_button(layout, "卡面调整器", &"card_art_tuner")
-	_add_menu_button(layout, "战斗实验室", &"battle_lab")
+	_home = _panel("PauseMenuPanel", MENU_PANEL_SIZE)
+	var home := _body(_home, "游戏已暂停")
+	_add_button(home, "继续游戏", "ContinueGameButton", return_requested.emit)
+	_add_button(home, "设置", "PauseSettingsButton", open_settings)
+	_add_button(home, "开发工具", "DeveloperToolsButton", open_tools)
+	var back := _add_button(home, "保存并返回主菜单", "ReturnToMainMenuButton", main_menu_requested.emit)
+	back.visible = get_tree().get_first_node_in_group(&"game_display_shell") != null
+	var abandon := _add_button(home, "放弃本局…", "AbandonRunButton", _confirm_abandon)
+	abandon.visible = back.visible
+	_tools = _panel("DeveloperToolsPanel", TOOLS_PANEL_SIZE)
+	_tools.theme = theme.duplicate()
+	for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
+		var compact := theme.get_stylebox(state, "Button").duplicate() as StyleBoxFlat
+		compact.content_margin_top = TOOL_BUTTON_PADDING
+		compact.content_margin_bottom = TOOL_BUTTON_PADDING
+		_tools.theme.set_stylebox(state, "Button", compact)
+	var tools := _body(_tools, "开发工具")
+	for entry: Array in [
+		["攻击特效调试器", "AttackEffectLabButton", &"attack_effect_lab"],
+		["开包特效调整器", "PackEffectTunerButton", &"pack_effect_tuner"],
+		["卡包凹凸调试", "PackReliefPreviewButton", &"pack_relief_preview"],
+		["卡面调整器", "CardArtTunerButton", &"card_art_tuner"],
+		["卡名字体调试", "CardFontLabButton", &"card_font_lab"],
+		["战斗实验室", "BattleLabButton", &"battle_lab"],
+	]:
+		_add_button(tools, entry[0], entry[1], tool_requested.emit.bind(entry[2]))
 	_target_priority_check = CheckButton.new()
 	_target_priority_check.name = "ShowBattleTargetPriority"
 	_target_priority_check.text = "显示受击优先级"
-	_target_priority_check.tooltip_text = "在上场小队上显示当前受击抽选权重"
-	_target_priority_check.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_target_priority_check.toggled.connect(target_priority_display_changed.emit)
-	layout.add_child(_target_priority_check)
-	var volume_row := HBoxContainer.new()
-	volume_row.custom_minimum_size = MENU_BUTTON_SIZE
-	volume_row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	layout.add_child(volume_row)
-	var volume_label := Label.new()
-	volume_label.text = "音量"
-	volume_row.add_child(volume_label)
-	var volume_slider := HSlider.new()
-	volume_slider.name = "BattleVolumeSlider"
-	volume_slider.unique_name_in_owner = true
-	volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	volume_slider.min_value = 0.0
-	volume_slider.max_value = 100.0
-	volume_slider.step = 1.0
-	volume_slider.value = 25.0 # 全局音量默认百分比，0为静音
-	volume_slider.tooltip_text = "全局音量：0 为静音，100 为最大音量"
-	volume_row.add_child(volume_slider)
-	var export_button := _add_menu_button(layout, "导出诊断日志", &"diagnostics")
-	export_button.name = "ExportRunDiagnosticsButton"
-	export_button.tooltip_text = "导出最近操作、卡牌状态变化、存档和上一场战斗数据"
-	_add_menu_button(layout, "返回", &"return")
-	_restore_button = _add_menu_button(layout, "还原", &"restore")
+	tools.add_child(_target_priority_check)
+	_add_button(tools, "导出诊断日志", "ExportRunDiagnosticsButton", diagnostic_export_requested.emit)
+	_restore_button = _add_button(tools, "还原", "RestoreStartupButton", restore_requested.emit)
 	_restore_button.disabled = true
-	_restore_button.tooltip_text = "还原基准待确认"
+	_add_button(tools, "返回", "ToolsBackButton", close_subpage)
+	_settings = SettingsPanel.new()
+	_settings.name = "PauseSettings"
+	var shell := get_tree().get_first_node_in_group(&"game_display_shell")
+	if shell != null: _settings.text_settings_path = shell.text_settings_path()
+	_settings.closed.connect(close_subpage)
+	_settings.display_changed.connect(func(mode: int):
+		if shell != null: show_settings_save_result(shell.change_display_preference(mode)))
+	_menu.add_child(_settings)
+	if shell != null: _settings.sync_values(shell._preferences.volume, shell.current_display_mode)
+	_settings.hide()
+	_tools.hide()
+	_menu.hide()
 
 
-func _add_menu_button(parent: VBoxContainer, label: String, action: StringName) -> Button:
-	var button := Button.new()
-	button.text = label
-	button.custom_minimum_size = MENU_BUTTON_SIZE
-	button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	button.pressed.connect(_on_menu_action.bind(action))
-	parent.add_child(button)
-	return button
+func _add_button(parent: Control, title: String, node_name: String, action: Callable) -> Button:
+	var result := Style.button(parent, title, node_name, action)
+	result.custom_minimum_size = MENU_BUTTON_SIZE
+	result.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	return result
+
+
+func _confirm_abandon() -> void:
+	var dialog := ConfirmationDialog.new()
+	dialog.name = "AbandonConfirmation"
+	dialog.title = "确认放弃本局"
+	dialog.dialog_text = "将按当前状态结束本局并保存结算。\n进入第3天后可计分和选卡；前两天放弃仍保留已实际获得的发现。\n普通保存退出可稍后继续本局。"
+	dialog.ok_button_text = "确认放弃并结算"
+	dialog.cancel_button_text = "继续本局"
+	dialog.confirmed.connect(abandon_requested.emit)
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(650, 230)) # 放弃说明与明确确认按钮的弹窗尺寸
 
 
 func is_menu_open() -> bool:
@@ -121,46 +146,56 @@ func is_menu_open() -> bool:
 
 
 func open_menu() -> void:
-	_menu.visible = true
+	close_subpage()
+	_menu.show()
 
 
 func close_menu() -> void:
-	_menu.visible = false
+	_menu.hide()
+	close_subpage()
+
+
+func open_settings() -> void:
+	_home.hide()
+	_tools.hide()
+	var shell := get_tree().get_first_node_in_group(&"game_display_shell")
+	_settings.sync_values(_settings.volume_slider.value, shell.current_display_mode if shell != null else 1, shell != null)
+	_settings.show()
+
+
+func open_tools() -> void:
+	_home.hide()
+	_settings.hide()
+	_tools.show()
+
+
+func close_subpage() -> bool:
+	var changed: bool = _settings.visible or _tools.visible
+	_settings.hide()
+	_tools.hide()
+	_home.show()
+	return changed
+
+
+func sync_card_text_display_mode() -> void:
+	if is_instance_valid(_settings): _settings.sync_text_mode()
+
+
+func show_settings_save_result(error: Error) -> void:
+	_settings.show_save_result(error)
 
 
 func set_restore_available(value: bool) -> void:
-	if not is_instance_valid(_restore_button):
-		return
 	_restore_button.disabled = not value
 	_restore_button.tooltip_text = "恢复本次启动时的界面和运行状态" if value else "启动状态尚未捕获"
 
 
 func set_target_priority_display_enabled(enabled: bool) -> void:
-	if is_instance_valid(_target_priority_check):
-		_target_priority_check.set_pressed_no_signal(enabled)
+	_target_priority_check.set_pressed_no_signal(enabled)
 
 
 func _input(event: InputEvent) -> void:
-	if get_viewport().is_input_handled():
-		return
-	if event is InputEventKey:
-		var key_event := event as InputEventKey
-		if key_event.pressed and not key_event.echo and key_event.keycode == KEY_ESCAPE:
-			escape_pressed.emit()
-			get_viewport().set_input_as_handled()
-
-
-func _on_escape_pressed() -> void:
-	escape_pressed.emit()
-
-
-func _on_menu_action(action: StringName) -> void:
-	match action:
-		&"attack_effect_lab", &"card_art_tuner", &"battle_lab", &"pack_effect_tuner":
-			tool_requested.emit(action)
-		&"diagnostics":
-			diagnostic_export_requested.emit()
-		&"return":
-			return_requested.emit()
-		&"restore":
-			restore_requested.emit()
+	if get_viewport().is_input_handled(): return
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		escape_pressed.emit()
+		get_viewport().set_input_as_handled()

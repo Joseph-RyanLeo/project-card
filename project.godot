@@ -10,9 +10,17 @@ config_version=5
 
 [application]
 
-config/name="Project Card"
+config/name="余烬秘渊"
+config/name_localized={
+"en": "Embersea Arcana",
+"zh": "余烬秘渊"
+}
+; 固定已有存档目录，避免应用改名后切换 user:// 位置。
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/Project Card"
+config/custom_user_dir_name.linuxbsd="godot/app_userdata/Project Card"
 config/version="0.2.83"
-run/main_scene="res://scenes/GameDisplay.tscn"
+run/main_scene="res://scenes/StartMenu.tscn"
 config/features=PackedStringArray("4.7")
 config/icon="res://icon.svg"
 

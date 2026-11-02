@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://bpwc8r1uvdthl"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://drypuybdbhqt2" path="res://assets/card_art/timid_infantry.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/timid_infantry.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -17,4 +17,7 @@ armor = 2
 runes = Array[int]([1, 2, 4])
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-10, 22)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-8, 23)
+})
 effect_text = "同排其他友军行动后：获得强化1。"

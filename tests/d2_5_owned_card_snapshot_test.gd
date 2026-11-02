@@ -589,6 +589,7 @@ func _test_chaos_permanent_growth_targets_the_whole_squad() -> void:
 func _test_main_battle_entry_uses_owned_snapshot() -> void:
 	root.size = Vector2i(1280, 720)
 	var main = MAIN_SCENE.instantiate()
+	main.run_save_path = "/private/tmp/project-card-d2-5-owned-card-snapshot.json"
 	root.add_child(main)
 	await process_frame
 	await process_frame

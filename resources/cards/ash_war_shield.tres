@@ -18,4 +18,7 @@ equipment_zeal_delta = -1
 equipment_armor_delta = 4
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(0, 8)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(1, 15)
+})
 effect_text = "受击后，对来源造成当前护甲20%的伤害（最多4）。"

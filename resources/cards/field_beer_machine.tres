@@ -17,4 +17,7 @@ runes = Array[int]([0, 1, 2])
 race_type = 3
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-2, 24)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-10, 23)
+})
 effect_text = "回响：相邻矮人充能0.5秒。"
