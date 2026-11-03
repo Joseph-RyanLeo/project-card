@@ -2,7 +2,7 @@
 
 当前入口是 `scenes/tools/CardArtTuner.tscn`。在右下方工艺选项中切换普通卡、闪卡、全息闪卡、法线闪卡、碎闪和超框卡。关闭“材质”开关可临时对照完全关闭光影的原画。
 
-当前完成范围为可交互的工艺样板；工艺选择、反光参数只保存在调整器本次会话，各工艺的取景位置可保存到 `CardData`。2026-10-27起开包已接入单卡实例、存档和两维独立随机获取，详见[开包罕贵度接入](PACK_CARD_APPEARANCE.md)。既有 I—V 品级仍按原规则工作。
+2026-11-03起，工艺参数可通过顶部“保存工艺参数（全局）”持久化到`resources/ui/card_finish_settings.tres`，由真实卡面共用；各工艺取景仍独立保存到CardData。碎闪纹理密度现为15，详见[本轮光泽与保存修复](D3_3_FINISH_FEEDBACK_20261103.md)。工艺选择、3D和材质开关仍为预览状态。2026-10-27起开包已接入单卡实例、存档和两维独立随机获取，详见[开包罕贵度接入](PACK_CARD_APPEARANCE.md)。既有 I—V 品级仍按原规则工作。
 
 ## 2026-10-27：正式特殊卡放大模糊修复
 
@@ -121,3 +121,7 @@
 初学者写法：`blend_add`表示只向原画加上反射光，纹理仅作透明度遮罩，不重新采样或模糊原画；光层继承卡牌调制透明度，虚影依旧半透明。`static Dictionary`由不同控制器共享缓存，布局相同的卡牌复用同一遮罩，不是在每张卡上存一份完整画面。
 
 验证：`tests/collection_rest_flash_test.gd`在真实2K收藏检查18种组合、普通卡隔离、GPU静止亮纹差异、节点／遮罩复用、无逐卡Viewport、悬停接管及回正恢复，73项通过；日志`/private/tmp/project-card-rest-flash-gpu-2.log`。实拍`/private/tmp/project-card-collection-rest-finishes.png`每列依次为普通／银／金／彩／法线／碎闪，每行为普通／全息／超框卡图。18种正式检视GPU回归187项通过，日志`/private/tmp/project-card-rest-flash-combinations.log`；未运行全量套件。
+
+## 2026-11-03：基础图鉴普通材质与全局工艺保存
+
+无OwnedCard的基础图鉴在绑定检视表面后也必须刷新为普通卡面／卡图，不能因无实例提前返回并保留默认扫光。全局工艺配置独立于单张CardData，调整器顶部提供保存／重载入口；碎闪密度15，其他工艺独立保留。根因、操作、脚本职责、实际截图与5组408项GPU验证见[修复说明](D3_3_FINISH_FEEDBACK_20261103.md)。

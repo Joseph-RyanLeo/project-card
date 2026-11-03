@@ -3,6 +3,7 @@ class_name CardFinishPreview
 extends RefCounted
 
 ## 调整器、真实单卡与开包共用的卡面工艺；卡面与卡图独立组合。
+const SETTINGS = preload("res://resources/ui/card_finish_settings.tres")
 const Appearance = preload("res://scripts/data/card_appearance.gd")
 enum Finish { PLAIN, FOIL, HOLOGRAPHIC, EMBOSSED, FRACTURED, OVERFRAME }
 const LABELS := ["普通卡", "闪卡", "全息闪卡", "法线闪卡", "碎闪", "超框卡"]
@@ -32,7 +33,8 @@ var finish: Finish = Finish.FOIL:
 			Finish.FRACTURED: surface_finish = Appearance.Surface.FRACTURED
 var strength := 0.75 # 当前工艺的反光强度
 var depth := 2.5 # 全息前后层距离档位；0与卡框同面，越大层次越明显
-var density := 32.0 # 压纹密度或碎闪晶片数量
+var density := 32.0 # 调整器草稿纹理密度；真实卡面读取共享配置
+var use_saved_settings := false # 真实卡面读取全局工艺配置；调整器仍使用未保存的预览参数
 var enabled := true
 var _card: CardView
 var _surface: ShaderMaterial
@@ -53,6 +55,7 @@ static var _rest_flash_mask_cache: Dictionary = {}
 func setup(card: CardView, surface: ShaderMaterial) -> void:
 	_card = card
 	_surface = surface
+	SETTINGS.changed.connect(refresh)
 	_art_material = ShaderMaterial.new()
 	_art_material.shader = ART_SHADER
 	_background_material = ShaderMaterial.new()
@@ -93,19 +96,23 @@ func refresh() -> void:
 	if not is_instance_valid(_card): return
 	var face := int(surface_finish) if enabled else Appearance.Surface.PLAIN
 	var art := int(art_finish) if enabled else Appearance.Art.PLAIN
+	var face_key: StringName = &"fractured" if face == Appearance.Surface.FRACTURED else (&"embossed" if face == Appearance.Surface.EMBOSSED else &"plain")
+	var face_parameters: Vector3 = SETTINGS.parameters(face_key) if use_saved_settings else Vector3(strength, depth, density)
+	var art_parameters: Vector3 = SETTINGS.parameters(&"holographic") if use_saved_settings else Vector3(strength, depth, density)
+	var texture_parameters := face_parameters if face == Appearance.Surface.EMBOSSED else art_parameters
 	var active := int(Finish.HOLOGRAPHIC) if art == Appearance.Art.HOLOGRAPHIC else -1
 	_surface.set_shader_parameter("use_flash", face in [Appearance.Surface.SILVER, Appearance.Surface.GOLD, Appearance.Surface.RAINBOW])
 	if face in [Appearance.Surface.SILVER, Appearance.Surface.GOLD, Appearance.Surface.RAINBOW]:
 		_surface.set_shader_parameter("flash_type", face - Appearance.Surface.SILVER)
 	_surface.set_shader_parameter("use_fractured", face == Appearance.Surface.FRACTURED)
-	_surface.set_shader_parameter("finish_strength", strength)
-	_surface.set_shader_parameter("finish_density", density)
+	_surface.set_shader_parameter("finish_strength", face_parameters.x)
+	_surface.set_shader_parameter("finish_density", face_parameters.z)
 	_surface.set_shader_parameter("mask_origin_px", _card.position)
 	_surface.set_shader_parameter("mask_size_px", _card.card_size)
 	_art_material.set_shader_parameter("embossed", face == Appearance.Surface.EMBOSSED)
 	for material: ShaderMaterial in [_art_material, _background_material]:
-		material.set_shader_parameter("effect_strength", strength)
-		material.set_shader_parameter("texture_density", density)
+		material.set_shader_parameter("effect_strength", texture_parameters.x)
+		material.set_shader_parameter("texture_density", texture_parameters.z)
 		material.set_shader_parameter("card_finish", active)
 		material.set_shader_parameter("card_size", _card.card_size)
 		material.set_shader_parameter("use_3d", _surface.get_shader_parameter("use_3d"))
@@ -115,7 +122,7 @@ func refresh() -> void:
 		material.set_shader_parameter("card_origin", _card.position)
 	_art_material.set_shader_parameter("layer_size", _card.art_texture.size)
 	_background_material.set_shader_parameter("layer_size", _card.art_area_size)
-	var art_depth := -depth * DEPTH_DISTANCE_SCALE if active == Finish.HOLOGRAPHIC else 0.0
+	var art_depth := -art_parameters.y * DEPTH_DISTANCE_SCALE if active == Finish.HOLOGRAPHIC else 0.0
 	_art_material.set_shader_parameter("layer_depth", art_depth)
 	_background_material.set_shader_parameter("layer_depth", art_depth * BACKGROUND_DEPTH_RATIO)
 	_art_material.set_shader_parameter("layer_origin", _card.art_panel.position + _card.art_texture.position)
@@ -144,10 +151,10 @@ func refresh() -> void:
 	_overframe_art.scale = Vector2.ONE
 	_overframe_art.position = _card.art_panel.position + _card.art_texture.position - OVERFRAME_INSET
 	_refresh_badges()
-	_refresh_rest_flash(face)
+	_refresh_rest_flash(face, face_parameters)
 
 
-func _refresh_rest_flash(face: int) -> void:
+func _refresh_rest_flash(face: int, parameters: Vector3) -> void:
 	var visible := not _surface_composited and _card.card_data != null and face in [Appearance.Surface.SILVER, Appearance.Surface.GOLD, Appearance.Surface.RAINBOW, Appearance.Surface.FRACTURED]
 	if not visible:
 		if is_instance_valid(_rest_flash): _rest_flash.visible = false
@@ -170,8 +177,8 @@ func _refresh_rest_flash(face: int) -> void:
 	var material := _rest_flash.material as ShaderMaterial
 	material.set_shader_parameter("flash_type", face - Appearance.Surface.SILVER)
 	material.set_shader_parameter("use_fractured", face == Appearance.Surface.FRACTURED)
-	material.set_shader_parameter("finish_strength", strength)
-	material.set_shader_parameter("finish_density", density)
+	material.set_shader_parameter("finish_strength", parameters.x)
+	material.set_shader_parameter("finish_density", parameters.z)
 	material.set_shader_parameter("mask_origin_px", padding)
 	material.set_shader_parameter("mask_size_px", _card.card_size)
 	material.set_shader_parameter("texture_size_px", _rest_flash.size)

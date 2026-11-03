@@ -9,6 +9,7 @@ const MAIN_SCENE_PATH := "res://scenes/Main.tscn"
 const CARD_PREVIEW_SHADER: Shader = preload(
 	"res://shaders/card_preview_3d.gdshader"
 )
+const FINISH_SETTINGS = preload("res://scripts/ui/card_finish_settings.gd")
 const FINISH_PREVIEW = preload("res://scripts/ui/card_finish_preview.gd")
 const PREVIEW_EFFECT_PADDING_BOTTOM_RIGHT := Vector2(4.0, 4.0) # 在卡面真实越界范围外为 3D 投影额外保留的右下透明边
 const PREVIEW_POINTER_RESPONSE: float = 12.0 # 鼠标进入、离开时 3D 倾斜追随与回正速度
@@ -80,6 +81,9 @@ var _refresh_queued: bool = false
 var _preview_effect_material: ShaderMaterial
 var _preview_pointer_force := Vector2.ZERO
 var _active_selector_card_type: int = -1
+var finish_settings_path := FINISH_SETTINGS.PATH
+var _finish_settings: Resource
+var _finish_drafts: Dictionary = {}
 var _finish_preview: CardFinishPreview
 
 @onready var preview_card: CardView = %PreviewCard
@@ -113,6 +117,8 @@ var _finish_preview: CardFinishPreview
 @onready var use_flash_check: CheckButton = %UseFlashCheck
 @onready var flash_type_selector: OptionButton = %FlashTypeSelector
 @onready var finish_selector: OptionButton = %FinishSelector
+@onready var save_finish_button: Button = %SaveFinishSettingsButton
+@onready var reload_finish_button: Button = %ReloadFinishSettingsButton
 @onready var finish_strength_spin: SpinBox = %FinishStrengthSpin
 @onready var finish_depth_spin: SpinBox = %FinishDepthSpin
 @onready var finish_density_spin: SpinBox = %FinishDensitySpin
@@ -129,6 +135,8 @@ func _ready() -> void:
 	_populate_pack_selector()
 	_populate_card_selector()
 	_populate_effect_controls()
+	_finish_settings = ResourceLoader.load(finish_settings_path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	_load_finish_controls()
 	_sync_effect_controls_to_material()
 	_connect_runtime_controls()
 	_sync_runtime_controls()
@@ -403,7 +411,11 @@ func _connect_runtime_controls() -> void:
 	use_3d_check.toggled.connect(_on_use_3d_toggled)
 	use_flash_check.toggled.connect(_on_use_flash_toggled)
 	flash_type_selector.item_selected.connect(_on_flash_type_selected)
-	finish_selector.item_selected.connect(func(_index: int) -> void: _on_finish_controls_changed())
+	finish_selector.item_selected.connect(func(_index: int) -> void:
+		_load_finish_controls()
+		_on_finish_controls_changed())
+	save_finish_button.pressed.connect(_save_finish_settings)
+	reload_finish_button.pressed.connect(_reload_finish_settings)
 	for spin: SpinBox in [finish_strength_spin, finish_depth_spin, finish_density_spin]:
 		spin.value_changed.connect(func(_value: float) -> void: _on_finish_controls_changed())
 
@@ -510,6 +522,55 @@ func _on_use_flash_toggled(enabled: bool) -> void:
 	_refresh_preview()
 
 
+func _load_finish_controls() -> void:
+	var key: StringName = CardData.ART_FINISH_KEYS[finish_selector.get_selected_id()]
+	var values: Vector3 = _finish_drafts.get(key, _finish_settings.parameters(key) if _finish_settings != null else Vector3(0.75, 2.5, 32))
+	for entry: Array in [[finish_strength_spin, values.x], [finish_depth_spin, values.y], [finish_density_spin, values.z]]:
+		entry[0].set_value_no_signal(entry[1])
+
+
+func _has_finish_changes() -> bool:
+	if _finish_settings == null: return false
+	for key: StringName in _finish_drafts:
+		if not _finish_drafts[key].is_equal_approx(_finish_settings.parameters(key)): return true
+	return false
+
+
+func _save_finish_settings() -> void:
+	var latest := ResourceLoader.load(finish_settings_path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	if latest == null:
+		_set_status("无法读取工艺配置；尚未保存，预览草稿保留。")
+		return
+	# 只合并本次改动的工艺，避免覆盖磁盘上其他工艺的修改。
+	for key: StringName in _finish_drafts:
+		if not _finish_drafts[key].is_equal_approx(_finish_settings.parameters(key)): latest.set_parameters(key, _finish_drafts[key])
+	var error := ResourceSaver.save(latest, finish_settings_path)
+	if error != OK:
+		_set_status("工艺参数保存失败（错误码%d）；预览草稿保留。" % error)
+		return
+	_finish_settings = latest
+	_finish_drafts.clear()
+	if finish_settings_path == FINISH_SETTINGS.PATH:
+		var shared: Resource = FINISH_PREVIEW.SETTINGS
+		for key: StringName in FINISH_SETTINGS.KEYS: shared.set_parameters(key, latest.parameters(key))
+		shared.emit_changed()
+	_load_finish_controls()
+	_on_finish_controls_changed()
+	_set_status("已保存全局工艺参数；真实卡面共用。卡牌资料与取景不受影响。")
+
+
+func _reload_finish_settings() -> void:
+	var latest := ResourceLoader.load(finish_settings_path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	if latest == null:
+		_set_status("无法读取工艺配置；预览草稿保留。")
+		return
+	_finish_settings = latest
+	_finish_drafts.clear()
+	_load_finish_controls()
+	_on_finish_controls_changed()
+	_set_status("已重载全局工艺参数；未保存的工艺预览已放弃。")
+
+
 func _on_finish_controls_changed() -> void:
 	_finish_preview.finish = finish_selector.get_selected_id() as CardFinishPreview.Finish
 	_preview_art_offset = _preview_data.get_art_offset_for_finish(_selected_finish_key()) if _preview_data != null else Vector2i.ZERO
@@ -517,6 +578,9 @@ func _on_finish_controls_changed() -> void:
 	_finish_preview.strength = finish_strength_spin.value
 	_finish_preview.depth = finish_depth_spin.value
 	_finish_preview.density = finish_density_spin.value
+	var key := _selected_finish_key()
+	if FINISH_SETTINGS.KEYS.has(key): _finish_drafts[key] = Vector3(_finish_preview.strength, _finish_preview.depth, _finish_preview.density)
+	save_finish_button.disabled = not _has_finish_changes()
 	_update_finish_render_scale()
 	flash_type_selector.disabled = _finish_preview.finish not in [CardFinishPreview.Finish.FOIL, CardFinishPreview.Finish.OVERFRAME]
 	finish_strength_spin.editable = _finish_preview.finish in [CardFinishPreview.Finish.HOLOGRAPHIC, CardFinishPreview.Finish.EMBOSSED, CardFinishPreview.Finish.FRACTURED]
@@ -587,7 +651,7 @@ func _refresh_preview() -> void:
 	status_label.text = "%s · %s · %s | 偏移 %s | %s" % [
 		preview_data.display_name, CardPackRegistry.get_display_name(card_data.pack_id) if not card_data.pack_id.is_empty() else "未指定卡包",
 		card_data.get_card_type_name(), preview_art_offset,
-		("有未保存修改 · " if _has_unsaved_changes(card_data) else "") + _finish_preview.get_description(),
+		("有未保存卡牌修改 · " if _has_unsaved_changes(card_data) else "") + ("工艺参数未保存（全局） · " if _has_finish_changes() else "") + _finish_preview.get_description(),
 	]
 	_update_current_list_label()
 

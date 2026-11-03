@@ -1184,7 +1184,6 @@ func update_finish_pointer(force: Vector2) -> void:
 
 
 func _refresh_owned_appearance() -> void:
-	if _owned_card == null and _finish_controller == null: return
 	if _finish_surface == null and (_owned_card == null or not _owned_card.has_special_appearance()) and _finish_controller == null: return
 	if _finish_controller == null:
 		if _finish_surface == null:
@@ -1196,6 +1195,7 @@ func _refresh_owned_appearance() -> void:
 			_finish_surface.set_shader_parameter("card_texture_size_px", card_size)
 		# 控制器持有CardView类型，延迟载入以免两个脚本相互预载。
 		_finish_controller = load("res://scripts/ui/card_finish_preview.gd").new()
+		_finish_controller.use_saved_settings = true
 		_finish_controller.setup(self, _finish_surface)
 	_finish_controller.surface_finish = _owned_card.surface_finish if _owned_card != null else Appearance.Surface.PLAIN
 	_finish_controller.art_finish = _owned_card.art_finish if _owned_card != null else Appearance.Art.PLAIN

@@ -48,9 +48,9 @@ text = "← 返回主界面"
 
 [node name="Title" type="Label" parent="CenterContainer/Workspace"]
 layout_mode = 0
-offset_left = 250.0
+offset_left = 480.0
 offset_top = 18.0
-offset_right = 1030.0
+offset_right = 800.0
 offset_bottom = 52.0
 theme_override_font_sizes/font_size = 24
 text = "卡面调整器"
@@ -63,7 +63,7 @@ offset_top = 58.0
 offset_right = 1030.0
 offset_bottom = 102.0
 theme_override_font_sizes/font_size = 16
-text = "筛选卡包与种类，编辑名称、属性与立绘取景。\n五种工艺仅作预览；切卡保留编辑草稿，点击保存才写入卡牌资料。"
+text = "筛选卡包与种类，编辑名称、属性与立绘取景。\n卡牌资料与取景用卡牌保存；强度／景深／纹理用“保存工艺参数（全局）”。"
 horizontal_alignment = 1
 
 [node name="PreviewCaption" type="Label" parent="CenterContainer/Workspace"]
@@ -334,7 +334,7 @@ offset_top = 612.0
 offset_right = 780.0
 offset_bottom = 650.0
 theme_override_font_sizes/font_size = 16
-text = "保存修改"
+text = "保存卡牌修改"
 tooltip_text = "保存本卡的资料与各罕贵度自己的取景，不互相覆盖。"
 
 [node name="SaveAllFinishesButton" type="Button" parent="CenterContainer/Workspace"]
@@ -491,3 +491,24 @@ offset_right = 1180.0
 offset_bottom = 472.0
 theme_override_font_sizes/font_size = 16
 max_value = 999.0
+
+[node name="SaveFinishSettingsButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 800.0
+offset_top = 18.0
+offset_right = 1046.0
+offset_bottom = 54.0
+theme_override_font_sizes/font_size = 16
+text = "保存工艺参数（全局）"
+tooltip_text = "保存全息、法线、碎闪的强度／景深／纹理。所有真实卡面共用，不写入单张CardData。"
+
+[node name="ReloadFinishSettingsButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 1056.0
+offset_top = 18.0
+offset_right = 1232.0
+offset_bottom = 54.0
+theme_override_font_sizes/font_size = 16
+text = "重载工艺参数"

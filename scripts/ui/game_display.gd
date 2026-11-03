@@ -25,6 +25,7 @@ const CARD_FONT_LAB_SCENE: PackedScene = preload("res://scenes/tools/CardFontLab
 const RARE_SHOP_LAB_SCENE: PackedScene = preload("res://scenes/tools/RareShopLab.tscn")
 const MAIN_SCENE: PackedScene = preload("res://scenes/Main.tscn")
 const PROFILE_DATA = preload("res://scripts/data/profile_progress.gd")
+const GALLERY_SCRIPT = preload("res://scripts/ui/gallery_book.gd")
 const SLOT_HUB_SCRIPT = preload("res://scripts/ui/slot_hub.gd")
 const SETTINGS_SCRIPT = preload("res://scripts/ui/game_settings_panel.gd")
 const PREFERENCES_SCRIPT = preload("res://scripts/data/game_preferences.gd")
@@ -72,6 +73,7 @@ var _persistence_dialog: AcceptDialog
 var screen_transition: CanvasLayer
 var _collection_hover_surface: Control
 var last_startup_timings: Dictionary = {}
+var _gallery_panel: Control
 var _slot_progress_panel: Control
 var slot_progress: RefCounted
 var _slot_checkpoint: Dictionary = {}
@@ -260,6 +262,7 @@ func return_to_start_menu() -> void:
 		main_screen.free()
 		main_screen = null
 	get_tree().paused = false
+	_clear_gallery()
 	if is_instance_valid(_slot_progress_panel):
 		_slot_progress_panel.hide()
 		_slot_progress_panel.queue_free()
@@ -311,6 +314,10 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		if is_instance_valid(_settings_panel) and _settings_panel.visible:
 			_settings_panel.hide()
+			get_viewport().set_input_as_handled()
+			return
+		if is_instance_valid(_gallery_panel):
+			if not _gallery_panel.close_inspection(): change_screen(_close_gallery)
 			get_viewport().set_input_as_handled()
 			return
 		if is_instance_valid(_slot_progress_panel) and _slot_progress_panel.visible:
@@ -690,6 +697,7 @@ func _center_window() -> void:
 
 
 func _refresh_slot_progress_panel() -> void:
+	_clear_gallery()
 	if start_menu == null or slot_progress == null: return
 	if is_instance_valid(main_screen): slot_progress = main_screen.profile_progress
 	if is_instance_valid(_slot_progress_panel):
@@ -709,10 +717,37 @@ func _refresh_slot_progress_panel() -> void:
 	_slot_progress_panel.slot_index = run_slots.selected_slot
 	_slot_progress_panel.new_run_requested.connect(_request_new_slot_run, CONNECT_DEFERRED)
 	_slot_progress_panel.return_requested.connect(change_screen.bind(return_to_start_menu), CONNECT_DEFERRED)
+	_slot_progress_panel.gallery_requested.connect(change_screen.bind(_open_gallery), CONNECT_DEFERRED)
 	_slot_progress_panel.settings_requested.connect(open_settings)
 	_slot_progress_panel.collection_action_requested.connect(_apply_collection_action)
 	_slot_progress_panel.selection_requested.connect(_apply_collection_selection)
 	design_canvas.add_child(_slot_progress_panel)
+
+
+func _open_gallery() -> void:
+	if slot_progress == null or slot_progress.run.stage != "hub" or is_instance_valid(_gallery_panel): return
+	get_collection_hover_surface().release_collection()
+	_slot_progress_panel.hide()
+	_gallery_panel = GALLERY_SCRIPT.new()
+	_gallery_panel.name = "GalleryBook"
+	_gallery_panel.progress = slot_progress
+	_gallery_panel.slot_index = run_slots.selected_slot
+	_gallery_panel.return_requested.connect(change_screen.bind(_close_gallery), CONNECT_DEFERRED)
+	design_canvas.add_child(_gallery_panel)
+
+
+func _clear_gallery() -> void:
+	if not is_instance_valid(_gallery_panel): return
+	get_collection_hover_surface().release_collection()
+	_gallery_panel.close_inspection(false)
+	_gallery_panel.hide()
+	_gallery_panel.queue_free()
+	_gallery_panel = null
+
+
+func _close_gallery() -> void:
+	_clear_gallery()
+	if is_instance_valid(_slot_progress_panel): _slot_progress_panel.show()
 
 
 func _apply_collection_action(action: StringName) -> void:

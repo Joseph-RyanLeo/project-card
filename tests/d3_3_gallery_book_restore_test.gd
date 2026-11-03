@@ -1,0 +1,43 @@
+extends "res://tests/d3_3_gallery_book_test.gd"
+
+## 在完整收藏册测试之后以独立进程读取同一隔离存档，确认分类与实例来自磁盘。
+func _run() -> void:
+	create_timer(90).timeout.connect(func(): push_error("完整收藏册恢复验证超时"); quit(1))
+	root.size = Vector2i(1280, 720)
+	root.gui_embed_subwindows = true
+	shell = SHELL.instantiate()
+	shell.run_slots.directory = BOOK_DIR
+	root.add_child(shell)
+	shell.apply_display_mode(shell.DisplayMode.WINDOW_2K if "2k" in OS.get_cmdline_user_args() else shell.DisplayMode.WINDOW_720P)
+	await frames()
+	check(await shell.start_slot(0), "另一进程恢复完整收藏册档")
+	var before: Dictionary = shell.slot_progress.capture_state()
+	var disk := FileAccess.get_file_as_string(shell.run_slots.get_slot_path(0))
+	await click(button("GalleryButton"))
+	var gallery = await wait_gallery()
+	check(gallery._pack_filter.item_count == 5 and gallery.page_count() == 5 and gallery.page_index == 0 and gallery._search.text.is_empty(), "重启从本档开放范围重建分类与完整目录，浏览状态不混入玩家档案")
+	await click(gallery._pack_filter)
+	check(gallery._pack_filter.get_popup().visible, "分类菜单实际展开")
+	await capture_book("08_pack_menu")
+	await key(KEY_ESCAPE)
+	check(is_instance_valid(shell._gallery_panel) and not gallery._pack_filter.get_popup().visible, "菜单打开时Esc只收起菜单，不退回大厅")
+	await choose_option(gallery._pack_filter, 1)
+	check(gallery._pack == &"ironwall_inscription" and gallery.filtered_cards.size() == 34, "独立进程可切换铁壁全部34种")
+	for page: int in 5: await key(KEY_PAGEDOWN)
+	check(gallery.page_index == 5 and gallery.shown_cards.size() == 4 and gallery._next.disabled, "独立进程通过键盘可达第六张末页")
+	await choose_option(gallery._pack_filter, 0)
+	await query(gallery, "火枪手")
+	check(gallery.views.has("musketeer:1"), "重启搜索找回真实收藏实例")
+	await click(gallery.views["musketeer:1"], MOUSE_BUTTON_RIGHT)
+	await create_timer(0.9).timeout
+	check(text_rows(gallery._inspection.find_child("CardDetails", true, false)).contains("245.5"), "重启检视保留累计战绩")
+	await key(KEY_ESCAPE)
+	await wait_inspection_closed(gallery)
+	await key(KEY_ESCAPE)
+	await wait_gallery()
+	check(not is_instance_valid(shell._gallery_panel) and shell._slot_progress_panel.visible, "重启后Esc按检视、收藏册、大厅层次返回")
+	check(shell.slot_progress.capture_state() == before and FileAccess.get_file_as_string(shell.run_slots.get_slot_path(0)) == disk, "独立进程中分类、翻页、搜索、检视仍完全只读")
+	print("D3-3 complete book restore checks: %d, failures: %d" % [checks, failures])
+	shell.free()
+	await frames()
+	quit(1 if failures else 0)
