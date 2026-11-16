@@ -121,9 +121,8 @@ var _inspection_pattern_suppressed: bool = false
 var _battle_result_statistics: Dictionary = {}
 var _battle_result_defeated: bool = false
 var _battle_result_action_type: CardData.ActionType = CardData.ActionType.MELEE
-var _equipment_indicator: Control
+var _equipment_indicators: Dictionary = {}
 var _celestial_views: Dictionary = {}
-var _equipment_indicator_base_position := Vector2.ZERO
 
 @onready var stack_feedback_layer: Control = %StackFeedbackLayer
 @onready var squad_lift_layer: Control = %SquadLiftLayer
@@ -440,6 +439,9 @@ func play_battle_action_lift(speed_multiplier: float = 1.0) -> void:
 func play_death_dissolve(noise_seed: float = 0.0) -> void:
 	if _death_dissolving or not is_node_ready():
 		return
+	# 首次退场伤势已经写入战斗实例，画面尚未等到下一次状态刷新。
+	for card: CardView in get_card_views():
+		card.refresh_status_slots()
 	_death_dissolving = true
 	_death_dissolve_original_mouse_filter = mouse_filter
 	_death_dissolve_original_drag_enabled = _drag_enabled
@@ -635,8 +637,8 @@ func set_service_ghosts(instance_ids: Array[StringName]) -> void:
 		for definition: CardData in squad_data.horizontal_cards:
 			var owned := squad_data.get_owned_card(definition)
 			if owned != null and instance_ids.has(owned.instance_id): selected.append(owned.instance_id)
-		var equipment := squad_data.get_equipped_item()
-		if equipment != null and instance_ids.has(equipment.instance_id): selected.append(equipment.instance_id)
+		for equipment: OwnedCard in squad_data.get_equipped_items():
+			if instance_ids.has(equipment.instance_id): selected.append(equipment.instance_id)
 	if selected == _service_ghost_ids: return
 	_service_ghost_ids = selected
 	_refresh()
@@ -666,6 +668,7 @@ func can_show_card_effect_on_hover(card_view: CardView) -> bool:
 	# 鼠标进入事件由 Control 的最终命中测试产生，因此堆叠中被遮挡的卡不会抢悬停。
 	if (
 		card_view == null
+		or _death_dissolving
 		or is_preview()
 		or card_view.is_snapshot_mode()
 		or card_view.card_data == null
@@ -689,14 +692,8 @@ func configure_drag_source(enabled: bool, source_row: Node = null) -> void:
 	for card_data: CardData in _card_views:
 		var card_view := _card_views[card_data] as CardView
 		card_view.configure_drag_source(_drag_enabled and not _is_service_ghost(card_data), &"board", source_row, self)
-	if is_instance_valid(_equipment_indicator):
-		_equipment_indicator.call(
-			"configure",
-			get_display_data().get_equipped_item() if get_display_data() != null else null,
-			_source_row,
-			self,
-			_drag_enabled and not has_service_ghosts()
-		)
+	for indicator: Control in _equipment_indicators.values():
+		indicator.call("configure", indicator.get("owned_item"), _source_row, self, _drag_enabled and not has_service_ghosts())
 	if not _drag_enabled:
 		reset_hover_feedback()
 	for view: CelestialIndicatorView in _celestial_views.values():
@@ -964,60 +961,48 @@ func _refresh() -> void:
 	_refresh_target_priority_badge()
 
 
-func get_equipment_indicator() -> Control:
-	return _equipment_indicator
+func get_equipment_indicator(item: OwnedCard = null) -> Control:
+	var data := get_display_data()
+	if item == null and data != null:
+		item = data.get_equipped_item() if data.get_equipped_item() != null else data.get_helmet()
+	return _equipment_indicators.get(item.instance_id) as Control if item != null else null
 
 
 func _refresh_equipment_indicator(data: SquadData) -> void:
-	var equipped_item := data.get_equipped_item() if data != null else null
-	if (
-		equipped_item == null
-		or (
-			_drag_hidden_card != null
-			and data.get_card_count() == 1
-		)
-	):
-		_clear_equipment_indicator()
-		return
-	if not is_instance_valid(_equipment_indicator):
-		_equipment_indicator = EQUIPMENT_INDICATOR_SCRIPT.new() as Control
-		_equipment_indicator.name = "EquipmentIndicator"
-		_equipment_indicator.connect("inspection_requested", _on_card_inspection_requested)
-		card_visual_layer.add_child(_equipment_indicator)
-		_equipment_indicator.connect(
-			"click_carry_requested",
-			_on_card_click_carry_requested
-		)
-	_equipment_indicator_base_position = (
-		data.get_equipment_indicator_position()
-		- EQUIPMENT_INDICATOR_SIZE * 0.5
-	)
+	var retained := {}
+	if data != null and not (_drag_hidden_card != null and data.get_card_count() == 1):
+		for item: OwnedCard in data.get_equipped_items():
+			retained[item.instance_id] = true
+			var indicator := _equipment_indicators.get(item.instance_id) as Control
+			if not is_instance_valid(indicator):
+				indicator = EQUIPMENT_INDICATOR_SCRIPT.new() as Control
+				indicator.name = "HelmetIndicator" if SquadData.is_helmet(item) else "EquipmentIndicator"
+				indicator.connect("inspection_requested", _on_card_inspection_requested)
+				indicator.connect("click_carry_requested", _on_card_click_carry_requested)
+				card_visual_layer.add_child(indicator)
+				_equipment_indicators[item.instance_id] = indicator
+			indicator.set_meta("rest_position", data.get_equipment_indicator_position(item) - EQUIPMENT_INDICATOR_SIZE * 0.5)
+			indicator.modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA if _service_ghost_ids.has(item.instance_id) or has_service_ghosts() and data.get_card_count() == 1 else PREVIEW_ALPHA if is_preview() else 1.0
+			indicator.call("configure", item, _source_row, self, _drag_enabled and not is_preview() and not has_service_ghosts())
+			indicator.visible = true
+	for id: StringName in _equipment_indicators.keys():
+		if retained.has(id): continue
+		_equipment_indicators[id].queue_free()
+		_equipment_indicators.erase(id)
 	_sync_equipment_indicator_hover_offset()
-	_equipment_indicator.modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA if _service_ghost_ids.has(equipped_item.instance_id) or has_service_ghosts() and data.get_card_count() == 1 else PREVIEW_ALPHA if is_preview() else 1.0
-	_equipment_indicator.call(
-		"configure",
-		equipped_item,
-		_source_row,
-		self,
-		_drag_enabled and not is_preview() and not has_service_ghosts()
-	)
-	_equipment_indicator.visible = true
 
 
 func _clear_equipment_indicator() -> void:
-	if is_instance_valid(_equipment_indicator):
-		_equipment_indicator.queue_free()
-	_equipment_indicator = null
+	for indicator: Control in _equipment_indicators.values():
+		indicator.queue_free()
+	_equipment_indicators.clear()
 
 
 func _sync_equipment_indicator_hover_offset() -> void:
-	var follows_hover_lift := (
-		_hovered_card != null
-		and (_active_drag_kind == &"card" or _squad_feedback_active)
-	)
+	var follows_hover_lift := _hovered_card != null and (_active_drag_kind == &"card" or _squad_feedback_active)
 	var lift := Vector2(0.0, CARD_LIFT_OFFSET if follows_hover_lift else 0.0)
-	if is_instance_valid(_equipment_indicator):
-		_equipment_indicator.position = _equipment_indicator_base_position - lift
+	for indicator: Control in _equipment_indicators.values():
+		indicator.position = (indicator.get_meta("rest_position", Vector2.ZERO) as Vector2) - lift
 	for view: CelestialIndicatorView in _celestial_views.values():
 		view.position = (view.get_meta("rest_position", Vector2.ZERO) as Vector2) - lift
 
@@ -1397,16 +1382,16 @@ func _ensure_stack_target_snapshots() -> void:
 		)
 	# 目标小队开始晃动时会隐藏真实 CardVisualLayer，改由快照绘制。
 	# 装备指示物也必须进入同一快照层，否则视觉上会在切换瞬间消失。
-	var equipped_item := data.get_equipped_item()
-	if equipped_item != null and equipped_item.card_data != null:
+	for equipped_item: OwnedCard in data.get_equipped_items():
 		var indicator_snapshot := EquipmentIndicatorStyleScript.create_visual(
 			equipped_item.card_data
 		)
 		indicator_snapshot.name = "EquipmentIndicatorSnapshot"
 		indicator_snapshot.position = (
-			data.get_equipment_indicator_position()
+			data.get_equipment_indicator_position(equipped_item)
 			- EQUIPMENT_INDICATOR_SIZE * 0.5
 		)
+		if equipped_item.is_temporary_equipment(): indicator_snapshot.modulate = EquipmentIndicatorStyleScript.TEMPORARY_EQUIPMENT_TINT
 		indicator_snapshot.modulate.a = PREVIEW_ALPHA if is_preview() else 1.0
 		_stack_target_snapshot_layer.add_child(indicator_snapshot)
 	for attachment: Dictionary in data.indicator_attachments:

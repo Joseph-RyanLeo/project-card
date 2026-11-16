@@ -1,0 +1,695 @@
+{
+  "schema_version": 2,
+  "cards": [
+    {
+      "card_id": "extinguished_lantern",
+      "effects": [
+        {
+          "effect_id": "extinguished_lantern.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "extinguished_lantern.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "task_lantern"
+          },
+          "reading": "回响：对场上包括自己的所有角色造成1点伤害。触发10次后转换为摇曳青灯。",
+          "questions": []
+        },
+        {
+          "effect_id": "extinguished_lantern.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "extinguished_lantern.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "task_lantern"
+          },
+          "reading": "回响：对场上包括自己的所有角色造成1点伤害。触发10次后转换为摇曳青灯。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "flickering_lantern",
+      "effects": [
+        {
+          "effect_id": "flickering_lantern.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "flickering_lantern.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "task_lantern"
+          },
+          "reading": "耀眼。遗愿：左右相邻友军永久+2生命。触发4次后转换为炽烈青灯。",
+          "questions": []
+        },
+        {
+          "effect_id": "flickering_lantern.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "flickering_lantern.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "task_lantern"
+          },
+          "reading": "耀眼。遗愿：左右相邻友军永久+2生命。触发4次后转换为炽烈青灯。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "blazing_lantern",
+      "effects": [
+        {
+          "effect_id": "blazing_lantern.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "blazing_lantern.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "task_lantern"
+          },
+          "reading": "耀眼。遗愿：按本局友军阵亡次数造成总伤害，每点随机分配给敌方。",
+          "questions": []
+        },
+        {
+          "effect_id": "blazing_lantern.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "blazing_lantern.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "task_lantern"
+          },
+          "reading": "耀眼。遗愿：按本局友军阵亡次数造成总伤害，每点随机分配给敌方。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "edwin_ash",
+      "effects": [
+        {
+          "effect_id": "edwin_ash.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "edwin_ash.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "按铁壁铭刻确认规则结算",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "edwin_ash"
+          },
+          "reading": "消灭左右友军，不新增伤势，治愈一个伤势并获得随机纹章。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "balin_ashslag",
+      "effects": [
+        {
+          "effect_id": "balin_ashslag.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "balin_ashslag.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本次效果结算完成",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "balin_ashslag"
+          },
+          "reading": "遗愿：局外展览馆每发现2种装备，投掷1d20。>5获得1金币，>10永久生命+1，>15永久基础数值+1，等于20另治愈本小队1处可见伤势并获得1枚普通纹章。各档累计。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "hild_allrounder",
+      "effects": [
+        {
+          "effect_id": "hild_allrounder.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "hild_allrounder.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本次效果结算完成",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "hild_allrounder"
+          },
+          "reading": "突击：对每个友方小队，若生效牌型包含多种元素，每种元素使其本场获得+1/+1（非连星最多+2/+2），同时增加当前生命。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "sargon_harmonizer",
+      "effects": [
+        {
+          "effect_id": "sargon_harmonizer.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "sargon_harmonizer.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本次效果结算完成",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "sargon_harmonizer"
+          },
+          "reading": "无法堆叠。回响：双方行动方式与自身相同的小队永久生命+1。共投1d6，5–6时这些小队再永久基础行动值+1。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "mogris_old_oak",
+      "effects": [
+        {
+          "effect_id": "mogris_old_oak.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "mogris_old_oak.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本次效果结算完成",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "mogris_old_oak"
+          },
+          "reading": "任务：单场连续存活45秒。奖励：从下一场起，突击：45秒后所有存活友军本场+5/+10。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "nyx_contract_demon",
+      "effects": [
+        {
+          "effect_id": "nyx_contract_demon.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "nyx_contract_demon.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "minion_card_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本次效果结算完成",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "nyx_contract_demon"
+          },
+          "reading": "任务：选择16次奈克斯指定的道路。奖励：突击：所有友军本场热诚+6。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "balin_helmet",
+      "effects": [
+        {
+          "effect_id": "balin_helmet.effect.rush",
+          "review_status": "confirmed",
+          "effect_group": "balin_helmet.group.rush",
+          "group_order": 1,
+          "trigger": "rush",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本次效果结算完成",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "balin_helmet"
+          },
+          "reading": "独立头盔位。突击复制普通装备到收藏，复制品下场战斗结束时消失。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "gravekeepers_notes",
+      "effects": [
+        {
+          "effect_id": "gravekeepers_notes.effect.last_wish",
+          "review_status": "confirmed",
+          "effect_group": "gravekeepers_notes.group.last_wish",
+          "group_order": 1,
+          "trigger": "last_wish",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_dead_card",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本次效果结算完成",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "gravekeepers_notes"
+          },
+          "reading": "基础护甲-1（最低0）。跨战记录双方不同种类的阵亡随从（不含佩戴者）。遗愿：每种已记录随从逐次对随机敌军造成1点固定无属性伤害。",
+          "questions": []
+        }
+      ]
+    },
+    {
+      "card_id": "insect_blade",
+      "effects": [
+        {
+          "effect_id": "insect_blade.effect.echo",
+          "review_status": "confirmed",
+          "effect_group": "insect_blade.group.echo",
+          "group_order": 1,
+          "trigger": "echo",
+          "conditions": [
+            "always"
+          ],
+          "target": "source_combat_unit",
+          "operation": "task_cards",
+          "value": {
+            "kind": "fixed",
+            "amount": 0
+          },
+          "duration": {
+            "kind": "instant"
+          },
+          "stacking": {
+            "kind": "not_applicable"
+          },
+          "source_owner": "equipment_instance",
+          "result_owner": "affected_combat_unit",
+          "end_conditions": [
+            "操作结算完成"
+          ],
+          "end_relation": "任一满足",
+          "end_parameters": "本次效果结算完成",
+          "end_operation": "完成本次效果",
+          "trigger_limit": {
+            "scope": "event",
+            "count": 1
+          },
+          "tags": [],
+          "related_effects": [],
+          "modifier": null,
+          "parameters": {
+            "content_effect": "insect_blade"
+          },
+          "reading": "任务：佩戴参战时，跨战累计友军召唤10个随从。奖励：回响：对随机2个敌方单位各造成2点固定无属性伤害。目标不足时可重复。",
+          "questions": []
+        }
+      ]
+    }
+  ]
+}

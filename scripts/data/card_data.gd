@@ -8,7 +8,18 @@ extends Resource
 
 const CardFactionScript = preload("res://scripts/data/card_faction.gd")
 const CardPackRegistryScript = preload("res://scripts/data/card_pack_registry.gd")
-const ART_FINISH_KEYS: Array[StringName] = [&"plain", &"foil", &"holographic", &"embossed", &"fractured", &"overframe"] # 六种卡面工艺的稳定保存键，顺序对应调整器选项
+const BACKGROUND_SETTINGS: CardBackgroundSettings = preload("res://resources/ui/card_background_settings.tres")
+const ART_FINISH_KEYS: Array[StringName] = [&"plain", &"foil", &"holographic", &"embossed", &"fractured", &"overframe", &"frosted", &"fingerprint"] # 工艺的稳定保存键；新工艺保留独立取景
+
+enum BackgroundStyle { ORIGINAL, BLUE_ALLEY, SUNNY_SQUARE, EMBERSEA_NIGHT }
+
+const BACKGROUND_NAMES := ["原始背景", "蓝色街巷", "晴日广场", "余烬秘渊"]
+const BACKGROUND_TEXTURES: Array[Texture2D] = [
+	preload("res://assets/card_backgrounds/card_background_placeholder.png"),
+	preload("res://assets/card_backgrounds/blue_alley.png"),
+	preload("res://assets/card_backgrounds/sunny_square.png"),
+	preload("res://assets/card_backgrounds/embersea_night.png"),
+]
 
 enum CardType {
 	MINION,
@@ -136,13 +147,16 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export_range(-99, 99, 1) var equipment_action_delta: int = 0 # 装备对基础行动数值的临时占位变化量
 @export_range(-99, 99, 1) var equipment_zeal_delta: int = 0 # 装备提供的带正负号热诚层数；每层按现有战斗规则改变5%冷却速度
 @export_range(-99, 99, 1) var equipment_health_delta: int = 0 # 装备对生命值的临时占位加成
-@export_range(0, 99, 1) var equipment_armor_delta: int = 0 # 装备对护甲值的临时占位加成
+@export_range(-99, 99, 1) var equipment_armor_delta: int = 0 # 装备对护甲值的带符号修正
 @export_range(-1, 8, 1) var wound_slot_count: int = -1 # -1按稀有度取默认伤势槽数；非负值用于明确覆盖
 @export_range(-1, 8, 1) var emblem_slot_count: int = -1 # -1按稀有度取默认纹章槽数；非负值用于明确覆盖
 @export var slot_layout: Array[int] = [] # 特殊卡可固定8项槽位类别；留空时OwnedCard获得时随机抽合法布局
 
 ## 卡面美术字段：人物偏移只改变取景，不改变 99×136 卡牌逻辑尺寸。
-@export var background_texture: Texture2D # 立绘透明区域下方的临时背景
+@export var background_texture: Texture2D # 卡牌专用的原始背景；空值使用默认原背景
+@export var background_style: BackgroundStyle = BackgroundStyle.ORIGINAL # 立绘下方选用的背景
+@export var background_offsets: Dictionary[int, Vector2i] = {} # 非超框随从按背景保存的像素偏移
+@export var background_overframe_offsets: Dictionary[int, Vector2i] = {} # 超框卡及装备、法术、资源全部外观按背景保存的像素偏移
 @export var art_texture: Texture2D # 卡牌人物立绘
 @export var art_normal_texture: Texture2D # 可选立绘法线贴图；为空时预览仍保留 3D 与整卡扫光
 @export var art_offset: Vector2i = Vector2i.ZERO # 立绘在裁切窗口内的像素偏移
@@ -150,6 +164,26 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export_multiline var effect_text: String = "" # 收藏、商店等非战场的效果说明
 @export_multiline var front_effect_text: String = "" # 前排效果说明；空文本沿用通用说明
 @export_multiline var back_effect_text: String = "" # 后排效果说明；空文本沿用通用说明
+
+
+func get_background_texture() -> Texture2D:
+	if background_style == BackgroundStyle.ORIGINAL and background_texture != null: return background_texture
+	return BACKGROUND_TEXTURES[background_style]
+
+
+func uses_overframe_background(overframe: bool) -> bool:
+	return overframe or card_type != CardType.MINION
+
+
+func get_background_offset(style: BackgroundStyle, overframe: bool = false) -> Vector2i:
+	var use_overframe := uses_overframe_background(overframe)
+	var offsets := background_overframe_offsets if use_overframe else background_offsets
+	return offsets.get(style, BACKGROUND_SETTINGS.get_offset(style, use_overframe))
+
+
+func set_background_offset(style: BackgroundStyle, value: Vector2i, overframe: bool = false) -> void:
+	var offsets := background_overframe_offsets if uses_overframe_background(overframe) else background_offsets
+	offsets[style] = value
 
 
 func get_art_offset_for_finish(finish: StringName) -> Vector2i:
@@ -326,3 +360,10 @@ func get_rarity_name() -> String:
 func is_unique_while_owned() -> bool:
 	# 这是同名持有限制，按稳定id判断；永久移除后恢复获取资格。
 	return rarity == Rarity.IV or card_type == CardType.EQUIPMENT
+
+
+func references_resource_rules() -> bool:
+	if card_type == CardType.RESOURCE or mining_uses != 0: return true
+	for keyword: String in ["开采", "资源", "矿物", "植物", "遗物"]:
+		if effect_text.contains(keyword): return true
+	return false

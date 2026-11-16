@@ -142,12 +142,16 @@ func test_echo_and_periods() -> void:
 	c.elapsed_seconds = 10
 	c.ironwall.process_due()
 	check(c.player_states[2].get_protection_count() == 1, "吊坠第10秒保护")
-	c = battle([squad(["formation_infantry", "scout"]), squad(["logistics_robot"]), squad(["formation_infantry", "scout"])])
+	c = battle([squad(["formation_infantry", "scout"]), squad(["mobilization_machine"]), squad(["formation_infantry", "scout"])])
+	check(c.ironwall.temporary_emblems.is_empty(), "动员机兵不再有开场临时纹章突击")
+	c.elapsed_seconds = 4.99
+	c.ironwall.process_due()
+	check(c.player_states[0].modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT) == 0 and c.player_states[2].modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT) == 0, "动员机兵第5秒前不触发周期强化")
 	c.elapsed_seconds = 5
 	c.ironwall.process_due()
 	var a := c.player_states[0].modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT)
 	var b := c.player_states[2].modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT)
-	check(a >= 1 and a <= 4 and a == b, "后勤一次骰给两邻小队")
+	check(a >= 1 and a <= 4 and a == b, "动员机兵每5秒共用一次骰给两邻小队")
 
 func test_armor_and_zeal() -> void:
 	var c := battle([squad(["walking_fighter"]), squad(["thunderstorm_infantry"])])
@@ -296,8 +300,9 @@ func test_mining_and_scrap() -> void:
 func test_rush_and_death() -> void:
 	var c := battle([squad(["formation_commander"]), squad(["formation_infantry", "scout"])])
 	check(c.player_states[1].get_protection_count() == 1, "军阵突击只相邻小队")
-	c = battle([squad(["mobilization_machine"]), squad(["scout"])])
-	check(c.ironwall.temporary_emblems.size() == 1, "动员每邻居临时纹章")
+	c = battle([squad(["logistics_robot"]), squad(["scout"])])
+	check(c.ironwall.temporary_emblems.size() == 1, "后勤机器人突击给相邻友军临时纹章")
+	check(not c.ironwall.periods.any(func(entry: Dictionary) -> bool: return entry.key == &"logistics_robot"), "后勤机器人不再注册5秒周期强化")
 	var recipient := c.ironwall.temporary_emblems[0].owned as OwnedCard
 	c.ironwall.restore_temporary()
 	check(recipient.emblem_slots.all(func(s: Dictionary) -> bool: return s.is_empty()), "临时纹章战后恢复")

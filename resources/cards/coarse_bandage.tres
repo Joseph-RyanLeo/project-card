@@ -12,10 +12,14 @@ effect_ids = Array[StringName]([&"coarse_bandage.effect.01"])
 card_type = 1
 base_value = 0
 max_health = 0
-rarity = 0
 equipment_type = 3
-equipment_action_delta = 0
-equipment_zeal_delta = 0
 equipment_armor_delta = 1
-effect_text = "装备时，遮蔽装备者最多2处伤势。"
+background_style = 3
+background_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, -20)
+})
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 1)
+})
 art_texture = ExtResource("2_art")
+effect_text = "装备时，遮蔽装备者最多2处伤势。"

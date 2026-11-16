@@ -63,7 +63,7 @@ offset_top = 58.0
 offset_right = 1030.0
 offset_bottom = 102.0
 theme_override_font_sizes/font_size = 16
-text = "筛选卡包与种类，编辑名称、属性与立绘取景。\n卡牌资料与取景用卡牌保存；强度／景深／纹理用“保存工艺参数（全局）”。"
+text = "筛选卡包与种类，单击列表切换卡牌；编辑名称、属性、背景与立绘取景。\n背景位置可分别保存为普通卡共用值或超框卡独立值，也可应用到当前卡包。"
 horizontal_alignment = 1
 
 [node name="PreviewCaption" type="Label" parent="CenterContainer/Workspace"]
@@ -107,87 +107,99 @@ offset_right = 1220.0
 offset_bottom = 658.0
 mouse_filter = 2
 
-[node name="CardLabel" type="Label" parent="CenterContainer/Workspace"]
+[node name="BackgroundSelector" type="OptionButton" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
 layout_mode = 0
 offset_left = 660.0
-offset_top = 128.0
-offset_right = 705.0
-offset_bottom = 162.0
+offset_top = 132.0
+offset_right = 850.0
+offset_bottom = 166.0
 theme_override_font_sizes/font_size = 16
-text = "强度"
+tooltip_text = "切换立绘下方的背景图，按原图像素显示。"
 
-[node name="FinishStrengthSpin" type="SpinBox" parent="CenterContainer/Workspace"]
+[node name="BackgroundXLabel" type="Label" parent="CenterContainer/Workspace"]
+layout_mode = 0
+offset_left = 660.0
+offset_top = 174.0
+offset_right = 695.0
+offset_bottom = 208.0
+theme_override_font_sizes/font_size = 16
+text = "背景 X"
+vertical_alignment = 1
+
+[node name="BackgroundXSpinBox" type="SpinBox" parent="CenterContainer/Workspace"]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 707.0
-offset_top = 128.0
-offset_right = 810.0
-offset_bottom = 162.0
-tooltip_text = "全息、浮雕、碎闪的反光强度；闪卡沿用原扫光参数。"
-max_value = 1.5
-step = 0.05
-value = 0.75
+offset_left = 700.0
+offset_top = 174.0
+offset_right = 845.0
+offset_bottom = 208.0
+theme_override_font_sizes/font_size = 16
+min_value = -256.0
+max_value = 256.0
 
-[node name="FinishDepthLabel" type="Label" parent="CenterContainer/Workspace"]
+[node name="BackgroundYLabel" type="Label" parent="CenterContainer/Workspace"]
 layout_mode = 0
-offset_left = 835.0
-offset_top = 128.0
-offset_right = 880.0
-offset_bottom = 162.0
-text = "景深"
+offset_left = 860.0
+offset_top = 174.0
+offset_right = 895.0
+offset_bottom = 208.0
+theme_override_font_sizes/font_size = 16
+text = "背景 Y"
+vertical_alignment = 1
 
-[node name="FinishDepthSpin" type="SpinBox" parent="CenterContainer/Workspace"]
+[node name="BackgroundYSpinBox" type="SpinBox" parent="CenterContainer/Workspace"]
 unique_name_in_owner = true
 layout_mode = 0
-offset_left = 882.0
-offset_top = 128.0
-offset_right = 985.0
-offset_bottom = 162.0
-tooltip_text = "控制全息人物、卡框与背景之间的前后距离；三层保持相同倾角。"
-max_value = 5.0
-step = 0.25
-value = 2.5
-
-[node name="FinishDensityLabel" type="Label" parent="CenterContainer/Workspace"]
-layout_mode = 0
-offset_left = 1010.0
-offset_top = 128.0
-offset_right = 1055.0
-offset_bottom = 162.0
-text = "纹理"
-
-[node name="FinishDensitySpin" type="SpinBox" parent="CenterContainer/Workspace"]
-unique_name_in_owner = true
-layout_mode = 0
-offset_left = 1057.0
-offset_top = 128.0
-offset_right = 1180.0
-offset_bottom = 162.0
-tooltip_text = "越大纹理越细；碎闪调低可显示大块镜碎。"
-min_value = 5.0
-max_value = 90.0
-step = 1.0
-value = 32.0
+offset_left = 900.0
+offset_top = 174.0
+offset_right = 1045.0
+offset_bottom = 208.0
+theme_override_font_sizes/font_size = 16
+min_value = -256.0
+max_value = 256.0
 
 [node name="CardTypeSelector" type="OptionButton" parent="CenterContainer/Workspace"]
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 920.0
-offset_top = 176.0
+offset_top = 212.0
 offset_right = 1180.0
-offset_bottom = 212.0
+offset_bottom = 248.0
 theme_override_font_sizes/font_size = 18
 
 [node name="CardSelector" type="ItemList" parent="CenterContainer/Workspace"]
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 660.0
-offset_top = 266.0
+offset_top = 294.0
 offset_right = 1180.0
 offset_bottom = 364.0
 theme_override_font_sizes/font_size = 18
 select_mode = 0
 allow_reselect = true
+
+[node name="SaveSharedBackgroundButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 860.0
+offset_top = 132.0
+offset_right = 1000.0
+offset_bottom = 166.0
+theme_override_font_sizes/font_size = 15
+text = "保存共用位置"
+tooltip_text = "保存普通卡的共用位置；超框预览会单独保存。"
+
+[node name="ApplySamePackBackgroundButton" type="Button" parent="CenterContainer/Workspace"]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 1010.0
+offset_top = 132.0
+offset_right = 1180.0
+offset_bottom = 166.0
+theme_override_font_sizes/font_size = 15
+text = "应用到同卡包"
+tooltip_text = "将当前背景和位置直接保存到当前卡包的全部卡牌。"
 
 [node name="EffectTitle" type="Label" parent="CenterContainer/Workspace"]
 visible = false
@@ -385,9 +397,9 @@ autowrap_mode = 3
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 660.0
-offset_top = 176.0
+offset_top = 212.0
 offset_right = 905.0
-offset_bottom = 212.0
+offset_bottom = 248.0
 theme_override_font_sizes/font_size = 16
 
 
@@ -395,9 +407,9 @@ theme_override_font_sizes/font_size = 16
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 660.0
-offset_top = 222.0
+offset_top = 254.0
 offset_right = 1050.0
-offset_bottom = 256.0
+offset_bottom = 288.0
 theme_override_font_sizes/font_size = 16
 placeholder_text = "搜索名称或卡牌ID"
 
@@ -405,9 +417,9 @@ placeholder_text = "搜索名称或卡牌ID"
 unique_name_in_owner = true
 layout_mode = 0
 offset_left = 1060.0
-offset_top = 222.0
+offset_top = 254.0
 offset_right = 1180.0
-offset_bottom = 256.0
+offset_bottom = 288.0
 theme_override_font_sizes/font_size = 16
 text = "刷新卡牌"
 
@@ -492,23 +504,12 @@ offset_bottom = 472.0
 theme_override_font_sizes/font_size = 16
 max_value = 999.0
 
-[node name="SaveFinishSettingsButton" type="Button" parent="CenterContainer/Workspace"]
-unique_name_in_owner = true
-layout_mode = 0
-offset_left = 800.0
-offset_top = 18.0
-offset_right = 1046.0
-offset_bottom = 54.0
-theme_override_font_sizes/font_size = 16
-text = "保存工艺参数（全局）"
-tooltip_text = "保存全息、法线、碎闪的强度／景深／纹理。所有真实卡面共用，不写入单张CardData。"
 
-[node name="ReloadFinishSettingsButton" type="Button" parent="CenterContainer/Workspace"]
-unique_name_in_owner = true
+[node name="TextureToolsHint" type="Label" parent="CenterContainer/Workspace"]
 layout_mode = 0
-offset_left = 1056.0
+offset_left = 790.0
 offset_top = 18.0
 offset_right = 1232.0
 offset_bottom = 54.0
 theme_override_font_sizes/font_size = 16
-text = "重载工艺参数"
+text = "纹理与闪纹请使用独立的卡牌纹理调整器"

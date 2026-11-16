@@ -45,7 +45,7 @@
       "cooldown": "5s",
       "health": "2",
       "armor": "3",
-      "effect": "乡邻：所有友方高牌牌型的基础数值翻倍。",
+      "effect": "乡邻：所有友方混沌牌型的基础数值翻倍。",
       "source_blue_slots": "🔵🔵",
       "source_red_slots": "🔴🔴🔴"
     },
@@ -189,7 +189,7 @@
       "cooldown": "4",
       "health": "2",
       "armor": "0",
-      "effect": "友方的对子牌型视为同元素三条。",
+      "effect": "友方的双鸣牌型视为同元素三相。",
       "source_blue_slots": "🔵🔵",
       "source_red_slots": "🔴🔴"
     },
@@ -234,10 +234,10 @@
       "subtype": "强化",
       "actions": "无",
       "value": "-",
-      "cooldown": "开战时友方拥有顺子牌型",
+      "cooldown": "开战时友方拥有连星牌型",
       "health": "-",
       "armor": "-",
-      "effect": "拥有顺子牌型的小队为相邻卡牌提供\n1d6点数值加成以及1d10点生命值上限加成",
+      "effect": "拥有连星牌型的小队为相邻卡牌提供\n1d6点数值加成以及1d10点生命值上限加成",
       "source_blue_slots": "-",
       "source_red_slots": "-"
     },
@@ -285,7 +285,7 @@
       "cooldown": "开战时",
       "health": "-",
       "armor": "-",
-      "effect": "战斗开始10秒内敌人的对子与三条牌型失效。",
+      "effect": "战斗开始10秒内敌人的双鸣与三相牌型失效。",
       "source_blue_slots": "-",
       "source_red_slots": "-"
     },

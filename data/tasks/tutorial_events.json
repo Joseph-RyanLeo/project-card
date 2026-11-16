@@ -1,0 +1,77 @@
+{
+  "smith": {
+    "path_id": "tutorial_smith",
+    "kind": "free_event",
+    "tutorial": true,
+    "first_day": 2,
+    "last_day": 2,
+    "name": "找到铁匠",
+    "hint": "矿脉边传来熟悉的锤击声，玛格丽特就在前方。",
+    "reward": "tutorial_smith",
+    "cost": 0
+  },
+  "fortuna": {
+    "path_id": "tutorial_fortuna",
+    "kind": "free_event",
+    "tutorial": true,
+    "first_day": 1,
+    "last_day": 1,
+    "name": "福尔图纳的馈赠",
+    "art": "res://assets/card_ui/status/emblems/金币袋.png",
+    "hint": "你刚抬起脚，发现腿边有一个袋子",
+    "reward": "story",
+    "description": "你刚抬起脚，发现腿边有一个袋子",
+    "options": [
+      {
+        "label": "捡起来打开",
+        "condition": "-",
+        "cost": 0,
+        "roll_sides": 10,
+        "roll_max": 8,
+        "outcomes": [
+          {
+            "text": "你们打开钱袋，里面整整齐齐地码着一堆币。正准备收起来时，袋底还闪过一道金光。看来福尔图纳今天格外慷慨。",
+            "source_probability": "1d10=10",
+            "roll_values": [
+              10
+            ],
+            "effect_text": "获得15金币、一个随机小卡包和一个随机大卡包",
+            "gold": 15,
+            "packs": [
+              "small",
+              "large"
+            ]
+          },
+          {
+            "text": "你们从钱袋里倒出几枚金币，正准备将空袋子丢掉，却发现里面还有一个夹层。撕开夹层后，更多好东西躺在里面",
+            "source_probability": "1d10=9",
+            "roll_values": [
+              9
+            ],
+            "effect_text": "获得15金币、一个随机大卡包",
+            "gold": 15,
+            "packs": [
+              "large"
+            ]
+          },
+          {
+            "text": "你们打开钱袋，发现里面装着一堆崭新的金币。虽然没有其他特别的东西，但能在路边白捡一笔钱，已经足够让人高兴了。",
+            "source_probability": "1d10≤8",
+            "roll_values": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8
+            ],
+            "effect_text": "获得15金币",
+            "gold": 15
+          }
+        ]
+      }
+    ]
+  }
+}

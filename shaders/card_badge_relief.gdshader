@@ -1,12 +1,13 @@
 shader_type canvas_item;
 render_mode unshaded;
 
+#include "res://shaders/card_layer_flash.gdshaderinc"
+
 uniform sampler2D badge_texture : source_color, filter_nearest;
 uniform sampler2D shadow_texture : filter_linear, repeat_disable; // 独立连续采样投影；原图仍保留最近邻像素
 uniform vec2 source_size = vec2(1.0); // 独立图标素材尺寸，用于按原图像素取样
 uniform vec2 draw_size = vec2(1.0); // 图标实际绘制尺寸，保留原有缩放与居中
 uniform vec2 draw_origin = vec2(0.0); // 原图在TextureRect内的居中偏移
-uniform vec2 pointer_force = vec2(0.0);
 uniform bool relief_enabled = true;
 uniform float padding_pixels = 3.0; // 给轮廓外的投影保留3个原生像素
 uniform float normal_strength = 2.4; // 轮廓与表面亮度生成的法线起伏强度
@@ -44,19 +45,26 @@ void fragment() {
 		vec2 right = badge_uv + vec2(step_uv.x, 0.0);
 		vec2 up = badge_uv - vec2(0.0, step_uv.y);
 		vec2 down = badge_uv + vec2(0.0, step_uv.y);
-		float dx = badge_height(texture(badge_texture, clamp(right, vec2(0.0), vec2(1.0)))) * inside_badge(right)
-			- badge_height(texture(badge_texture, clamp(left, vec2(0.0), vec2(1.0)))) * inside_badge(left);
-		float dy = badge_height(texture(badge_texture, clamp(down, vec2(0.0), vec2(1.0)))) * inside_badge(down)
-			- badge_height(texture(badge_texture, clamp(up, vec2(0.0), vec2(1.0)))) * inside_badge(up);
+		vec4 left_pixel = texture(badge_texture, clamp(left, vec2(0.0), vec2(1.0))) * inside_badge(left);
+		vec4 right_pixel = texture(badge_texture, clamp(right, vec2(0.0), vec2(1.0))) * inside_badge(right);
+		vec4 up_pixel = texture(badge_texture, clamp(up, vec2(0.0), vec2(1.0))) * inside_badge(up);
+		vec4 down_pixel = texture(badge_texture, clamp(down, vec2(0.0), vec2(1.0))) * inside_badge(down);
+		float dx = badge_height(right_pixel) - badge_height(left_pixel);
+		float dy = badge_height(down_pixel) - badge_height(up_pixel);
 		vec3 normal = normalize(vec3(-dx * normal_strength, -dy * normal_strength, 1.0));
 		vec3 light = normalize(vec3(pointer_force.x * 0.85 - 0.35, pointer_force.y * 0.85 - 0.45, 1.0));
 		float diffuse = max(dot(normal, light), 0.0);
 		vec3 half_direction = normalize(light + vec3(0.0, 0.0, 1.0));
 		float specular = pow(max(dot(normal, half_direction), 0.0), 24.0);
+		vec3 outline = vec3(0.0);
+		if (outline_highlight_enabled && base.a >= 0.5) {
+			vec2 finish_position = layer_origin + draw_origin + badge_uv * draw_size;
+			outline = card_outline_flash(finish_position, base, left_pixel, right_pixel, up_pixel, down_pixel);
+		}
 		base.rgb *= mix(1.0, 0.65 + diffuse * 0.4, light_strength);
-		// 高光按原图亮度调节，黑色描边不会被漂白。
+		// 浮雕表面高光按原图亮度调节；描边另外跟随整卡光带。
 		float luminance = dot(base.rgb, vec3(0.299, 0.587, 0.114));
-		base.rgb += vec3(specular * light_strength * 0.16 * smoothstep(0.06, 0.5, luminance));
+		base.rgb += vec3(specular * light_strength * 0.16 * smoothstep(0.06, 0.5, luminance)) + outline;
 		vec2 offset = shadow_rest_offset - pointer_force * shadow_travel;
 		vec2 shadow_uv = badge_uv - offset / max(draw_size, vec2(1.0));
 		vec2 padded_shadow_uv = (shadow_uv * source_size + vec2(1.0))

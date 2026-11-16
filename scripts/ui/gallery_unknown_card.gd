@@ -15,13 +15,20 @@ func setup(card: CardData) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	modulate = Color(HINT_ALPHA, HINT_ALPHA, HINT_ALPHA)
+	var background_window := Control.new()
+	background_window.size = SIZE
+	background_window.clip_contents = true
+	background_window.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(background_window)
 	var background := TextureRect.new()
 	background.name = "HintBackground"
-	background.texture = card.background_texture if card.background_texture != null else CardView.DEFAULT_ART_BACKGROUND_TEXTURE
+	background.texture = card.get_background_texture()
 	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	background.size = SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP
+	background.size = background.texture.get_size()
+	background.position = ((SIZE - background.size) * 0.5).floor() + Vector2(card.get_background_offset(card.background_style))
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(background)
+	background_window.add_child(background)
 	var frame := TextureRect.new()
 	frame.name = "HintRarityFrame"
 	frame.texture = load("res://assets/card_frames/card_frame_%s.png" % card.get_rarity_asset_key())

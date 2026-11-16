@@ -1,6 +1,6 @@
 extends "res://tests/service_interaction_revision_20261020_test.gd"
 
-## 正式F2／Esc输入和真实免费交易；等待黑场结束再继续操作。
+## 实验室入口、正式 Esc 输入和真实免费交易。
 const ENTRY_SAVE := "/private/tmp/project-card-rare-entry-original.json"
 
 func _run() -> void:
@@ -66,11 +66,8 @@ func wait_for(predicate: Callable) -> bool:
 	return predicate.call()
 
 func open_rare(source: Control) -> void:
-	await press_key(KEY_F2)
-	check(source._developer_console.visible and source._developer_console._command_input.has_focus(), "真实F2打开并聚焦控制台")
-	source._developer_console._command_input.text = "rare shop"
-	await press_key(KEY_ENTER)
-	check(await wait_for(func(): return is_instance_valid(shell._rare_shop) and not shell.screen_transition.busy), "真实回车提交rare shop并等待加载结束")
+	await source.change_screen(shell.open_rare_shop, true)
+	check(await wait_for(func(): return is_instance_valid(shell._rare_shop) and not shell.screen_transition.busy), "通过实验室接口打开测试商店并等待加载结束")
 
 func verify_tuner(source: Control) -> void:
 	await press_key(KEY_ESCAPE)

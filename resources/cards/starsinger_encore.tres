@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"starsinger_encore"
+display_name = "星歌者的安可曲"
+pack_id = &"gilded_commission"
+rarity = 3
+content_effect = &"starsinger_encore"
+card_type = 2
+spell_type = 3
+spell_trigger_kind = 2
+effect_text = "友军发生位移时：随机再触发一个友方突击。位移判定冷却0.1秒。"

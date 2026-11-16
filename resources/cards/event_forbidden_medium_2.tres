@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"event_forbidden_medium_2"
+display_name = "硬皮禁药"
+pack_id = &"event_potions"
+content_effect = &"event_forbidden_medium_2"
+card_type = 1
+equipment_type = 5
+rarity = 2
+effect_text = "突击：消耗。新增一处不可清除的随机I级伤势，并随机升级一处伤势使其不可清除。永久保护+4。"

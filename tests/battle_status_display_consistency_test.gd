@@ -74,7 +74,7 @@ func _run() -> void:
 	for row: BattlefieldRow in [main.front_row, main.back_row, main.enemy_front_row, main.enemy_back_row]:
 		row.clear_squads()
 	var tree := add_card("moonlight_treant", main.front_row)
-	add_card("mobilization_machine", main.front_row)
+	add_card("logistics_robot", main.front_row)
 	var scout := add_card("scout", main.front_row)
 	for index: int in scout.emblem_slots.size():
 		scout.set_emblem_slot(index, {"emblem_id": &"盾牌Ⅰ", "instance_id": StringName("upgrade:%d" % index)})
@@ -99,7 +99,7 @@ func _run() -> void:
 	var spirit_state := state_for(spirit)
 	var enemy_state := controller.enemy_states[0]
 	enemy = enemy_state.squad_data.get_effect_source_instance()
-	check(controller.ironwall.temporary_emblems.size() == 2, "动员实际给两名邻居新增或升级纹章")
+	check(controller.ironwall.temporary_emblems.size() == 2, "后勤机器人实际给两名邻居新增或升级纹章")
 	check(tree.emblem_slots.any(func(s: Dictionary) -> bool: return not s.is_empty()), "树人实际获得本场纹章")
 	check(scout.emblem_slots.any(func(s: Dictionary) -> bool: return s.get("emblem_id") == &"盾牌Ⅱ"), "满槽邻居实际升级纹章")
 	check(golem.emblem_slots[0].is_empty() and golem_state.modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT) == 10, "魔像实际移除纹章并获得强化")

@@ -14,6 +14,10 @@ rarity = 1
 equipment_type = 2
 equipment_zeal_delta = -2
 equipment_armor_delta = 10
+background_style = 3
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 2)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-6, 14)
 effect_text = "非疲劳伤害降低50%；开采之外的行动投1d6，<4则失败。"

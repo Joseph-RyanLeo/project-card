@@ -9,16 +9,12 @@ const MAIN_SCENE_PATH := "res://scenes/Main.tscn"
 const CARD_PREVIEW_SHADER: Shader = preload(
 	"res://shaders/card_preview_3d.gdshader"
 )
-const FINISH_SETTINGS = preload("res://scripts/ui/card_finish_settings.gd")
 const FINISH_PREVIEW = preload("res://scripts/ui/card_finish_preview.gd")
 const PREVIEW_EFFECT_PADDING_BOTTOM_RIGHT := Vector2(4.0, 4.0) # 在卡面真实越界范围外为 3D 投影额外保留的右下透明边
 const PREVIEW_POINTER_RESPONSE: float = 12.0 # 鼠标进入、离开时 3D 倾斜追随与回正速度
 const PREVIEW_MAX_TILT_DEGREES: float = 10.0 # 4× 预览跟随鼠标时的最大倾斜角度
 const PREVIEW_FOV_DEGREES: float = 72.0 # 整卡与全息层共用的相机视野角，越大近大远小越明显
 const PREVIEW_PROJECTION_INSET: float = 0.0 # 透视补偿内缩量；0 保持开关 3D 前后的卡面尺寸一致
-const PREVIEW_FLASH_SPACING: float = 7.0 # 扫光条纹密度；越大，同屏出现的光带越多
-const PREVIEW_FLASH_WIDTH: float = 2.4 # 扫光指数；越大光带越窄，越小光带越宽
-const PREVIEW_FLASH_INTENSITY: float = 0.32 # 扫光叠加亮度；建议在 0.2～0.6 之间微调
 const FINISH_RENDER_SCALE := 4.0 # 内层动态压纹按4倍采样计算，源图仍使用最近邻保持像素边缘
 const CARD_RESOURCE_DIRECTORY := "res://resources/cards"
 const ALL_PACK_ID: StringName = &"__all_packs__"
@@ -46,6 +42,8 @@ var _active_pack_id: StringName = ALL_PACK_ID
 			if not _drafts.has(key):
 				var draft := value.duplicate() as CardData
 				draft.art_finish_offsets = value.art_finish_offsets.duplicate()
+				draft.background_offsets = value.background_offsets.duplicate()
+				draft.background_overframe_offsets = value.background_overframe_offsets.duplicate()
 				_drafts[key] = draft
 			_preview_data = _drafts[key]
 		else: _preview_data = null
@@ -81,9 +79,6 @@ var _refresh_queued: bool = false
 var _preview_effect_material: ShaderMaterial
 var _preview_pointer_force := Vector2.ZERO
 var _active_selector_card_type: int = -1
-var finish_settings_path := FINISH_SETTINGS.PATH
-var _finish_settings: Resource
-var _finish_drafts: Dictionary = {}
 var _finish_preview: CardFinishPreview
 
 @onready var preview_card: CardView = %PreviewCard
@@ -95,6 +90,8 @@ var _finish_preview: CardFinishPreview
 @onready var pack_selector: OptionButton = %PackSelector
 @onready var search_input: LineEdit = %SearchInput
 @onready var refresh_catalog_button: Button = %RefreshCatalogButton
+@onready var apply_same_pack_background_button: Button = %ApplySamePackBackgroundButton
+@onready var save_shared_background_button: Button = %SaveSharedBackgroundButton
 @onready var name_input: LineEdit = %NameInput
 @onready var value_spin_box: SpinBox = %ValueSpinBox
 @onready var health_spin_box: SpinBox = %HealthSpinBox
@@ -102,6 +99,9 @@ var _finish_preview: CardFinishPreview
 @onready var value_title: Label = %ValueTitle
 @onready var health_title: Label = %HealthTitle
 @onready var armor_title: Label = %ArmorTitle
+@onready var background_selector: OptionButton = %BackgroundSelector
+@onready var background_x_spin_box: SpinBox = %BackgroundXSpinBox
+@onready var background_y_spin_box: SpinBox = %BackgroundYSpinBox
 @onready var offset_x_spin_box: SpinBox = %OffsetXSpinBox
 @onready var offset_y_spin_box: SpinBox = %OffsetYSpinBox
 @onready var back_button: Button = %BackButton
@@ -117,11 +117,6 @@ var _finish_preview: CardFinishPreview
 @onready var use_flash_check: CheckButton = %UseFlashCheck
 @onready var flash_type_selector: OptionButton = %FlashTypeSelector
 @onready var finish_selector: OptionButton = %FinishSelector
-@onready var save_finish_button: Button = %SaveFinishSettingsButton
-@onready var reload_finish_button: Button = %ReloadFinishSettingsButton
-@onready var finish_strength_spin: SpinBox = %FinishStrengthSpin
-@onready var finish_depth_spin: SpinBox = %FinishDepthSpin
-@onready var finish_density_spin: SpinBox = %FinishDensitySpin
 
 
 func _ready() -> void:
@@ -135,8 +130,7 @@ func _ready() -> void:
 	_populate_pack_selector()
 	_populate_card_selector()
 	_populate_effect_controls()
-	_finish_settings = ResourceLoader.load(finish_settings_path, "", ResourceLoader.CACHE_MODE_IGNORE)
-	_load_finish_controls()
+	for title: String in CardData.BACKGROUND_NAMES: background_selector.add_item(title)
 	_sync_effect_controls_to_material()
 	_connect_runtime_controls()
 	_sync_runtime_controls()
@@ -220,18 +214,6 @@ func _setup_effect_preview() -> void:
 	_preview_effect_material.set_shader_parameter(
 		"inset",
 		PREVIEW_PROJECTION_INSET
-	)
-	_preview_effect_material.set_shader_parameter(
-		"stripe_spacing",
-		PREVIEW_FLASH_SPACING
-	)
-	_preview_effect_material.set_shader_parameter(
-		"stripe_width",
-		PREVIEW_FLASH_WIDTH
-	)
-	_preview_effect_material.set_shader_parameter(
-		"flash_intensity",
-		PREVIEW_FLASH_INTENSITY
 	)
 	preview_display.material = _preview_effect_material
 	_finish_preview = FINISH_PREVIEW.new()
@@ -347,7 +329,7 @@ func _draft_key(card: CardData) -> String:
 
 
 func _editable_fields(card: CardData) -> Array[StringName]:
-	var fields: Array[StringName] = [&"display_name"]
+	var fields: Array[StringName] = [&"display_name", &"background_style"]
 	match card.card_type:
 		CardData.CardType.MINION: fields.append_array([&"base_value", &"max_health", &"armor"])
 		CardData.CardType.EQUIPMENT: fields.append_array([&"equipment_action_delta", &"equipment_health_delta", &"equipment_armor_delta"])
@@ -362,7 +344,7 @@ func _has_unsaved_changes(source: CardData) -> bool:
 		if draft.get(field) != source.get(field): return true
 	for finish_key: StringName in CardData.ART_FINISH_KEYS:
 		if draft.get_art_offset_for_finish(finish_key) != source.get_art_offset_for_finish(finish_key): return true
-	return false
+	return draft.background_offsets != source.background_offsets or draft.background_overframe_offsets != source.background_overframe_offsets
 
 
 func _selected_finish_key() -> StringName:
@@ -397,6 +379,11 @@ func _connect_runtime_controls() -> void:
 	health_spin_box.value_changed.connect(_on_stat_changed.bind(&"max_health"))
 	armor_spin_box.value_changed.connect(_on_stat_changed.bind(&"armor"))
 	card_selector.item_selected.connect(_on_card_selected)
+	apply_same_pack_background_button.pressed.connect(_apply_background_to_same_pack)
+	save_shared_background_button.pressed.connect(_save_shared_background_position)
+	background_selector.item_selected.connect(_on_background_selected)
+	background_x_spin_box.value_changed.connect(_on_background_offset_changed)
+	background_y_spin_box.value_changed.connect(_on_background_offset_changed)
 	offset_x_spin_box.value_changed.connect(_on_offset_x_changed)
 	offset_y_spin_box.value_changed.connect(_on_offset_y_changed)
 	back_button.pressed.connect(_on_back_button_pressed)
@@ -411,13 +398,7 @@ func _connect_runtime_controls() -> void:
 	use_3d_check.toggled.connect(_on_use_3d_toggled)
 	use_flash_check.toggled.connect(_on_use_flash_toggled)
 	flash_type_selector.item_selected.connect(_on_flash_type_selected)
-	finish_selector.item_selected.connect(func(_index: int) -> void:
-		_load_finish_controls()
-		_on_finish_controls_changed())
-	save_finish_button.pressed.connect(_save_finish_settings)
-	reload_finish_button.pressed.connect(_reload_finish_settings)
-	for spin: SpinBox in [finish_strength_spin, finish_depth_spin, finish_density_spin]:
-		spin.value_changed.connect(func(_value: float) -> void: _on_finish_controls_changed())
+	finish_selector.item_selected.connect(func(_index: int) -> void: _on_finish_controls_changed())
 
 
 func _sync_runtime_controls() -> void:
@@ -425,6 +406,7 @@ func _sync_runtime_controls() -> void:
 		return
 	_sync_card_selector()
 	_sync_offset_controls()
+	_sync_background_controls()
 	_sync_card_fields()
 
 
@@ -457,6 +439,96 @@ func _sync_offset_controls() -> void:
 	offset_y_spin_box.value = preview_art_offset.y
 	offset_x_spin_box.set_block_signals(false)
 	offset_y_spin_box.set_block_signals(false)
+
+
+func _sync_background_controls() -> void:
+	var enabled := _preview_data != null
+	background_selector.disabled = not enabled
+	save_shared_background_button.disabled = not enabled
+	apply_same_pack_background_button.disabled = not enabled
+	var use_overframe := enabled and _preview_data.uses_overframe_background(_is_overframe_preview())
+	save_shared_background_button.text = "保存超框共用" if use_overframe else "保存普通共用"
+	save_shared_background_button.tooltip_text = "超框位置也用于装备、法术和资源的全部外观。" if use_overframe else "保存非超框随从卡的共用背景位置。"
+	background_selector.select(int(_preview_data.background_style) if enabled else -1)
+	var offset := _preview_data.get_background_offset(_preview_data.background_style, _is_overframe_preview()) if enabled else Vector2i.ZERO
+	background_x_spin_box.editable = enabled
+	background_y_spin_box.editable = enabled
+	background_x_spin_box.set_value_no_signal(offset.x)
+	background_y_spin_box.set_value_no_signal(offset.y)
+
+
+func _on_background_selected(index: int) -> void:
+	if _preview_data == null: return
+	_preview_data.background_style = index as CardData.BackgroundStyle
+	_sync_background_controls()
+	_queue_preview_refresh()
+
+
+func _on_background_offset_changed(_value: float) -> void:
+	if _preview_data == null: return
+	var offset := Vector2i(int(background_x_spin_box.value), int(background_y_spin_box.value))
+	_preview_data.set_background_offset(_preview_data.background_style, offset, _is_overframe_preview())
+	_queue_preview_refresh()
+
+
+func _is_overframe_preview() -> bool:
+	return _finish_preview != null and _finish_preview.finish == CardFinishPreview.Finish.OVERFRAME
+
+
+func _apply_background_to_same_pack() -> void:
+	if _preview_data == null:
+		return
+	if card_data.pack_id.is_empty():
+		_set_status("当前卡牌没有所属卡包，未执行批量应用。")
+		return
+	var style := _preview_data.background_style
+	var overframe := _is_overframe_preview()
+	var offset := _preview_data.get_background_offset(style, overframe)
+	var changed := 0
+	for catalog_card: CardData in _catalog:
+		if catalog_card.pack_id != card_data.pack_id:
+			continue
+		var path := catalog_card.resource_path
+		var target := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as CardData
+		if target == null:
+			continue
+		target.background_style = style
+		target.set_background_offset(style, offset, overframe)
+		if ResourceSaver.save(target, path) != OK:
+			continue
+		catalog_card.background_style = style
+		catalog_card.set_background_offset(style, offset, overframe)
+		var existing_draft := _drafts.get(path) as CardData
+		if existing_draft != null:
+			existing_draft.background_style = style
+			existing_draft.set_background_offset(style, offset, overframe)
+		if card_data != catalog_card and card_data.resource_path == path:
+			card_data.background_style = style
+			card_data.set_background_offset(style, offset, overframe)
+		changed += 1
+	if changed == 0:
+		_set_status("没有卡牌成功保存；请确认目标资源可写。")
+		return
+	_refresh_preview()
+	_set_status("已将背景 %s 及位置 %s 应用到卡包“%s”的 %d 张卡牌。" % [CardData.BACKGROUND_NAMES[style], offset, CardPackRegistry.get_display_name(card_data.pack_id), changed])
+
+
+func _save_shared_background_position() -> void:
+	if _preview_data == null:
+		_set_status("请先选择一张卡牌和背景。")
+		return
+	var style := _preview_data.background_style
+	var overframe := _preview_data.uses_overframe_background(_is_overframe_preview())
+	var offset := _preview_data.get_background_offset(style, overframe)
+	var previous := CardData.BACKGROUND_SETTINGS.get_offset(style, overframe)
+	CardData.BACKGROUND_SETTINGS.set_offset(style, offset, overframe)
+	var error := ResourceSaver.save(CardData.BACKGROUND_SETTINGS, "res://resources/ui/card_background_settings.tres")
+	if error != OK:
+		CardData.BACKGROUND_SETTINGS.set_offset(style, previous, overframe)
+		_set_status("共用背景位置保存失败（错误码%d）。" % error)
+		return
+	_refresh_preview()
+	_set_status("已保存%s卡共用的%s背景位置：%s。" % ["超框" if overframe else "普通", CardData.BACKGROUND_NAMES[style], offset])
 
 
 func _on_card_selected(item_index: int) -> void:
@@ -522,70 +594,13 @@ func _on_use_flash_toggled(enabled: bool) -> void:
 	_refresh_preview()
 
 
-func _load_finish_controls() -> void:
-	var key: StringName = CardData.ART_FINISH_KEYS[finish_selector.get_selected_id()]
-	var values: Vector3 = _finish_drafts.get(key, _finish_settings.parameters(key) if _finish_settings != null else Vector3(0.75, 2.5, 32))
-	for entry: Array in [[finish_strength_spin, values.x], [finish_depth_spin, values.y], [finish_density_spin, values.z]]:
-		entry[0].set_value_no_signal(entry[1])
-
-
-func _has_finish_changes() -> bool:
-	if _finish_settings == null: return false
-	for key: StringName in _finish_drafts:
-		if not _finish_drafts[key].is_equal_approx(_finish_settings.parameters(key)): return true
-	return false
-
-
-func _save_finish_settings() -> void:
-	var latest := ResourceLoader.load(finish_settings_path, "", ResourceLoader.CACHE_MODE_IGNORE)
-	if latest == null:
-		_set_status("无法读取工艺配置；尚未保存，预览草稿保留。")
-		return
-	# 只合并本次改动的工艺，避免覆盖磁盘上其他工艺的修改。
-	for key: StringName in _finish_drafts:
-		if not _finish_drafts[key].is_equal_approx(_finish_settings.parameters(key)): latest.set_parameters(key, _finish_drafts[key])
-	var error := ResourceSaver.save(latest, finish_settings_path)
-	if error != OK:
-		_set_status("工艺参数保存失败（错误码%d）；预览草稿保留。" % error)
-		return
-	_finish_settings = latest
-	_finish_drafts.clear()
-	if finish_settings_path == FINISH_SETTINGS.PATH:
-		var shared: Resource = FINISH_PREVIEW.SETTINGS
-		for key: StringName in FINISH_SETTINGS.KEYS: shared.set_parameters(key, latest.parameters(key))
-		shared.emit_changed()
-	_load_finish_controls()
-	_on_finish_controls_changed()
-	_set_status("已保存全局工艺参数；真实卡面共用。卡牌资料与取景不受影响。")
-
-
-func _reload_finish_settings() -> void:
-	var latest := ResourceLoader.load(finish_settings_path, "", ResourceLoader.CACHE_MODE_IGNORE)
-	if latest == null:
-		_set_status("无法读取工艺配置；预览草稿保留。")
-		return
-	_finish_settings = latest
-	_finish_drafts.clear()
-	_load_finish_controls()
-	_on_finish_controls_changed()
-	_set_status("已重载全局工艺参数；未保存的工艺预览已放弃。")
-
-
 func _on_finish_controls_changed() -> void:
 	_finish_preview.finish = finish_selector.get_selected_id() as CardFinishPreview.Finish
 	_preview_art_offset = _preview_data.get_art_offset_for_finish(_selected_finish_key()) if _preview_data != null else Vector2i.ZERO
 	_sync_offset_controls()
-	_finish_preview.strength = finish_strength_spin.value
-	_finish_preview.depth = finish_depth_spin.value
-	_finish_preview.density = finish_density_spin.value
-	var key := _selected_finish_key()
-	if FINISH_SETTINGS.KEYS.has(key): _finish_drafts[key] = Vector3(_finish_preview.strength, _finish_preview.depth, _finish_preview.density)
-	save_finish_button.disabled = not _has_finish_changes()
+	_sync_background_controls()
 	_update_finish_render_scale()
 	flash_type_selector.disabled = _finish_preview.finish not in [CardFinishPreview.Finish.FOIL, CardFinishPreview.Finish.OVERFRAME]
-	finish_strength_spin.editable = _finish_preview.finish in [CardFinishPreview.Finish.HOLOGRAPHIC, CardFinishPreview.Finish.EMBOSSED, CardFinishPreview.Finish.FRACTURED]
-	finish_density_spin.editable = finish_strength_spin.editable
-	finish_depth_spin.editable = _finish_preview.finish == CardFinishPreview.Finish.HOLOGRAPHIC
 	_refresh_preview()
 
 
@@ -651,7 +666,7 @@ func _refresh_preview() -> void:
 	status_label.text = "%s · %s · %s | 偏移 %s | %s" % [
 		preview_data.display_name, CardPackRegistry.get_display_name(card_data.pack_id) if not card_data.pack_id.is_empty() else "未指定卡包",
 		card_data.get_card_type_name(), preview_art_offset,
-		("有未保存卡牌修改 · " if _has_unsaved_changes(card_data) else "") + ("工艺参数未保存（全局） · " if _has_finish_changes() else "") + _finish_preview.get_description(),
+		("有未保存卡牌修改 · " if _has_unsaved_changes(card_data) else "") + _finish_preview.get_description(),
 	]
 	_update_current_list_label()
 
@@ -679,6 +694,14 @@ func _save_card_to_resource(all_finishes: bool = false) -> void:
 		return
 	for field: StringName in _editable_fields(card_data):
 		if _preview_data.get(field) != card_data.get(field): saved.set(field, _preview_data.get(field))
+	for style: int in _preview_data.background_offsets:
+		var offset: Vector2i = _preview_data.background_offsets[style]
+		if card_data.background_offsets.get(style) != offset:
+			saved.background_offsets[style] = offset
+	for style: int in _preview_data.background_overframe_offsets:
+		var offset: Vector2i = _preview_data.background_overframe_offsets[style]
+		if card_data.background_overframe_offsets.get(style) != offset:
+			saved.background_overframe_offsets[style] = offset
 	if all_finishes:
 		saved.set_art_offset_for_all_finishes(preview_art_offset)
 	else:

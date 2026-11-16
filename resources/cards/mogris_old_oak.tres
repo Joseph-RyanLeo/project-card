@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/gilded_commission/mogris_old_oak.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"mogris_old_oak"
+display_name = "“老橡树”莫格里斯"
+pack_id = &"gilded_commission"
+effect_ids = Array[StringName]([&"mogris_old_oak.effect.rush"])
+content_effect = &"mogris_old_oak"
+action_type = 4
+base_value = 2
+cooldown_seconds = 5.0
+max_health = 5
+armor = 2
+runes = Array[int]([0, 1, 2])
+race_type = 2
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-9, 13)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-9, 12)
+})
+effect_text = "任务：单场连续存活45秒。奖励：从下一场起，突击：45秒后所有存活友军本场+5/+10。"

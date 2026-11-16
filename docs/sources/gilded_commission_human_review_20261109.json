@@ -1,0 +1,175 @@
+{
+  "date": "2026-11-09",
+  "table_id": "tbl6qIMmgLoYgMpX",
+  "source": "镀金委托",
+  "records": [
+    {
+      "number": 1,
+      "card_name": "“星歌者”塞拉菲娜",
+      "record_id": "reczz28U6igOujg9",
+      "review_status_before": "已确认",
+      "human_confirmation": "跨战斗累计，只统计友方，包括自身，要求在顶牌且未遮挡，当场生效，多个来源也是触发两次。"
+    },
+    {
+      "number": 2,
+      "card_name": "巴林·灰渣",
+      "record_id": "reczz28U6igOujXM",
+      "review_status_before": "已确认",
+      "human_confirmation": "包括已装备的装备，什么情况下会存在复制品。奇数向下取整，叠加，20包含低档，伤势治愈指定本小队的可见伤势，无目标时跳过，纹章奖励范围为1-3级纹章，按照纹章包概率来，复活不触发突击"
+    },
+    {
+      "number": 3,
+      "card_name": "“苍鹰”罗兰",
+      "record_id": "reczz28U6igOvqWS",
+      "review_status_before": "已确认",
+      "human_confirmation": "是的，就是混乱，帮我修改一下。效果取消掉乡邻限制，也帮我改一下。作用于所有友军，包括自身，同名光环叠加，如基础数值为3，两个光环后数值为9"
+    },
+    {
+      "number": 4,
+      "card_name": "“万金油”希尔德",
+      "record_id": "reczz28U6igOumr7",
+      "review_status_before": "已确认",
+      "human_confirmation": "指每个小队。牌型的组成部分，所以非顺子排行只能最多+2/+2。万能和混沌元素按照变了之后的算。同步"
+    },
+    {
+      "number": 5,
+      "card_name": "萨尔贡·调和者",
+      "record_id": "reczz28U6igOucEj",
+      "review_status_before": "待确认",
+      "human_confirmation": "双方，包括自身和衍生物，按照小队发放，所有目标共用，不用设立上线，无法组成小队=之前的无法堆叠，也不允许被当作队员加入。"
+    },
+    {
+      "number": 6,
+      "card_name": "达米莉·血棘",
+      "record_id": "reczz28U6igOwYvU",
+      "review_status_before": "待确认",
+      "human_confirmation": "只要击杀来源为血棘都可以触发荣耀，包括灼烧等元素派生效果以及血棘装备造成的效果；作用于所有友军，本场临时，阵亡/放逐友军无法被选中，复活可重置。"
+    },
+    {
+      "number": 7,
+      "card_name": "“老橡树”莫格里斯",
+      "record_id": "reczz28U6igOx0kA",
+      "review_status_before": "待确认",
+      "human_confirmation": "改成存活45秒，以及突击也是45秒后友军获得+5/+10，要求单场存活，奖励下场开始。"
+    },
+    {
+      "number": 8,
+      "card_name": "门板",
+      "record_id": "reczz28U6igOy6E5",
+      "review_status_before": "待确认",
+      "human_confirmation": "友军指代包括单卡和小队都是友军；可记衍生物；门板需存活且效果生效吗这个我没明白；加值仅持续本场；不用每场一次；无相邻友军时目标为空不生效"
+    },
+    {
+      "number": 9,
+      "card_name": "喀利斯",
+      "record_id": "reczz28U6igOwexP",
+      "review_status_before": "待确认",
+      "human_confirmation": "战斗中出现空位后触发；临时复制；只能选未部署卡；占用原有位置，满场时不消耗，只有成功召唤时才消耗；战后消耗、成长正常计算，只是召唤的为临时复制消失而已"
+    },
+    {
+      "number": 10,
+      "card_name": "埃德温·尘灰",
+      "record_id": "reczz28U6igOuy4X",
+      "review_status_before": "已确认",
+      "human_confirmation": ""
+    },
+    {
+      "number": 11,
+      "card_name": "契约之魔·奈克斯",
+      "record_id": "reczz28U6igOxT7V",
+      "review_status_before": "待确认",
+      "human_confirmation": "文案改成“任务：选择16次由奈克斯指定的道路。\n奖励：获得突击：所有友军的热诚+6。”\n累计8次，持有即可，选择奈克斯指定的道路意思是，每次抽取事件牌、商店牌、战斗牌时，选项中会有一个。完成任务时应该不在战斗阶段，所以不存在当前战斗是否被影响的问题。热诚同样给到所有友军，非永久"
+    },
+    {
+      "number": 12,
+      "card_name": "拨号机·哔哔",
+      "record_id": "reczz28U6igOwpjC",
+      "review_status_before": "待确认",
+      "human_confirmation": "仅升级最高牌型为双鸣等小队；倍率和元素派生效果都生效双环、三相等都不升级"
+    },
+    {
+      "number": 13,
+      "card_name": "星歌者的安可曲",
+      "record_id": "reczz28U6igOxW6r",
+      "review_status_before": "待确认",
+      "human_confirmation": "都算位移，但是沿用银月之章里的交换位置触发的0.1s冷却，不按单卡次数算。"
+    },
+    {
+      "number": 14,
+      "card_name": "平民英雄",
+      "record_id": "reczz28U6igOvEsK",
+      "review_status_before": "待确认",
+      "human_confirmation": "数值削弱成+3+5，小队按照队长来，相当于按照最上方的卡来算卡牌等级；如果队长为1级，则小队获得+3/+5，生命上限加值同步当前生命"
+    },
+    {
+      "number": 15,
+      "card_name": "终极调和",
+      "record_id": "reczz28U6igOwMdt",
+      "review_status_before": "待确认",
+      "human_confirmation": "相邻卡牌默认指相邻友军，左右共用骰值，同一目标可叠加，失效后也保留，加生命值也同时治疗"
+    },
+    {
+      "number": 16,
+      "card_name": "元素爆发",
+      "record_id": "reczz28U6igOxdDH",
+      "review_status_before": "待确认",
+      "human_confirmation": "优先级也翻倍，火强化也翻倍呀，我们先结算法术，应该不会存在法术结算前就已消耗的情况，如果有立刻行动的法术，也正常再加一次火的强化就行"
+    },
+    {
+      "number": 17,
+      "card_name": "自然守护",
+      "record_id": "reczz28U6igOy8q7",
+      "review_status_before": "待确认",
+      "human_confirmation": "我改成这样把，受到伤害时1d6≥5时免疫此次伤害，这样就可以不用考虑跟其他减伤的叠加逻辑了。"
+    },
+    {
+      "number": 18,
+      "card_name": "信号干扰",
+      "record_id": "reczz28U6igOutoB",
+      "review_status_before": "待确认",
+      "human_confirmation": "特效改成“战斗开始10秒内敌人获得-10热诚”"
+    },
+    {
+      "number": 19,
+      "card_name": "奈克斯的骰子",
+      "record_id": "reczz28U6igOumr8",
+      "review_status_before": "已确认",
+      "human_confirmation": ""
+    },
+    {
+      "number": 20,
+      "card_name": "巴林头盔",
+      "record_id": "reczz28U6igOvD8N",
+      "review_status_before": "待确认",
+      "human_confirmation": "巴林头盔不是不占物品栏位吗，相当于可以同属装备两个物品卡，“其他物品”相当于除了巴林头盔的另一个物品。临时复制跟普通物品一样占位。仅开场一次，如果有其他触发突击的行为的话可以支持。"
+    },
+    {
+      "number": 21,
+      "card_name": "隐秘任务",
+      "record_id": "reczz28U6igOwVrd",
+      "review_status_before": "待确认",
+      "human_confirmation": "效果改成这个“获得时从以下几个任务&奖励中各选择一个\n任务：本卡消灭10个敌人；装备此卡的随从纹章和符文全满；打开5个卡包；打出10次法术；使用15次刮刀；开采，本卡开采6张资源卡\n奖励：获得50金币；获得10个纹章；随机获得两个大卡包；本装备不消失并获得+6/+10；获得5个装备；本装备不消失并获得-3数值以及+10热诚；获得10个随机矿物和一张幽魂矿镐；获得4个元素纹章；获得一个万能贴纸和一个混沌贴纸；刮刀本局使用次数无限。”\n\n拿到手时自动锁定，不要三选一，比如：“任务：打出10次法术。奖励：获得50金币”"
+    },
+    {
+      "number": 22,
+      "card_name": "门板的玩具",
+      "record_id": "reczz28U6igOwNSz",
+      "review_status_before": "待确认",
+      "human_confirmation": "使用当前生命值，向下取整，改成每5生命值加一数值。加值为装备临时，每次发射快照"
+    },
+    {
+      "number": 23,
+      "card_name": "守墓人的笔记",
+      "record_id": "reczz28U6igOvPNS",
+      "review_status_before": "待确认",
+      "human_confirmation": "改为永久跨战斗统计卡牌种类并成长+1，统计双方，不同种类，比如两张不同的民兵死了，只统计一次。不包含本次佩戴者，每次遗愿都触发，为不吃增幅的无属性伤害。基础护甲佩戴后-1，最低到0"
+    },
+    {
+      "number": 24,
+      "card_name": "虫刃",
+      "record_id": "reczz28U6igOyNlV",
+      "review_status_before": "待确认",
+      "human_confirmation": "全队召唤，可以跨战斗计算进度；背包期间如果是指非战斗期间的话不累计；召唤资源也不累计；剩余目标不足两个时可以重复；2点伤害不吃任何加成和倍率。"
+    }
+  ]
+}

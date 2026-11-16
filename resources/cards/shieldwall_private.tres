@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://b55d51ynshasf"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://dn7rq0b7fb70i" path="res://assets/card_art/shieldwall_private.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/shieldwall_private.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -17,6 +17,17 @@ max_health = 4
 armor = 5
 runes = Array[int]([4, 0, 2])
 rarity = 1
+background_style = 3
+background_offsets = Dictionary[int, Vector2i]({
+2: Vector2i(0, -27),
+3: Vector2i(0, -20)
+})
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 1)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(0, 29)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(0, 25)
+})
 effect_text = "耀眼。乡邻：每次获得护甲时，额外获得1点。"

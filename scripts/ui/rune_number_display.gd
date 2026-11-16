@@ -68,6 +68,7 @@ const SIGN_HEIGHT: float = 10.0 # 用户提供的正负号原图画布高度，�
 const SIGN_TOP: float = 1.0 # 10px符号画布在12px中号数字旁的垂直居中偏移
 const SIGN_PLUS_REGION := Rect2(0, 0, 7, 10) # 用户正号在原图中的7×10裁切区域
 const SIGN_MINUS_REGION := Rect2(14, 0, 7, 10) # 用户负号在原图中的7×10裁切区域
+static var _infinity_texture: ImageTexture
 
 @export var number_style: NumberStyle = NumberStyle.LARGE:
 	set(value):
@@ -97,9 +98,9 @@ func _draw() -> void:
 		return
 	match number_style:
 		NumberStyle.LARGE:
-			_draw_digit_run(text, LARGE_TEXTURE, LARGE_GLYPH_RECTS, Vector2.ZERO)
+			draw_large_digits(self, text, Vector2.ZERO, character_spacing)
 		NumberStyle.MEDIUM:
-			_draw_digit_run(text, MEDIUM_TEXTURE, MEDIUM_GLYPH_RECTS, Vector2.ZERO)
+			_draw_digit_run(self, text, MEDIUM_TEXTURE, MEDIUM_GLYPH_RECTS, Vector2.ZERO, character_spacing)
 		NumberStyle.COOLDOWN:
 			_draw_cooldown()
 
@@ -108,29 +109,39 @@ func get_rendered_size() -> Vector2:
 	if text == "∞": return Vector2(14, LARGE_HEIGHT)
 	match number_style:
 		NumberStyle.LARGE:
-			return Vector2(_measure_digit_run(text, LARGE_GLYPH_RECTS), LARGE_HEIGHT)
+			return measure_large_digits(text, character_spacing)
 		NumberStyle.MEDIUM:
-			return Vector2(_measure_digit_run(text, MEDIUM_GLYPH_RECTS), MEDIUM_HEIGHT)
+			return Vector2(_measure_digit_run(text, MEDIUM_GLYPH_RECTS, character_spacing), MEDIUM_HEIGHT)
 		NumberStyle.COOLDOWN:
 			return _measure_cooldown()
 	return Vector2.ZERO
+
+
+static func draw_large_digits(canvas: CanvasItem, value: String, origin: Vector2, spacing: int = 0) -> void:
+	_draw_digit_run(canvas, value, LARGE_TEXTURE, LARGE_GLYPH_RECTS, origin, spacing)
+
+
+static func measure_large_digits(value: String, spacing: int = 0) -> Vector2:
+	return Vector2(_measure_digit_run(value, LARGE_GLYPH_RECTS, spacing), LARGE_HEIGHT)
 
 
 func _draw_cooldown() -> void:
 	var parts := text.split(".", false, 1)
 	if parts.size() != 2:
 		# 10秒及以上只显示紧贴的中号整数，不再要求必须存在小数点。
-		_draw_digit_run(text, MEDIUM_TEXTURE, MEDIUM_GLYPH_RECTS, Vector2.ZERO)
+		_draw_digit_run(self, text, MEDIUM_TEXTURE, MEDIUM_GLYPH_RECTS, Vector2.ZERO, character_spacing)
 		return
 	var integer_text := parts[0]
 	var fraction_text := parts[1]
-	var integer_width := _measure_digit_run(integer_text, MEDIUM_GLYPH_RECTS)
-	_draw_digit_run(integer_text, MEDIUM_TEXTURE, MEDIUM_GLYPH_RECTS, Vector2.ZERO)
+	var integer_width := _measure_digit_run(integer_text, MEDIUM_GLYPH_RECTS, character_spacing)
+	_draw_digit_run(self, integer_text, MEDIUM_TEXTURE, MEDIUM_GLYPH_RECTS, Vector2.ZERO, character_spacing)
 	_draw_digit_run(
+		self,
 		fraction_text,
 		SMALL_TEXTURE,
 		SMALL_GLYPH_RECTS,
-		Vector2(integer_width + 1.0, COOLDOWN_FRACTION_TOP)
+		Vector2(integer_width + 1.0, COOLDOWN_FRACTION_TOP),
+		character_spacing
 	)
 	# 最后绘制小数点，使其左右黑边覆盖整数、小数各自边缘的 1px。
 	draw_texture_rect(
@@ -146,37 +157,39 @@ func _draw_cooldown() -> void:
 func _measure_cooldown() -> Vector2:
 	var parts := text.split(".", false, 1)
 	if parts.size() != 2:
-		return Vector2(_measure_digit_run(text, MEDIUM_GLYPH_RECTS), MEDIUM_HEIGHT)
-	var integer_width := _measure_digit_run(parts[0], MEDIUM_GLYPH_RECTS)
-	var fraction_width := _measure_digit_run(parts[1], SMALL_GLYPH_RECTS)
+		return Vector2(_measure_digit_run(text, MEDIUM_GLYPH_RECTS, character_spacing), MEDIUM_HEIGHT)
+	var integer_width := _measure_digit_run(parts[0], MEDIUM_GLYPH_RECTS, character_spacing)
+	var fraction_width := _measure_digit_run(parts[1], SMALL_GLYPH_RECTS, character_spacing)
 	return Vector2(integer_width + 1.0 + fraction_width, MEDIUM_HEIGHT)
 
 
-func _draw_digit_run(
+static func _draw_digit_run(
+	canvas: CanvasItem,
 	value: String,
 	atlas: Texture2D,
 	glyph_rects: Dictionary,
-	start_position: Vector2
+	start_position: Vector2,
+	spacing: int
 ) -> void:
 	var cursor_x := start_position.x
 	for index: int in value.length():
 		var digit := value.substr(index, 1)
 		if digit == "+" or digit == "-":
-			_draw_zeal_sign(Vector2(cursor_x, start_position.y), digit == "+")
-			cursor_x += SIGN_WIDTH + float(character_spacing)
+			_draw_zeal_sign(canvas, Vector2(cursor_x, start_position.y), digit == "+")
+			cursor_x += SIGN_WIDTH + float(spacing)
 			continue
 		if not glyph_rects.has(digit):
 			continue
 		var glyph_rect := glyph_rects[digit] as Rect2
-		draw_texture_rect_region(
+		canvas.draw_texture_rect_region(
 			atlas,
 			Rect2(Vector2(cursor_x, start_position.y), glyph_rect.size),
 			glyph_rect
 		)
-		cursor_x += glyph_rect.size.x + float(character_spacing)
+		cursor_x += glyph_rect.size.x + float(spacing)
 
 
-func _measure_digit_run(value: String, glyph_rects: Dictionary) -> float:
+static func _measure_digit_run(value: String, glyph_rects: Dictionary, spacing: int) -> float:
 	var width := 0.0
 	var glyph_count := 0
 	for index: int in value.length():
@@ -189,11 +202,11 @@ func _measure_digit_run(value: String, glyph_rects: Dictionary) -> float:
 			continue
 		width += (glyph_rects[digit] as Rect2).size.x
 		glyph_count += 1
-	return width + float(maxi(glyph_count - 1, 0) * character_spacing)
+	return width + float(maxi(glyph_count - 1, 0) * spacing)
 
 
-func _draw_zeal_sign(origin: Vector2, positive: bool) -> void:
-	draw_texture_rect_region(
+static func _draw_zeal_sign(canvas: CanvasItem, origin: Vector2, positive: bool) -> void:
+	canvas.draw_texture_rect_region(
 		ZEAL_SIGN_TEXTURE,
 		Rect2(origin + Vector2(0.0, SIGN_TOP), Vector2(SIGN_WIDTH, SIGN_HEIGHT)),
 		SIGN_PLUS_REGION if positive else SIGN_MINUS_REGION
@@ -208,11 +221,15 @@ func _sync_size_and_redraw() -> void:
 
 
 func _draw_infinity() -> void:
-	# 数字图集没有无限字形；使用原生像素矩形画独立符号，保持现有PNG与数字图集不变。
-	var rows := ["011100001110", "110110011011", "100011110001", "100001100001", "100011110001", "110110011011", "011100001110"]
-	var pixels: Array[Vector2] = []
-	for y: int in rows.size():
-		for x: int in rows[y].length():
-			if rows[y][x] == "1": pixels.append(Vector2(x + 1, y + 3))
-	for pixel: Vector2 in pixels: draw_rect(Rect2(pixel - Vector2.ONE, Vector2(3, 3)), Color.BLACK)
-	for pixel: Vector2 in pixels: draw_rect(Rect2(pixel, Vector2.ONE), Color.WHITE)
+	# 生成一张共享像素纹理，让无限符号的黑边也能像图集数字一样反光。
+	if _infinity_texture == null:
+		var rows := ["011100001110", "110110011011", "100011110001", "100001100001", "100011110001", "110110011011", "011100001110"]
+		var image := Image.create_empty(14, int(LARGE_HEIGHT), false, Image.FORMAT_RGBA8)
+		var pixels: Array[Vector2i] = []
+		for y: int in rows.size():
+			for x: int in rows[y].length():
+				if rows[y][x] == "1": pixels.append(Vector2i(x + 1, y + 3))
+		for pixel: Vector2i in pixels: image.fill_rect(Rect2i(pixel - Vector2i.ONE, Vector2i(3, 3)), Color.BLACK)
+		for pixel: Vector2i in pixels: image.set_pixelv(pixel, Color.WHITE)
+		_infinity_texture = ImageTexture.create_from_image(image)
+	draw_texture(_infinity_texture, Vector2.ZERO)

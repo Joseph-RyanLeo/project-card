@@ -373,9 +373,10 @@ func _decode_collection_state(
 		var encoded_rune_revealed: Array = (encoded.get("rune_revealed", []) as Array).duplicate()
 		var encoded_rune_scrape_masks: Array = (encoded.get("rune_scrape_masks", []) as Array).duplicate()
 		var saved_rune_count := encoded_rune_revealed.size()
-		var expanding_runes := (
-			migrate_minion_rune_slots and card_data.card_type == CardData.CardType.MINION
-			and card_data.runes.size() == 3 and saved_rune_count in [1, 2]
+		# 埃德温早期的定义没有符文槽。旧实例沿用现有补槽随机流，避免读档失败。
+		var expanding_runes := card_data.card_type == CardData.CardType.MINION and card_data.runes.size() == 3 and (
+			(migrate_minion_rune_slots and saved_rune_count in [1, 2])
+			or (card_data.id == &"edwin_ash" and saved_rune_count == 0)
 		)
 		var expected_saved_runes := saved_rune_count if expanding_runes else card_data.runes.size()
 		var encoded_resolved_runes: Array = (encoded.get("resolved_runes", card_data.runes.slice(0, expected_saved_runes)) as Array).duplicate()
@@ -416,9 +417,12 @@ func _decode_collection_state(
 				encoded_rune_revealed.append(false)
 				encoded_rune_scrape_masks.append("")
 				stickers.append({})
-		var resolved_counts := CardSlotLayout.resolve_counts(card_data)
+		var progress_by_source := _decode_number_dictionary(encoded.get("progress_by_source", {}) as Dictionary)
+		var forbidden_layout := int(progress_by_source.get(&"forbidden_layout", 0)) == 1
+		var resolved_counts := CardSlotLayout.resolve_counts(card_data, forbidden_layout)
 		var saved_layout: Array = encoded.get("slot_layout", [])
-		var saved_layout_is_valid := CardSlotLayout.is_valid_layout(card_data, saved_layout)
+		var saved_layout_is_valid := CardSlotLayout.is_valid_layout(card_data, saved_layout, forbidden_layout)
+		if forbidden_layout and (not saved_layout_is_valid or wound_slots.size() != resolved_counts.x or not emblem_slots.is_empty()): return _failure("save_forbidden_layout_invalid")
 		if not migrate_status_slots and (
 			wound_slots.size() != resolved_counts.x
 			or emblem_slots.size() != resolved_counts.y
@@ -448,9 +452,6 @@ func _decode_collection_state(
 				return _failure("save_resource_shape_invalid")
 		elif encoded_shape is Array and not encoded_shape.is_empty():
 			return _failure("save_resource_shape_invalid")
-		var progress_by_source := _decode_number_dictionary(
-			encoded.get("progress_by_source", {}) as Dictionary
-		)
 		if _occupied_count(emblem_slots) > resolved_counts.y:
 			if not migrate_status_slots:
 				return _failure("save_status_slot_migration_marker_invalid")
@@ -549,7 +550,7 @@ func _capture_enemy_collection(rows: Dictionary) -> Dictionary:
 			for member: CardData in squad.horizontal_cards:
 				var owned := squad.get_owned_card(member)
 				if owned != null: owned_cards.append(owned)
-			if squad.get_equipped_item() != null: owned_cards.append(squad.get_equipped_item())
+			owned_cards.append_array(squad.get_equipped_items())
 			for owned: OwnedCard in owned_cards:
 				if seen.has(owned.instance_id): continue
 				seen[owned.instance_id] = true
@@ -576,6 +577,11 @@ func _encode_rows(rows: Dictionary) -> Dictionary:
 				"horizontal_cards": horizontal_refs,
 				"layer_cards": layer_refs,
 				"two_card_layout": int(squad.two_card_layout),
+				"helmet_instance_id": String(squad.get_helmet().instance_id) if squad.get_helmet() != null else "",
+				"helmet_position": [
+					squad.get_equipment_indicator_position(squad.get_helmet()).x,
+					squad.get_equipment_indicator_position(squad.get_helmet()).y,
+				],
 				"equipped_item_instance_id": (
 					String(squad.get_equipped_item().instance_id)
 					if squad.get_equipped_item() != null
@@ -645,31 +651,32 @@ func _decode_rows(
 					binding.get("card_data") as CardData,
 					binding.get("owned_card") as OwnedCard
 				)
-			var equipment_instance_id := StringName(
-				String(encoded_squad.get("equipped_item_instance_id", ""))
-			)
-			if not equipment_instance_id.is_empty():
-				var equipped_item := row_collection.get_by_instance_id(
-					equipment_instance_id
+			for pair: Array in [["equipped_item_instance_id", "equipment_indicator_position"], ["helmet_instance_id", "helmet_position"]]:
+				var equipment_instance_id := StringName(
+					String(encoded_squad.get(pair[0], ""))
 				)
-				var indicator_position := SquadData.UNSPECIFIED_EQUIPMENT_INDICATOR_POSITION
-				var encoded_position: Variant = encoded_squad.get(
-					"equipment_indicator_position",
-					[]
-				)
-				if encoded_position is Array and (encoded_position as Array).size() == 2:
-					indicator_position = Vector2(
-						float((encoded_position as Array)[0]),
-						float((encoded_position as Array)[1])
+				if not equipment_instance_id.is_empty():
+					var equipped_item := row_collection.get_by_instance_id(
+						equipment_instance_id
 					)
-				if (
-					equipped_item == null
-					or equipped_item.card_data.card_type != CardData.CardType.EQUIPMENT
-					or claimed_equipment_instance_ids.has(equipment_instance_id)
-					or not squad.equip_item(equipped_item, indicator_position)
-				):
-					return _failure("save_squad_equipment_invalid")
-				claimed_equipment_instance_ids[equipment_instance_id] = true
+					var indicator_position := SquadData.UNSPECIFIED_EQUIPMENT_INDICATOR_POSITION
+					var encoded_position: Variant = encoded_squad.get(
+						pair[1],
+						[]
+					)
+					if encoded_position is Array and (encoded_position as Array).size() == 2:
+						indicator_position = Vector2(
+							float((encoded_position as Array)[0]),
+							float((encoded_position as Array)[1])
+						)
+					if (
+						equipped_item == null
+						or SquadData.is_helmet(equipped_item) != (pair[0] == "helmet_instance_id")
+						or claimed_equipment_instance_ids.has(equipment_instance_id)
+						or not squad.equip_item(equipped_item, indicator_position)
+					):
+						return _failure("save_squad_equipment_invalid")
+					claimed_equipment_instance_ids[equipment_instance_id] = true
 			if not squad.is_valid():
 				return _failure("save_squad_layout_invalid")
 			decoded_squads.append(squad)

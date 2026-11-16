@@ -3,7 +3,7 @@ extends RefCounted
 
 ## 铁壁铭刻的内容规则。复用控制器的时钟、弹道、召唤与事务，不另建战斗循环。
 const BEER_CHARGE_SECONDS: float = 0.5 # 啤酒机每次回响减少相邻矮人的剩余冷却
-const LOGISTICS_PERIOD: float = 5.0 # 后勤机器人共用骰强化的触发周期
+const MOBILIZATION_PERIOD: float = 5.0 # 动员机兵共用骰强化的触发周期
 const MUG_PERIOD: float = 3.0 # 啤酒杯强化周期
 const PENDANT_PERIOD: float = 10.0 # 铁心吊坠保护周期
 const SENTRY_SLEEP_SECONDS: float = 30.0 # 警戒机械开战休眠的持续秒数
@@ -51,7 +51,7 @@ func initialize_state(state: BattleSquadState, preview: bool = false) -> void:
 		if active(state, &"bomb_apprentice") or active(state, &"swordshield_master"): state.grant_protection(&"ironwall_native", 1)
 		if active(state, &"sentry_machine"): state.apply_sleep(SENTRY_SLEEP_SOURCE, controller.elapsed_seconds + SENTRY_SLEEP_SECONDS)
 		if active(state, &"legion_aegis", true): state.grant_protection(&"legion_aegis", 2)
-		for entry: Array in [[&"logistics_robot", LOGISTICS_PERIOD, false], [&"beer_mug", MUG_PERIOD, true], [&"ironheart_pendant", PENDANT_PERIOD, true]]:
+		for entry: Array in [[&"mobilization_machine", MOBILIZATION_PERIOD, false], [&"beer_mug", MUG_PERIOD, true], [&"sour_beer_mug", MUG_PERIOD, true], [&"ironheart_pendant", PENDANT_PERIOD, true]]:
 			if active(state, entry[0], entry[2]): periods.append({"state": state, "key": entry[0], "period": entry[1], "next": controller.elapsed_seconds + entry[1], "equipment": entry[2]})
 	initial_vitals[state] = {"health": state.current_health, "armor": state.current_armor, "base_health": base_health(state)}
 	state.damage_taken.connect(on_damage_taken.bind(state))
@@ -80,6 +80,7 @@ func on_damage_taken(amount: float, _source: BattleSquadState, _event: BattleEff
 		for ally: BattleSquadState in controller.get_living_states(state.side):
 			if ally.row_key == state.row_key and ally.current_health > 0.0 and not ally.is_banished:
 				ally.grant_protection(&"sentry_machine", 1)
+				controller.record_task_buff(state, ally, "sentry_machine")
 
 func convert_thunderstorm_zeal(state: BattleSquadState) -> void:
 	while state.get_zeal_layers() >= 10:
@@ -115,9 +116,11 @@ func execute_trigger(state: BattleSquadState, key: StringName, trigger: int, equ
 		&"formation_commander":
 			var neighbors: Array[BattleSquadState] = controller.get_death_neighbors(state) if trigger == BattleEffectDefinition.Trigger.LAST_WISH else controller._get_adjacent_allies(state)
 			for ally: BattleSquadState in neighbors:
-				if ally.current_health > 0.0 and not ally.is_banished and ally.squad_data.get_card_count() > 1: ally.grant_protection(&"formation_commander", 1)
-		&"mobilization_machine":
-			for ally: BattleSquadState in controller._get_adjacent_allies(state): grant_temporary_emblem(ally)
+				if ally.current_health > 0.0 and not ally.is_banished and ally.squad_data.get_card_count() > 1:
+					ally.grant_protection(&"formation_commander", 1)
+					controller.record_task_buff(state, ally, String(key))
+		&"logistics_robot":
+			for ally: BattleSquadState in controller._get_adjacent_allies(state): grant_temporary_emblem(ally, state)
 		&"armament_apprentice": improve_equipment(state)
 		&"scout":
 			for ally: BattleSquadState in controller._get_adjacent_allies(state):
@@ -130,7 +133,8 @@ func execute_trigger(state: BattleSquadState, key: StringName, trigger: int, equ
 					ally.apply_armor_exact(1, state)
 		&"field_beer_machine":
 			for ally: BattleSquadState in controller._get_adjacent_allies(state):
-				if ally.has_effective_race(CardData.RaceType.DWARF): controller._charge_state(ally, BEER_CHARGE_SECONDS)
+				if ally.has_effective_race(CardData.RaceType.DWARF):
+					controller._charge_state(ally, BEER_CHARGE_SECONDS, state, String(key))
 		&"sentry_pistol": independent_damage(state, random_enemy(state.side), roll(state, 6), CardData.ActionType.RANGED, true, "哨位短铳")
 		&"bomb_apprentice": controller.summon_content_minion(state, load("res://resources/cards/booby_mine.tres"))
 		&"unstable_explosive_robot": independent_damage(state, random_enemy(state.side), roll(state, 10), CardData.ActionType.MAGIC, false, "自爆机械人遗愿")
@@ -280,11 +284,12 @@ func process_due() -> void:
 		entry.next += entry.period
 		var state: BattleSquadState = entry.state
 		match StringName(entry.key):
-			&"logistics_robot":
+			&"mobilization_machine":
 				var amount = roll(state, 4)
 				for ally: BattleSquadState in controller._get_adjacent_allies(state):
 					if ally.squad_data.get_card_count() > 1: add(ally, BattleModifier.Stat.REINFORCEMENT, amount, entry.key, state)
 			&"beer_mug": add(state, BattleModifier.Stat.REINFORCEMENT, 1, entry.key)
+			&"sour_beer_mug": add(state, BattleModifier.Stat.REINFORCEMENT, -1, entry.key)
 			&"ironheart_pendant": state.grant_protection(entry.key, 1)
 	var queued = repeats.duplicate()
 	repeats.clear()
@@ -314,7 +319,9 @@ func release_spell(spell: OwnedCard, side: int) -> bool:
 				state.apply_armor_exact(4, null, armor_event)
 		for source: BattleSquadState in allies:
 			if active(source, &"augustus_ironwall"):
-				for state: BattleSquadState in allies: state.grant_protection(&"augustus_ironwall", 2)
+				for state: BattleSquadState in allies:
+					state.grant_protection(&"augustus_ironwall", 2)
+					controller.record_task_buff(source, state, "augustus_ironwall")
 	sync_auras()
 	return true
 
@@ -346,9 +353,12 @@ func harvest_scrap(event: BattleEffectEvent) -> void:
 			if item != null: counts[item.card_data.id] = int(counts.get(item.card_data.id, 0)) + 1
 	var definition: CardData = selector.draw_card_candidate(candidates, controller._random, counts)
 	owned.initialize(definition, StringName("%s:ironwall_item:%d" % [controller.battle_instance_id, controller._next_reward_instance_sequence]), 0, controller._random)
+	owned.progress_by_source[OwnedCard.TEMPORARY_EQUIPMENT] = 1
 	controller._next_reward_instance_sequence += 1
 	if not target.squad_data.equip_item(owned): return
 	temporary_items.append({"state": target, "item": owned})
+	controller.record_task_supply(event.source, {"owned": owned})
+	controller.record_task_buff(event.source, target, "harvest_scrap")
 	target.apply_armor_exact(definition.equipment_armor_delta)
 	target.apply_healing_exact(maxi(definition.equipment_health_delta, 0))
 	controller._register_card_effects(target, definition, true)
@@ -358,8 +368,8 @@ func harvest_scrap(event: BattleEffectEvent) -> void:
 	sync_auras()
 
 func initialize_equipment_period(state: BattleSquadState, key: StringName) -> void:
-	if key in [&"beer_mug", &"ironheart_pendant"]:
-		var period = MUG_PERIOD if key == &"beer_mug" else PENDANT_PERIOD
+	if key in [&"beer_mug", &"sour_beer_mug", &"ironheart_pendant"]:
+		var period = PENDANT_PERIOD if key == &"ironheart_pendant" else MUG_PERIOD
 		periods.append({"state": state, "key": key, "period": period, "next": controller.elapsed_seconds + period, "equipment": true})
 
 func improve_equipment(state: BattleSquadState) -> void:
@@ -376,8 +386,14 @@ func improve_equipment(state: BattleSquadState) -> void:
 		if not temporary_items.any(func(e: Dictionary) -> bool: return e.item == item): controller.record_pending_permanent_growth(owner, &"base_value", 1, &"armament_apprentice", state.runtime_id, roundi(controller.elapsed_seconds * 1000000))
 		item.apply_permanent_growth(&"base_value", 1)
 
-func grant_temporary_emblem(state: BattleSquadState) -> void:
-	if state.is_banished: return
+func grant_temporary_emblem(state: BattleSquadState, source: BattleSquadState = null) -> void:
+	_grant_emblem(state, false, source)
+
+func grant_permanent_emblem(state: BattleSquadState) -> void:
+	_grant_emblem(state, true)
+
+func _grant_emblem(state: BattleSquadState, permanent: bool, source: BattleSquadState = null) -> void:
+	if state.is_banished or not state.alive or state.current_health <= 0.0: return
 	var empty: Array[Dictionary] = []
 	var upgrades: Array[Dictionary] = []
 	var definitions = EmblemLibraryData.get_definitions()
@@ -399,13 +415,20 @@ func grant_temporary_emblem(state: BattleSquadState) -> void:
 	else:
 		var roll_value: int = controller._random.randi_range(1, 100)
 		var rarity = 0 if roll_value <= 85 else (1 if roll_value <= 98 else 2)
-		var pool: Array = definitions.filter(func(d: Dictionary) -> bool: return int(d.get("rarity", -1)) == rarity and d.get("target", "") != "rune")
+		var pool: Array = definitions.filter(func(d: Dictionary) -> bool: return int(d.get("rarity", -1)) == rarity and d.get("target", "") != "rune" and not d.get("event_only", false))
 		if pool.is_empty(): return
 		id = pool[controller._random.randi_range(0, pool.size() - 1)].id
-	temporary_emblems.append({"owned": selected.owned, "index": selected.index, "before": selected.owned.emblem_slots[selected.index].duplicate(true)})
+	if not permanent: temporary_emblems.append({"owned": selected.owned, "index": selected.index, "before": selected.owned.emblem_slots[selected.index].duplicate(true)})
 	var health_before = state.get_max_health()
 	var armor_before = state.squad_data.get_effective_base_armor()
-	selected.owned.set_emblem_slot(selected.index, {"emblem_id": id, "instance_id": StringName("ironwall:%s:%d" % [controller.battle_instance_id, temporary_emblems.size()])})
+	var sticker := {"emblem_id": id, "instance_id": StringName("battle_emblem:%s:%d" % [controller.battle_instance_id, controller._next_reward_instance_sequence])}
+	controller._next_reward_instance_sequence += 1
+	selected.owned.set_emblem_slot(selected.index, sticker)
+	if source != null:
+		controller.record_task_supply(source, {"emblem_id": id})
+		controller.record_task_buff(source, state, "logistics_robot")
+	if permanent and state.side == BattleSquadState.Side.PLAYER:
+		controller.record_pending_owned_card_slot_change(BattleEffectOwnerRef.for_owned_card_in_state(state, selected.owned), BattleOwnedCardChangeLedger.KIND_SET_EMBLEM_SLOT, selected.index, sticker, &"edwin_ash", state.runtime_id, roundi(controller.elapsed_seconds * 1000000.0))
 	state.apply_healing_exact(maxi(state.get_max_health() - health_before, 0))
 	state.apply_armor_exact(maxi(state.squad_data.get_effective_base_armor() - armor_before, 0))
 	controller._register_formation_emblems()

@@ -11,7 +11,9 @@ signal card_removing(owned: OwnedCard)
 
 var acquired_discoveries: Dictionary = {} # 随本局快照回滚，保留已卖出卡的真实获得记录
 var acquisition_context: Dictionary = {}
+var enabled_acquisition_packs: Array = [] # 空数组沿用独立测试／旧档；D3新局按冻结卡包过滤获得时普通赠卡
 var recruiting_hero: String = ""
+var exclude_resource_related_cards := false
 
 signal card_removed(instance_id: StringName)
 
@@ -20,7 +22,7 @@ var _next_instance_sequence: int = 1
 
 
 func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null, reserved_cards: Array[CardData] = [], pack_appearance: bool = false, source: Dictionary = {}) -> OwnedCard:
-	if card_data == null:
+	if card_data == null or (exclude_resource_related_cards and card_data.references_resource_rules()):
 		return null
 	var owned_card := OwnedCard.new()
 	owned_card.initialize(
@@ -38,6 +40,17 @@ func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null
 		acquired_discoveries[String(card_data.id)] = "resources" if card_data.card_type == CardData.CardType.RESOURCE else "cards"
 	_grant_acquisition_cards(owned_card, instance_rng, reserved_cards)
 	return owned_card
+
+
+func create_temporary_equipment(definition: CardData, state: Dictionary) -> OwnedCard:
+	if definition == null or definition.card_type != CardData.CardType.EQUIPMENT: return null
+	var copy := OwnedCard.new()
+	copy.initialize(definition, _take_next_instance_id(), _cards.size())
+	copy.permanent_growth = state.temporary_equipment_growth.duplicate(true)
+	copy.equipment_durability = int(state.temporary_equipment_durability)
+	copy.progress_by_source = state.temporary_equipment_progress.duplicate(true)
+	copy.progress_by_source[OwnedCard.TEMPORARY_EQUIPMENT] = 1
+	return copy if add_existing(copy) else null
 
 
 func add_existing(owned_card: OwnedCard) -> bool:
@@ -189,6 +202,8 @@ func _grant_acquisition_cards(owned: OwnedCard, rng: RandomNumberGenerator, rese
 			if filename.get_extension() != "tres": continue
 			var card := load("res://resources/cards/" + filename) as CardData
 			if card == null or not card.is_available or card.is_derived or card.get_effective_faction() == CardFaction.Id.LABYRINTH: continue
+			if not enabled_acquisition_packs.is_empty() and not enabled_acquisition_packs.has(String(card.pack_id)): continue
+			if exclude_resource_related_cards and card.references_resource_rules(): continue
 			if card.is_unique_while_owned() and held_counts.has(card.id): continue
 			if card.card_type == CardData.CardType.EQUIPMENT and card.equipment_type == CardData.EquipmentType.RANGED_WEAPON and card.rarity <= CardData.Rarity.II: candidates.append(card)
 		if candidates.is_empty(): return

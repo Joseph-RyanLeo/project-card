@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"commoner_hero"
+display_name = "平民英雄"
+pack_id = &"gilded_commission"
+rarity = 3
+content_effect = &"commoner_hero"
+card_type = 2
+spell_type = 0
+spell_trigger_kind = 1
+effect_text = "开战时：最上层随从为Ⅰ级的友军，本场行动数值+3、生命上限及当前生命+5。"

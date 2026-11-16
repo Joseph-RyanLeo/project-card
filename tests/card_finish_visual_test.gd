@@ -7,6 +7,17 @@ const CAPTURE_RECT := Rect2i(40, 104, 540, 616) # 完整4倍卡面及工艺标�
 var tuner: CardArtTuner
 var failures := 0
 var assertions := 0
+var original_settings: Resource
+
+func set_depth(value: float) -> void:
+	var settings: Resource = CardFinishPreview.SETTINGS
+	settings.holographic_depth = value
+	settings.emit_changed()
+
+func set_strength(value: float) -> void:
+	var settings: Resource = CardFinishPreview.SETTINGS
+	settings.fractured_strength = value
+	settings.emit_changed()
 
 func _initialize() -> void: _run.call_deferred()
 
@@ -48,6 +59,7 @@ func difference(a: Image, b: Image, region: Rect2i) -> int:
 	return count
 
 func _run() -> void:
+	original_settings = CardFinishPreview.SETTINGS.duplicate(true)
 	root.size = Vector2i(1280, 720)
 	tuner = SCENE.instantiate()
 	root.add_child(tuner)
@@ -88,7 +100,7 @@ func _run() -> void:
 			check(tuner.preview_viewport.size == Vector2i(tuner.preview_display.size * 4.0), "动态材质用高分辨率采样，保持显示尺寸")
 		check(tuner.preview_card.card_data != tuner.card_data, "工艺不污染共享卡牌定义")
 		for material: ShaderMaterial in tuner._finish_preview._badge_materials.values():
-			check(bool(material.get_shader_parameter("relief_enabled")) == (finish != CardFinishPreview.Finish.PLAIN), "仅闪卡起启用图标法线与投影")
+			check(bool(material.get_shader_parameter("relief_enabled")) == (finish in [CardFinishPreview.Finish.HOLOGRAPHIC, CardFinishPreview.Finish.EMBOSSED, CardFinishPreview.Finish.FRACTURED]), "全息、法线和碎闪保留图标浮雕，银金彩闪图标保持原色")
 		grid.blit_rect(shot, CAPTURE_RECT, Vector2i((finish % 3) * CAPTURE_RECT.size.x, floori(float(finish) / 3.0) * CAPTURE_RECT.size.y))
 		shot.save_png("/private/tmp/project-card-finish-%d.png" % finish)
 	check(grid.save_png("/private/tmp/project-card-five-finishes.png") == OK, "输出普通卡与五种工艺对照")
@@ -106,26 +118,27 @@ func _run() -> void:
 	select_finish(CardFinishPreview.Finish.HOLOGRAPHIC)
 	point(Vector2(0.8, -0.3))
 	tuner.use_3d_check.button_pressed = true
-	tuner.finish_depth_spin.value = 0.0
+	set_depth(0.0)
 	var flat: Image = await capture()
-	tuner.finish_depth_spin.value = 5.0
+	set_depth(5.0)
 	var deep: Image = await capture()
 	check(difference(flat, deep, art_rect) > 100, "景深参数确实改变人物与背景关系")
 	await test_holographic_perspective()
 	await test_full_card_fractured()
 	tuner.use_3d_check.button_pressed = false
 	select_finish(CardFinishPreview.Finish.OVERFRAME)
-	var clip := tuner.preview_card.get_node("OverframeArtClip") as Control
-	check(clip.visible and clip.clip_contents and clip.position == Vector2(3, 3), "超框有独立外轮廓裁切")
-	check(clip.z_index > tuner.preview_card.card_frame.z_index and clip.z_index < tuner.preview_card.card_name_frame.z_index, "超框遮挡顺序保护卡名与属性")
-	var overframe_art := clip.get_child(0) as TextureRect
-	check(overframe_art.scale == Vector2.ONE and overframe_art.size == tuner.preview_card.art_texture.size, "超框立绘保持原尺寸")
-	check(overframe_art.position + clip.position == tuner.preview_card.art_panel.position + tuner.preview_card.art_texture.position, "超框不改变原立绘取景位置")
+	var clip := tuner.preview_card.art_panel
+	check(clip.clip_contents and clip.position == Vector2.ONE and clip.size == Vector2(97, 134), "超框复用卡面裁切并扩至半透明框")
+	check(clip.z_index < tuner.preview_card.card_frame.z_index, "半透明框在超框立绘上方合成")
+	var overframe_art := tuner.preview_card.art_texture
+	check(overframe_art.visible and overframe_art.scale == Vector2.ONE and overframe_art.size == overframe_art.texture.get_size(), "超框立绘保持原尺寸")
+	check(not tuner.preview_card.card_name_frame.visible and not tuner.preview_card.name_label.visible and not tuner.preview_card.race_icon.visible, "超框随从隐藏卡名、卡名框和种族图标")
 	check(clip.position.y + clip.size.y > tuner.preview_card.rune_area_position.y + tuner.preview_card.rune_area_size.y, "超框允许延伸到完整符文板块")
 	check(tuner.preview_card.bottom_panel.z_index + tuner.preview_card.rune_row.z_index > clip.z_index, "符文绘制在超框人物上方")
 	await test_overframe_runes()
 	tuner.use_flash_check.button_pressed = false
-	check(not clip.visible and tuner.preview_card.art_texture.visible, "关闭材质恢复原人物层")
+	check(clip.position == tuner.preview_card.art_area_position and tuner.preview_card.art_texture.visible, "关闭材质恢复普通取景")
+	check(tuner.preview_card.card_name_frame.visible and tuner.preview_card.name_label.visible and tuner.preview_card.race_icon.visible, "关闭材质恢复随从身份标识")
 	tuner.use_flash_check.button_pressed = true
 	select_finish(CardFinishPreview.Finish.FOIL)
 	tuner.use_flash_check.button_pressed = false
@@ -170,8 +183,10 @@ func _run() -> void:
 	for finish: int in range(6):
 		select_finish(finish)
 		await process_frame
-		check(not clip.visible, "缺图卡不会残留超框人物")
+		check(not tuner.preview_card.art_texture.visible, "缺图卡不会残留超框人物")
 	check(FileAccess.get_file_as_bytes(CARD_PATH) == bytes_before, "所有工艺预览保持正式卡牌文件不变")
+	CardFinishPreview.SETTINGS.copy_values(original_settings)
+	CardFinishPreview.SETTINGS.emit_changed()
 	tuner.queue_free()
 	await process_frame
 	print("五种卡面工艺GPU验收：%d条断言，%d失败" % [assertions, failures])
@@ -188,10 +203,10 @@ func test_holographic_perspective() -> void:
 	var art_rect := Rect2i(132, 196, 280, 300)
 	point(Vector2.ZERO)
 	# 单独检查人物原取景；背景为避免露空可按景深预留固定边缘。
-	tuner.finish_depth_spin.value = 0.0
+	set_depth(0.0)
 	tuner.preview_card.art_background.hide()
 	var center_flat := await capture()
-	tuner.finish_depth_spin.value = 5.0
+	set_depth(5.0)
 	tuner.preview_card.art_background.hide()
 	var center_deep := await capture()
 	check(difference(center_flat, center_deep, art_rect) == 0, "正面姿态改变景深不放大人物、不改变取景")
@@ -207,9 +222,9 @@ func test_holographic_perspective() -> void:
 	tuner._finish_preview.refresh()
 	# 关闭3D时三层同时停止旋转，不能残留独立的反向倾斜／鼠标平移。
 	tuner.use_3d_check.button_pressed = false
-	tuner.finish_depth_spin.value = 0.0
+	set_depth(0.0)
 	var no_3d_flat := await capture()
-	tuner.finish_depth_spin.value = 5.0
+	set_depth(5.0)
 	var no_3d_deep := await capture()
 	check(difference(no_3d_flat, no_3d_deep, art_rect) == 0, "关闭3D后内外层同时停止深度投影")
 	tuner.use_3d_check.button_pressed = true
@@ -271,7 +286,7 @@ func test_holographic_perspective() -> void:
 	check(largest.x - smallest.x <= 1 and largest.y - smallest.y <= 1, "鼠标移动时背景图案大小保持不变，允许1个显示像素的取整差：" + str(marker_sizes))
 	probe.queue_free()
 	tuner.preview_card.show()
-	tuner.finish_depth_spin.value = 2.5
+	set_depth(2.5)
 	tuner._finish_preview.refresh()
 	# 输出三个真实姿态，供观察人物、卡框与背景作为同一整体转动。
 	var strip := Image.create(CAPTURE_RECT.size.x * 3, CAPTURE_RECT.size.y, false, Image.FORMAT_RGBA8)
@@ -291,9 +306,9 @@ func test_full_card_fractured() -> void:
 	tuner.use_3d_check.button_pressed = false
 	select_finish(CardFinishPreview.Finish.FRACTURED)
 	point(Vector2(0.65, -0.35))
-	tuner.finish_strength_spin.value = 0.0
+	set_strength(0.0)
 	var flat := await capture()
-	tuner.finish_strength_spin.value = 0.75
+	set_strength(0.75)
 	var fractured := await capture()
 	var origin := tuner.preview_display.position + tuner.preview_card.position * 4.0
 	for entry: Array in [["卡框", Rect2i(2, 35, 6, 50)], ["卡名", Rect2i(24, 7, 50, 8)], ["符文板块", Rect2i(10, 109, 79, 24)], ["生命图标", Rect2i(86, 88, 15, 20)]]:
@@ -337,6 +352,24 @@ func test_overframe_runes() -> void:
 	var original := await capture_inner()
 	select_finish(CardFinishPreview.Finish.OVERFRAME)
 	var overframe := await capture_inner()
+	var frame := CardView.OVERFRAME_OUTLINE_SOURCE.get_image()
+	var outline := tuner.preview_card._overframe_outline.texture.get_image()
+	var card_transform: Transform2D = tuner.preview_card.get_global_transform_with_canvas()
+	var edge_pixels := 0
+	var matching_pixels := 0
+	var mask_matches := true
+	for y: int in frame.get_height():
+		for x: int in frame.get_width():
+			if frame.get_pixel(x, y) != Color.BLACK:
+				mask_matches = mask_matches and outline.get_pixel(x, y).a == 0.0
+				continue
+			mask_matches = mask_matches and outline.get_pixel(x, y) == Color.BLACK
+			var pixel := Vector2i(card_transform * (Vector2(x, y) + Vector2(0.5, 0.5)))
+			# 保持普通卡的遮挡次序，属性和身份图标仍可画在轮廓前面。
+			if original.get_pixelv(pixel) != Color.BLACK: continue
+			edge_pixels += 1
+			if overframe.get_pixelv(pixel) == original.get_pixelv(pixel): matching_pixels += 1
+	check(mask_matches and edge_pixels > 300 and matching_pixels == edge_pixels, "实际GPU画面中超框的1px圆角轮廓与普通卡最外层逐像素一致")
 	var changed := 0
 	var sampled := 0
 	for slot: Node in tuner.preview_card.rune_row.get_children():
@@ -360,7 +393,7 @@ func test_holographic_background_corners() -> void:
 	await process_frame
 	select_finish(CardFinishPreview.Finish.HOLOGRAPHIC)
 	tuner.use_3d_check.button_pressed = true
-	tuner.finish_depth_spin.value = 5.0
+	set_depth(5.0)
 	var source := CardView.DEFAULT_ART_BACKGROUND_TEXTURE
 	var original := source.get_image()
 	var preview_texture := tuner.preview_card.art_background.texture
@@ -405,7 +438,7 @@ func test_holographic_background_corners() -> void:
 	check(tuner.preview_card.art_background.texture == source, "普通卡继续使用原始背景素材")
 	select_finish(CardFinishPreview.Finish.HOLOGRAPHIC)
 	check(tuner.preview_card.art_background.texture == preview_texture, "切回全息复用背景显示副本")
-	tuner.finish_depth_spin.value = 2.5
+	set_depth(2.5)
 	point(Vector2(0.9, 0.45))
 	var caption := tuner.get_node("CenterContainer/Workspace/PreviewCaption") as Label
 	caption.text = "全息 · 透明四角修正"

@@ -279,12 +279,12 @@
       ]
     },
     {
-      "card_id": "mobilization_machine",
+      "card_id": "logistics_robot",
       "effects": [
         {
-          "effect_id": "mobilization_machine.effect.rush",
+          "effect_id": "logistics_robot.effect.rush",
           "review_status": "confirmed",
-          "effect_group": "mobilization_machine.group.rush",
+          "effect_group": "logistics_robot.group.rush",
           "group_order": 1,
           "trigger": "rush",
           "conditions": [
@@ -318,7 +318,7 @@
           "related_effects": [],
           "modifier": null,
           "parameters": {
-            "content_effect": "mobilization_machine"
+            "content_effect": "logistics_robot"
           },
           "reading": "突击：相邻友军各随机获得一枚本场纹章。",
           "questions": []

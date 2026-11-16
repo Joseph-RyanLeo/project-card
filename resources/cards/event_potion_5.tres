@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"event_potion_5"
+display_name = "迅捷骨刺药剂"
+pack_id = &"event_potions"
+content_effect = &"event_potion_5"
+card_type = 1
+equipment_type = 5
+rarity = 1
+effect_text = "突击：消耗，携带者永久获得基础数值+1、基础生命-1、热诚+1。"

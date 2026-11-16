@@ -14,6 +14,13 @@ base_value = 0
 max_health = 0
 equipment_type = 5
 equipment_zeal_delta = 1
+background_style = 3
+background_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, -20)
+})
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 1)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-2, 5)
 effect_text = "携带参战并获胜后，获得2张随机随从并消耗此卡。"

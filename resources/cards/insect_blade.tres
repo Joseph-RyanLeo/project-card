@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"insect_blade"
+display_name = "虫刃"
+pack_id = &"gilded_commission"
+rarity = 3
+content_effect = &"insect_blade"
+card_type = 1
+equipment_type = 0
+equipment_zeal_delta = 4
+equipment_action_delta = -2
+effect_ids = Array[StringName]([&"insect_blade.effect.echo"])
+effect_text = "任务：佩戴参战时，跨战累计友军召唤10个随从。奖励：回响：对随机2个敌方单位各造成2点固定无属性伤害。目标不足时可重复。"

@@ -379,12 +379,13 @@ func get_source_card_view() -> Variant:
 	return null
 
 
-func set_equipment_card_data(equipment_data: CardData) -> void:
+func set_equipment_card_data(equipment_data: CardData, temporary: bool = false) -> void:
 	if is_instance_valid(_equipment_indicator_visual):
 		_equipment_indicator_visual.texture = (
 			EquipmentIndicatorStyleScript.get_texture(equipment_data)
 		)
 	if is_instance_valid(_equipment_indicator_shadow):
+		_equipment_indicator_visual.self_modulate = EquipmentIndicatorStyleScript.TEMPORARY_EQUIPMENT_TINT if temporary else Color.WHITE
 		_equipment_indicator_shadow.texture = _equipment_indicator_visual.texture
 
 

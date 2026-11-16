@@ -35,7 +35,7 @@ func _run() -> void:
 	check(ElementResolver.get_element_groups(split_pattern).is_empty(), "隐藏断开的相同元素不会产生派生组")
 	owned.rune_revealed[1] = true
 	var triple_pattern := squad.get_rune_pattern_result()
-	check(triple_pattern.pattern_type == RunePatternResult.PatternType.THREE_OF_A_KIND and triple_pattern.participating_indices == [0, 1, 2], "揭晓后相邻水符文恢复三条并保留正确索引")
+	check(triple_pattern.pattern_type == RunePatternResult.PatternType.THREE_OF_A_KIND and triple_pattern.participating_indices == [0, 1, 2], "揭晓后相邻水符文恢复三相并保留正确索引")
 	owned.rune_revealed[1] = false
 	owned.set_rune_sticker(1, {"instance_id": "water_sticker", "emblem_id": "水贴纸", "element": CardData.ElementType.WATER})
 	check(squad.get_visible_rune_stat_bonus(&"max_health") == 6 and not owned.rune_revealed[1], "元素贴纸直接生效但不改变底层揭晓状态")

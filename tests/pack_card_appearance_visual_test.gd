@@ -67,16 +67,18 @@ func _run() -> void:
 			caption.text = "%s卡面 / %s卡图" % [Appearance.SURFACE_LABELS[face], Appearance.ART_LABELS[art]]
 			var shot := await capture()
 			var renderer = card._finish_controller
-			var foil := face in [Appearance.Surface.SILVER, Appearance.Surface.GOLD, Appearance.Surface.RAINBOW]
+			var foil := face in [Appearance.Surface.SILVER, Appearance.Surface.GOLD, Appearance.Surface.RAINBOW, Appearance.Surface.FRACTURED, Appearance.Surface.EMBOSSED]
 			check(bool(surface.effect.get_shader_parameter("use_flash")) == foil, "真实检视按卡面维度启用扫光：" + caption.text)
-			if foil: check(int(surface.effect.get_shader_parameter("flash_type")) == face - Appearance.Surface.SILVER, "银／金／彩闪的颜色正确")
+			if foil: check(int(surface.effect.get_shader_parameter("flash_type")) == (0 if face in [Appearance.Surface.FRACTURED, Appearance.Surface.EMBOSSED] else face - Appearance.Surface.SILVER), "银金彩闪颜色正确，碎闪与法线闪使用白色闪纹")
 			check(bool(surface.effect.get_shader_parameter("use_fractured")) == (face == Appearance.Surface.FRACTURED), "碎闪可与卡图组合")
 			check(bool(renderer._art_material.get_shader_parameter("embossed")) == (face == Appearance.Surface.EMBOSSED), "法线可与卡图组合")
-			check(renderer._overframe_clip.visible == (art == Appearance.Art.OVERFRAME), "超框由卡图维度控制")
+			var overframe := art == Appearance.Art.OVERFRAME
+			check((card.art_panel.position == Vector2.ONE and card.art_panel.size == Vector2(97, 134)) == overframe, "扩展裁切由卡图维度控制")
+			check(card.art_texture.visible and card.card_name_frame.visible != overframe and card.name_label.visible != overframe and card.race_icon.visible != overframe, "超框随从隐藏卡名与种族，保留立绘")
 			check((float(renderer._art_material.get_shader_parameter("layer_depth")) < 0.0) == (art == Appearance.Art.HOLOGRAPHIC), "全息由卡图维度控制")
 			check(renderer._art_material.get_shader_parameter("pointer_force") == surface.force, "人物与整卡共用平滑方向")
 			var centered := Vector2(floorf((card.art_area_size.x - card.art_texture.size.x) * 0.5), floorf((card.art_area_size.y - card.art_texture.size.y) * 0.5))
-			check(card.art_texture.position == centered + Vector2(source.get_art_offset_for_finish(owned.get_art_finish_key())), "真实实例沿用各工艺已保存的取景")
+			check(card.art_panel.position + card.art_texture.position == card.art_area_position + centered + Vector2(source.get_art_offset_for_finish(owned.get_art_finish_key())), "真实实例沿用各工艺已保存的取景")
 			if face == 0: reference = shot
 			else: check(difference(reference, shot) > 50, "GPU实际画面能区分卡面工艺：" + caption.text)
 			grid.blit_rect(shot, TILE, Vector2i(face * TILE.size.x, art * TILE.size.y))

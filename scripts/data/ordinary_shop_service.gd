@@ -13,6 +13,7 @@ const PREVIOUS_CARD_RULES := {
 const CONFIG_PATH := "res://data/demo2/ordinary_shop_config.json"
 const CardPackRegistryScript = preload("res://scripts/data/card_pack_registry.gd")
 
+var sticker_packs_enabled: bool = true # 按本局冻结资格控制普通纹章包
 var config: Dictionary = {}
 var rng := RandomNumberGenerator.new()
 var refresh_count: int = 0
@@ -268,7 +269,7 @@ func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_defi
 		if not bool(generated.get("success", false)):
 			return false
 		next_offers.append({"kind": "card_pack", "pack_id": String(pack_id), "size": size_key, "price": int((config.get("card_pack_prices", {}) as Dictionary).get(size_key, 0)), "cards": _card_ids(generated.cards), "offer_id": "card_%d" % next_offers.size()})
-	var sticker_count := _weighted_key(weights.get("sticker_pack_count", {}), next_rng)
+	var sticker_count := _weighted_key(weights.get("sticker_pack_count", {}), next_rng) if sticker_packs_enabled else 0
 	if sticker_count < 0 or (sticker_count > 0 and sticker_candidates.is_empty()):
 		return false
 	for _index: int in sticker_count:
@@ -374,7 +375,7 @@ func _append_action_procurement(next_offers: Array[Dictionary], candidates: Arra
 			next_offers.append({"kind": "single_card", "card_id": String(definition.id), "procurement_action": action, "resolved_action_type": action, "price": price, "hidden": hidden, "hint": "action_type" if hidden else "", "hint_value": CardData.get_action_type_name_for(action as CardData.ActionType) if hidden else "", "offer_id": "action_%d_%s" % [action, "hidden" if hidden else "visible"], "instance_seed": str(source_rng.randi())})
 
 
-func draw_card_pack(card_definitions: Array[CardData], is_large: bool, draw_count: int, source_rng: RandomNumberGenerator = null, owned_cards: Array = []) -> Dictionary:
+func draw_card_pack(card_definitions: Array[CardData], is_large: bool, draw_count: int, source_rng: RandomNumberGenerator = null, owned_cards: Array = [], exclusive_pack: StringName = &"") -> Dictionary:
 	var active_rng := _copy_rng(source_rng if source_rng != null else rng)
 	if draw_count <= 0:
 		return {"success": false, "reason": "invalid_pack_size"}
@@ -385,7 +386,7 @@ func draw_card_pack(card_definitions: Array[CardData], is_large: bool, draw_coun
 	if minimum_rarity < CardData.Rarity.I or minimum_rarity > CardData.Rarity.V:
 		return {"success": false, "reason": "invalid_guarantee_rarity"}
 	for draw_index: int in draw_count:
-		var eligible := _eligible_cards(card_definitions, owned_cards, picked_unique)
+		var eligible := _eligible_cards(card_definitions, owned_cards, picked_unique, exclusive_pack)
 		var guarantee := is_large and draw_index == draw_count - 1 and not _contains_rarity_at_least(picks, minimum_rarity)
 		var selected := _draw_by_rarity_weights(eligible, active_rng, minimum_rarity if guarantee else CardData.Rarity.I, held_counts)
 		if selected == null:
@@ -401,7 +402,26 @@ func draw_card_pack(card_definitions: Array[CardData], is_large: bool, draw_coun
 	return {"success": true, "cards": picks}
 
 
-func _eligible_cards(definitions: Array[CardData], owned_cards: Array, additionally_used: Dictionary = {}) -> Array[CardData]:
+func draw_reward_card_pack(candidates: Array[CardData], size_key: String, source_rng: RandomNumberGenerator, owned_cards: Array) -> Dictionary:
+	var pools := {}
+	for card: CardData in candidates:
+		if card.pack_id == &"gilded_commission": continue
+		if not pools.has(card.pack_id):
+			var pool: Array[CardData] = []
+			pools[card.pack_id] = pool
+		pools[card.pack_id].append(card)
+	var themes := pools.keys()
+	var next_rng := _copy_rng(source_rng)
+	while not themes.is_empty():
+		var theme: StringName = themes.pop_at(next_rng.randi_range(0, themes.size() - 1))
+		var result := draw_card_pack(pools[theme], size_key == "large", int(config.card_pack_sizes.get(size_key, 0)), next_rng, owned_cards)
+		if result.success:
+			source_rng.state = next_rng.state
+			return result
+	return {"success": false, "reason": "no_valid_theme"}
+
+
+func _eligible_cards(definitions: Array[CardData], owned_cards: Array, additionally_used: Dictionary = {}, exclusive_pack: StringName = &"") -> Array[CardData]:
 	var eligible: Array[CardData] = []
 	var held_unique: Dictionary = additionally_used.duplicate(true)
 	for owned_value: Variant in owned_cards:
@@ -415,6 +435,9 @@ func _eligible_cards(definitions: Array[CardData], owned_cards: Array, additiona
 	for definition: CardData in definitions:
 		if definition == null or not definition.is_available or definition.is_derived:
 			continue
+		if definition.pack_id == &"gilded_commission" and exclusive_pack != &"gilded_commission": continue
+		if not exclusive_pack.is_empty() and definition.pack_id != exclusive_pack: continue
+		if config.get("exclude_resource_related_cards", false) and definition.references_resource_rules(): continue
 		var pack_allowed := false
 		var pack_excluded := false
 		for pack: Variant in allowed:
@@ -474,6 +497,7 @@ func _eligible_stickers(definitions: Array[Dictionary], held: Array[Dictionary],
 	for definition: Dictionary in definitions:
 		var id := String(definition.get("id", ""))
 		var rarity := int(definition.get("rarity", -1))
+		if definition.get("event_only", false): continue
 		if rarity < 0 or rarity >= CardData.Rarity.V or int(weights.get(_rarity_key(rarity), 0)) <= 0:
 			continue
 		if id == "万能贴纸" and universal_held:

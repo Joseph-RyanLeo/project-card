@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"blood_oath_whip"
+display_name = "血誓之鞭"
+pack_id = &"event_relics"
+card_type = 1
+equipment_type = 1
+rarity = 4
+effect_text = "突击：装备者永久失去3点生命值。荣耀：该装备永久获得+2/+5（每场战斗1次）。"

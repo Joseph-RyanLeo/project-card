@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"blazing_lantern"
+display_name = "炽烈青灯"
+pack_id = &"styx_tomb"
+card_type = 1
+rarity = 2
+equipment_type = 4
+equipment_action_delta = 1
+equipment_zeal_delta = 2
+equipment_armor_delta = 4
+content_effect = &"blazing_lantern"
+effect_ids = Array[StringName]([&"blazing_lantern.effect.echo", &"blazing_lantern.effect.last_wish"])
+keywords = Array[StringName]([&"dazzling"])
+effect_text = "耀眼。遗愿：按本局友军阵亡次数造成总伤害，每点随机分配给敌方。"

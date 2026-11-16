@@ -4,7 +4,7 @@ const FEEDBACK_DIR := "/private/tmp/project-card-gallery-finish-feedback"
 const PREVIEW_DIR := "res://docs/previews/d3_3_finish_feedback_20261103"
 const SETTINGS_SCRIPT = preload("res://scripts/ui/card_finish_settings.gd")
 const SETTINGS_PATH := FEEDBACK_DIR + "/card_finish_settings.tres"
-const TUNER = preload("res://scenes/tools/CardArtTuner.tscn")
+const TUNER = preload("res://scenes/tools/CardTextureTuner.tscn")
 
 func capture_feedback(title: String) -> void:
 	if DisplayServer.get_name() == "headless": return
@@ -13,9 +13,10 @@ func capture_feedback(title: String) -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(PREVIEW_DIR))
 	root.get_texture().get_image().save_png(PREVIEW_DIR.path_join(title + ".png"))
 
-func choose_finish(tuner: CardArtTuner, index: int) -> void:
-	tuner.finish_selector.select(index)
-	tuner.finish_selector.item_selected.emit(index)
+func choose_finish(tuner: Control, index: int) -> void:
+	var style: int = {CardFinishPreview.Finish.FRACTURED: 5, CardFinishPreview.Finish.HOLOGRAPHIC: 3}[index]
+	tuner.style_selector.select(style)
+	tuner.style_selector.item_selected.emit(style)
 	await frames()
 
 func _run() -> void:
@@ -84,42 +85,44 @@ func _run() -> void:
 	var settings := SETTINGS_SCRIPT.new()
 	settings.fractured_density = 32
 	check(ResourceSaver.save(settings, SETTINGS_PATH) == OK, "建立原纹理32的隔离工艺文件")
-	var tuner := TUNER.instantiate() as CardArtTuner
-	tuner.finish_settings_path = SETTINGS_PATH
+	var tuner := TUNER.instantiate() as Control
+	tuner.settings_path = SETTINGS_PATH
 	root.add_child(tuner)
 	await frames()
-	tuner.card_data = load("res://resources/cards/anvil_margaret.tres")
-	for action: Button in [tuner.save_finish_button, tuner.reload_finish_button]:
+	var selected: int = tuner._paths.find("res://resources/cards/anvil_margaret.tres")
+	tuner.card_selector.select(selected)
+	tuner.card_selector.item_selected.emit(selected)
+	for action: Button in [tuner.save_button, tuner.reload_button]:
 		check(Rect2(Vector2.ZERO, Vector2(1280, 720)).encloses(action.get_global_rect()), "工艺保存入口在720p画布内")
-		for control: Control in [tuner.use_3d_check, tuner.use_flash_check, tuner.finish_selector, tuner.flash_type_selector, tuner.save_button]:
+		for control: Control in [tuner.style_selector, tuner.card_selector, tuner.tabs]:
 			check(not action.get_global_rect().intersects(control.get_global_rect()), "全局工艺按钮不遮挡原材质／卡牌控件")
 	await choose_finish(tuner, CardFinishPreview.Finish.FRACTURED)
-	check(tuner.finish_density_spin.value == 32, "调整器读取保存的工艺值，不只读取场景默认值")
-	tuner.finish_density_spin.value = 15
-	check(tuner._preview_effect_material.get_shader_parameter("finish_density") == 15 and tuner._has_finish_changes() and not tuner.save_finish_button.disabled, "碎闪纹理15立即预览，并明确标记尚未保存")
+	check(tuner.controls.fractured_density.value == 32, "调整器读取保存的工艺值，不只读取场景默认值")
+	tuner.controls.fractured_density.value = 15
+	check(tuner.previews[0].effect.get_shader_parameter("finish_density") == 15 and tuner.has_changes() and not tuner.save_button.disabled, "碎闪纹理15立即预览，并明确标记尚未保存")
 	await choose_finish(tuner, CardFinishPreview.Finish.HOLOGRAPHIC)
-	check(tuner.finish_density_spin.value == 32, "全息和碎闪的纹理值分别保留，不互相串改")
-	tuner.finish_strength_spin.value = 0.9
+	check(tuner.controls.holographic_density.value == 32, "全息和碎闪的纹理值分别保留，不互相串改")
+	tuner.controls.holographic_strength.value = 0.9
 	await choose_finish(tuner, CardFinishPreview.Finish.FRACTURED)
-	check(tuner.finish_density_spin.value == 15, "切换工艺后碎闪草稿仍为15")
+	check(tuner.controls.fractured_density.value == 15, "切换工艺后碎闪草稿仍为15")
 	var latest := ResourceLoader.load(SETTINGS_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
 	latest.embossed_density = 47
 	check(ResourceSaver.save(latest, SETTINGS_PATH) == OK, "另一个工艺的磁盘修改作为真实合并检查")
-	await click(tuner.save_finish_button)
+	await click(tuner.save_button)
 	var saved := ResourceLoader.load(SETTINGS_PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
 	check(saved.fractured_density == 15 and is_equal_approx(saved.holographic_strength, 0.9) and saved.embossed_density == 47, "真实保存按钮写入改动工艺，同时保留其他工艺的磁盘值")
-	check(not tuner._has_finish_changes() and tuner.status_label.text.contains("已保存全局工艺参数"), "保存成功才清除工艺脏标记并提示成功")
+	check(not tuner.has_changes() and tuner.status_label.text.contains("全体卡牌"), "保存成功才清除工艺脏标记并提示成功")
 	await capture_feedback("04_fractured_saved")
-	tuner.finish_density_spin.value = 23
-	await click(tuner.reload_finish_button)
-	check(tuner.finish_density_spin.value == 15 and not tuner._has_finish_changes(), "重载工艺配置放弃未保存的23，恢复真实磁盘15")
+	tuner.controls.fractured_density.value = 23
+	await click(tuner.reload_button)
+	check(tuner.controls.fractured_density.value == 15 and not tuner.has_changes(), "重载工艺配置放弃未保存的23，恢复真实磁盘15")
 	tuner.free()
-	tuner = TUNER.instantiate() as CardArtTuner
-	tuner.finish_settings_path = SETTINGS_PATH
+	tuner = TUNER.instantiate() as Control
+	tuner.settings_path = SETTINGS_PATH
 	root.add_child(tuner)
 	await frames()
 	await choose_finish(tuner, CardFinishPreview.Finish.FRACTURED)
-	check(tuner.finish_density_spin.value == 15, "重新创建开发工具仍读回15")
+	check(tuner.controls.fractured_density.value == 15, "重新创建开发工具仍读回15")
 	# 真实OwnedCard不经过调整器，直接检查正式CardView→InspectionCardSurface链路。
 	var owned := OwnedCardCollection.new().create_card(load("res://resources/cards/militia.tres"))
 	owned.surface_finish = CardAppearance.Surface.FRACTURED

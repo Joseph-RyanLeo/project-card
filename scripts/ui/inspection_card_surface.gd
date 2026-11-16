@@ -3,6 +3,7 @@ extends TextureRect
 
 ## 整张卡先合成后倾斜；命中点使用与着色器相同的逆投影，避免贴纸错位。
 const SHADER = preload("res://shaders/card_preview_3d.gdshader")
+const EffectPopup = preload("res://scripts/ui/card_effect_popup.gd")
 const PADDING := Vector2(18, 18) # 容纳卡面外角标和贴纸
 var content_padding := PADDING # 合成画布边距；翻皮演出可扩大，普通卡牌保持默认边距
 var render_scale := 1.0 # 合成纹理相对原生尺寸的分辨率倍率；贴纸包检视使用4倍精度
@@ -14,18 +15,19 @@ const FOLLOW_SPEED := 12.0 # 检视倾斜跟随鼠标的平滑速度
 var force := Vector2.ZERO
 var tilt_locked := false
 var drop_handler: Callable
-var tooltip_handler: Callable
+var sticker_help_handler: Callable
+var _sticker_popup: CanvasLayer
 var _drop_preview: TextureRect
 var _fusion_highlights: Control
 var _fusion_rects: Array[Rect2] = []
 const FUSION_HALO_MARGIN := 1.0 # 可合成目标紫光超出原纹章的原生像素边距
 
-func setup(value: CardView, handler: Callable, tooltip: Callable) -> void:
+func setup(value: CardView, handler: Callable, sticker_help: Callable) -> void:
 	card = value
 	if CardView.TextDisplaySettings.is_popup_mode(): render_scale = maxf(render_scale, 4.0) # 黑体卡名用4倍合成，放大检视不放大低分辨率字形
 	if card.get_owned_card() != null and card.get_owned_card().has_special_appearance(): render_scale = 4.0
 	drop_handler = handler
-	tooltip_handler = tooltip
+	sticker_help_handler = sticker_help
 	_setup_content(card, card.card_size)
 	card.bind_finish_surface(effect)
 	_drop_preview = TextureRect.new()
@@ -81,9 +83,6 @@ func _setup_content(value: Control, content_size: Vector2) -> void:
 	effect.set_shader_parameter("max_tilt_degrees", TILT)
 	effect.set_shader_parameter("fov", 72.0)
 	effect.set_shader_parameter("inset", 0.0)
-	effect.set_shader_parameter("stripe_spacing", 14.0)
-	effect.set_shader_parameter("stripe_width", 10.0)
-	effect.set_shader_parameter("flash_intensity", 0.2)
 	effect.set_shader_parameter("flash_type", 1)
 	effect.set_shader_parameter("card_texture_size_px", size)
 	effect.set_shader_parameter("texture_render_scale", render_scale)
@@ -97,6 +96,26 @@ func _process(delta: float) -> void:
 	if not tilt_locked and hover_rect.has_point(pointer):
 		target = ((pointer - hover_rect.position) / hover_rect.size - Vector2(0.5, 0.5)) * 2.0
 	update_pointer_force(target, delta)
+	if not sticker_help_handler.is_valid(): return
+	# 弹窗打开后由它跟踪投影与文字，卡面只负责首次命中。
+	if is_instance_valid(_sticker_popup) and _sticker_popup.source == self: return
+	if get_hovered_sticker_help().is_empty(): return
+	if not is_instance_valid(_sticker_popup): _sticker_popup = EffectPopup.shared(get_tree())
+	_sticker_popup.show_sticker(self)
+
+
+func get_hovered_sticker_help() -> Dictionary:
+	if not sticker_help_handler.is_valid() or not is_processing() or not is_visible_in_tree() or tilt_locked or not is_instance_valid(card):
+		return {}
+	var hovered := get_viewport().gui_get_hovered_control()
+	if hovered != self: return {}
+	var overlay := get_parent() as CardInspectionOverlay
+	var local_pointer := get_local_mouse_position()
+	if overlay != null:
+		local_pointer = get_global_transform_with_canvas().affine_inverse() * overlay.pointer_position
+	var help: Dictionary = sticker_help_handler.call(card_point(local_pointer))
+	if not help.is_empty(): help.rect = card_canvas_rect(help.rect)
+	return help
 
 func update_pointer_force(target: Vector2, delta: float) -> void:
 	# 商店从固定商品区域提供归一化坐标，检视从自身区域提供；共用同一套平滑。
@@ -169,15 +188,6 @@ func _update_drop_preview(point: Vector2, data: Dictionary) -> void:
 func _drop_context(point: Vector2, data: Variant) -> Dictionary:
 	var adjusted_data: Dictionary = data.duplicate() if data is Dictionary else {}
 	return {"point": card_point(point), "data": adjusted_data}
-
-func _get_tooltip(point: Vector2) -> String:
-	return tooltip_handler.call(card_point(point)) if tooltip_handler.is_valid() else ""
-
-func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
-		get_parent().close_requested.emit()
-		accept_event()
-
 
 func set_fusion_targets(rects: Array[Rect2]) -> void:
 	if _fusion_rects == rects or not is_instance_valid(_fusion_highlights):

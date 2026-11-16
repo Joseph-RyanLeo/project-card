@@ -3,6 +3,8 @@ extends Node
 
 const HeroRuntime = preload("res://scripts/battle/battle_hero_runtime.gd")
 var hero_runtime: HeroRuntime
+var task_cards: RefCounted
+var gilded: RefCounted
 const TwistedRuntime = preload("res://scripts/battle/twisted_vein_runtime.gd")
 const SilvermoonContent = preload("res://scripts/battle/silvermoon_runtime.gd")
 const IronwallContent = preload("res://scripts/battle/ironwall_runtime.gd")
@@ -74,6 +76,8 @@ var player_states: Array[BattleSquadState] = []
 var enemy_states: Array[BattleSquadState] = []
 var player_resource_states: Array[RefCounted] = []
 var enemy_resource_states: Array[RefCounted] = []
+var _player_enabled_packs: Array = [] # 空数组沿用独立战斗／旧档卡池；D3传入本局启用包
+var _player_sticker_unlocks: Dictionary = {}
 var _reward_card_catalog: Array[CardData] = []
 var _player_owned_card_ids: Dictionary = {} # 键用于物品／IV持有去重，值保存同名持有数量供奖励降权
 var _held_reward_stickers: Array[Dictionary] = []
@@ -135,6 +139,21 @@ var _next_spell_modifier_source_id: int = -10000000
 var _death_sequence: int = 0
 var _death_history: Array[Dictionary] = []
 var owned_card_statistics: Dictionary = {} # 本场待提交单卡战绩；重开时清空，正式结算才累计
+var _story_timed_stuns: Array[Dictionary] = []
+var _story_opening_damage: Array[Dictionary] = []
+var _story_floor_health := 0
+var _story_fragile_charges: Dictionary = {}
+var story_fragile_spent: Dictionary = {}
+var _blood_oath_glory: Dictionary = {}
+var _enemy_first_rush := false
+var _roland_sources: Array[BattleSquadState] = []
+var _has_seraphina := false
+var task_scroll_buffs: Dictionary = {}
+var task_scroll_supplies: Dictionary = {}
+var _task_buff_groups: Dictionary = {}
+var _has_task_scrolls := false
+var _forbidden_wound_pool: Array = []
+const EventPotionRules = preload("res://scripts/data/event_potion_rules.gd")
 var _death_wound_checked: Dictionary = {}
 
 
@@ -191,6 +210,12 @@ func start_battle(
 	for owned: OwnedCard in player_owned_cards:
 		for sticker: Dictionary in owned.rune_stickers:
 			if not sticker.is_empty(): _held_reward_stickers.append(sticker.duplicate(true))
+	task_cards = preload("res://scripts/battle/task_card_runtime.gd").new()
+	task_cards.initialize(self, int(run_context.get("ally_deaths", 0)), int(run_context.get("gallery_equipment_count", 0)))
+	gilded = preload("res://scripts/battle/gilded_commission_runtime.gd").new()
+	gilded.initialize(self, player_owned_cards)
+	_player_enabled_packs = run_context.get("player_enabled_packs", []).duplicate()
+	_player_sticker_unlocks = run_context.get("player_sticker_unlocks", {}).duplicate(true)
 	_reward_card_catalog.assign(reward_card_catalog)
 	_player_owned_card_ids.clear()
 	for owned: OwnedCard in player_owned_cards:
@@ -212,6 +237,9 @@ func start_battle(
 		hero_runtime = HeroRuntime.new()
 		hero_runtime.initialize(self, hero_context)
 	for state: BattleSquadState in get_all_states(): state.direct_damage_guard = try_protect_direct_damage
+	_apply_story_buffs(hero_context.get("story_buffs", []), int(hero_context.get("floor", 1)))
+	_forbidden_wound_pool = hero_context.get("rules", {}).get("wound_event", {}).get("wound_ids", [])
+	_enemy_first_rush = bool(hero_context.get("enemy_first", false))
 	battle_initialized.emit()
 	_opening_resolving = true
 	_begin_opening_spell_phase(auto_run)
@@ -223,17 +251,29 @@ func start_battle(
 func _finish_opening_spell_phase(auto_run: bool) -> void:
 	if hero_runtime != null:
 		hero_runtime.opening_passives()
-		hero_runtime.opening_rush()
+		if not _enemy_first_rush: hero_runtime.opening_rush()
 	# 先放入战前已获强化，再结算突击窗口；突击内的即时行动会正常读取并消费这批强化。
 	_apply_visible_fire_rune_reinforcement()
-	_apply_emblem_rush_effects()
-	_apply_wound_rush_effects()
+	if hero_runtime != null: hero_runtime.try_lone_star()
+	if not _enemy_first_rush: _apply_native_opening_rush()
 	if not effect_runtime.bindings.is_empty():
 		var continuous_event := effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.CONTINUOUS)
 		# 排空持续触发及其子事件后再排突击；同一时刻其他独立事件保留在队列中。
 		effect_runtime.process_due_for_root(elapsed_seconds, continuous_event.root_event_id)
-		effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH)
-		effect_runtime.process_due(elapsed_seconds)
+		if not _enemy_first_rush:
+			effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH)
+			effect_runtime.process_due(elapsed_seconds)
+	if _enemy_first_rush:
+		for side: int in [BattleSquadState.Side.ENEMY, BattleSquadState.Side.PLAYER]:
+			if side == BattleSquadState.Side.PLAYER and hero_runtime != null: hero_runtime.opening_rush()
+			_apply_native_opening_rush(side)
+			var actors := get_living_states(side)
+			actors.sort_custom(_is_actor_before)
+			for actor: BattleSquadState in actors:
+				if not actor.alive or actor.current_health <= 0.0: continue
+				var rush := effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.RUSH, {"actor": actor})
+				effect_runtime.process_due_for_root(elapsed_seconds, rush.root_event_id)
+				_finalize_batch()
 	_finalize_batch()
 	_opening_resolving = false
 	_running = true
@@ -242,6 +282,169 @@ func _finish_opening_spell_phase(auto_run: bool) -> void:
 	states_changed.emit()
 	_check_battle_result()
 	opening_spell_phase_finished.emit(_battle_generation)
+
+
+func _apply_native_opening_rush(side: int = -1) -> void:
+	if side != BattleSquadState.Side.ENEMY:
+		gilded.snapshot_opening_potions()
+		_use_opening_event_potions()
+	_apply_emblem_rush_effects(null, side)
+	_apply_wound_rush_effects(null, side)
+	for state: BattleSquadState in get_all_states():
+		if side >= 0 and state.side != side: continue
+		for card: CardData in state.squad_data.horizontal_cards:
+			var owned := state.squad_data.get_owned_card(card)
+			if owned == null: continue
+			var charges := int(owned.progress_by_source.get(EventPotionRules.FORBIDDEN_PROTECTION, 0))
+			if charges > 0: state.grant_protection(StringName("forbidden:%s" % owned.instance_id), charges)
+		if _has_slave_shackles(state): state.apply_sleep(&"slave_shackles", 30.0)
+		if state.alive and state.current_health > 0.0 and state.equipped_card_is(&"blood_oath_whip"):
+			_apply_native_rush_with_repeat(state, _apply_blood_oath_rush.bind(state))
+	if side != BattleSquadState.Side.ENEMY:
+		for entry: Dictionary in _story_opening_damage:
+			var state: BattleSquadState = entry.state
+			if state.alive and state.current_health > 0: state.apply_damage_exact(float(entry.amount))
+		_story_opening_damage.clear()
+
+
+func _apply_blood_oath_rush(state: BattleSquadState) -> bool:
+	return _record_resource_permanent_growth(state, BattlePermanentGrowthLedger.STAT_MAX_HEALTH, -3.0, &"blood_oath_whip", roundi(elapsed_seconds * 1000000.0))
+
+
+func _apply_native_rush_with_repeat(state: BattleSquadState, apply: Callable) -> void:
+	if not apply.call() or not _has_seraphina: return
+	task_cards.observe_rush(state, roundi(elapsed_seconds * 1000000.0))
+	if state.current_health > 0.0 and task_cards.doubles_rush(state) and apply.call():
+		task_cards.observe_rush(state, roundi(elapsed_seconds * 1000000.0))
+
+
+func _apply_story_buffs(buffs: Array, floor_number: int) -> void:
+	for index: int in buffs.size():
+		var buff: Dictionary = buffs[index]
+		if int(buff.get("floor", floor_number)) != floor_number: continue
+		var targets: Array[BattleSquadState] = []
+		for state: BattleSquadState in player_states:
+			var squad := state.squad_data
+			var top := squad.get_effect_source()
+			if buff.has("max_rarity") and (top == null or int(top.rarity) > int(buff.max_rarity)): continue
+			if buff.get("target") == "magic" and squad.get_effective_action_type() != CardData.ActionType.MAGIC: continue
+			if buff.has("instance_id") and squad.get_card_data_for_owned_instance(StringName(buff.instance_id)) == null: continue
+			if buff.stat == "equipment_growth" and squad.get_equipped_item() == null: continue
+			targets.append(state)
+		if buff.has("floor") and buff.stat == "max_health": _story_floor_health += int(buff.value)
+		var count := mini(int(buff.get("count", targets.size())), targets.size())
+		for _index: int in count:
+			var state: BattleSquadState = targets.pop_at(_random.randi_range(0, targets.size() - 1)) if buff.has("count") else targets.pop_front()
+			var source := StringName("story_event:%d" % index)
+			match String(buff.stat):
+				"sleep":
+					if float(buff.get("delay", 0)) > 0:
+						_story_timed_stuns.append({"state": state, "source": source, "at": float(buff.delay), "duration": float(buff.value)})
+					else: state.apply_sleep(source, float(buff.value))
+				"opening_damage": _story_opening_damage.append({"state": state, "amount": buff.value})
+				"dazzling": state.grant_runtime_keyword(&"dazzling", -18000 - index)
+				"protection": state.grant_protection(source, int(buff.value))
+				"fragile_protection":
+					if not _story_fragile_charges.has(state): _story_fragile_charges[state] = []
+					_story_fragile_charges[state].append({"index": index, "remaining": int(buff.value)})
+				"growth", "equipment_growth":
+					_add_story_modifier(state, BattleModifier.Stat.ACTION_VALUE, float(buff.get("base_value", 0)), source)
+					_add_story_modifier(state, BattleModifier.Stat.MAX_HEALTH, float(buff.get("max_health", 0)), source)
+				"reinforcement": _add_story_modifier(state, BattleModifier.Stat.REINFORCEMENT, float(buff.value), source)
+				"zeal": _add_story_modifier(state, BattleModifier.Stat.ZEAL, float(buff.value), source)
+				"action_value": _add_story_modifier(state, BattleModifier.Stat.ACTION_VALUE, float(buff.value), source)
+				"base_armor": _add_story_modifier(state, BattleModifier.Stat.BASE_ARMOR, float(buff.value), source)
+				"max_health": _add_story_modifier(state, BattleModifier.Stat.MAX_HEALTH, float(buff.value), source)
+
+
+func _add_story_modifier(state: BattleSquadState, stat: BattleModifier.Stat, amount: float, source: StringName) -> void:
+	if is_zero_approx(amount): return
+	var modifier := BattleModifier.new()
+	modifier.stat = stat
+	modifier.value = amount
+	modifier.effect_id = source
+	modifier.source_runtime_id = state.runtime_id
+	state.modifiers.add_modifier(modifier)
+	if stat == BattleModifier.Stat.MAX_HEALTH: state.current_health = minf(state.current_health + amount, state.get_max_health())
+	if stat == BattleModifier.Stat.BASE_ARMOR: state.current_armor += amount
+	if stat == BattleModifier.Stat.ZEAL: state.refresh_cooldown_after_modifier_change()
+
+
+func _use_opening_event_potions() -> void:
+	for state: BattleSquadState in player_states:
+		if not state.alive or state.current_health <= 0.0: continue
+		var item := state.squad_data.get_equipped_item()
+		if item == null: continue
+		var effect := String(item.card_data.content_effect)
+		var forbidden := effect.begins_with("event_forbidden_")
+		if not forbidden and not effect.begins_with("event_potion_"): continue
+		var target := state.squad_data.get_effect_source_instance()
+		if target == null: continue
+		if forbidden and _forbidden_wound_pool.is_empty(): continue
+		var mask := 0 if forbidden else int(effect.trim_prefix("event_potion_"))
+		var equipment_owner := BattleEffectOwnerRef.for_state(state, BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE)
+		if not record_pending_equipment_consumption(equipment_owner, item.card_data.content_effect, state.runtime_id, 0): continue
+		if _has_seraphina: task_cards.observe_rush(state, 0)
+		var owner := BattleEffectOwnerRef.for_owned_card_in_state(state, target)
+		var growth := _apply_forbidden_potion(state, target, owner, effect) if forbidden else EventPotionRules.growth(mask, target)
+		for stat: StringName in growth:
+			var amount := float(growth[stat])
+			if not record_pending_permanent_growth(owner, stat, amount, item.card_data.content_effect, state.runtime_id, 0): continue
+			target.apply_permanent_growth(stat, amount)
+			if stat == OwnedCard.STAT_MAX_HEALTH and state.squad_data.get_vitals_source_instance() == target and amount > 0:
+				state.current_health = minf(state.current_health + amount, state.get_max_health())
+			if stat == OwnedCard.STAT_BASE_ARMOR and state.squad_data.get_vitals_source_instance() == target:
+				state.current_armor += amount
+		if mask & EventPotionRules.SWIFT:
+			var key: StringName = EventPotionRules.PERMANENT_ZEAL
+			var value := int(target.progress_by_source.get(key, 0)) + 1
+			if owned_card_change_ledger.record_progress_value(owner, key, value, item.card_data.content_effect, battle_instance_id):
+				target.progress_by_source[key] = value
+				state.refresh_cooldown_after_modifier_change()
+		state.squad_data.unequip_item()
+
+
+func _apply_forbidden_potion(state: BattleSquadState, target: OwnedCard, owner: BattleEffectOwnerRef, effect: String) -> Dictionary:
+	var parts := effect.split("_")
+	var large := parts[2] == "large"
+	var variant := int(parts[3])
+	var receipt := "%s:forbidden:%s" % [battle_instance_id, target.instance_id]
+	if large:
+		var wounds: Array[Dictionary] = []
+		for index: int in target.wound_slots.size() + target.emblem_slots.size():
+			wounds.append(EventPotionRules.make_locked_wound(_forbidden_wound_pool, _random, "%s:%d" % [receipt, index]))
+		if owned_card_change_ledger.record_content_change(owner, BattleOwnedCardChangeLedger.KIND_FORBIDDEN_WOUNDS, {"wounds": wounds, "convert": true}, battle_instance_id):
+			target.apply_forbidden_wounds(wounds, true)
+			_sync_emblem_registration_visibility()
+	else:
+		EventPotionRules.add_locked_wound(target, _forbidden_wound_pool, _random, receipt)
+		EventPotionRules.upgrade_locked_wound(target, _random)
+		owned_card_change_ledger.record_content_change(owner, BattleOwnedCardChangeLedger.KIND_FORBIDDEN_WOUNDS, {"wounds": target.wound_slots, "convert": false}, battle_instance_id)
+	state._load_owned_card_injuries()
+	_clear_wound_registrations(state)
+	_register_formation_wounds(state)
+	if variant == 0:
+		if not large: return {OwnedCard.STAT_BASE_VALUE: 3, OwnedCard.STAT_MAX_HEALTH: 5}
+		return {
+			OwnedCard.STAT_BASE_VALUE: target.get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_VALUE) + 4.0,
+			OwnedCard.STAT_MAX_HEALTH: target.get_base_stat_with_permanent_growth(OwnedCard.STAT_MAX_HEALTH) + 4.0,
+			OwnedCard.STAT_BASE_ARMOR: target.get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_ARMOR),
+		}
+	var progress_key: StringName = EventPotionRules.PERMANENT_ZEAL if variant == 1 else (EventPotionRules.FORBIDDEN_IMMUNITY if large else EventPotionRules.FORBIDDEN_PROTECTION)
+	var amount := (30 if large else 10) if variant == 1 else (10 if large else 4)
+	var value := maxi(int(target.progress_by_source.get(progress_key, 0)), amount) if progress_key == EventPotionRules.FORBIDDEN_IMMUNITY else int(target.progress_by_source.get(progress_key, 0)) + amount
+	if owned_card_change_ledger.record_progress_value(owner, progress_key, value, StringName(effect), battle_instance_id):
+		target.progress_by_source[progress_key] = value
+		if variant == 1: state.refresh_cooldown_after_modifier_change()
+	return {}
+
+
+func _has_forbidden_immunity(state: BattleSquadState) -> bool:
+	if state.squad_data == null or elapsed_seconds >= 10.0: return false
+	for card: CardData in state.squad_data.horizontal_cards:
+		var owned := state.squad_data.get_owned_card(card)
+		if owned != null and float(owned.progress_by_source.get(EventPotionRules.FORBIDDEN_IMMUNITY, 0)) > elapsed_seconds: return true
+	return false
 
 
 func _begin_opening_spell_phase(auto_run: bool) -> void:
@@ -355,6 +558,16 @@ func prepare_battle_preview(player_formation: Array[Dictionary], enemy_formation
 
 
 func _initialize_battle_state(player_formation: Array[Dictionary], enemy_formation: Array[Dictionary], random_seed: int) -> void:
+	_story_timed_stuns.clear()
+	_story_opening_damage.clear()
+	_story_floor_health = 0
+	_story_fragile_charges.clear()
+	story_fragile_spent.clear()
+	_blood_oath_glory.clear()
+	task_scroll_buffs.clear()
+	task_scroll_supplies.clear()
+	_task_buff_groups.clear()
+	_has_task_scrolls = false
 	if ironwall != null: ironwall.cleanup()
 	ironwall = null
 	if silvermoon != null: silvermoon.cleanup()
@@ -378,6 +591,8 @@ func _initialize_battle_state(player_formation: Array[Dictionary], enemy_formati
 	_next_state_runtime_id = 1
 	player_states = _create_states(player_formation, BattleSquadState.Side.PLAYER)
 	enemy_states = _create_states(enemy_formation, BattleSquadState.Side.ENEMY)
+	_has_task_scrolls = player_states.any(func(state: BattleSquadState) -> bool:
+		return state.squad_data.has_indicator(CelestialIndicator.Kind.CLEANUP) or state.squad_data.has_indicator(CelestialIndicator.Kind.SUPPLIES))
 	current_result = Result.NONE
 	elapsed_seconds = 0.0
 	batch_count = 0
@@ -421,6 +636,10 @@ func _initialize_battle_state(player_formation: Array[Dictionary], enemy_formati
 	_register_formation_card_effects()
 	_register_formation_emblems()
 	_register_formation_wounds()
+	for state: BattleSquadState in get_all_states():
+		if state.has_unmasked_wound(&"业火"):
+			state.current_health = minf(state.current_health, state.get_max_health())
+			state.force_boundary_sync()
 	player_resource_states.clear()
 	enemy_resource_states.clear()
 	mining_actions_remaining_by_runtime_id.clear()
@@ -651,39 +870,45 @@ func _sync_emblem_registration_visibility() -> void:
 			state.grant_runtime_race(instance_id, runtime_race as CardData.RaceType)
 
 
-func _apply_emblem_rush_effects(entering_state: BattleSquadState = null) -> void:
+func _apply_emblem_rush_effects(entering_state: BattleSquadState = null, side: int = -1) -> void:
 	# 开战和复活沿用RUSH窗口；每次只处理本次入场者的纹章实例。
 	for registration: Dictionary in _emblem_registrations:
 		var state := registration.get("state") as BattleSquadState
-		var definition: Dictionary = registration.get("definition", {})
-		if state == null or (entering_state != null and state != entering_state) or not _is_emblem_registration_visible(registration):
+		if state == null or (side >= 0 and state.side != side) or (entering_state != null and state != entering_state) or not _is_emblem_registration_visible(registration):
 			continue
-		var reinforcement := int(definition.get("reinforcement", 0))
-		if reinforcement > 0 and entering_state == null:
-			_add_emblem_reinforcement(state, registration, reinforcement)
-		var charge := float(definition.get("rush_charge", 0.0))
-		if charge > 0.0:
-			_charge_state(state, charge)
-		if bool(definition.get("rush_convert_rightmost_rune", false)):
-			_convert_rightmost_rune_to_fire(state)
-		if int(definition.get("adjacent_protection", 0)) > 0:
-			for ally: BattleSquadState in _get_adjacent_allies(state):
-				ally.grant_protection(StringName("emblem:%s:protection" % registration.get("instance_id", "")), int(definition.get("adjacent_protection", 0)))
-		var adjacent_reinforcement := int(definition.get("adjacent_reinforcement", 0))
-		var adjacent_charge := float(definition.get("adjacent_rush_charge", 0.0))
-		if adjacent_reinforcement <= 0 and adjacent_charge <= 0.0:
-			continue
+		_apply_emblem_rush(state, registration, entering_state == null)
+
+
+func _apply_emblem_rush(state: BattleSquadState, registration: Dictionary, include_reinforcement: bool) -> bool:
+	var definition: Dictionary = registration.get("definition", {})
+	var reinforcement := int(definition.get("reinforcement", 0))
+	if reinforcement != 0 and include_reinforcement:
+		_add_emblem_reinforcement(state, registration, reinforcement)
+	var charge := float(definition.get("rush_charge", 0.0))
+	if charge > 0.0:
+		_charge_state(state, charge)
+	if bool(definition.get("rush_convert_rightmost_rune", false)):
+		_convert_rightmost_rune_to_fire(state)
+	if int(definition.get("adjacent_protection", 0)) > 0:
 		for ally: BattleSquadState in _get_adjacent_allies(state):
-			if adjacent_reinforcement > 0:
-				_add_emblem_reinforcement(ally, registration, adjacent_reinforcement)
-			if adjacent_charge > 0.0:
-				_charge_state(ally, adjacent_charge)
+			ally.grant_protection(StringName("emblem:%s:protection" % registration.get("instance_id", "")), int(definition.get("adjacent_protection", 0)))
+			record_task_buff(state, ally, String(registration.get("instance_id", "")))
+	var adjacent_reinforcement := int(definition.get("adjacent_reinforcement", 0))
+	var adjacent_charge := float(definition.get("adjacent_rush_charge", 0.0))
+	if adjacent_reinforcement <= 0 and adjacent_charge <= 0.0:
+		return true
+	for ally: BattleSquadState in _get_adjacent_allies(state):
+		if adjacent_reinforcement > 0:
+			_add_emblem_reinforcement(ally, registration, adjacent_reinforcement)
+		if adjacent_charge > 0.0:
+			_charge_state(ally, adjacent_charge, state, String(registration.get("instance_id", "")))
+	return true
 
 
-func _apply_wound_rush_effects(entering_state: BattleSquadState = null) -> void:
+func _apply_wound_rush_effects(entering_state: BattleSquadState = null, side: int = -1) -> void:
 	for registration: Dictionary in _wound_registrations:
 		var state := registration.get("state") as BattleSquadState
-		if state == null or (entering_state != null and state != entering_state) or not state.get_unmasked_active_injuries().has(registration.get("instance_id", &"")):
+		if state == null or (side >= 0 and state.side != side) or (entering_state != null and state != entering_state) or not state.get_unmasked_active_injuries().has(registration.get("instance_id", &"")):
 			continue
 		var amount := int((registration.get("definition", {}) as Dictionary).get("rush_reinforcement", 0))
 		if amount <= 0:
@@ -691,13 +916,18 @@ func _apply_wound_rush_effects(entering_state: BattleSquadState = null) -> void:
 		_add_wound_reinforcement(state, registration, amount)
 
 
+func _replay_wound_rush(state: BattleSquadState, registration: Dictionary, amount: int) -> bool:
+	_add_wound_reinforcement(state, registration, amount)
+	return true
+
+
 func _add_wound_reinforcement(target: BattleSquadState, registration: Dictionary, amount: int) -> void:
 	_add_status_reinforcement(target, registration, amount, "突击", "突击强化")
 
 
-func _apply_visible_fire_rune_reinforcement() -> void:
+func _apply_visible_fire_rune_reinforcement(only_state: BattleSquadState = null, add_to_tracked: bool = false) -> void:
 	for state: BattleSquadState in get_all_states():
-		if state.squad_data == null:
+		if state.squad_data == null or (only_state != null and state != only_state):
 			continue
 		var visible_slot_index := 0
 		for slot: Dictionary in state.get_active_rune_slots():
@@ -707,17 +937,19 @@ func _apply_visible_fire_rune_reinforcement() -> void:
 			var card := slot.get("card") as CardData
 			var owner := state.squad_data.get_owned_card(card)
 			var rune_index := int(slot.get("rune_index", -1))
-			if state.fire_rune_reinforcement_sources.has(state._rune_slot_key(card, rune_index)): continue
+			var key := state._rune_slot_key(card, rune_index)
+			var tracked := state.fire_rune_reinforcement_sources.has(key)
+			if tracked and not add_to_tracked: continue
 			var modifier := BattleModifier.new()
 			modifier.stat = BattleModifier.Stat.REINFORCEMENT
 			modifier.mode = BattleModifier.Mode.ADD
-			modifier.value = 2.0
-			modifier.source_instance_id = -3000000 - state.runtime_id * 10 - visible_slot_index
+			modifier.value = 2.0 if tracked else 2.0 * state.rune_base_multiplier
+			modifier.source_instance_id = int(state.fire_rune_reinforcement_sources[key]) if tracked else -3000000 - state.runtime_id * 10 - visible_slot_index
 			modifier.effect_id = &"visible_fire_rune"
 			modifier.source_runtime_id = state.runtime_id
 			modifier.contribution_sources.append({
 				"role": "强化",
-				"amount": 2,
+				"amount": modifier.value,
 				"source_name": "火符文",
 				"source_card_name": card.display_name if card != null else "未知卡牌",
 				"source_card_id": String(card.id) if card != null else "",
@@ -736,7 +968,7 @@ func _add_status_reinforcement(
 	trigger_name: String,
 	role: String
 ) -> void:
-	if target == null or amount <= 0:
+	if target == null or amount == 0:
 		return
 	var modifier := BattleModifier.new()
 	modifier.stat = BattleModifier.Stat.REINFORCEMENT
@@ -805,10 +1037,13 @@ func _add_emblem_reinforcement(
 	target.modifiers.add_modifier(modifier)
 
 
-func _charge_state(target: BattleSquadState, seconds: float) -> void:
+func _charge_state(target: BattleSquadState, seconds: float, source: BattleSquadState = null, group: String = "") -> void:
 	if target == null or not target.alive or seconds <= 0.0:
 		return
+	var before := target.remaining_cooldown
 	target.charge_action_cooldown(seconds)
+	if source != null and target.remaining_cooldown < before:
+		record_task_buff(source, target, group)
 
 
 func _get_adjacent_allies(source: BattleSquadState) -> Array[BattleSquadState]:
@@ -834,13 +1069,8 @@ func _register_formation_card_effects() -> void:
 	for state: BattleSquadState in get_all_states():
 		var card := state.get_effect_source()
 		_register_card_effects(state, card)
-		var equipped_item := (
-			state.squad_data.get_equipped_item()
-			if state.squad_data != null
-			else null
-		)
-		if equipped_item != null:
-			_register_card_effects(state, equipped_item.card_data, true)
+		for equipped: OwnedCard in state.squad_data.get_equipped_items():
+			_register_card_effects(state, equipped.card_data, true)
 
 
 func _register_card_effects(
@@ -858,10 +1088,11 @@ func _register_card_effects(
 		if is_equipment and definition.source_owner != BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE:
 			push_error("装备 %s 的效果 %s 必须以 equipment_instance 为来源" % [card.id, effect_id])
 			continue
-		effect_runtime.register_definition(
-			definition,
-			BattleEffectOwnerRef.for_state(state, definition.source_owner)
-		)
+		var source := BattleEffectOwnerRef.for_state(state, definition.source_owner)
+		if is_equipment and card.id == &"balin_helmet":
+			source = BattleEffectOwnerRef.for_owned_card_in_state(state, state.squad_data.get_helmet())
+			source.owner_kind = BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE
+		effect_runtime.register_definition(definition, source)
 
 
 func stop_battle() -> void:
@@ -939,6 +1170,9 @@ func _release_current_states() -> void:
 			state.lifetime_stat_resolved.disconnect(_on_owned_stat_resolved)
 	player_states.clear()
 	enemy_states.clear()
+	gilded = null
+	_roland_sources.clear()
+	_has_seraphina = false
 
 
 func is_running() -> bool:
@@ -1055,6 +1289,9 @@ func record_pending_run_reward(
 		return false
 	var entries := run_reward_ledger.get_entries()
 	var reward_entry := entries[-1]
+	if owner != null and kind in [BattleRunRewardLedger.KIND_OWNED_CARD_AWARD, BattleRunRewardLedger.KIND_RANDOM_EMBLEM_INSTANCE]:
+		var supply := {"card_id": actual_parameters.get("card_id", "")} if kind == BattleRunRewardLedger.KIND_OWNED_CARD_AWARD else {"emblem_id": actual_parameters.get("emblem_id", "")}
+		record_task_supply(owner.state, supply)
 	pending_run_reward_recorded.emit(reward_entry)
 	if kind == BattleRunRewardLedger.KIND_GOLD:
 		var reward_entry_id := reward_entry.get("entry_id", &"") as StringName
@@ -1802,12 +2039,11 @@ func _create_states(formation: Array[Dictionary], side: int) -> Array[BattleSqua
 					npc_owned.initialize(card, StringName("%s:npc:%d:%d" % [battle_instance_id, _next_state_runtime_id, squad.horizontal_cards.find(card)]), 0, _random)
 					npc_owned.rune_revealed.fill(true)
 					squad.bind_owned_card(card, npc_owned)
-			var equipped := squad.get_equipped_item()
-			if equipped != null:
+			for equipped: OwnedCard in squad.get_equipped_items():
 				var equipment_copy := OwnedCard.new()
 				equipment_copy.restore_state(equipped.capture_state())
-				var indicator_position := squad.get_equipment_indicator_position()
-				squad.unequip_item()
+				var indicator_position := squad.get_equipment_indicator_position(equipped)
+				squad.unequip_item(equipped)
 				squad.equip_item(equipment_copy, indicator_position)
 		var state := BattleSquadState.new()
 		state.runtime_id = _next_state_runtime_id
@@ -1822,13 +2058,34 @@ func _create_states(formation: Array[Dictionary], side: int) -> Array[BattleSqua
 		)
 		state.integer_settlement_committed.connect(_on_integer_settlement_committed)
 		state.lifetime_stat_resolved.connect(_on_owned_stat_resolved)
+		state.modifiers.modifier_added.connect(_on_task_modifier_added.bind(state))
 		state.health_lost_accumulated.connect(_on_health_lost_accumulated)
 		state.armor_depleted.connect(_on_state_armor_depleted)
 		state.card_destruction_requested.connect(_on_content_card_destroyed)
 		state.injury_mask_changed.connect(_on_injury_mask_changed)
 		state.direct_damage_guard = try_protect_direct_damage
+		state.lethal_equipment_guard = _try_ember_empty_bottle
+		state.base_action_aura = _roland_base_multiplier
+		state.pair_upgrade_aura = _has_gilded_pair_upgrade
+		if squad.horizontal_cards.any(func(card: CardData) -> bool: return card.content_effect == &"roland_falcon"):
+			_roland_sources.append(state)
+		if not _has_seraphina:
+			_has_seraphina = squad.horizontal_cards.any(func(card: CardData) -> bool: return card.content_effect == &"seraphina_starsinger")
 		states.append(state)
 	return states
+
+
+func _roland_base_multiplier(target: BattleSquadState) -> float:
+	if _roland_sources.is_empty() or twisted_vein == null: return 1.0
+	var sources := 0
+	for state: BattleSquadState in _roland_sources:
+		if state.side == target.side and twisted_vein.active(state, &"roland_falcon"): sources += 1
+	if sources == 0 or target.get_rune_pattern_result().pattern_type != RunePatternResult.PatternType.CHAOS: return 1.0
+	return 1.0 + sources
+
+
+func _has_gilded_pair_upgrade(state: BattleSquadState) -> bool:
+	return gilded != null and gilded.upgrades_pair(state)
 
 
 func _statistics_owner(state: BattleSquadState, event: BattleEffectEvent = null) -> StringName:
@@ -1851,6 +2108,54 @@ func _record_owned_stat(id: StringName, channel: StringName, amount: float) -> v
 func _on_owned_stat_resolved(channel: StringName, amount: float, source: BattleSquadState, event: BattleEffectEvent, target: BattleSquadState) -> void:
 	_record_owned_stat(_statistics_owner(source, event), channel, amount)
 	if channel == &"damage_dealt": _record_owned_stat(_statistics_owner(target), &"damage_taken", amount)
+	if amount > 0.0 and channel in [&"healing_done", &"armor_granted"]:
+		record_task_buff(source, target, str(event.group_id) if event != null else String(channel))
+
+
+func _on_task_modifier_added(modifier: BattleModifier, target: BattleSquadState) -> void:
+	if not _has_task_scrolls or target.side != BattleSquadState.Side.PLAYER or not modifier.active: return
+	if modifier.stat == BattleModifier.Stat.TARGET_PRIORITY: return
+	var beneficial := (modifier.value < 1.0 if modifier.stat == BattleModifier.Stat.INCOMING_DAMAGE else modifier.value > 1.0) if modifier.mode == BattleModifier.Mode.MULTIPLY else (modifier.value < 0.0 if modifier.stat == BattleModifier.Stat.INCOMING_DAMAGE else modifier.value > 0.0)
+	if not beneficial: return
+	for source: BattleSquadState in player_states:
+		if source.runtime_id == modifier.source_runtime_id:
+			record_task_buff(source, target, String(modifier.effect_id))
+			return
+
+
+func record_task_buff(source: BattleSquadState, target: BattleSquadState, group: String) -> void:
+	if not _has_task_scrolls or source == null or target == null or source == target or source.side != BattleSquadState.Side.PLAYER or target.side != source.side or target.current_health <= 0.0 or target.is_banished:
+		return
+	if not source.squad_data.has_indicator(CelestialIndicator.Kind.CLEANUP): return
+	# 同一来源在同一结算时刻给同一单位的同组增益只计一次。
+	var key := "%d:%d:%d:%s" % [source.runtime_id, target.runtime_id, roundi(elapsed_seconds * 1000000.0), group]
+	if _task_buff_groups.has(key): return
+	_task_buff_groups[key] = true
+	for entry: Dictionary in source.squad_data.indicator_attachments:
+		var item: CelestialIndicator = entry.indicator
+		if item.kind == CelestialIndicator.Kind.CLEANUP:
+			task_scroll_buffs[item.instance_id] = int(task_scroll_buffs.get(item.instance_id, 0)) + 1
+
+
+func record_task_supply(source: BattleSquadState, supply: Dictionary) -> void:
+	if not _has_task_scrolls or source == null or source.side != BattleSquadState.Side.PLAYER or source.squad_data == null: return
+	for entry: Dictionary in source.squad_data.indicator_attachments:
+		var item: CelestialIndicator = entry.indicator
+		if item.kind != CelestialIndicator.Kind.SUPPLIES: continue
+		if not task_scroll_supplies.has(item.instance_id): task_scroll_supplies[item.instance_id] = []
+		task_scroll_supplies[item.instance_id].append(supply)
+
+
+func record_settled_card_supplies(awards: Dictionary, collection: OwnedCardCollection) -> void:
+	if not _has_task_scrolls or awards.is_empty(): return
+	for entry: Dictionary in run_reward_ledger.get_entries():
+		if not awards.has(entry.entry_id): continue
+		for source: BattleSquadState in player_states:
+			if source.runtime_id != int(entry.source_runtime_id): continue
+			for id: StringName in awards[entry.entry_id]:
+				var owned := collection.get_by_instance_id(id)
+				if owned != null: record_task_supply(source, {"owned": owned})
+			break
 
 
 func get_owned_card_statistics() -> Dictionary:
@@ -1976,6 +2281,8 @@ func _get_next_event_delay() -> float:
 	for state: BattleSquadState in get_all_states():
 		state.sync_fire_rune_reinforcement_activity()
 	var next_time := _get_next_cooldown()
+	for entry: Dictionary in _story_timed_stuns:
+		next_time = minf(next_time, maxf(float(entry.at) - elapsed_seconds, 0.0))
 	for entry: Dictionary in _prepared_spell_schedule:
 		var spell := entry.spell as OwnedCard
 		if _elapsed_spell_attempted.has(spell.instance_id):
@@ -2016,6 +2323,7 @@ func _get_next_event_delay() -> float:
 	if twisted_vein != null: next_time = minf(next_time, twisted_vein.next_delay(elapsed_seconds))
 	if silvermoon != null: next_time = minf(next_time, silvermoon.next_delay(elapsed_seconds))
 	if ironwall != null: next_time = minf(next_time, ironwall.next_delay(elapsed_seconds))
+	if gilded != null: next_time = minf(next_time, gilded.next_delay(elapsed_seconds))
 	return next_time
 
 
@@ -2028,11 +2336,16 @@ func _decrease_living_cooldowns(amount: float) -> void:
 
 
 func _resolve_ready_batch() -> void:
+	if gilded != null: gilded.process_due()
 	_sync_emblem_registration_visibility()
 	_sync_wound_registration_visibility()
 	for state: BattleSquadState in get_all_states():
 		state.sync_fire_rune_reinforcement_activity()
 	_expire_emblem_shadows()
+	while not _story_timed_stuns.is_empty() and float(_story_timed_stuns.front().at) <= elapsed_seconds + COOLDOWN_EPSILON:
+		var entry: Dictionary = _story_timed_stuns.pop_front()
+		var state: BattleSquadState = entry.state
+		if state.alive: state.apply_sleep(entry.source, elapsed_seconds + float(entry.duration))
 	for state: BattleSquadState in get_all_states():
 		state.expire_sleep_sources(elapsed_seconds)
 		if state.alive and state.moon_restore_time <= elapsed_seconds + COOLDOWN_EPSILON:
@@ -2364,6 +2677,7 @@ func notify_spell_triggered(spell_instance_id: StringName, activation_index: int
 	if _processed_spell_event_ids.has(spell_event_id):
 		return false
 	_processed_spell_event_ids[spell_event_id] = true
+	if gilded != null and _spell_side_by_instance.get(spell_instance_id, -1) == BattleSquadState.Side.PLAYER: gilded.on_player_spell()
 	if silvermoon != null and _spell_side_by_instance.has(spell_instance_id):
 		for prepared: OwnedCard in _get_all_prepared_spell_instances():
 			if prepared.instance_id == spell_instance_id:
@@ -2418,6 +2732,7 @@ func _resolve_opening_spell(spell: OwnedCard, side: int) -> bool:
 	if silvermoon != null and spell != null and spell.card_data != null and silvermoon.release_spell(spell, side): return true
 	if spell == null or spell.card_data == null:
 		return false
+	if gilded != null and gilded.release_opening_spell(spell, side): return true
 	match spell.card_data.id:
 		&"side_by_side":
 			var recipients := get_living_states(side)
@@ -2635,11 +2950,12 @@ func _roll_probability(state: BattleSquadState, sides: int, dice_count: int = 1)
 	var candidate_count := absi(advantage_delta) + 1
 	var candidate_sets: Array[Array] = []
 	var candidate_totals: Array[int] = []
+	var bonus := 2 if state.equipped_card_is(&"nyx_dice") else 0
 	for _candidate_index: int in candidate_count:
 		var faces: Array[int] = []
 		var total := 0
 		for _die_index: int in dice_count:
-			var face := _random.randi_range(1, sides)
+			var face := mini(_random.randi_range(1, sides) + bonus, sides)
 			faces.append(face)
 			total += face
 		candidate_sets.append(faces)
@@ -3098,12 +3414,15 @@ func _make_value_event(action: Dictionary, target: BattleSquadState, element_mul
 		var action_bonus := actor.modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)
 		var reinforcement := actor.modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT)
 		var immediate_action_delta := float(action.get("action_value_delta", 0.0))
+		var toy_bonus := actor.get_doorboard_toy_bonus()
 		if not is_zero_approx(action_bonus):
 			additions.append({"name": "效果数值修正", "value": action_bonus})
 		if not is_zero_approx(reinforcement):
 			additions.append({"name": "强化", "value": reinforcement})
 		if not is_zero_approx(immediate_action_delta):
 			additions.append({"name": "即时行动数值修正", "value": immediate_action_delta})
+		if toy_bonus > 0:
+			additions.append({"name": "门板的玩具", "value": toy_bonus})
 		var formula_base := float(actor.get_action_base_value())
 		var multipliers := _action_multipliers(actor)
 		if bool(action.get("native_only", false)):
@@ -3156,6 +3475,7 @@ func _capture_action_base_sources(state: BattleSquadState) -> Array[Dictionary]:
 	var active_injury_ids := state.get_unmasked_active_injuries()
 	var action_card := squad.get_action_source()
 	var action_owner := squad.get_action_source_instance()
+	var base_multiplier := state.get_effective_base_action_multiplier()
 	if state.has_unmasked_wound(&"贪婪"):
 		for registration: Dictionary in _wound_registrations:
 			if registration.get("state") != state or registration.get("wound_id") != &"贪婪":
@@ -3181,8 +3501,8 @@ func _capture_action_base_sources(state: BattleSquadState) -> Array[Dictionary]:
 			"source_card_id": String(action_card.id),
 			"source_card_name": action_card.display_name,
 			"source_owned_card_instance_id": String(action_owner.instance_id) if action_owner != null else "",
-			"attribute": "基础行动值（本场倍率后）" if not is_equal_approx(state.runtime_base_action_multiplier, 1.0) else "基础行动值",
-			"amount": float(action_card.base_value) * state.runtime_base_action_multiplier,
+			"attribute": "基础行动值（本场倍率后）" if not is_equal_approx(base_multiplier, 1.0) else "基础行动值",
+			"amount": float(action_card.base_value) * base_multiplier,
 			"source_status": "resolved",
 		})
 	if action_owner != null:
@@ -3194,7 +3514,7 @@ func _capture_action_base_sources(state: BattleSquadState) -> Array[Dictionary]:
 				"source_card_name": action_card.display_name if action_card != null else "未知卡牌",
 				"source_owned_card_instance_id": String(action_owner.instance_id),
 				"attribute": "永久成长：行动值",
-				"amount": growth * state.runtime_base_action_multiplier,
+				"amount": growth * base_multiplier,
 				"source_status": "resolved",
 			})
 	if not is_zero_approx(state.runtime_permanent_action_growth):
@@ -3204,7 +3524,7 @@ func _capture_action_base_sources(state: BattleSquadState) -> Array[Dictionary]:
 			"source_card_name": action_card.display_name if action_card != null else "未知卡牌",
 			"source_owned_card_instance_id": String(action_owner.instance_id) if action_owner != null else "",
 			"attribute": "本场已获得永久成长（基础倍率后）",
-			"amount": state.runtime_permanent_action_growth * state.runtime_base_action_multiplier,
+			"amount": state.runtime_permanent_action_growth * base_multiplier,
 			"source_status": "resolved",
 		})
 	for card: CardData in squad.horizontal_cards:
@@ -3443,6 +3763,10 @@ func _consume_reinforcement_for_action(actor: BattleSquadState, action: Dictiona
 func _apply_wound_echo_effects(actor: BattleSquadState) -> void:
 	if actor == null:
 		return
+	if actor.alive and actor.current_health > 0.0 and actor.equipped_card_is(&"pain_whip"):
+		_emit_wound_damage(actor, actor, 2.0, &"苦痛之鞭", "pain_whip_echo", _take_group_id(), true)
+		if actor.current_health > 0.0:
+			_add_story_modifier(actor, BattleModifier.Stat.REINFORCEMENT, 3.0, &"pain_whip")
 	for wound_id: StringName in _get_unmasked_wound_ids(actor):
 		var self_damage := 0
 		match wound_id:
@@ -3551,7 +3875,7 @@ func _build_fire_events(action: Dictionary, carrier: BattleEffectEvent, count: i
 func _build_straight_bonus_events(action: Dictionary, carrier: BattleEffectEvent, layer: int) -> Array[BattleEffectEvent]:
 	if carrier.resource_target != null or bool(action.get("is_mining", false)):
 		return []
-	# 顺子一次性选择五类追加效果；返回事件不会作为下一元素层载体。
+	# 连星一次性选择五类追加效果；返回事件不会作为下一元素层载体。
 	var config := BattleRules.STRAIGHT_BONUS_CONFIG
 	var result: Array[BattleEffectEvent] = []
 	result.append_array(_build_dark_events(action, carrier, 1, config["dark"] as Dictionary, layer))
@@ -3561,11 +3885,11 @@ func _build_straight_bonus_events(action: Dictionary, carrier: BattleEffectEvent
 	result.append_array(_build_fire_events(action, carrier, 1, config["fire"] as Dictionary, layer))
 	for event: BattleEffectEvent in result:
 		event.can_trigger_element_chain = false
-		if event.visual_kind == &"dark_repeat": event.log_qualifier = "顺子·连击"
-		elif event.visual_kind == &"water_spread": event.log_qualifier = "顺子·扩散"
-		elif event.visual_kind == &"wood_pierce": event.log_qualifier = "顺子·穿刺"
-		elif event.visual_kind == &"light_reflect": event.log_qualifier = "顺子·折射"
-		elif event.visual_kind == &"fire_burn": event.log_qualifier = "顺子·施加灼烧"
+		if event.visual_kind == &"dark_repeat": event.log_qualifier = "连星·连击"
+		elif event.visual_kind == &"water_spread": event.log_qualifier = "连星·扩散"
+		elif event.visual_kind == &"wood_pierce": event.log_qualifier = "连星·穿刺"
+		elif event.visual_kind == &"light_reflect": event.log_qualifier = "连星·折射"
+		elif event.visual_kind == &"fire_burn": event.log_qualifier = "连星·施加灼烧"
 	return result
 
 
@@ -3821,7 +4145,7 @@ func _record_resource_wound_heal(actor: BattleSquadState, owner: BattleEffectOwn
 		var card := slot.get("card") as CardData
 		var owned := actor.squad_data.get_owned_card(card)
 		var index := int(slot.get("slot_index", -1))
-		if owned == null or index < 0 or index >= owned.wound_slots.size() or owned.wound_slots[index].is_empty(): continue
+		if owned == null or index < 0 or index >= owned.wound_slots.size() or owned.wound_slots[index].is_empty() or owned.wound_slots[index].get("locked", false): continue
 		var key := StringName("%s:wound:%d" % [owned.instance_id, index])
 		if not actor.is_injury_masked(key): candidates.append({"state": actor, "owned": owned, "index": index})
 	if candidates.is_empty(): return false
@@ -3837,6 +4161,7 @@ func _record_resource_wound_heal(actor: BattleSquadState, owner: BattleEffectOwn
 
 func _record_resource_card_award(owner: BattleEffectOwnerRef, card: CardData, effect_id: StringName, actor: BattleSquadState, timestamp: int) -> void:
 	if card == null: return
+	if actor.side == BattleSquadState.Side.PLAYER and not _player_enabled_packs.is_empty() and not _player_enabled_packs.has(String(card.pack_id)): return
 	if actor.side == BattleSquadState.Side.PLAYER and card.is_unique_while_owned() and int(_reward_held_card_counts().get(card.id, 0)) > 0: return
 	if actor.side == BattleSquadState.Side.ENEMY:
 		if card.card_type == CardData.CardType.RESOURCE: spawn_content_resource(card, actor.side)
@@ -3862,6 +4187,7 @@ func _random_equipment_definition(requested_rarity: int = -1, side: BattleSquadS
 			if state.side == side and item != null: held[item.card_data.id] = true
 	for card: CardData in _reward_card_catalog:
 		if card.card_type != CardData.CardType.EQUIPMENT or not card.is_available or card.is_derived or card.rarity > CardData.Rarity.IV or card.pack_id == &"development_test" or not CardPackRegistryScript.PACKS.has(card.pack_id): continue
+		if side == BattleSquadState.Side.PLAYER and not _player_enabled_packs.is_empty() and not _player_enabled_packs.has(String(card.pack_id)): continue
 		if requested_rarity >= 0 and int(card.rarity) != requested_rarity: continue
 		if card.is_unique_while_owned() and held.has(card.id): continue
 		if side == BattleSquadState.Side.PLAYER and card.is_unique_while_owned() and _has_same_battle_equipment_award(card.id): continue
@@ -3971,6 +4297,11 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 		_ensure_formula_source_snapshots(event)
 		effect_resolved.emit(event)
 		return
+	if event.effect_kind == BattleEffectEvent.EffectKind.DAMAGE and not event.target.accepts_damage_event(event):
+		event.missed = true
+		event.effective_amount = 0.0
+		effect_resolved.emit(event)
+		return
 	if event.effect_kind == BattleEffectEvent.EffectKind.HEALING and event.target.has_unmasked_wound(&"暗蚀"):
 		event.missed = true
 		event.effective_amount = 0.0
@@ -3982,30 +4313,35 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 		event.effective_amount = 0.0
 		effect_resolved.emit(event)
 		return
-	_apply_wound_continuous_adjustments(event)
+	if not event.fixed_damage: _apply_wound_continuous_adjustments(event)
 	match event.effect_kind:
 		BattleEffectEvent.EffectKind.DAMAGE:
-			_apply_attack_type_multiplier(event)
-			if ironwall != null: ironwall.adjust_hit(event)
-			if silvermoon != null: silvermoon.impact_bonus(event)
-			var incoming_multiplier := event.target.modifiers.get_multiplier(BattleModifier.Stat.INCOMING_DAMAGE)
-			var incoming_addition := event.target.modifiers.get_additive(BattleModifier.Stat.INCOMING_DAMAGE)
-			if event.formula != null and not is_equal_approx(incoming_multiplier, 1.0):
-				event.formula.other_multipliers.append({
-					"name": "承伤修正",
-					"value": incoming_multiplier,
-					"sources": _capture_modifier_sources(event.target, BattleModifier.Stat.INCOMING_DAMAGE, BattleModifier.Mode.MULTIPLY),
-				})
-			if event.formula != null and not is_zero_approx(incoming_addition):
-				event.formula.final_flat_bonus += incoming_addition
-				for source: Dictionary in _capture_modifier_sources(event.target, BattleModifier.Stat.INCOMING_DAMAGE):
-					event.formula.final_flat_bonus_sources.append(source)
-			if event.formula != null:
-				event.formula.exact_result = maxf(event.formula.calculate_result(), 0.0)
-				event.exact_amount = event.formula.exact_result
-			_apply_side_by_side_reduction(event)
-			if hero_runtime != null:
-				hero_runtime.share_damage(event)
+			if event.fixed_damage:
+				event.hellfire_adjusted = true
+			else:
+				_apply_attack_type_multiplier(event)
+				if ironwall != null: ironwall.adjust_hit(event)
+				if silvermoon != null: silvermoon.impact_bonus(event)
+				var incoming_multiplier := event.target.modifiers.get_multiplier(BattleModifier.Stat.INCOMING_DAMAGE)
+				var incoming_addition := event.target.modifiers.get_additive(BattleModifier.Stat.INCOMING_DAMAGE)
+				if event.formula != null and not is_equal_approx(incoming_multiplier, 1.0):
+					event.formula.other_multipliers.append({
+						"name": "承伤修正",
+						"value": incoming_multiplier,
+						"sources": _capture_modifier_sources(event.target, BattleModifier.Stat.INCOMING_DAMAGE, BattleModifier.Mode.MULTIPLY),
+					})
+				if event.formula != null and not is_zero_approx(incoming_addition):
+					event.formula.final_flat_bonus += incoming_addition
+					for source: Dictionary in _capture_modifier_sources(event.target, BattleModifier.Stat.INCOMING_DAMAGE):
+						event.formula.final_flat_bonus_sources.append(source)
+				if event.formula != null:
+					event.formula.exact_result = maxf(event.formula.calculate_result(), 0.0)
+					event.exact_amount = event.formula.exact_result
+				_apply_side_by_side_reduction(event)
+				_apply_hellfire_damage(event)
+				if hero_runtime != null:
+					hero_runtime.share_damage(event)
+			var original_damage_target := event.target
 			var pre_hit_armor: float = event.target.current_armor
 			if event.is_base_action and event.source != null and event.action_type in [CardData.ActionType.MELEE, CardData.ActionType.RANGED, CardData.ActionType.MAGIC]:
 				_apply_emblem_armor_break(event)
@@ -4019,6 +4355,9 @@ func _apply_effect_event(event: BattleEffectEvent) -> void:
 				if silvermoon != null and silvermoon.prelethal(event):
 					event.missed = true
 					event.exact_amount = 0.0
+				_redirect_slave_shackles(event)
+				if event.target != original_damage_target and event.hellfire_adjusted and not event.fixed_damage:
+					event.exact_amount *= event.target.hellfire_multiplier() / original_damage_target.hellfire_multiplier()
 				var split := event.target.apply_damage_exact(event.exact_amount, event.source, event, event.pierces_armor)
 				event.armor_amount = float(split["armor_damage"])
 				event.health_amount = float(split["health_damage"])
@@ -4169,13 +4508,35 @@ func _apply_emblem_armor_break(event: BattleEffectEvent) -> void:
 			event.target.destroy_armor_exact(amount, event.source, event)
 
 
+func _apply_hellfire_damage(event: BattleEffectEvent) -> void:
+	var multiplier := event.target.hellfire_multiplier()
+	if event.source != null: multiplier *= event.source.hellfire_multiplier()
+	event.hellfire_adjusted = true
+	if is_equal_approx(multiplier, 1.0): return
+	event.exact_amount *= multiplier
+	if event.formula != null:
+		event.formula.other_multipliers.append({"name": "业火／业石", "value": multiplier})
+		event.formula.final_flat_bonus *= multiplier
+		event.formula.exact_result = event.exact_amount
+
+
+func _has_damage_immunity(target: BattleSquadState, amount: float) -> bool:
+	return _has_forbidden_immunity(target) or (gilded != null and gilded.prevents_damage(target, amount))
+
+
 func _try_consume_damage_prevention(event: BattleEffectEvent) -> bool:
+	if _has_damage_immunity(event.target, event.exact_amount): return true
 	if hero_runtime != null and hero_runtime.try_protect(event):
 		return true
 	if event.exact_amount <= 0.0:
 		return false
 	if event.target.consume_protection():
 		return true
+	for entry: Dictionary in _story_fragile_charges.get(event.target, []):
+		if int(entry.remaining) > 0:
+			entry.remaining = int(entry.remaining) - 1
+			story_fragile_spent[entry.index] = int(story_fragile_spent.get(entry.index, 0)) + 1
+			return true
 	if event.action_type == CardData.ActionType.MELEE or event.dual_melee_ranged:
 		for registration: Dictionary in _has_emblem_effect(event.target, &"melee_immunity_once"):
 			if bool(registration.get("melee_immunity_used", false)):
@@ -4191,6 +4552,23 @@ func _try_consume_damage_prevention(event: BattleEffectEvent) -> bool:
 			if _random.randi_range(0, 1) == 1:
 				return true
 	return false
+
+
+func _has_slave_shackles(state: BattleSquadState) -> bool:
+	var item := state.squad_data.get_equipped_item()
+	return (item != null and item.card_data.content_effect == &"slave_shackles") or not _has_emblem_effect(state, &"slave_shackles").is_empty()
+
+
+func _redirect_slave_shackles(event: BattleEffectEvent) -> void:
+	var target := event.target
+	var damage := event.exact_amount - (0.0 if event.pierces_armor else target.current_armor)
+	if damage < target.current_health: return
+	var allies := player_states if target.side == BattleSquadState.Side.PLAYER else enemy_states
+	for ally: BattleSquadState in allies:
+		if ally == target or not ally.alive or ally.current_health <= 0.0 or ally.is_banished or not _has_slave_shackles(ally): continue
+		event.target = ally
+		if _has_damage_immunity(ally, event.exact_amount) or ally.consume_protection(): event.exact_amount = 0.0
+		return
 
 
 func _apply_side_by_side_reduction(event: BattleEffectEvent) -> void:
@@ -4446,6 +4824,7 @@ func _emit_wound_damage(
 	event.is_continuous = visual_id == &"wound_poison_tick"
 	event.visual_kind = visual_id
 	event.log_qualifier = "中毒周期伤害" if visual_id == &"wound_poison_tick" else ("中毒行动附伤" if visual_id == &"wound_poison_action" else "撕裂回响自伤")
+	if visual_id == &"pain_whip_echo": event.log_qualifier = "苦痛之鞭回响自伤"
 	event.formula = BattleFormulaData.create(
 		"伤势伤害",
 		CardData.ActionType.MELEE,
@@ -4455,12 +4834,13 @@ func _emit_wound_damage(
 		source,
 		target
 	)
-	if hero_runtime != null and hero_runtime.try_protect(event):
+	_apply_hellfire_damage(event)
+	if _has_damage_immunity(target, event.exact_amount) or (hero_runtime != null and hero_runtime.try_protect(event)):
 		event.missed = true
 		event.exact_amount = 0.0
 		effect_resolved.emit(event)
 		return
-	var split := target.apply_damage_exact(amount, source, event, pierces_armor)
+	var split := target.apply_damage_exact(event.exact_amount, source, event, pierces_armor)
 	event.health_amount = float(split.get("health_damage", 0.0))
 	event.effective_amount = event.health_amount
 	_record_battle_statistics(event)
@@ -4536,6 +4916,20 @@ func _prepare_fatigue_events(living_snapshot: Array) -> Array[BattleEffectEvent]
 	return events
 
 
+func _apply_blood_oath_glory(actor: BattleSquadState, defeated: BattleSquadState) -> void:
+	if actor.side == defeated.side or not actor.equipped_card_is(&"blood_oath_whip"): return
+	var item := actor.squad_data.get_equipped_item()
+	if _blood_oath_glory.has(item.instance_id): return
+	_blood_oath_glory[item.instance_id] = true
+	var owner := BattleEffectOwnerRef.for_state(actor, BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE)
+	var timestamp := roundi(elapsed_seconds * 1000000.0)
+	for change: Array in [[OwnedCard.STAT_BASE_VALUE, 2.0], [OwnedCard.STAT_MAX_HEALTH, 5.0]]:
+		if record_pending_permanent_growth(owner, change[0], change[1], &"blood_oath_whip", actor.runtime_id, timestamp):
+			item.apply_permanent_growth(change[0], change[1])
+			if change[0] == OwnedCard.STAT_MAX_HEALTH:
+				actor.current_health = minf(actor.current_health + float(change[1]), actor.get_max_health())
+
+
 func _finalize_batch() -> void:
 	if _finalizing_deaths: return
 	_finalizing_deaths = true
@@ -4555,17 +4949,23 @@ func _finalize_batch() -> void:
 		defeated.sort_custom(_is_actor_before)
 		for state: BattleSquadState in defeated:
 			_record_owned_stat(_statistics_owner(state.pending_kill_source, state.pending_kill_event), &"kills", 1)
+			if gilded != null and state.side == BattleSquadState.Side.ENEMY:
+				gilded.on_mission_action(state.pending_kill_source, OwnedCard.MissionGoal.KILLS)
 			state.alive = false
 			state.battle_ever_defeated = true
 			state.force_boundary_sync()
 			if state.pending_kill_event != null and state.pending_kill_source != null and state.pending_kill_source.alive and state.pending_kill_source.current_health > 0.0:
+				_apply_blood_oath_glory(state.pending_kill_source, state)
 				kill_resolved.emit(state.pending_kill_source, state, state.pending_kill_event)
 		if ironwall != null: ironwall.begin_repairs(defeated)
+		if gilded != null: gilded.fill_vacated_slots(defeated)
 		recalculate_logical_layout()
 		for state: BattleSquadState in defeated:
 			if ironwall != null: ironwall.on_unit_defeated(state)
 			_death_sequence += 1
 			_death_history.append({"state": state, "sequence": _death_sequence, "time": elapsed_seconds})
+			if task_cards != null: task_cards.on_defeated(state)
+			if gilded != null: gilded.on_defeated(state)
 			_apply_first_death_wound(state)
 			_transfer_defeated_star(state)
 			squad_defeated.emit(state)
@@ -4575,9 +4975,11 @@ func _finalize_batch() -> void:
 			effect_runtime.notify_source_defeated(state)
 			effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.ADJACENT_ALLY_DESTROYED, {"actor": state})
 			effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.OTHER_ALLY_DESTROYED, {"actor": state})
+			effect_runtime.emit_trigger(BattleEffectDefinition.Trigger.UNIT_DESTROYED, {"actor": state})
 		effect_runtime.recheck_continuous_conditions()
 		effect_runtime.process_due(elapsed_seconds)
 	_finalizing_deaths = false
+	if hero_runtime != null: hero_runtime.try_lone_star()
 
 
 func _apply_first_death_wound(state: BattleSquadState) -> void:
@@ -4625,19 +5027,24 @@ func _apply_first_death_wound(state: BattleSquadState) -> void:
 	for mutation: Dictionary in _temporary_wound_slot_mutations.duplicate():
 		if mutation.owner == owned and int(mutation.slot_index) == index:
 			_temporary_wound_slot_mutations.erase(mutation)
-	for participation: Dictionary in _fracture_participation.duplicate():
-		if participation.state == state and participation.instance_id == chosen.key:
-			_fracture_participation.erase(participation)
-	for registration: Dictionary in _wound_registrations.duplicate():
-		if registration.state == state and registration.instance_id == chosen.key:
-			state.modifiers.remove_source_instance(int(registration.armor_modifier_source_id))
-			_wound_registrations.erase(registration)
-	for periodic: Dictionary in _wound_periodic_effects.duplicate():
-		if periodic.state == state and periodic.instance_id == chosen.key:
-			_wound_periodic_effects.erase(periodic)
+	_clear_wound_registrations(state, chosen.key)
 	state._load_owned_card_injuries()
 	_register_formation_wounds(state)
 	wound_gained.emit(state, wound_id)
+
+
+func _clear_wound_registrations(state: BattleSquadState, instance_id: StringName = &"") -> void:
+	for participation: Dictionary in _fracture_participation.duplicate():
+		if participation.state == state and (instance_id.is_empty() or participation.instance_id == instance_id):
+			_fracture_participation.erase(participation)
+	for registration: Dictionary in _wound_registrations.duplicate():
+		if registration.state == state and (instance_id.is_empty() or registration.instance_id == instance_id):
+			if int(registration.armor_modifier_source_id) != 0:
+				state.modifiers.remove_source_instance(int(registration.armor_modifier_source_id))
+			_wound_registrations.erase(registration)
+	for periodic: Dictionary in _wound_periodic_effects.duplicate():
+		if periodic.state == state and (instance_id.is_empty() or periodic.instance_id == instance_id):
+			_wound_periodic_effects.erase(periodic)
 
 
 func _record_emblem_last_wish_rewards(state: BattleSquadState) -> void:
@@ -4956,7 +5363,10 @@ func _resolve_rune_engraver_progress() -> void:
 				var member := ally.squad_data.get_owned_card(card)
 				if member != null:
 					held.append_array(member.rune_stickers)
+		var previous_unlocks: Dictionary = _card_reward_picker.config.get("sticker_unlocks", {}).duplicate(true)
+		if state.side == BattleSquadState.Side.PLAYER and not _player_enabled_packs.is_empty(): _card_reward_picker.config.sticker_unlocks = _player_sticker_unlocks
 		var candidates := _card_reward_picker._eligible_stickers(definitions, held, [])
+		_card_reward_picker.config.sticker_unlocks = previous_unlocks
 		if candidates.is_empty():
 			continue
 		var sticker := _card_reward_picker._draw_sticker(candidates, _random)
@@ -5181,7 +5591,7 @@ func execute_targeted_healing(actor: BattleSquadState, target: BattleSquadState)
 			carriers = next
 
 
-func summon_content_minion(source: BattleSquadState, definition: CardData) -> BattleSquadState:
+func summon_content_minion(source: BattleSquadState, definition: CardData, original: OwnedCard = null, vacated_index: int = -1) -> BattleSquadState:
 	if source == null or definition == null: return null
 	var used := 0
 	for state: BattleSquadState in get_living_states(source.side, true):
@@ -5193,10 +5603,15 @@ func summon_content_minion(source: BattleSquadState, definition: CardData) -> Ba
 	owned.initialize(definition, StringName("%s:summon:%d" % [battle_instance_id, _next_state_runtime_id]), 0, _random)
 	# 战斗召唤没有刮开操作，符文按生成时确定的内容直接显现。
 	owned.rune_revealed.fill(true)
+	if original != null:
+		var copied := original.capture_state()
+		copied.instance_id = owned.instance_id
+		copied.companion_source_id = &""
+		if not owned.restore_state(copied): return null
 	var squad := SquadData.from_owned_card(owned)
-	var insert_index := source.formation_index + 1
+	var insert_index := vacated_index if vacated_index >= 0 else source.formation_index + 1
 	for existing: BattleSquadState in get_all_states():
-		if (existing.alive or existing.is_repairing) and existing.row_key == source.row_key and existing.formation_index >= insert_index: existing.formation_index += 1
+		if vacated_index < 0 and (existing.alive or existing.is_repairing) and existing.row_key == source.row_key and existing.formation_index >= insert_index: existing.formation_index += 1
 	var formation: Array[Dictionary] = [{"squad_data": squad, "row_key": source.row_key, "formation_index": insert_index}]
 	var created := _create_states(formation, source.side)[0]
 	created.battle_summoned = true
@@ -5204,14 +5619,18 @@ func summon_content_minion(source: BattleSquadState, definition: CardData) -> Ba
 	if silvermoon != null: silvermoon.initialize_state(created)
 	if ironwall != null: ironwall.initialize_state(created)
 	created.initial_formation_index = -1
-	if source.side == BattleSquadState.Side.PLAYER: player_states.append(created)
+	if source.side == BattleSquadState.Side.PLAYER:
+		_add_story_modifier(created, BattleModifier.Stat.MAX_HEALTH, _story_floor_health, &"story_floor_health")
+		player_states.append(created)
 	else: enemy_states.append(created)
+	if gilded != null: gilded.on_joined(created)
 	_register_card_effects(created, created.get_effect_source())
 	_register_formation_wounds(created)
 	mining_actions_remaining_by_runtime_id[created.runtime_id] = _mining_uses_from_card(definition)
 	_apply_visible_fire_rune_reinforcement()
 	recalculate_logical_layout()
 	effect_runtime.recheck_continuous_conditions()
+	if gilded != null: gilded.on_summoned(created)
 	squad_summoned.emit(created)
 	states_changed.emit()
 	return created
@@ -5326,6 +5745,10 @@ func _load_effect_catalog() -> void:
 	effect_catalog.definitions.merge(iron_catalog.definitions)
 	effect_catalog.card_effect_ids.merge(iron_catalog.card_effect_ids)
 	effect_catalog.errors.append_array(iron_catalog.errors)
+	var task_catalog := BattleEffectCatalog.load_from_file("res://data/tasks/task_card_effects.json")
+	effect_catalog.definitions.merge(task_catalog.definitions)
+	effect_catalog.card_effect_ids.merge(task_catalog.card_effect_ids)
+	effect_catalog.errors.append_array(task_catalog.errors)
 
 
 func execute_linked_action(original: Dictionary, target: BattleSquadState) -> void:
@@ -5357,8 +5780,13 @@ func execute_linked_action(original: Dictionary, target: BattleSquadState) -> vo
 			carriers.assign(events)
 
 
+func _try_ember_empty_bottle(target: BattleSquadState) -> bool:
+	return twisted_vein != null and twisted_vein.try_ember_empty_bottle(target)
+
+
 func try_protect_direct_damage(target: BattleSquadState, amount: float, pierces: bool) -> bool:
 	if target.is_banished: return true
+	if _has_damage_immunity(target, amount): return true
 	if hero_runtime != null and hero_runtime.try_protect_direct(target, amount, pierces): return true
 	if silvermoon == null: return false
 	var event := BattleEffectEvent.new()

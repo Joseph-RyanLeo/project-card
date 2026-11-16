@@ -110,7 +110,7 @@ func verify_lighting(source: Image) -> void:
 	for field: Dictionary in preview.LIGHT_FIELDS:
 		var slider: HSlider = controls[field.key].slider
 		check(is_equal_approx(slider.value, float(field.default)) and is_equal_approx(float(preview.sample.effect.get_shader_parameter(field.key)), float(field.default) * float(field.scale)), "恢复默认同步光源控件与材质：" + str(field.key))
-	check(is_equal_approx(preview.body_slider.value, 0.65) and is_equal_approx(preview.gold_slider.value, 0.45), "恢复默认同时保留原凹凸默认值")
+	check(is_equal_approx(preview.body_slider.value, 0.15) and is_equal_approx(preview.gold_slider.value, 0.45), "恢复默认同步袋身与金纹强度")
 	print("LIGHTING: grazing contrast=", grazing_contrast, " frontal contrast=", frontal_contrast)
 	await capture_lighting_examples()
 

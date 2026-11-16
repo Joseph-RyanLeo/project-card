@@ -24,6 +24,7 @@ var anchor: BattleSquadState
 var source_emblem_instance_id: StringName = &"" # 纹章生成事件保留纹章实例身份
 var source_owned_card_instance_id: StringName = &"" # 纹章所在OwnedCard，不等同于效果目标小队
 var action_type: CardData.ActionType = CardData.ActionType.MELEE
+var hellfire_adjusted := false # 结算层已算过业火倍率时，实际写伤不再乘第二次
 var effect_kind: EffectKind = EffectKind.DAMAGE
 var element_type: int = -1
 var element_count: int = 0
@@ -43,6 +44,7 @@ var is_finisher: bool = false
 var can_trigger_element_chain: bool = true
 var missed: bool = false
 var uses_attack_type_multiplier: bool = false
+var fixed_damage := false # 无属性固定伤害经过护甲和免伤，跳过数值增减与属性倍率
 var attack_type_multiplier: float = 1.0
 var target_had_armor_on_impact: bool = false
 var launch_sequence: int = -1

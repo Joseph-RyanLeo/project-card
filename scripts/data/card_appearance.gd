@@ -2,13 +2,13 @@ class_name CardAppearance
 extends RefCounted
 
 ## 卡面工艺与卡图表现分别抽取，独立于I～V品级和战斗数值。
-enum Surface { PLAIN, SILVER, GOLD, RAINBOW, EMBOSSED, FRACTURED }
+enum Surface { PLAIN, SILVER, GOLD, RAINBOW, EMBOSSED, FRACTURED, FROSTED, FINGERPRINT }
 enum Art { PLAIN, HOLOGRAPHIC, OVERFRAME }
-const SURFACE_WEIGHTS: Array[int] = [40, 25, 15, 10, 5, 5] # 普通、银闪、金闪、彩闪、法线闪、碎闪的百分比
+const SURFACE_WEIGHTS: Array[int] = [40, 25, 15, 10, 5, 5, 0, 0] # 普通、银闪、金闪、彩闪、法线闪、碎闪的百分比；两种实验闪卡暂不加入随机池
 const ART_WEIGHTS: Array[int] = [90, 5, 5] # 普通、全息、超框的百分比
-const SURFACE_KEYS := ["plain", "silver", "gold", "rainbow", "embossed", "fractured"]
+const SURFACE_KEYS := ["plain", "silver", "gold", "rainbow", "embossed", "fractured", "frosted", "fingerprint"]
 const ART_KEYS := ["plain", "holographic", "overframe"]
-const SURFACE_LABELS := ["普通", "银闪", "金闪", "彩闪", "法线闪", "碎闪"]
+const SURFACE_LABELS := ["普通", "银闪", "金闪", "彩闪", "法线闪", "碎闪", "磨砂闪", "指纹闪"]
 const ART_LABELS := ["普通", "全息", "超框"]
 
 

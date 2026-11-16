@@ -16,6 +16,13 @@ armor = 3
 runes = Array[int]([0, 1, 2])
 race_type = 2
 rarity = 2
+background_style = 3
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 2)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(9, 17)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(9, 8)
+})
 effect_text = "组成小队时：相邻小队每次行动的数值+1d4。"

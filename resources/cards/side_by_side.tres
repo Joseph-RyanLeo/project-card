@@ -13,6 +13,22 @@ keywords = Array[StringName]([&"乡邻", &"固定减伤"])
 card_type = 2
 rarity = 2
 spell_trigger_kind = 1
+background_style = 3
+background_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, -20)
+})
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 1)
+})
 art_texture = ExtResource("2_art")
-art_offset = Vector2i(-1, 14)
+art_offset = Vector2i(-1, 21)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"embossed": Vector2i(-1, 14),
+&"fingerprint": Vector2i(-1, 14),
+&"foil": Vector2i(-1, 14),
+&"fractured": Vector2i(-1, 14),
+&"frosted": Vector2i(-1, 14),
+&"holographic": Vector2i(-1, 14),
+&"overframe": Vector2i(-1, 22)
+})
 effect_text = "所有友军获得乡邻：受到的所有攻击伤害-1。"

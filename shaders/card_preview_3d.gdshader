@@ -11,19 +11,25 @@ uniform float fov : hint_range(20.0, 120.0, 1.0) = 72.0;
 uniform float max_tilt_degrees : hint_range(0.0, 24.0, 0.5);
 uniform float inset : hint_range(0.0, 1.0, 0.01);
 uniform vec2 pointer_force = vec2(0.0);
+uniform vec2 flash_direction_force = vec2(0.0); // 最近一次有效鼠标方向，中心附近保持上次光带角度
 uniform vec2 visual_offset = vec2(0.0); // 合成后平面的局部视觉位移，默认不偏移；不改变节点命中区域
 
 uniform bool use_flash = false;
+uniform bool flash_in_layers = false; // 正式闪卡由背景和卡框分别反光，外层只做整体透视
 uniform bool use_fractured = false;
 uniform float finish_strength = 0.75; // 整卡碎闪的反光强度
 uniform float finish_density = 32.0; // 整卡晶片的密度，所有图层共用同一图案
+uniform float fractured_brightness = 1.0; // 碎闪晶片高光的明度倍率
+uniform float fractured_saturation = 0.55; // 碎闪晶片彩色反光相对白光的比例
+uniform float fractured_hue_degrees = 0.0; // 碎闪晶片整体色相旋转角度
 uniform bool use_pack_foil = false; // 包装仅对中央图案三档金色做统一烫金反光
 uniform float pack_foil_strength = 0.85; // 包装烫金光带亮度，与贴纸封皮一致
 uniform int flash_type : hint_range(0, 2) = 0;
 uniform float stripe_spacing : hint_range(1.0, 50.0, 0.5);
 uniform float stripe_width : hint_range(1.0, 20.0, 0.5);
 uniform float flash_intensity : hint_range(0.0, 2.0, 0.05);
-uniform float flash_angle_degrees : hint_range(0.0, 360.0, 1.0) = 50.0;
+uniform float flash_offset = 0.0; // 闪纹平移相位，1为一个重复周期
+uniform float flash_angle_degrees : hint_range(0.0, 360.0, 1.0) = 50.0; // 尚无有效鼠标方向时的默认光带角度
 
 uniform vec2 card_texture_size_px = vec2(1.0);
 uniform float texture_render_scale = 1.0; // 合成纹理的采样倍率，用于还原透视四边形的原生尺寸
@@ -90,13 +96,13 @@ void fragment() {
 		output_color *= mix(1.0, light_multiplier, normal_light_strength * packed_normal.a);
 	}
 
-	if (use_flash) {
+	if (use_flash && !flash_in_layers) {
 		// 扫光作用于 SubViewport 已经合成并裁切好的整张卡；透明留白仍由 source.a 控制。
-		output_color += card_flash_light(sample_uv, pointer_force, flash_type, stripe_spacing, stripe_width, flash_intensity, flash_angle_degrees);
+		output_color += card_flash_light(sample_uv, pointer_force, flash_direction_force, card_texture_size_px, flash_type, stripe_spacing, stripe_width, flash_intensity, flash_angle_degrees, flash_offset);
 	}
 
 	if (use_fractured) {
-		output_color = fractured_finish(output_color, mask_uv, pointer_force, finish_strength, finish_density);
+		output_color = fractured_finish(output_color, mask_uv, pointer_force, finish_strength, finish_density, fractured_brightness, fractured_saturation, fractured_hue_degrees);
 	}
 	COLOR = vec4(output_color, source.a) * item_modulate;
 }

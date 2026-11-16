@@ -9,6 +9,8 @@ const DAYS: int = 8 # 短路线固定为第一层八天，第八天日末为Boss
 const ROUND_KINDS: Array[String] = ["free_event", "paid_event", "shop", "battle"]
 const INITIAL_FAILURE_PROTECTION: int = 2 # 前两次普通失败可继续，第三次结束
 
+var route_days: int = DAYS # 本局路线终点；教程4天，第一层8天
+var daily_pack_rewards: bool = true # 仅兼容Demo2固定日期礼包，新D3局按任务开放
 var day: int = 1
 var round_index: int = 0
 var step: Step = Step.DAY_START
@@ -44,40 +46,56 @@ func get_round_kind() -> String:
 
 
 func is_boss_day() -> bool:
-	return day == DAYS
+	return not is_event_battle() and (day % DAYS == 0 or day == route_days)
+
+
+func is_event_battle() -> bool:
+	return selected_path.has("event_battle")
+
+
+func battle_path() -> Dictionary:
+	return selected_path.get("event_battle", selected_path)
+
+
+func prepare_event_battle(encounter: Dictionary) -> bool:
+	if step != Step.EVENT or round_index >= 2 or is_event_battle(): return false
+	selected_path["event_battle"] = encounter
+	step = Step.BATTLE_PREPARE
+	return true
 
 
 func set_paths(candidates: Array[Dictionary]) -> bool:
 	if step != Step.CHOOSING or not paths.is_empty() or candidates.size() != 3:
 		return false
-	var seen_ids: Array[String] = []
+	var seen_paths := {}
 	for candidate: Dictionary in candidates:
 		if not _valid_path(candidate, get_round_kind()):
 			return false
 		var path_id: String = candidate.path_id
-		if path_id in seen_ids:
+		# 事件不足时允许重复发同一定义，商店及战斗仍须是独立路径。
+		if seen_paths.has(path_id) and (round_index >= 2 or seen_paths[path_id] != candidate):
 			return false
-		seen_ids.append(path_id)
+		seen_paths[path_id] = candidate
 	paths.assign(candidates.duplicate(true))
 	return true
 
 
-func select_path(path_id: String) -> bool:
+func select_path(path_id: String, index: int = -1) -> bool:
 	if step != Step.CHOOSING or paths.size() != 3:
 		return false
-	for candidate: Dictionary in paths:
-		if candidate.path_id != path_id:
-			continue
-		selected_path = candidate.duplicate(true)
-		paths.clear()
-		step = Step.BATTLE_PREPARE if round_index == 3 else Step.EVENT
-		return true
-	return false
+	if index < 0:
+		index = paths.find_custom(func(candidate: Dictionary) -> bool: return candidate.path_id == path_id)
+	if index < 0 or index >= paths.size() or paths[index].path_id != path_id:
+		return false
+	selected_path = paths[index].duplicate(true)
+	paths.clear()
+	step = Step.BATTLE_PREPARE if round_index == 3 else Step.EVENT
+	return true
 
 
 func get_pending_start_packs() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	if step != Step.EVENT or round_index != 0 or day in claimed_pack_days:
+	if not daily_pack_rewards or step != Step.EVENT or round_index != 0 or day in claimed_pack_days:
 		return result
 	if day in [2, 3]:
 		result.append({"pack_id": "ash_ledger", "size": "large"})
@@ -97,7 +115,7 @@ func complete_event() -> bool:
 	if step != Step.EVENT:
 		return false
 	# 指定日首事件的礼包未提交时，不能离开，以免丢失奖励。
-	if round_index == 0 and day in [2, 3] and day not in claimed_pack_days:
+	if daily_pack_rewards and round_index == 0 and day in [2, 3] and day not in claimed_pack_days:
 		return false
 	round_index += 1
 	selected_path.clear()
@@ -117,7 +135,7 @@ func settle_battle(won: bool) -> bool:
 		return false
 	var ending := ""
 	if is_boss_day():
-		ending = "cleared" if won else "boss_loss"
+		ending = ("cleared" if day == route_days else "") if won else "boss_loss"
 		if not won:
 			failure_protection = 0
 	elif not won:
@@ -125,7 +143,11 @@ func settle_battle(won: bool) -> bool:
 			ending = "ordinary_loss"
 		else:
 			failure_protection -= 1
-	battle_results.append({"day": day, "won": won, "ending": ending})
+	var result := {"day": day, "won": won, "ending": ending}
+	if is_event_battle():
+		result["extra"] = true
+		result["event_round"] = round_index
+	battle_results.append(result)
 	step = Step.BATTLE_RESULT
 	return true
 
@@ -135,6 +157,9 @@ func continue_after_battle() -> bool:
 		return false
 	if not String(battle_results.back().ending).is_empty():
 		step = Step.ENDED
+	elif is_event_battle():
+		step = Step.EVENT
+		return complete_event()
 	else:
 		day += 1
 		round_index = 0
@@ -146,6 +171,8 @@ func continue_after_battle() -> bool:
 func capture_state() -> Dictionary:
 	return {
 		"state_version": 2,
+		"route_days": route_days,
+		"daily_pack_rewards": daily_pack_rewards,
 		"day": day,
 		"round_index": round_index,
 		# 战斗中存档与读档都回到本场准备，保留已选敌人和随机流。
@@ -171,6 +198,8 @@ func restore_state(snapshot: Dictionary) -> bool:
 		snapshot["state_version"] = 2
 	if not _valid_snapshot(snapshot):
 		return false
+	route_days = int(snapshot.get("route_days", DAYS))
+	daily_pack_rewards = snapshot.get("daily_pack_rewards", true)
 	day = int(snapshot.day)
 	round_index = int(snapshot.round_index)
 	step = int(snapshot.step) as Step
@@ -188,10 +217,12 @@ func _valid_snapshot(snapshot: Dictionary) -> bool:
 	for key: String in ["state_version", "day", "round_index", "step", "failure_protection"]:
 		if not _whole_number(snapshot.get(key)):
 			return false
+	var saved_limit: Variant = snapshot.get("route_days", DAYS)
+	if not _whole_number(saved_limit) or int(saved_limit) not in [4, 8, 16] or not snapshot.get("daily_pack_rewards", true) is bool: return false
 	var saved_day := int(snapshot.day)
 	var saved_round := int(snapshot.round_index)
 	var saved_step := int(snapshot.step)
-	if int(snapshot.state_version) != 2 or saved_day < 1 or saved_day > DAYS or saved_round < 0 or saved_round > 3:
+	if int(snapshot.state_version) != 2 or saved_day < 1 or saved_day > int(saved_limit) or saved_round < 0 or saved_round > 3:
 		return false
 	if saved_step < Step.DAY_START or saved_step > Step.ENDED or saved_step == Step.BATTLE_ACTIVE:
 		return false
@@ -211,35 +242,50 @@ func _valid_snapshot(snapshot: Dictionary) -> bool:
 	if saved_step == Step.CHOOSING:
 		if not saved_selected.is_empty() or saved_paths.size() not in [0, 3]:
 			return false
-		var seen_ids: Array[String] = []
+		var seen_paths := {}
 		for path: Variant in saved_paths:
 			if not path is Dictionary or not _valid_path(path, ROUND_KINDS[saved_round]):
 				return false
-			if path.path_id in seen_ids:
+			if seen_paths.has(path.path_id) and (saved_round >= 2 or seen_paths[path.path_id] != path):
 				return false
-			seen_ids.append(path.path_id)
+			seen_paths[path.path_id] = path
 	elif saved_step == Step.DAY_START:
 		if saved_round != 0 or not saved_paths.is_empty() or not saved_selected.is_empty():
 			return false
 	else:
 		if not saved_paths.is_empty() or not _valid_path(saved_selected, ROUND_KINDS[saved_round]):
 			return false
-		if (saved_step == Step.EVENT) != (saved_round < 3):
+		if (saved_step == Step.EVENT) != (saved_round < 3 and not saved_selected.has("event_battle")):
+			return false
+		if saved_selected.has("event_battle") and (saved_round >= 2 or not saved_selected.event_battle is Dictionary):
 			return false
 	var saved_results: Array = snapshot.battle_results
 	var after_battle := saved_step in [Step.BATTLE_RESULT, Step.ENDED]
-	if saved_results.size() != (saved_day if after_battle else saved_day - 1):
-		return false
+	var expected_daily := saved_day if after_battle and not saved_selected.has("event_battle") else saved_day - 1
+	var completed_days := 0
+	var last_extra_day := 0
+	var last_extra_round := -1
 	var expected_protection := INITIAL_FAILURE_PROTECTION
 	var expected_ending := ""
 	for index: int in saved_results.size():
 		var result: Variant = saved_results[index]
-		if not result is Dictionary or not _whole_number(result.get("day")) or int(result.day) != index + 1:
+		if not result is Dictionary or not _whole_number(result.get("day")) or int(result.day) != completed_days + 1:
 			return false
 		if not result.get("won") is bool or not result.get("ending") is String or not expected_ending.is_empty():
 			return false
-		if index + 1 == DAYS:
-			expected_ending = "cleared" if result.won else "boss_loss"
+		var extra: Variant = result.get("extra", false)
+		if not extra is bool: return false
+		if extra:
+			if int(result.day) > saved_day: return false
+			var event_round: Variant = result.get("event_round", int(saved_round) if after_battle and index == saved_results.size() - 1 else 0)
+			if not _whole_number(event_round) or int(event_round) not in [0, 1]: return false
+			if int(result.day) == last_extra_day and int(event_round) <= last_extra_round: return false
+			last_extra_day = int(result.day)
+			last_extra_round = int(event_round)
+		else:
+			completed_days += 1
+		if not extra and (completed_days % DAYS == 0 or completed_days == int(saved_limit)):
+			expected_ending = ("cleared" if completed_days == int(saved_limit) else "") if result.won else "boss_loss"
 			if not result.won:
 				expected_protection = 0
 		elif not result.won:
@@ -249,6 +295,11 @@ func _valid_snapshot(snapshot: Dictionary) -> bool:
 				expected_protection -= 1
 		if result.ending != expected_ending:
 			return false
+	if completed_days != expected_daily: return false
+	if after_battle and (saved_results.is_empty() or bool(saved_results.back().get("extra", false)) != saved_selected.has("event_battle")):
+		return false
+	if last_extra_day == saved_day and saved_round <= last_extra_round and not (after_battle and saved_selected.has("event_battle") and saved_round == last_extra_round):
+		return false
 	if int(snapshot.failure_protection) != expected_protection:
 		return false
 	if not expected_ending.is_empty() and not after_battle:
@@ -263,7 +314,7 @@ func _valid_snapshot(snapshot: Dictionary) -> bool:
 			return false
 		seen_days.append(int(claimed_day))
 	for reward_day: int in [2, 3]:
-		if (saved_day > reward_day or (saved_day == reward_day and saved_round > 0)) and reward_day not in seen_days:
+		if snapshot.get("daily_pack_rewards", true) and (saved_day > reward_day or (saved_day == reward_day and saved_round > 0)) and reward_day not in seen_days:
 			return false
 	return true
 

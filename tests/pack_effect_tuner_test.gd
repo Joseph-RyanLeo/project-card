@@ -2,12 +2,21 @@ extends "res://tests/card_pack_opening_test.gd"
 
 const Settings = preload("res://scripts/ui/pack_opening_effect_settings.gd")
 
+func key(code: Key) -> void:
+	for pressed: bool in [true, false]:
+		var event := InputEventKey.new()
+		event.keycode = code
+		event.pressed = pressed
+		root.push_input(event, true)
+		await process_frame
+	await create_timer(0.1).timeout
+
 func _run() -> void:
 	create_timer(60).timeout.connect(func(): push_error("开包调整器验收超时"); quit(1))
-	Settings.save_path = "/private/tmp/project-card-pack-tuner-test-%d.cfg" % Time.get_ticks_usec()
-	DirAccess.remove_absolute(Settings.save_path)
-	Settings.reload()
-	check(Settings.FIELDS.size() == 54 and _defaults_match(), "54个参数集中声明且无配置时使用默认值")
+	var settings_path := "/private/tmp/project-card-pack-tuner-test-%d.cfg" % Time.get_ticks_usec()
+	DirAccess.remove_absolute(settings_path)
+	Settings.load_saved(settings_path)
+	check(Settings.FIELDS.size() >= 54 and Settings.defaults().has("arrival_slide_power") and _defaults_match(), "开包与入场参数集中声明且无配置时使用默认值")
 	Settings.set_value("pixel", 0)
 	Settings.set_value("shake_seconds", NAN)
 	check(Settings.get_values().pixel == 1 and Settings.get_values().shake_seconds == .38, "非法输入限制范围且拒绝非有限值")
@@ -23,16 +32,18 @@ func _run() -> void:
 	var old_mode: int = main.process_mode
 	await key(KEY_ESCAPE)
 	check(main._escape_pause_menu.is_menu_open(), "Esc真实输入打开菜单")
+	await click(main._escape_pause_menu.find_child("DeveloperToolsButton", true, false).get_global_rect().get_center())
 	var entry: Button
 	for button: Button in main._escape_pause_menu.find_children("*", "Button", true, false):
 		if button.text == "开包特效调整器": entry = button
 	check(is_instance_valid(entry), "暂停菜单包含开包特效调整器入口")
 	await click(entry.get_global_rect().get_center())
-	await create_timer(.7).timeout
+	if shell.screen_transition.busy: await shell.screen_transition.finished
+	await process_frame
 	var tuner: Control = shell._pack_effect_tuner
 	check(is_instance_valid(tuner) and not main.visible and not main._escape_pause_menu.is_processing_input(), "真实菜单按钮打开调整器并隔离原场景Esc")
 	if not is_instance_valid(tuner): quit(1); return
-	check(tuner.controls.size() == 54 and tuner.preview_shop.ordinary_shop_open, "全部滑块与免费预览商店加载完成")
+	check(tuner.controls.size() == Settings.FIELDS.size() and tuner.preview_shop.ordinary_shop_open, "全部滑块与免费预览商店加载完成")
 	await capture("pack-tuner-layout")
 	var tabs: TabContainer = tuner.find_child("ParameterTabs", true, false)
 	tabs.current_tab = 1
@@ -119,6 +130,7 @@ func _run() -> void:
 	check(sequence.glow.effects.halo_count == 100 and sequence.glow.effects.halo_radius == 650, "最大边界可渲染，100点大光环与颜色上限合法")
 	var scratch: String = tuner.preview_shop.run_save_path
 	await key(KEY_ESCAPE)
+	if shell.screen_transition.busy: await shell.screen_transition.finished
 	await process_frame
 	check(not shell.is_pack_effect_tuner_open() and main.visible and main.process_mode == old_mode and main._escape_pause_menu.is_processing_input(), "Esc在预览中退出，恢复原游戏处理和输入")
 	check(is_equal_approx(Settings.get_values().tear_shake_pixels, saved_amplitude) and is_equal_approx(Settings.get_values().auto_tear_seconds, .35), "退出丢弃草稿，保留上次成功保存的参数")
@@ -131,19 +143,22 @@ func _run() -> void:
 	main = rare_shop
 	await key(KEY_ESCAPE)
 	check(rare_shop._escape_pause_menu.is_menu_open(), "稀有商店Esc同样提供暂停菜单")
+	await click(rare_shop._escape_pause_menu.find_child("DeveloperToolsButton", true, false).get_global_rect().get_center())
 	for button: Button in rare_shop._escape_pause_menu.find_children("*", "Button", true, false):
 		if button.text == "开包特效调整器": entry = button
 	await click(entry.get_global_rect().get_center())
 	await create_timer(.6).timeout
+	if shell.screen_transition.busy: await shell.screen_transition.finished
 	check(shell.is_pack_effect_tuner_open() and not rare_shop.visible, "从稀有商店进入调整器，来源场景隔离")
 	await key(KEY_ESCAPE)
+	if shell.screen_transition.busy: await shell.screen_transition.finished
 	await process_frame
 	check(not shell.is_pack_effect_tuner_open() and shell._rare_shop == rare_shop and rare_shop.visible and rare_shop._escape_pause_menu.is_processing_input(), "退出调整器返回原稀有商店")
 	shell.close_rare_shop()
 	await process_frame
 	Settings.reset_defaults()
 	Settings.save()
-	Settings.reload()
+	Settings.load_saved()
 	check(_defaults_match(), "完整默认配置可保存并重新载入")
 	DirAccess.remove_absolute(Settings.save_path)
 	shell.queue_free()

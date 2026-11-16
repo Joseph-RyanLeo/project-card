@@ -43,13 +43,29 @@ const ACTION_MAGIC_TEXTURE: Texture2D = preload("res://assets/actions/action_mag
 const ACTION_HEAL_TEXTURE: Texture2D = preload("res://assets/actions/action_heal.png")
 const ACTION_DEFENSE_TEXTURE: Texture2D = preload("res://assets/actions/action_defense.png")
 const HEALTH_TEXTURE: Texture2D = preload("res://assets/stats/health.png")
+const SPELL_DURABILITY_TEXTURE: Texture2D = preload("res://assets/stats/spell_durability.png")
+const NON_MINION_FRAME_ATLAS: Texture2D = preload("res://assets/card_frames/non_minion_frame_rarity_sheet.png")
+const NON_MINION_FRAME_X := [0, 125, 250, 373, 494] # I～V 级外框各自在图集上的原生起点
+const NON_MINION_FRAME_SIZE := Vector2i(99, 136) # 每个品级外框切片的原生尺寸
+const NON_MINION_ART_BOTTOM := 125.0 # 新外框透明内窗底边，立绘可显示到第124行
+const NON_MINION_IDENTITY_BOTTOM_INSET := 2.0 # 三类卡牌的种类图标距裸卡底边
+const OVERFRAME_TEXTURE: Texture2D = preload("res://assets/card_frames/card_frame_overframe.png")
+const OVERFRAME_OUTLINE_SOURCE: Texture2D = preload("res://assets/card_frames/card_frame_i.png")
+const OVERFRAME_FRAME_INSET := Vector2.ONE # 97×134 的细框在 99×136 裸卡中各留 1px
+const OVERFRAME_FRAME_ALPHA := 0.46 # 纯白硬光外框的混合不透明度
+static var _non_minion_frames: Dictionary[int, Texture2D] = {}
+static var _overframe_outline_texture: ImageTexture
 const ARMOR_TEXTURE: Texture2D = preload("res://assets/stats/armor.png")
 const COOLDOWN_HOURGLASS_TEXTURE: Texture2D = preload(
 	"res://assets/stats/cooldown_hourglass.png"
 )
 const ZEAL_TEXTURE: Texture2D = preload("res://assets/stats/zeal.png")
 const ResourceIndicatorStyle = preload("res://scripts/ui/resource_indicator_style.gd")
-const ZEAL_ICON_OFFSET := Vector2(-1.0, -1.0) # 装备热诚图标左上角相对旧沙漏向左、向上各移动1px
+const EQUIPMENT_ZEAL_POSITION := Vector2(-2, 20) # 装备热诚图标在裸卡上的左上角
+const EQUIPMENT_ZEAL_VALUE_POSITION := EQUIPMENT_ZEAL_POSITION + Vector2(-1, 3) # 装备热诚数字随图标移动，保留两者间距
+const EQUIPMENT_HEALTH_POSITION := Vector2(84, 110) # 装备生命图标在裸卡上的左上角
+const EQUIPMENT_ARMOR_POSITION := Vector2(87, 93) # 装备护甲图标在裸卡上的左上角
+const SPELL_DURABILITY_POSITION := Vector2(84, 110) # 法术耐久图标在裸卡上的左上角
 const ZEAL_ZERO_VALUE_OFFSET := Vector2(3, 0) # 无正负号的0向右3px，靠近热诚火焰中心
 const SPELL_RARITY_BADGE_TEXTURE: Texture2D = preload(
 	"res://assets/card_ui/placeholders/spell_rarity_badges.png"
@@ -77,7 +93,8 @@ const SPELL_RARITY_BADGE_POSITION := Vector2(-6, -2) # 按法术参考图相对 
 const SPELL_RARITY_BADGE_SIZE := Vector2(22, 22) # 法术稀有度角标保持原生 22×22px
 const RESOURCE_BADGE_POSITION := Vector2(-5, -4) # 资源袋角标放在卡牌左上角，保持原生像素对齐
 const RESOURCE_BADGE_SIZE := Vector2(21, 26) # 资源袋角标保持用户素材原生21×26像素
-const EQUIPMENT_ACTION_POSITION := Vector2(-9, -9) # 装备参考合图相对卡框原点的位置；完整箭头位于合图顶部
+const EQUIPMENT_ACTION_POSITION := Vector2(-7, -9) # 装备数值增减图标在裸卡上的左上角
+const EQUIPMENT_ACTION_VALUE_OFFSET := Vector2(2, 0) # 装备数值随箭头移动，保留相对间距
 const CONSTRUCT_IDENTITY_REGION := Rect2(0, 0, 13, 11) # 造物原PNG第14行有2个游离像素，只读取上方完整头部，不改写原图
 const EQUIPMENT_ACTION_SIZE := Vector2(28, 28) # 装备增减箭头保持原生 28×28px 画布
 const SPELL_TYPE_ATLAS_X := [5, 26, 46, 67, 86] # 法术类型图集视觉列为 V、IV、III、II、I
@@ -88,9 +105,7 @@ const EQUIPMENT_TYPE_ATLAS_X := [2, 22, 40, 58, 76] # 装备类型图集视觉�
 const EQUIPMENT_TYPE_ATLAS_Y := [4, 20, 36, 51, 66, 81] # 装备类型图集行依次为六种装备类型
 const EQUIPMENT_TYPE_ATLAS_W := [13, 13, 13, 13, 13] # 装备类型图标的原始裁切宽度
 const EQUIPMENT_TYPE_ATLAS_H := [13, 13, 10, 10, 12, 10] # 装备类型图标的原始裁切高度
-const DEFAULT_ART_BACKGROUND_TEXTURE: Texture2D = preload(
-	"res://assets/card_backgrounds/card_background_placeholder.png"
-)
+const DEFAULT_ART_BACKGROUND_TEXTURE: Texture2D = CardData.BACKGROUND_TEXTURES[CardData.BackgroundStyle.ORIGINAL]
 const CARD_NAME_FRAME_TEXTURE: Texture2D = preload(
 	"res://assets/card_ui/card_name_frame.png"
 )
@@ -225,8 +240,15 @@ const STAT_PULSE_SCALE: float = 1.28 # 检视中数值变化时放大的倍率
 const STAT_CHANGE_SECONDS: float = 0.64 # 检视数字滚动与放大缩回共同使用的总时长
 var _owned_card: OwnedCard
 var _finish_controller: Variant
+var _overframe_outline: TextureRect
 var _finish_surface: ShaderMaterial
 var _finish_surface_composited := false
+const BOARD_FINISH_ORBIT_SECONDS: float = 14.5 # 上场闪卡的模拟鼠标绕行一周时长
+const BOARD_NORMAL_ORBIT_SECONDS: float = 12.0 # 法线闪卡略快的模拟鼠标绕行一周时长
+const BOARD_FINISH_RADIUS: float = 0.8 # 模拟鼠标距离卡面中心的归一化半径
+const BOARD_FINISH_FOLLOW: float = 4.0 # 真实鼠标离开后回到自动光效的平滑速度
+var _finish_pointer_force := Vector2.ZERO
+var _finish_orbit_seconds := 0.0
 var _collection_hover_surface: Control
 var _collection_hover_modulate := Color.WHITE
 static var _collection_hover_owner: CardView
@@ -318,7 +340,7 @@ func _ready() -> void:
 		mouse_entered.connect(_on_mouse_entered)
 	if not mouse_exited.is_connected(_on_mouse_exited):
 		mouse_exited.connect(_on_mouse_exited)
-	set_process(false)
+	_sync_visual_processing()
 	_refresh()
 	_refresh_new_card_dot()
 	if _drag_source_type == &"collection":
@@ -326,11 +348,24 @@ func _ready() -> void:
 		if is_instance_valid(display): display.call_deferred("_prepare_collection_hover")
 
 
-func _process(_delta: float) -> void:
-	if _active_rune_icons.is_empty():
-		set_process(false)
-		return
-	_update_active_rune_frames()
+func _has_board_finish_motion() -> bool:
+	return _drag_source_type == &"board" and not _snapshot_mode and not _finish_surface_composited and _owned_card != null and _owned_card.has_special_appearance()
+
+
+func _sync_visual_processing() -> void:
+	set_process(not _active_rune_icons.is_empty() or _has_board_finish_motion())
+
+
+func _process(delta: float) -> void:
+	if _has_board_finish_motion() and is_visible_in_tree():
+		var orbit_seconds := BOARD_NORMAL_ORBIT_SECONDS if _owned_card.surface_finish == Appearance.Surface.EMBOSSED else BOARD_FINISH_ORBIT_SECONDS
+		_finish_orbit_seconds = fmod(_finish_orbit_seconds + delta, orbit_seconds)
+		if not _mouse_hovered:
+			var angle := _finish_orbit_seconds / orbit_seconds * TAU
+			var target := Vector2(cos(angle), sin(angle)) * BOARD_FINISH_RADIUS
+			update_finish_pointer(_finish_pointer_force.lerp(target, 1.0 - exp(-BOARD_FINISH_FOLLOW * delta)))
+	if not _active_rune_icons.is_empty(): _update_active_rune_frames()
+	_sync_visual_processing()
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -534,7 +569,7 @@ static func create_drag_visual(drag_data: Dictionary) -> CardDragPreview:
 		)
 	var owned_item := drag_data.get("owned_card") as OwnedCard
 	if owned_item != null:
-		preview_root.set_equipment_card_data(owned_item.card_data)
+		preview_root.set_equipment_card_data(owned_item.card_data, owned_item.is_temporary_equipment())
 	if drag_data.get("kind") == &"equipment_indicator":
 		preview_root.set_equipment_indicator_grab_local_position(
 			drag_data.get("indicator_grab_local_position", EquipmentIndicatorStyleScript.DISPLAY_SIZE * 0.5)
@@ -628,6 +663,7 @@ func configure_drag_source(
 	_drag_source_type = source_type
 	_drag_source_row = source_row
 	_drag_source_slot = source_slot
+	_sync_visual_processing()
 	if not _drag_enabled:
 		_reset_interaction_visual()
 	mouse_default_cursor_shape = (
@@ -680,7 +716,7 @@ func show_pointer_hover_feedback(play_rotation_punch: bool = false) -> void:
 
 
 func _on_mouse_exited() -> void:
-	update_finish_pointer(Vector2.ZERO)
+	update_finish_pointer(Vector2.ZERO, true)
 	_mouse_hovered = false
 	_refresh_priority_label()
 	_cancel_hover_effect_display(true)
@@ -1154,8 +1190,9 @@ func set_owned_card(value: OwnedCard) -> void:
 		_refresh_action_value_text()
 		_refresh_vitals_text()
 		_refresh_cooldown_text()
-		_refresh_status_slots()
+		refresh_status_slots()
 		_refresh_runes()
+		if card_data != null: _refresh_art_tint()
 		_apply_art_offset()
 		_refresh_owned_appearance()
 
@@ -1179,8 +1216,9 @@ func bind_finish_surface(surface: ShaderMaterial) -> void:
 	_refresh_owned_appearance()
 
 
-func update_finish_pointer(force: Vector2) -> void:
-	if _finish_controller != null: _finish_controller.update_pointer(force)
+func update_finish_pointer(force: Vector2, reset_direction: bool = false) -> void:
+	_finish_pointer_force = force
+	if _finish_controller != null: _finish_controller.update_pointer(force, reset_direction)
 
 
 func _refresh_owned_appearance() -> void:
@@ -1195,11 +1233,11 @@ func _refresh_owned_appearance() -> void:
 			_finish_surface.set_shader_parameter("card_texture_size_px", card_size)
 		# 控制器持有CardView类型，延迟载入以免两个脚本相互预载。
 		_finish_controller = load("res://scripts/ui/card_finish_preview.gd").new()
-		_finish_controller.use_saved_settings = true
 		_finish_controller.setup(self, _finish_surface)
 	_finish_controller.surface_finish = _owned_card.surface_finish if _owned_card != null else Appearance.Surface.PLAIN
 	_finish_controller.art_finish = _owned_card.art_finish if _owned_card != null else Appearance.Art.PLAIN
 	_finish_controller.bind_surface(_finish_surface, _finish_surface_composited)
+	_sync_visual_processing()
 
 
 func _get_tooltip(point: Vector2) -> String:
@@ -1207,24 +1245,31 @@ func _get_tooltip(point: Vector2) -> String:
 
 
 func get_sticker_tooltip(point: Vector2) -> String:
+	return get_sticker_help(point).get("text", "")
+
+
+func get_sticker_help(point: Vector2) -> Dictionary:
 	if _owned_card == null or card_data == null:
-		return ""
+		return {}
 	for slot: Dictionary in CardSlotLayout.get_slot_definitions(card_data, _owned_card):
-		if _service_stickers_detached and slot.kind == CardSlotLayout.Kind.EMBLEM: continue
-		if not Rect2(slot.position, Vector2(14, 14)).has_point(point):
+		var is_emblem: bool = slot.kind == CardSlotLayout.Kind.EMBLEM
+		if is_emblem and _service_stickers_detached: continue
+		var rect := Rect2(slot.position, StatusIndicatorStyle.DISPLAY_SIZE)
+		if not rect.has_point(point):
 			continue
-		var states: Array[Dictionary] = _owned_card.emblem_slots if slot.kind == CardSlotLayout.Kind.EMBLEM else _owned_card.wound_slots
+		var states: Array[Dictionary] = _owned_card.emblem_slots if is_emblem else _owned_card.wound_slots
 		var index := int(slot.storage_index)
-		if index >= states.size() or states[index].is_empty():
-			return ""
-		if slot.kind == CardSlotLayout.Kind.EMBLEM:
-			return EmblemLibraryData.get_tooltip(StringName(states[index].get("emblem_id", "")))
-		return EmblemLibraryData.get_wound_tooltip(StringName(states[index].get("wound_id", "")))
+		if index >= states.size() or states[index].is_empty() or (is_emblem and index == _fusion_hidden_emblem_slot):
+			return {}
+		var id := StringName(states[index].get("emblem_id" if is_emblem else "wound_id", ""))
+		var text := EmblemLibraryData.get_tooltip(id) if is_emblem else EmblemLibraryData.get_wound_tooltip(id)
+		return {"rect": rect, "text": text}
 	for index: int in _owned_card.rune_stickers.size():
 		var origin := rune_area_position + Vector2(index * (rune_slot_size.x + rune_spacing), 0)
-		if Rect2(origin - Vector2(2, 2), Vector2(27, 27)).has_point(point) and not _rune_sticker_id(index).is_empty():
-			return EmblemLibraryData.get_tooltip(_rune_sticker_id(index))
-	return ""
+		var rect := Rect2(origin - Vector2(2, 2), Vector2(27, 27))
+		if rect.has_point(point) and not _rune_sticker_id(index).is_empty():
+			return {"rect": rect, "text": EmblemLibraryData.get_tooltip(_rune_sticker_id(index))}
+	return {}
 
 
 func set_emblem_drop_handler(handler: Callable) -> void:
@@ -1621,6 +1666,7 @@ func set_battle_action_type(action_type: CardData.ActionType) -> void:
 		action_icon.texture = _get_action_texture(action_type)
 		_refresh_priority_label()
 		_apply_action_layout(action_type)
+		if _finish_controller != null: _finish_controller.refresh_badge_texture(action_icon)
 
 
 func clear_battle_action_type() -> void:
@@ -1630,6 +1676,7 @@ func clear_battle_action_type() -> void:
 		action_icon.texture = _get_action_texture(_get_display_action_type())
 		_refresh_priority_label()
 		_apply_action_layout(_get_display_action_type())
+		if _finish_controller != null: _finish_controller.refresh_badge_texture(action_icon)
 
 
 func set_battle_target_weight(target_weight: int) -> void:
@@ -1790,7 +1837,7 @@ func set_battle_status_slot_states(
 	_battle_masked_wound_slots.assign(masked_wound_indices)
 	if is_node_ready():
 		# OwnedCard可原位新增、升级或移除贴纸；是否需要更新由完整槽位签名判断。
-		_refresh_status_slots()
+		refresh_status_slots()
 
 
 func get_battle_masked_rune_indices() -> Array[int]:
@@ -1861,12 +1908,11 @@ func _refresh() -> void:
 	_refresh_vitals_text()
 	_refresh_cooldown_text()
 	_refresh_priority_label()
-	card_name_frame.visible = true
 	_refresh_card_frame()
 	_refresh_art()
 	_refresh_race_icon()
 	_refresh_bottom_text()
-	_refresh_status_slots()
+	refresh_status_slots()
 	_refresh_owned_appearance()
 
 
@@ -1880,7 +1926,7 @@ func _create_status_slot_layer() -> void:
 	add_child(_status_slot_layer)
 
 
-func _refresh_status_slots() -> void:
+func refresh_status_slots() -> void:
 	if not is_instance_valid(_status_slot_layer):
 		return
 	var is_minion := card_data != null and card_data.card_type == CardData.CardType.MINION
@@ -1957,11 +2003,12 @@ func _refresh_status_slots() -> void:
 		visual.position = wanted_slots[slot_name]["position"] as Vector2
 		visual.modulate.a = float(wanted_slots[slot_name]["alpha"])
 	_status_slot_layer.visible = true
+	if _finish_controller != null: _finish_controller.refresh_detail_outlines()
 
 
 func set_fusion_hidden_emblem_slot(slot_index: int) -> void:
 	_fusion_hidden_emblem_slot = slot_index
-	_refresh_status_slots()
+	refresh_status_slots()
 
 
 func _refresh_action_value_text() -> void:
@@ -1972,8 +2019,11 @@ func _refresh_action_value_text() -> void:
 		value_label.text = ""
 		return
 	if card_data.card_type == CardData.CardType.EQUIPMENT:
-		value_label.text = str(absi(card_data.equipment_action_delta + roundi(_owned_card.get_permanent_growth(&"base_value")) if _owned_card != null else card_data.equipment_action_delta))
-		_set_control_rect(value_label, _get_action_value_position(value_label.text), value_label.get_rendered_size())
+		var delta := card_data.equipment_action_delta
+		if _owned_card != null: delta += roundi(_owned_card.get_permanent_growth(&"base_value"))
+		action_icon.texture = EQUIPMENT_ACTION_INCREASE_TEXTURE if delta >= 0 else EQUIPMENT_ACTION_DECREASE_TEXTURE
+		value_label.text = str(absi(delta))
+		_set_control_rect(value_label, _get_action_value_position(value_label.text) + EQUIPMENT_ACTION_VALUE_OFFSET, value_label.get_rendered_size())
 		return
 	value_label.text = str(
 		_battle_action_value
@@ -2052,11 +2102,11 @@ func _refresh_cooldown_text() -> void:
 			)
 		cooldown_label.text = format_cooldown_seconds(seconds)
 		cooldown_icon.tooltip_text = ""
-	_set_control_rect(
-		cooldown_label,
-		COOLDOWN_VALUE_POSITION + (ZEAL_ZERO_VALUE_OFFSET if card_data.card_type == CardData.CardType.EQUIPMENT and card_data.equipment_zeal_delta == 0 else Vector2.ZERO),
-		cooldown_label.get_rendered_size()
-	)
+	var number_position := COOLDOWN_VALUE_POSITION
+	if card_data.card_type == CardData.CardType.EQUIPMENT:
+		number_position = EQUIPMENT_ZEAL_VALUE_POSITION
+		if card_data.equipment_zeal_delta == 0: number_position += ZEAL_ZERO_VALUE_OFFSET
+	_set_control_rect(cooldown_label, number_position, cooldown_label.get_rendered_size())
 
 
 static func format_cooldown_seconds(seconds: float) -> String:
@@ -2097,7 +2147,7 @@ func _refresh_bottom_text() -> void:
 		showing_effect = false
 		rune_row.visible = false
 		rune_row.modulate.a = 1.0
-		set_process(false)
+		_sync_visual_processing()
 		effect_text_label.visible = true
 		effect_text_label.self_modulate.a = 1.0
 	else:
@@ -2162,12 +2212,14 @@ func _show_empty_card() -> void:
 	_active_rune_join_cycles.clear()
 	_rune_scrape_cover_icons.clear()
 	_rune_scrape_mask_textures.clear()
-	set_process(false)
+	_sync_visual_processing()
 	_set_card_name("空卡牌")
+	name_label.show()
 	action_icon.texture = null
 	card_name_frame.visible = false
 	card_frame.texture = null
 	card_frame.visible = false
+	if _overframe_outline != null: _overframe_outline.hide()
 	art_background.texture = null
 	art_background.visible = false
 	art_texture.texture = null
@@ -2197,20 +2249,27 @@ func _show_empty_card() -> void:
 
 
 func _refresh_art() -> void:
-	var base_background := (
-		card_data.background_texture
-		if card_data.background_texture != null
-		else DEFAULT_ART_BACKGROUND_TEXTURE
-	)
-	art_background.texture = base_background
+	art_background.texture = card_data.get_background_texture()
+	_apply_background_offset()
 	art_background.visible = art_background.texture != null
 	art_texture.texture = card_data.art_texture
+	_refresh_art_tint()
 	art_texture.visible = card_data.art_texture != null
 	_apply_art_offset()
 	art_label.visible = (
 		card_data.art_texture == null
 		and art_background.texture == null
 	)
+
+
+func _refresh_art_tint() -> void:
+	art_texture.modulate = Color(0.62, 1.0, 0.62) if card_data.id == &"sour_beer_mug" else Color.WHITE # 酸啤酒杯使用绿色滤镜
+	var equipment_tint := preload("res://scripts/ui/equipment_indicator_style.gd").TEMPORARY_EQUIPMENT_TINT if _owned_card != null and _owned_card.is_temporary_equipment() else Color.WHITE
+	art_texture.modulate *= equipment_tint
+	art_background.self_modulate = equipment_tint
+	# Hard Light 对纯白源像素的结果恒为白；直接用白色和该透明度即可等价合成。
+	card_frame.self_modulate = Color(1.0, 1.0, 1.0, OVERFRAME_FRAME_ALPHA) if card_frame.texture == OVERFRAME_TEXTURE else equipment_tint
+	card_name_frame.self_modulate = equipment_tint
 
 
 func _set_card_name(display_name: String) -> void:
@@ -2250,6 +2309,17 @@ func _layout_name_label() -> void:
 	)
 
 
+func _apply_background_offset() -> void:
+	if art_background.texture == null: return
+	var pixels := art_background.texture.get_size()
+	var overframe := card_frame.texture == OVERFRAME_TEXTURE
+	var centered := ((art_panel.size - pixels) * 0.5).floor()
+	if card_data.uses_overframe_background(overframe):
+		# 先按超框窗口在卡面上定位，再减掉当前裁切窗口的起点，得到背景在窗口内的坐标。
+		centered = OVERFRAME_FRAME_INSET + ((OVERFRAME_TEXTURE.get_size() - pixels) * 0.5).floor() - art_panel.position
+	_set_control_rect(art_background, centered + Vector2(card_data.get_background_offset(card_data.background_style, overframe)), pixels)
+
+
 func _apply_art_offset() -> void:
 	if art_texture.texture == null:
 		return
@@ -2261,18 +2331,68 @@ func _apply_art_offset() -> void:
 	)
 	_set_control_rect(
 		art_texture,
-		centered_position + Vector2(card_data.get_art_offset_for_finish(_owned_card.get_art_finish_key()) if _owned_card != null else card_data.art_offset),
+		art_area_position - art_panel.position + centered_position + Vector2(card_data.get_art_offset_for_finish(_owned_card.get_art_finish_key()) if _owned_card != null else card_data.art_offset),
 		texture_size
 	)
 
 
-func _refresh_card_frame() -> void:
-	var rarity_key := card_data.get_rarity_asset_key()
-	var texture_path := (
-		"res://assets/card_frames/card_frame_%s.png" % rarity_key
-	)
-	card_frame.texture = load(texture_path) as Texture2D
+func _refresh_card_frame(overframe: bool = false) -> void:
+	if card_data == null: return
+	name_label.visible = not overframe
+	card_name_frame.visible = not overframe
+	race_icon.visible = race_icon.texture != null and (not overframe or card_data.card_type != CardData.CardType.MINION)
+	var frame_position := Vector2.ZERO
+	var frame_size := card_size
+	var window_position := art_area_position
+	var window_size := art_area_size
+	if overframe:
+		card_frame.texture = OVERFRAME_TEXTURE
+		if _overframe_outline == null:
+			_overframe_outline = TextureRect.new()
+			_overframe_outline.name = "OverframeOutline"
+			_overframe_outline.texture = _get_overframe_outline_texture()
+			_overframe_outline.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			_overframe_outline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_overframe_outline.z_index = card_frame.z_index
+			add_child(_overframe_outline)
+		frame_position = OVERFRAME_FRAME_INSET
+		frame_size = Vector2(OVERFRAME_TEXTURE.get_size())
+		window_position = frame_position
+		window_size = frame_size
+	elif card_data.card_type != CardData.CardType.MINION:
+		var rarity := int(card_data.rarity)
+		if not _non_minion_frames.has(rarity):
+			var region := Rect2i(Vector2i(NON_MINION_FRAME_X[rarity], 0), NON_MINION_FRAME_SIZE)
+			# 提取成独立纹理后，现有闪纹材质仍按每张卡的完整 0～1 UV 取样。
+			_non_minion_frames[rarity] = ImageTexture.create_from_image(NON_MINION_FRAME_ATLAS.get_image().get_region(region))
+		card_frame.texture = _non_minion_frames[rarity]
+		window_size.y = maxf(window_size.y, NON_MINION_ART_BOTTOM - window_position.y)
+	else:
+		card_frame.texture = load("res://assets/card_frames/card_frame_%s.png" % card_data.get_rarity_asset_key()) as Texture2D
+	if card_frame.position != frame_position or card_frame.size != frame_size:
+		_set_control_rect(card_frame, frame_position, frame_size)
 	card_frame.visible = card_frame.texture != null
+	if _overframe_outline != null: _overframe_outline.visible = overframe
+	if art_panel.position != window_position or art_panel.size != window_size:
+		_set_control_rect(art_panel, window_position, window_size)
+		_set_control_rect(art_content, Vector2.ZERO, window_size)
+		_apply_background_offset()
+		_set_control_rect(art_label, art_area_position - window_position, art_area_size)
+		_apply_art_offset()
+	_refresh_art_tint()
+
+
+static func _get_overframe_outline_texture() -> ImageTexture:
+	if _overframe_outline_texture == null:
+		# 普通卡各品级共用这一圈黑色轮廓，提取一次即可供所有超框卡使用。
+		var source := OVERFRAME_OUTLINE_SOURCE.get_image()
+		var outline := Image.create_empty(source.get_width(), source.get_height(), false, Image.FORMAT_RGBA8)
+		for y: int in source.get_height():
+			for x: int in source.get_width():
+				if source.get_pixel(x, y) == Color.BLACK:
+					outline.set_pixel(x, y, Color.BLACK)
+		_overframe_outline_texture = ImageTexture.create_from_image(outline)
+	return _overframe_outline_texture
 
 
 func _get_identity_texture(definition: CardData) -> Texture2D:
@@ -2313,9 +2433,22 @@ func _refresh_card_type_visuals() -> void:
 	cooldown_icon.texture = ZEAL_TEXTURE if shows_zeal else COOLDOWN_HOURGLASS_TEXTURE
 	_set_control_rect(
 		cooldown_icon,
-		cooldown_icon_position + (ZEAL_ICON_OFFSET if shows_zeal else Vector2.ZERO),
+		EQUIPMENT_ZEAL_POSITION if shows_zeal else cooldown_icon_position,
 		ZEAL_TEXTURE.get_size() if shows_zeal else cooldown_icon_size
 	)
+	var shows_durability := card_data.card_type == CardData.CardType.SPELL
+	health_icon.texture = SPELL_DURABILITY_TEXTURE if shows_durability else HEALTH_TEXTURE
+	var health_position := health_icon_position
+	if shows_durability:
+		health_position = SPELL_DURABILITY_POSITION
+	elif shows_zeal:
+		health_position = EQUIPMENT_HEALTH_POSITION
+	_set_control_rect(
+		health_icon,
+		health_position,
+		SPELL_DURABILITY_TEXTURE.get_size() if shows_durability else health_badge_size
+	)
+	_set_control_rect(armor_icon, EQUIPMENT_ARMOR_POSITION if shows_zeal else armor_icon_position, armor_badge_size)
 	action_icon.visible = true
 	value_label.visible = true
 	health_icon.visible = true
@@ -2363,11 +2496,6 @@ func _refresh_card_type_visuals() -> void:
 		cooldown_icon.visible = false
 		cooldown_label.visible = false
 	elif card_data.card_type == CardData.CardType.EQUIPMENT:
-		action_icon.texture = (
-			EQUIPMENT_ACTION_INCREASE_TEXTURE
-			if card_data.equipment_action_delta + (_owned_card.get_permanent_growth(&"base_value") if _owned_card != null else 0) >= 0
-			else EQUIPMENT_ACTION_DECREASE_TEXTURE
-		)
 		_set_control_rect(
 			action_icon,
 			EQUIPMENT_ACTION_POSITION,
@@ -2428,6 +2556,9 @@ func _get_equipment_type_region(
 
 
 func _set_centered_identity_icon(icon_size: Vector2) -> void:
+	if card_data.card_type != CardData.CardType.MINION:
+		_set_control_rect(race_icon, _get_non_minion_identity_position(icon_size), icon_size)
+		return
 	_set_control_rect(
 		race_icon,
 		Vector2(
@@ -2438,11 +2569,15 @@ func _set_centered_identity_icon(icon_size: Vector2) -> void:
 	)
 
 
+func _get_non_minion_identity_position(icon_size: Vector2) -> Vector2:
+	return Vector2(floorf((card_size.x - icon_size.x) * 0.5), card_size.y - icon_size.y - NON_MINION_IDENTITY_BOTTOM_INSET)
+
+
 func _refresh_runes() -> void:
 	if card_data == null or card_data.card_type != CardData.CardType.MINION:
 		_active_rune_icons.clear()
 		_active_rune_join_cycles.clear()
-		set_process(false)
+		_sync_visual_processing()
 		rune_row.visible = false
 		return
 	var previous_join_cycles := _active_rune_join_cycles.duplicate()
@@ -2501,7 +2636,8 @@ func _refresh_runes() -> void:
 			if is_active:
 				_active_rune_icons[slot_index] = rune_icon
 	_update_active_rune_frames()
-	set_process(not _active_rune_icons.is_empty())
+	_sync_visual_processing()
+	if _finish_controller != null: _finish_controller.refresh_detail_outlines()
 
 
 func refresh_rune_scrape_cover(index: int) -> void:
@@ -2725,7 +2861,7 @@ func set_service_stickers_detached(value: bool) -> void:
 	_service_stickers_detached = value
 	_has_status_slot_signature = false
 	if is_node_ready():
-		_refresh_status_slots()
+		refresh_status_slots()
 		_refresh_runes()
 
 
@@ -2808,7 +2944,8 @@ func _apply_pixel_layout() -> void:
 	_set_control_rect(art_background, Vector2.ZERO, art_area_size)
 	_set_control_rect(art_label, Vector2.ZERO, art_area_size)
 	art_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	art_background.stretch_mode = TextureRect.STRETCH_SCALE
+	art_background.stretch_mode = TextureRect.STRETCH_KEEP
+	art_background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	art_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art_texture.stretch_mode = TextureRect.STRETCH_KEEP
 	_set_control_rect(card_frame, Vector2.ZERO, card_size)
@@ -3092,14 +3229,22 @@ func _layout_vitals_numbers() -> void:
 			if _battle_vitals_active:
 				health_value = _battle_current_health
 				armor_value = _battle_current_armor
+	var health_origin := get_health_value_position(health_value)
+	var armor_origin := get_armor_value_position(armor_value)
+	if card_data != null:
+		if card_data.card_type == CardData.CardType.SPELL:
+			health_origin += SPELL_DURABILITY_POSITION - health_icon_position
+		elif card_data.card_type == CardData.CardType.EQUIPMENT:
+			health_origin += EQUIPMENT_HEALTH_POSITION - health_icon_position
+			armor_origin += EQUIPMENT_ARMOR_POSITION - armor_icon_position
 	_set_control_rect(
 		health_label,
-		get_health_value_position(health_value),
+		health_origin,
 		health_label.get_rendered_size()
 	)
 	_set_control_rect(
 		armor_label,
-		get_armor_value_position(armor_value),
+		armor_origin,
 		armor_label.get_rendered_size()
 	)
 

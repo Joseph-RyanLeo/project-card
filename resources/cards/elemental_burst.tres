@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"elemental_burst"
+display_name = "元素爆发"
+pack_id = &"gilded_commission"
+rarity = 3
+content_effect = &"elemental_burst"
+card_type = 2
+spell_type = 0
+spell_trigger_kind = 1
+effect_text = "开战时：本场友方有效符文的基础收益翻倍。"

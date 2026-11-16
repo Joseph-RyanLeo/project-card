@@ -4,6 +4,7 @@ extends Node
 ## 只管理已经入库的卡牌的展示顺序；购买、实例生成与存档仍归主流程。
 signal card_requested(owned: OwnedCard)
 signal finished
+signal wrapper_opened
 
 enum Phase { ENLARGING, POSITIONING, SEALED, TEARING, BURST, REVEALING, INSPECTING, COLLECTING, FINISHED }
 const TearArt = preload("res://scripts/ui/pack_tear_art.gd")
@@ -13,6 +14,7 @@ const Settings = preload("res://scripts/ui/pack_opening_effect_settings.gd")
 const DRAG_FRACTION: float = 0.8 # 横向拖过包装宽度的此比例即完成撕开
 const SEAL_HIT_HEIGHT: float = 28.0 # 顶部封口可点击区域的原生像素高度
 const TEAR_DRAG_THRESHOLD: float = 6.0 # 鼠标移过此逻辑像素距离才算拖撕，否则松手视为单击
+const SEAL_HINT_DELAY: float = 3.0 # 点击进入开包后，尚未撕开多久开始银线扫光
 
 var effects: Dictionary = Settings.get_values()
 var cards: Array[OwnedCard] = []
@@ -39,6 +41,7 @@ var _stack_force := Vector2.ZERO
 var _pack_surface: InspectionCardSurface
 var _drag_pointer := Vector2.ZERO
 var _press_pointer := Vector2.ZERO
+var _seal_wait_seconds := 0.0
 
 
 func begin(acquired: Array[OwnedCard], host: Control, pack_surface: InspectionCardSurface) -> void:
@@ -79,6 +82,7 @@ func accept_purchase(acquired: Array[OwnedCard]) -> void:
 		_dragging = false
 		return
 	cards = acquired.duplicate()
+	_seal_wait_seconds = 0.0
 	for owned: OwnedCard in cards:
 		has_rare = has_rare or owned.card_data.rarity == CardData.Rarity.IV
 
@@ -128,6 +132,7 @@ func handle_input(event: InputEvent) -> bool:
 			if mouse.pressed:
 				var point := surface.card_point(surface.get_global_transform_with_canvas().affine_inverse() * mouse.position)
 				if Rect2(0, -8, tear_art.size.x, SEAL_HIT_HEIGHT).has_point(point):
+					tear_art.seal_hint_seconds = -1.0
 					phase = Phase.TEARING
 					_dragging = true
 					_drag_moved = false
@@ -166,6 +171,7 @@ func _advance_tear() -> void:
 func auto_tear() -> void:
 	if cards.is_empty() or phase not in [Phase.SEALED, Phase.TEARING] or _auto_tearing or _background_cards.size() < cards.size():
 		return
+	tear_art.seal_hint_seconds = -1.0
 	phase = Phase.TEARING
 	_dragging = false
 	_auto_tearing = true
@@ -184,6 +190,7 @@ func _burst() -> void:
 	_pack_surface.tilt_locked = true
 	if has_rare: _shake_elapsed = 0.0
 	card_requested.emit(cards[current_index])
+	wrapper_opened.emit()
 
 
 func take_next_surface() -> InspectionCardSurface:
@@ -329,6 +336,11 @@ func _set_help(value: String) -> void:
 
 
 func _process(delta: float) -> void:
+	if not cards.is_empty() and phase in [Phase.ENLARGING, Phase.POSITIONING, Phase.SEALED, Phase.TEARING]:
+		_seal_wait_seconds += delta
+	if is_instance_valid(tear_art):
+		var ready := phase in [Phase.SEALED, Phase.TEARING] and not _dragging and not _auto_tearing and not cards.is_empty() and _background_cards.size() == cards.size()
+		tear_art.seal_hint_seconds = _seal_wait_seconds - SEAL_HINT_DELAY if ready and _seal_wait_seconds >= SEAL_HINT_DELAY else -1.0
 	# 包装放大时每帧准备一张真实卡面，避免一次创建五张把购买帧堵住。
 	if phase in [Phase.ENLARGING, Phase.POSITIONING, Phase.SEALED] and _background_cards.size() < cards.size():
 		_prepare_next_card()
@@ -340,9 +352,6 @@ func _process(delta: float) -> void:
 			_host.position = _host_origin
 			_shake_elapsed = -1.0
 	if not is_instance_valid(surface): return
-	if phase == Phase.INSPECTING and has_rare:
-		for key: String in ["flash_intensity", "stripe_spacing", "stripe_width", "flash_angle_degrees"]:
-			surface.effect.set_shader_parameter(key, effects[key])
 	if phase == Phase.TEARING and _dragging:
 		_advance_tear()
 	if phase in [Phase.SEALED, Phase.TEARING] and is_instance_valid(glow):

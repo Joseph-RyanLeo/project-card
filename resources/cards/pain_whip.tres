@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"pain_whip"
+display_name = "苦痛之鞭"
+pack_id = &"arcane_codex"
+card_type = 1
+equipment_type = 1
+effect_text = "回响：对自身造成2点无视护甲的伤害，然后强化+3。"

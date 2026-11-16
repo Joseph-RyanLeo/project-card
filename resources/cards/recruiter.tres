@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="CardData" format=3 uid="uid://ceqni4ymff3ei"]
+[gd_resource type="Resource" script_class="CardData" format=3]
 
-[ext_resource type="Script" uid="uid://c6r35t6fxexfl" path="res://scripts/data/card_data.gd" id="1_card_data"]
-[ext_resource type="Texture2D" uid="uid://c1g3hn1hbyx1l" path="res://assets/card_art/recruiter.png" id="2_art"]
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/recruiter.png" id="2_art"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -10,12 +10,21 @@ display_name = "征召官"
 pack_id = &"ash_ledger"
 effect_ids = Array[StringName]([&"recruiter.effect.01"])
 keywords = Array[StringName]([&"rush", &"grant_random_minion"])
-action_type = 0
 base_value = 3
 cooldown_seconds = 5.0
 max_health = 7
 runes = Array[int]([4, 0, 2])
 rarity = 1
+background_style = 3
+background_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, -20)
+})
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 1)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(2, 29)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(2, 24)
+})
 effect_text = "突击：随机获得1张随从卡。"

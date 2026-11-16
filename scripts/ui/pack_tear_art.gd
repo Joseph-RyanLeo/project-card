@@ -8,6 +8,11 @@ const BODY = preload("res://assets/card_ui/shop/relief_sample/body_normal.png")
 const GOLD = preload("res://assets/card_ui/shop/relief_sample/gold_normal.png")
 const HEIGHT = preload("res://assets/card_ui/shop/relief_sample/body_height_input.png")
 const REGIONS = preload("res://assets/card_ui/shop/relief_sample/body_regions.png")
+const SMALL_BODY_HEIGHT = preload("res://assets/card_ui/shop/small_pack_height.png")
+const GILDED_WRAPPER = preload("res://assets/card_ui/shop/gilded_commission_small.png")
+const GILDED_SEAL_HEIGHT = preload("res://assets/card_ui/shop/gilded_commission_seal_height.png")
+const GILDED_SEAL_ORIGIN := Vector2(37, 49) # 41×38 的中心火漆高度图在包装原图上的左上角
+const GILDED_TRIM_COLOR := Vector3(255, 192, 61) / 255.0 # 镀金委托外圈与中央纹路的原图金色
 const INSPECTION_RENDER_SCALE := 4.0 # 放大开包时光照与撕口按4倍精度绘制，原图尺寸不变
 var effects: Dictionary = Settings.get_values()
 const STRIP_STEP: int = 2 # 封条分段宽度，保留阶梯状像素裂口
@@ -22,6 +27,12 @@ var seal_offset := Vector2.ZERO:
 		queue_redraw()
 var source_viewport: SubViewport
 var surface: InspectionCardSurface
+var _relief_values: Dictionary
+var seal_hint_seconds := -1.0:
+	set(value):
+		seal_hint_seconds = value
+		if material is ShaderMaterial:
+			(material as ShaderMaterial).set_shader_parameter("seal_hint_seconds", value)
 
 
 func setup(art: Control) -> void:
@@ -37,15 +48,37 @@ func setup(art: Control) -> void:
 	art.reparent(source_viewport)
 	art.position = Vector2.ZERO
 	art.scale = Vector2.ONE
-	var relief := ShaderMaterial.new()
-	relief.shader = RELIEF
-	relief.set_shader_parameter("body_normal", BODY)
-	relief.set_shader_parameter("gold_normal", GOLD)
-	relief.set_shader_parameter("body_height", HEIGHT)
-	relief.set_shader_parameter("body_regions", REGIONS)
-	material = relief
+	material = create_relief(size, art.texture if art is TextureRect else null)
+	_relief_values = Settings.get_relief_values()
 	set_process(false)
 	queue_redraw()
+
+
+static func create_relief(pack_size: Vector2, wrapper: Texture2D = null, shader: Shader = RELIEF) -> ShaderMaterial:
+	var relief := ShaderMaterial.new()
+	relief.shader = shader
+	var small := pack_size == Vector2(SMALL_BODY_HEIGHT.get_size())
+	var gilded := small and wrapper == GILDED_WRAPPER
+	relief.set_shader_parameter("use_body_height", small)
+	relief.set_shader_parameter("use_center_height", gilded)
+	if small:
+		relief.set_shader_parameter("body_height", SMALL_BODY_HEIGHT)
+		if gilded:
+			relief.set_shader_parameter("center_height", GILDED_SEAL_HEIGHT)
+			relief.set_shader_parameter("center_height_origin_px", GILDED_SEAL_ORIGIN)
+			relief.set_shader_parameter("extra_gold_color", GILDED_TRIM_COLOR)
+	else:
+		relief.set_shader_parameter("body_normal", BODY)
+		relief.set_shader_parameter("gold_normal", GOLD)
+		relief.set_shader_parameter("body_height", HEIGHT)
+		relief.set_shader_parameter("body_regions", REGIONS)
+	_apply_relief_values(relief, Settings.get_relief_values())
+	return relief
+
+
+static func _apply_relief_values(relief: ShaderMaterial, values: Dictionary) -> void:
+	for field: Dictionary in Settings.RELIEF_FIELDS:
+		relief.set_shader_parameter(field.key, values[field.key] * float(field.get("scale", 1.0)))
 
 
 func configure_inspection(value: InspectionCardSurface) -> void:
@@ -57,6 +90,10 @@ func configure_inspection(value: InspectionCardSurface) -> void:
 
 
 func _process(_delta: float) -> void:
+	var values := Settings.get_relief_values()
+	if not is_same(values, _relief_values):
+		_relief_values = values
+		_apply_relief_values(material as ShaderMaterial, values)
 	if is_instance_valid(surface):
 		(material as ShaderMaterial).set_shader_parameter("pointer_force", surface.force)
 

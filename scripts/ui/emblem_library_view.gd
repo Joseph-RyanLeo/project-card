@@ -34,6 +34,9 @@ var _sticker_inventory: Variant = StickerInventoryScript.new()
 var _scraper_count: int = 0
 var fusion_busy := false
 var _hidden_item_ids: Array[StringName] = []
+var _event_reward_ids: Array[StringName] = []
+const RECEIPT_SHAKE := 5.0 # 每次入库工具箱的水平震动幅度
+const RECEIPT_SHAKE_SECONDS := 0.04 # 工具箱震动每一步的时间
 var _reserved_item_ids: Array[StringName] = []
 var _drop_stack_order: Array[StringName] = []
 
@@ -122,7 +125,8 @@ func set_drag_enabled(value: bool) -> void:
 
 func _sync_entry_state(entry: Control) -> void:
 	var id := StringName(String(entry.definition.returned_state.instance_id))
-	entry.set_drag_enabled(_drag_enabled and not fusion_busy and not id in _reserved_item_ids)
+	var waiting := id in _event_reward_ids
+	entry.set_drag_enabled(_drag_enabled and not fusion_busy and not waiting and not id in _reserved_item_ids)
 	entry.modulate.a = 0.0 if id in _hidden_item_ids else CardView.COLLECTION_DRAG_GHOST_ALPHA if id in _reserved_item_ids else 1.0
 
 
@@ -417,6 +421,7 @@ func _refresh_entries() -> void:
 	for definition: Dictionary in display_definitions:
 		var entry: Variant = EmblemLibraryEntryScript.new()
 		entry.configure(definition, _drag_enabled and not fusion_busy)
+		entry.visible = not StringName(definition.returned_state.instance_id) in _event_reward_ids
 		_sync_entry_state(entry)
 		entry.click_carry_requested.connect(_on_item_click_carry_requested)
 		entry.front_requested.connect(bring_dropped_sticker_to_front)
@@ -480,6 +485,23 @@ func set_hidden_item_ids(instance_ids: Array[StringName]) -> void:
 	_hidden_item_ids.assign(instance_ids)
 	for entry: Control in _entries:
 		_sync_entry_state(entry)
+
+func set_event_reward_ids(ids: Array[StringName]) -> void:
+	if _event_reward_ids == ids: return
+	var previous := _event_reward_ids.duplicate()
+	_event_reward_ids.assign(ids)
+	for entry: Control in _entries:
+		var id := StringName(entry.definition.returned_state.instance_id)
+		if id in previous or id in _event_reward_ids:
+			entry.visible = id not in _event_reward_ids
+			_sync_entry_state(entry)
+
+
+func tween_receipt_shake(animation: Tween, rest_x: float) -> void:
+	animation.tween_property(self, "position:x", rest_x - RECEIPT_SHAKE, RECEIPT_SHAKE_SECONDS)
+	animation.chain().tween_property(self, "position:x", rest_x + RECEIPT_SHAKE, RECEIPT_SHAKE_SECONDS)
+	animation.chain().tween_property(self, "position:x", rest_x, RECEIPT_SHAKE_SECONDS)
+
 
 func set_reserved_item_ids(instance_ids: Array) -> void:
 	_reserved_item_ids.assign(instance_ids)

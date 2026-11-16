@@ -20,6 +20,8 @@ func _input(event: InputEvent) -> void:
 		pointer_position = event.position
 	if get_viewport().is_input_handled():
 		return
+	var pause_menu := get_tree().get_first_node_in_group(&"escape_pause_menus")
+	if pause_menu != null and pause_menu.is_menu_open(): return
 	if input_handler.is_valid() and bool(input_handler.call(event)):
 		get_viewport().set_input_as_handled()
 		return

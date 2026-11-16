@@ -12,9 +12,9 @@ var profile: Dictionary = {
 	"created_at": 0, "legacy": false, "points": 0, "discoveries": {"cards": {}, "stickers": {}, "resources": {}},
 	"tasks": {"tutorial": {"purchased": true, "completed": false}}, "unlocks": {"heroes": [INITIAL_HERO], "packs": ["ash_ledger"], "items": [], "routes": [], "growth": []},
 	"collection": {}, "receipts": {}, "pack_choices_by_hero": {},
-	"tutorial": {"actually_completed": false, "skipped": false, "reward_claimed": false, "skip_eligible_at_creation": false},
+	"tutorial": {"actually_completed": false, "skipped": false, "reward_claimed": false, "skip_eligible_at_creation": false, "records_version": 2, "read_hints": [], "hint_texts": {}},
 }
-var run: Dictionary = {"id": "", "stage": "hub", "hero": INITIAL_HERO, "pending_discoveries": {"cards": {}, "stickers": {}, "resources": {}}, "tasks": {}, "exhausted_spells": {}, "candidates": {}, "selection": [], "read_tutorial_hints": []}
+var run: Dictionary = {"id": "", "stage": "hub", "hero": INITIAL_HERO, "pending_discoveries": {"cards": {}, "stickers": {}, "resources": {}}, "tasks": {}, "exhausted_spells": {}, "candidates": {}, "selection": [], "read_story_nodes": [], "supplies": [], "enabled_unlocks": {}, "ally_deaths": 0}
 
 
 func _init() -> void:
@@ -28,10 +28,17 @@ func capture_state() -> Dictionary:
 func restore_state(value: Dictionary) -> bool:
 	if not _integer(value.get("version"), VERSION, VERSION) or not value.get("profile") is Dictionary or not value.get("run") is Dictionary:
 		return false
-	var p: Dictionary = value.profile
+	var p: Dictionary = value.profile.duplicate(true)
+	if not p.get("tutorial") is Dictionary: return false
+	if not p.tutorial.has("read_hints"): p.tutorial["read_hints"] = []
+	if not p.tutorial.has("hint_texts"): p.tutorial["hint_texts"] = {}
 	var r: Dictionary = value.run.duplicate(true)
 	# D3-1存档没有总结字段；只迁移缺省值，不推算旧局积分。
 	if not r.has("summary"): r["summary"] = {}
+	if not r.has("supplies"): r["supplies"] = []
+	if not r.has("ally_deaths"): r["ally_deaths"] = 0
+	if not r.has("enabled_unlocks"): r["enabled_unlocks"] = {}
+	if not _migrate_hint_records(p, r): return false
 	if not _valid_profile(p) or not _valid_run(r): return false
 	if not r.summary.is_empty():
 		var receipt := "run_end:" + String(r.id)
@@ -46,6 +53,45 @@ func restore_state(value: Dictionary) -> bool:
 	return true
 
 
+func _migrate_hint_records(p: Dictionary, r: Dictionary) -> bool:
+	if not r.has("read_story_nodes"):
+		var old: Variant = r.get("read_tutorial_hints", [])
+		if not _string_array(old): return false
+		r["read_story_nodes"] = []
+		for key: String in old:
+			for migrated: String in TaskCatalog.legacy_story_keys(key):
+				if not r.read_story_nodes.has(migrated): r.read_story_nodes.append(migrated)
+	r.erase("read_tutorial_hints")
+	if not _integer(p.tutorial.get("records_version", 1), 1, 2): return false
+	if int(p.tutorial.get("records_version", 1)) == 2: return true
+	if not _string_array(p.tutorial.read_hints) or not p.tutorial.hint_texts is Dictionary: return false
+	for text: Variant in p.tutorial.hint_texts.values():
+		if not text is String: return false
+	var teaching: Array = []
+	var texts: Dictionary = {}
+	for old: String in p.tutorial.read_hints:
+		for key: String in TaskCatalog.legacy_teaching_keys(old):
+			var hint := TaskCatalog.teaching_hint(key)
+			if String(hint.get("instruction", "")).is_empty() or teaching.has(key): continue
+			teaching.append(key)
+			texts[key] = TaskCatalog.teaching_archive(hint)
+	p.tutorial.read_hints = teaching
+	p.tutorial.hint_texts = texts
+	p.tutorial["records_version"] = 2
+	return true
+
+
+func hint_pending(key: String, hint: Dictionary) -> Dictionary:
+	return {"story": (not hint.get("dialogue", []).is_empty() or not String(hint.get("story_text", "")).is_empty()) and not run.read_story_nodes.has(key), "teaching": not String(hint.get("instruction", "")).is_empty() and not profile.tutorial.read_hints.has(key)}
+
+
+func record_hint_read(key: String, hint: Dictionary, parts: Dictionary) -> void:
+	if parts.story and not run.read_story_nodes.has(key): run.read_story_nodes.append(key)
+	if parts.teaching:
+		if not profile.tutorial.read_hints.has(key): profile.tutorial.read_hints.append(key)
+		profile.tutorial.hint_texts[key] = TaskCatalog.teaching_archive(hint)
+
+
 func start_run(hero: String = INITIAL_HERO) -> bool:
 	if run.stage != "hub" or not profile.unlocks.heroes.has(hero): return false
 	var selected: Dictionary = {}
@@ -58,6 +104,7 @@ func start_run(hero: String = INITIAL_HERO) -> bool:
 	run.id = Crypto.new().generate_random_bytes(16).hex_encode()
 	run.stage = "active"
 	run.hero = hero
+	run["enabled_unlocks"] = profile.unlocks.duplicate(true)
 	return true
 
 
@@ -78,6 +125,23 @@ func credit_once(receipt: String, amount: int) -> bool:
 	profile.points += amount
 	profile.receipts[receipt] = amount
 	return true
+
+
+func purchase_catalog_task(id: String) -> bool:
+	if not TaskCatalog.available(self, id): return false
+	return purchase_task(id, int(TaskCatalog.get_task(id).price))
+
+
+func select_catalog_tasks(main_id: String, side_id: String) -> bool:
+	for pair: Array in [["main", main_id], ["side", side_id]]:
+		if pair[1].is_empty(): continue
+		if not TaskCatalog.available(self, pair[1]) or TaskCatalog.get_task(pair[1]).category != pair[0]: return false
+	return select_tasks(main_id, side_id)
+
+
+func enabled(category: String, id: String) -> bool:
+	# 开局时冻结范围；本局新获得的永久奖励留待下一局生效。
+	return run.get("enabled_unlocks", {}).get(category, []).has(id)
 
 
 func purchase_task(id: String, price: int) -> bool:
@@ -142,7 +206,7 @@ func begin_collection(cards: Array[OwnedCard]) -> bool:
 	if run.stage != "active" or run.id.is_empty(): return false
 	var candidates: Dictionary = {}
 	for owned: OwnedCard in cards:
-		if owned.card_data.is_derived or owned.card_data.card_type == CardData.CardType.RESOURCE: continue
+		if owned.is_temporary_equipment() or owned.card_data.is_derived or owned.card_data.card_type == CardData.CardType.RESOURCE: continue
 		var encoded := _encode_card(owned)
 		if encoded.is_empty(): return false
 		candidates[String(owned.instance_id)] = encoded
@@ -155,10 +219,10 @@ func begin_collection(cards: Array[OwnedCard]) -> bool:
 	return true
 
 
-func finish_run(cards: Array[OwnedCard], inventory: Array, gold: int, outcome: String, day: int, results: Array, protection: int) -> bool:
+func finish_run(cards: Array[OwnedCard], inventory: Array, gold: int, outcome: String, day: int, results: Array, protection: int, event_score: int = 0) -> bool:
 	if run.stage != "active": return run.get("summary", {}).get("outcome", "") == outcome
 	if outcome not in ["cleared", "failed", "abandoned"]: return false
-	var summary := preload("res://scripts/data/run_score_service.gd").calculate(cards, run.exhausted_spells, inventory, gold, outcome, day, results, protection)
+	var summary := preload("res://scripts/data/run_score_service.gd").calculate(cards, run.exhausted_spells, inventory, gold, outcome, day, results, protection, event_score)
 	var eligible: bool = summary.eligible
 	var receipt := "run_end:" + String(run.id)
 	if profile.receipts.has(receipt) or int(summary.total) > 9007199254740991 - int(profile.points): return false
@@ -262,6 +326,14 @@ func _valid_profile(p: Dictionary) -> bool:
 	for key: String in ["tasks", "unlocks", "collection", "receipts", "pack_choices_by_hero", "tutorial"]:
 		if not p.get(key) is Dictionary: return false
 	if not _discovery_set(p.get("discoveries")): return false
+	if p.has("twisted_camp"):
+		var camp: Variant = p.twisted_camp
+		if not camp is Dictionary or camp.get("route") not in ["self", "friends"]: return false
+		if not _integer(camp.get("repairs"), 0, 5) or not camp.get("donations") is Array or camp.donations.size() > 3: return false
+		for rarity: Variant in camp.donations:
+			if not _integer(rarity, 0, 4) or int(rarity) == CardData.Rarity.IV: return false
+		if camp.route == "self" and not camp.donations.is_empty(): return false
+		if camp.route == "friends" and int(camp.repairs) != 0: return false
 	for category: String in ["heroes", "packs", "items", "routes", "growth"]:
 		if not _string_array(p.unlocks.get(category)) or _has_duplicates(p.unlocks[category]): return false
 	for id: Variant in p.tasks:
@@ -274,6 +346,9 @@ func _valid_profile(p: Dictionary) -> bool:
 		if not _string_array(ids) or ids.size() != 3 or _has_duplicates(ids): return false
 	for key: String in ["actually_completed", "skipped", "reward_claimed", "skip_eligible_at_creation"]:
 		if not p.tutorial.get(key) is bool: return false
+	if not _string_array(p.tutorial.get("read_hints", [])) or not p.tutorial.get("hint_texts", {}) is Dictionary: return false
+	for hint: Variant in p.tutorial.get("hint_texts", {}).values():
+		if not hint is String: return false
 	var seen: Dictionary = {}
 	for kind: Variant in p.collection:
 		if not kind is String or not p.collection[kind] is Array or p.collection[kind].size() > SLOTS_PER_KIND: return false
@@ -284,14 +359,30 @@ func _valid_profile(p: Dictionary) -> bool:
 
 
 func _valid_run(r: Dictionary) -> bool:
-	if not r.get("selection") is Array: return false
+	if not r.get("twisted_camp_rested", false) is bool: return false
+	if not r.get("selection") is Array or not _integer(r.get("ally_deaths", 0), 0, 9007199254740991): return false
+	if not r.get("supplies", []) is Array or not r.get("enabled_unlocks", {}) is Dictionary: return false
+	var enabled_unlocks: Dictionary = r.get("enabled_unlocks", {})
+	if not enabled_unlocks.is_empty():
+		for category: String in ["heroes", "packs", "items", "routes", "growth"]:
+			if not _string_array(enabled_unlocks.get(category)): return false
+	for supply: Variant in r.get("supplies", []):
+		if not supply is Dictionary or supply.get("kind") not in ["card_pack", "sticker_pack"] or not supply.get("name") is String: return false
+		if supply.kind == "card_pack":
+			if not _string_array(supply.get("cards")) or supply.cards.is_empty(): return false
+			for id: String in supply.cards:
+				if not ResourceLoader.exists("res://resources/cards/%s.tres" % id): return false
+		else:
+			if not supply.get("stickers") is Array or supply.stickers.size() != 5: return false
+			for sticker: Variant in supply.stickers:
+				if not sticker is Dictionary or not sticker.get("id") is String or sticker.id.is_empty(): return false
 	if not r.get("id") is String or not r.get("hero") is String or r.get("stage") not in ["hub", "active", "summary", "selection", "preview"]: return false
 	if r.has("summary") and not r.summary is Dictionary: return false
 	if r.stage == "summary":
 		var summary: Dictionary = r.get("summary", {})
 		if summary.get("outcome") not in ["cleared", "failed", "abandoned"] or not _integer(summary.get("total"), 0, 9007199254740991): return false
 	if r.stage != "hub" and r.id.is_empty(): return false
-	if not _discovery_set(r.get("pending_discoveries")) or not _string_array(r.get("read_tutorial_hints")): return false
+	if not _discovery_set(r.get("pending_discoveries")) or not _string_array(r.get("read_story_nodes")): return false
 	for key: String in ["tasks", "exhausted_spells", "candidates"]:
 		if not r.get(key) is Dictionary: return false
 	for category: String in ["exhausted_spells", "candidates"]:
@@ -322,7 +413,9 @@ func _valid_summary(summary: Dictionary) -> bool:
 	if summary.outcome != "cleared" and summary.protection != 0: return false
 	if summary.total != (int(summary.base) * int(summary.multiplier_tenths)) / 10: return false
 	if not summary.get("cards") is Array or not summary.get("toolbox") is Array: return false
-	var base: int = int(summary.gold)
+	var event_score: Variant = summary.get("event_score", 0)
+	if not _integer(event_score, 0, 9007199254740991): return false
+	var base: int = int(summary.gold) + int(event_score)
 	for card: Variant in summary.cards:
 		if not card is Dictionary or not card.get("parts") is Dictionary or not card.get("exhausted") is bool: return false
 		for key: String in ["name", "card_id", "instance_id"]:

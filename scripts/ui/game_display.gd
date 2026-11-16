@@ -24,11 +24,13 @@ const PACK_RELIEF_PREVIEW_SCENE: PackedScene = preload("res://scenes/tools/PackR
 const CARD_FONT_LAB_SCENE: PackedScene = preload("res://scenes/tools/CardFontLab.tscn")
 const RARE_SHOP_LAB_SCENE: PackedScene = preload("res://scenes/tools/RareShopLab.tscn")
 const MAIN_SCENE: PackedScene = preload("res://scenes/Main.tscn")
+const CardEffectPopup = preload("res://scripts/ui/card_effect_popup.gd")
 const PROFILE_DATA = preload("res://scripts/data/profile_progress.gd")
 const GALLERY_SCRIPT = preload("res://scripts/ui/gallery_book.gd")
 const SLOT_HUB_SCRIPT = preload("res://scripts/ui/slot_hub.gd")
 const SETTINGS_SCRIPT = preload("res://scripts/ui/game_settings_panel.gd")
 const PREFERENCES_SCRIPT = preload("res://scripts/data/game_preferences.gd")
+const PIXEL_EDGE_AA_SHADER = preload("res://shaders/pixel_edge_aa.gdshader")
 const SAVE_SERVICE = preload("res://scripts/data/run_save_service.gd")
 const START_MENU_SCRIPT = preload("res://scripts/ui/start_menu.gd")
 const SLOT_SERVICE = preload("res://scripts/data/run_slot_service.gd")
@@ -56,11 +58,13 @@ const DISPLAY_MODE_LABELS := {
 var current_display_mode: DisplayMode = DisplayMode.WINDOW_1080P
 var _window_resize_request_serial: int = 0
 var _window_transition_in_progress: bool = false
+var _card_texture_tuner: Control
 var _card_art_tuner: CardArtTuner
 var _battle_lab: BattleLab
 var _attack_effect_lab: AttackEffectLab
 var _pack_effect_tuner: Control
 var _card_font_lab: Control
+var _dice_model_viewer: Control
 var _tuner_source: Control
 var _tuner_previous_process_mode: Node.ProcessMode
 var _tuner_previous_escape_input: bool
@@ -79,7 +83,13 @@ var slot_progress: RefCounted
 var _slot_checkpoint: Dictionary = {}
 var _entering_slot := false
 var _preferences := PREFERENCES_SCRIPT.new()
+var _pixel_edge_aa_material := ShaderMaterial.new()
 var _settings_panel: Control
+var _return_to_tool_settings := false
+var _paused_hover_card: CardView
+var _paused_hover_time := 0.0
+var _paused_hover_popup: CanvasLayer
+var _pointer_in_window := Vector2.INF
 
 
 func _enter_tree() -> void:
@@ -95,11 +105,12 @@ func _ready() -> void:
 	add_child(screen_transition)
 	design_canvas.size = Vector2(DESIGN_SIZE)
 	design_canvas.scale = Vector2.ONE
+	_preferences.path = run_slots.directory.path_join("game_preferences.cfg")
+	_preferences.load_settings()
+	_pixel_edge_aa_material.shader = PIXEL_EDGE_AA_SHADER
 	_layout_render_container()
 	if not resized.is_connected(_on_root_control_resized):
 		resized.connect(_on_root_control_resized)
-	_preferences.path = run_slots.directory.path_join("game_preferences.cfg")
-	_preferences.load_settings()
 	if is_instance_valid(main_screen) and is_instance_valid(main_screen.battle_volume_slider):
 		main_screen.battle_volume_slider.set_value_no_signal(_preferences.volume)
 	preload("res://scripts/battle/battle_audio_service.gd").set_master_volume_percent(_preferences.volume)
@@ -117,6 +128,7 @@ func _ready() -> void:
 	else:
 		_connect_main_screen()
 	var window := get_window()
+	window.mouse_exited.connect(func(): _pointer_in_window = Vector2.INF)
 	get_tree().auto_accept_quit = false
 	window.close_requested.connect(_request_quit)
 	if not window.size_changed.is_connected(_on_root_window_size_changed):
@@ -220,6 +232,7 @@ func _create_run_screen(path: String, restore: bool, staged: bool) -> bool:
 		return false
 	slot_progress = main_screen.profile_progress
 	_connect_main_screen()
+	main_screen.maze_controller.show_task_hint.call_deferred()
 	if staged: main_screen._capture_startup_runtime_snapshot()
 	return true
 
@@ -251,7 +264,7 @@ func start_new_slot_run(staged: bool = false) -> bool:
 
 
 func _request_new_slot_run() -> void:
-	await change_screen(start_new_slot_run.bind(true), true)
+	await change_screen(_open_task_shop.bind(true))
 
 
 func return_to_start_menu() -> void:
@@ -262,6 +275,7 @@ func return_to_start_menu() -> void:
 		main_screen.free()
 		main_screen = null
 	get_tree().paused = false
+	_close_task_shop()
 	_clear_gallery()
 	if is_instance_valid(_slot_progress_panel):
 		_slot_progress_panel.hide()
@@ -310,10 +324,41 @@ func _on_card_pack_presentation_changed(active: bool) -> void:
 	display_mode_option.get_parent().visible = not active and is_instance_valid(main_screen) and main_screen.visible
 
 
+func _process(delta: float) -> void:
+	var card: CardView
+	if _pointer_in_window.is_finite() and is_instance_valid(main_screen) and main_screen.can_hover_paused_battle() and not screen_transition.busy and not is_developer_tool_open():
+		var pointer := render_container.get_global_transform_with_canvas().affine_inverse() * _pointer_in_window
+		var display_controls := display_mode_option.get_parent() as Control
+		if Rect2(Vector2.ZERO, render_container.size).has_point(pointer) and not (display_controls.visible and display_controls.get_global_rect().has_point(_pointer_in_window)):
+			card = main_screen.find_battle_card_at(pointer)
+	if card != _paused_hover_card or card == null:
+		if is_instance_valid(_paused_hover_popup): _paused_hover_popup.hide_card(null, &"paused_battle")
+		_paused_hover_card = card
+		_paused_hover_time = 0.0
+	if card == null: return
+	_paused_hover_time += delta
+	if _paused_hover_time < card.hover_effect_delay_seconds: return
+	if not is_instance_valid(_paused_hover_popup): _paused_hover_popup = CardEffectPopup.shared(get_tree())
+	_paused_hover_popup.show_card(card, null, true)
+
+
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouse:
+		_pointer_in_window = event.position
+	if event is InputEventMouseButton and event.pressed:
+		_paused_hover_time = 0.0
 	if event.is_action_pressed("ui_cancel"):
 		if is_instance_valid(_settings_panel) and _settings_panel.visible:
-			_settings_panel.hide()
+			if not _settings_panel.close_subpage(): _settings_panel.hide()
+			get_viewport().set_input_as_handled()
+			return
+		if is_developer_tool_open():
+			if is_card_art_tuner_open(): change_screen(close_card_art_tuner)
+			elif is_battle_lab_open(): change_screen(close_battle_lab)
+			elif is_attack_effect_lab_open(): change_screen(close_attack_effect_lab)
+			return
+		if is_instance_valid(_task_panel):
+			_close_task_shop()
 			get_viewport().set_input_as_handled()
 			return
 		if is_instance_valid(_gallery_panel):
@@ -452,8 +497,7 @@ func _layout_render_container() -> void:
 	if not is_instance_valid(render_container):
 		return
 	# 根窗口使用 disabled stretch，因此这里的 size 就是真实客户区像素尺寸；
-	# 只把固定 1×内部纹理一次性缩放到客户区。等比整数倍率保留硬像素，
-	# 1080p 等非整数倍率改用线性过滤，避免同一逻辑像素宽度忽大忽小。
+	# 固定 1×内部纹理一次性缩放到客户区。分数倍率默认平滑，也可只在边缘混色。
 	render_container.size = Vector2(INTERNAL_RENDER_SIZE)
 	var render_scale := Vector2(
 		size.x / float(INTERNAL_RENDER_SIZE.x),
@@ -470,6 +514,8 @@ func _layout_render_container() -> void:
 		if _is_uniform_integer_scale(render_scale)
 		else CanvasItem.TEXTURE_FILTER_LINEAR
 	)
+	var use_edge_aa := _preferences.pixel_edge_aa and not render_scale.is_equal_approx(render_scale.round())
+	render_container.material = _pixel_edge_aa_material if use_edge_aa else null
 
 
 static func _is_uniform_integer_scale(render_scale: Vector2) -> bool:
@@ -496,23 +542,65 @@ func _sync_display_mode_from_actual_window() -> void:
 	_select_option_without_signal(current_display_mode)
 
 
-func open_card_art_tuner() -> void:
-	if is_instance_valid(_card_art_tuner):
-		return
+func is_developer_tool_open() -> bool:
+	return is_card_texture_tuner_open() or is_card_art_tuner_open() or is_battle_lab_open() or is_attack_effect_lab_open() or is_pack_effect_tuner_open() or is_card_font_lab_open() or is_instance_valid(_dice_model_viewer)
+
+
+func open_developer_tool(tool: StringName, source: Control = null) -> void:
+	match tool:
+		&"card_texture_tuner": open_card_texture_tuner(source)
+		&"card_art_tuner": open_card_art_tuner(source)
+		&"battle_lab": open_battle_lab(source)
+		&"attack_effect_lab": open_attack_effect_lab(source)
+		&"pack_effect_tuner", &"pack_relief_preview": open_pack_effect_tuner(source, tool == &"pack_relief_preview")
+		&"card_font_lab": open_card_font_lab(source)
+		&"dice_model_viewer": open_dice_model_viewer(source)
+
+
+func _on_settings_tool_requested(tool: StringName) -> void:
+	if screen_transition.busy or is_developer_tool_open(): return
+	_settings_panel.hide()
+	_return_to_tool_settings = true
+	change_screen(open_developer_tool.bind(tool), true)
+
+
+func open_card_texture_tuner(source: Control = null) -> void:
+	if is_developer_tool_open(): return
+	_suspend_tuner_source(source)
+	_card_texture_tuner = preload("res://scenes/tools/CardTextureTuner.tscn").instantiate()
+	_card_texture_tuner.close_requested.connect(func(): change_screen(close_card_texture_tuner))
+	design_canvas.add_child(_card_texture_tuner)
+
+
+func close_card_texture_tuner() -> void:
+	if is_instance_valid(_card_texture_tuner): _card_texture_tuner.queue_free()
+	_card_texture_tuner = null
+	_restore_tuner_source()
+
+
+func is_card_texture_tuner_open() -> bool:
+	return is_instance_valid(_card_texture_tuner)
+
+
+func open_card_art_tuner(source: Control = null) -> void:
+	if is_developer_tool_open(): return
+	_suspend_tuner_source(source)
 	_card_art_tuner = CARD_ART_TUNER_SCENE.instantiate() as CardArtTuner
 	_card_art_tuner.name = "CardArtTuner"
 	_card_art_tuner.card_resource_saved.connect(_on_card_resource_saved)
 	design_canvas.add_child(_card_art_tuner)
 	_card_art_tuner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	main_screen.visible = false
 
 
 func _on_card_resource_saved(card: CardData) -> void:
+	if not is_instance_valid(main_screen): return
 	# 保存后更新现有卡面；准备态重算预览，不重建正在进行的战斗。
 	for view: CardView in get_tree().get_nodes_in_group(&"card_views"):
 		if not main_screen.is_ancestor_of(view) or view.card_data == null or view.card_data.id != card.id: continue
 		if view.card_data != card:
 			view.card_data.display_name = card.display_name
+			view.card_data.background_style = card.background_style
+			view.card_data.background_offsets = card.background_offsets.duplicate()
 		view.set_card_data(view.card_data)
 	if main_screen.current_phase == main_screen.GamePhase.PREPARE:
 		main_screen._refresh_preparation_effect_preview()
@@ -522,51 +610,49 @@ func close_card_art_tuner() -> void:
 	if is_instance_valid(_card_art_tuner):
 		_card_art_tuner.queue_free()
 	_card_art_tuner = null
-	main_screen.visible = true
+	_restore_tuner_source()
 
 
 func is_card_art_tuner_open() -> bool:
 	return is_instance_valid(_card_art_tuner)
 
 
-func open_battle_lab() -> void:
-	if is_instance_valid(_battle_lab):
-		return
+func open_battle_lab(source: Control = null) -> void:
+	if is_developer_tool_open(): return
+	_suspend_tuner_source(source)
 	_battle_lab = BATTLE_LAB_SCENE.instantiate() as BattleLab
 	_battle_lab.name = "BattleLab"
 	design_canvas.add_child(_battle_lab)
 	_battle_lab.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_battle_lab.close_requested.connect(change_screen.bind(close_battle_lab))
-	main_screen.visible = false
 
 
 func close_battle_lab() -> void:
 	if is_instance_valid(_battle_lab):
 		_battle_lab.queue_free()
 	_battle_lab = null
-	main_screen.visible = true
+	_restore_tuner_source()
 
 
 func is_battle_lab_open() -> bool:
 	return is_instance_valid(_battle_lab)
 
 
-func open_attack_effect_lab() -> void:
-	if is_instance_valid(_attack_effect_lab):
-		return
+func open_attack_effect_lab(source: Control = null) -> void:
+	if is_developer_tool_open(): return
+	_suspend_tuner_source(source)
 	_attack_effect_lab = ATTACK_EFFECT_LAB_SCENE.instantiate() as AttackEffectLab
 	_attack_effect_lab.name = "AttackEffectLab"
 	design_canvas.add_child(_attack_effect_lab)
 	_attack_effect_lab.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_attack_effect_lab.close_requested.connect(change_screen.bind(close_attack_effect_lab))
-	main_screen.visible = false
 
 
 func close_attack_effect_lab() -> void:
 	if is_instance_valid(_attack_effect_lab):
 		_attack_effect_lab.queue_free()
 	_attack_effect_lab = null
-	main_screen.visible = true
+	_restore_tuner_source()
 
 
 func is_attack_effect_lab_open() -> bool:
@@ -574,7 +660,7 @@ func is_attack_effect_lab_open() -> bool:
 
 
 func open_pack_effect_tuner(source: Control = null, relief_preview: bool = false) -> void:
-	if is_pack_effect_tuner_open() or is_card_font_lab_open() or is_card_art_tuner_open() or is_battle_lab_open() or is_attack_effect_lab_open(): return
+	if is_developer_tool_open(): return
 	_suspend_tuner_source(source)
 	_pack_effect_tuner = (PACK_RELIEF_PREVIEW_SCENE if relief_preview else PACK_EFFECT_TUNER_SCENE).instantiate()
 	_pack_effect_tuner.close_requested.connect(change_screen.bind(close_pack_effect_tuner), CONNECT_DEFERRED)
@@ -587,10 +673,15 @@ func open_pack_effect_tuner(source: Control = null, relief_preview: bool = false
 
 
 func _suspend_tuner_source(source: Control) -> void:
-	_tuner_source = source if is_instance_valid(source) else main_screen
+	_tuner_source = source
+	if not is_instance_valid(_tuner_source):
+		if is_instance_valid(main_screen) and main_screen.visible: _tuner_source = main_screen
+		elif is_instance_valid(_slot_progress_panel) and _slot_progress_panel.visible: _tuner_source = _slot_progress_panel
+		else: _tuner_source = start_menu
 	_tuner_previous_process_mode = _tuner_source.process_mode
-	_tuner_previous_escape_input = _tuner_source._escape_pause_menu.is_processing_input()
-	_tuner_source._escape_pause_menu.set_process_input(false)
+	if _tuner_source.has_method("_on_escape_pause_menu_requested"):
+		_tuner_previous_escape_input = _tuner_source._escape_pause_menu.is_processing_input()
+		_tuner_source._escape_pause_menu.set_process_input(false)
 	_tuner_source.process_mode = Node.PROCESS_MODE_DISABLED
 	_tuner_source.hide()
 
@@ -606,10 +697,14 @@ func close_pack_effect_tuner() -> void:
 
 func _restore_tuner_source() -> void:
 	_tuner_source.process_mode = _tuner_previous_process_mode
-	_tuner_source._escape_pause_menu.set_process_input(_tuner_previous_escape_input)
+	if _tuner_source.has_method("_on_escape_pause_menu_requested"):
+		_tuner_source._escape_pause_menu.set_process_input(_tuner_previous_escape_input)
 	_tuner_source.show()
 	_tuner_source = null
 	_on_card_pack_presentation_changed(false)
+	if _return_to_tool_settings:
+		_return_to_tool_settings = false
+		open_settings()
 
 
 func is_pack_effect_tuner_open() -> bool:
@@ -617,7 +712,7 @@ func is_pack_effect_tuner_open() -> bool:
 
 
 func open_card_font_lab(source: Control = null) -> void:
-	if is_card_font_lab_open() or is_pack_effect_tuner_open() or is_card_art_tuner_open() or is_battle_lab_open() or is_attack_effect_lab_open(): return
+	if is_developer_tool_open(): return
 	_suspend_tuner_source(source)
 	_card_font_lab = CARD_FONT_LAB_SCENE.instantiate()
 	_card_font_lab.close_requested.connect(change_screen.bind(close_card_font_lab), CONNECT_DEFERRED)
@@ -638,9 +733,25 @@ func is_card_font_lab_open() -> bool:
 	return is_instance_valid(_card_font_lab)
 
 
+func open_dice_model_viewer(source: Control = null) -> void:
+	if is_developer_tool_open(): return
+	_suspend_tuner_source(source)
+	_dice_model_viewer = preload("res://scenes/tools/DiceModelViewer.tscn").instantiate()
+	_dice_model_viewer.close_requested.connect(change_screen.bind(close_dice_model_viewer), CONNECT_DEFERRED)
+	design_canvas.add_child(_dice_model_viewer)
+
+
+func close_dice_model_viewer() -> void:
+	if not is_instance_valid(_dice_model_viewer): return
+	design_canvas.remove_child(_dice_model_viewer)
+	_dice_model_viewer.queue_free()
+	_dice_model_viewer = null
+	_restore_tuner_source()
+
+
 func open_rare_shop() -> bool:
 	if is_instance_valid(_rare_shop): return true
-	if is_card_art_tuner_open() or is_battle_lab_open() or is_attack_effect_lab_open() or is_pack_effect_tuner_open() or is_card_font_lab_open(): return false
+	if is_developer_tool_open(): return false
 	_rare_shop_previous_main_process_mode = main_screen.process_mode
 	_rare_shop_previous_escape_input = main_screen._escape_pause_menu.is_processing_input()
 	main_screen._developer_console.set_open(false)
@@ -717,11 +828,66 @@ func _refresh_slot_progress_panel() -> void:
 	_slot_progress_panel.slot_index = run_slots.selected_slot
 	_slot_progress_panel.new_run_requested.connect(_request_new_slot_run, CONNECT_DEFERRED)
 	_slot_progress_panel.return_requested.connect(change_screen.bind(return_to_start_menu), CONNECT_DEFERRED)
+	_slot_progress_panel.shop_requested.connect(change_screen.bind(_open_task_shop), CONNECT_DEFERRED)
 	_slot_progress_panel.gallery_requested.connect(change_screen.bind(_open_gallery), CONNECT_DEFERRED)
 	_slot_progress_panel.settings_requested.connect(open_settings)
 	_slot_progress_panel.collection_action_requested.connect(_apply_collection_action)
 	_slot_progress_panel.selection_requested.connect(_apply_collection_selection)
 	design_canvas.add_child(_slot_progress_panel)
+
+
+var _task_panel: Control
+
+
+func _open_task_shop(selecting: bool = false) -> void:
+	if slot_progress == null or slot_progress.run.stage != "hub" or is_instance_valid(_task_panel): return
+	_slot_progress_panel.hide()
+	_task_panel = preload("res://scripts/ui/task_shop.gd").new()
+	_task_panel.name = "TaskSelection" if selecting else "TaskShop"
+	_task_panel.progress = slot_progress
+	_task_panel.selecting = selecting
+	_task_panel.return_requested.connect(_close_task_shop, CONNECT_DEFERRED)
+	_task_panel.purchase_requested.connect(_purchase_task)
+	_task_panel.skip_requested.connect(_skip_tutorial)
+	_task_panel.selection_requested.connect(_begin_selected_run, CONNECT_DEFERRED)
+	design_canvas.add_child(_task_panel)
+
+
+func _close_task_shop() -> void:
+	if is_instance_valid(_task_panel):
+		_task_panel.hide()
+		_task_panel.queue_free()
+	_task_panel = null
+	if is_instance_valid(_slot_progress_panel):
+		_slot_progress_panel.refresh_balance()
+		_slot_progress_panel.show()
+
+
+func _purchase_task(id: String) -> void:
+	if slot_progress == null or slot_progress.run.stage != "hub": return
+	var before: Dictionary = slot_progress.capture_state()
+	if not slot_progress.purchase_catalog_task(id): return
+	if not _save_active_run(): slot_progress.restore_state(before)
+	if is_instance_valid(_task_panel): _task_panel.refresh()
+
+
+func _skip_tutorial() -> void:
+	var before: Dictionary = slot_progress.capture_state()
+	if not slot_progress.complete_tutorial(true): return
+	if not _save_active_run(): slot_progress.restore_state(before)
+	_close_task_shop()
+	_refresh_slot_progress_panel()
+
+
+func _begin_selected_run(main_id: String, side_id: String) -> void:
+	if slot_progress == null: return
+	var before: Dictionary = slot_progress.capture_state()
+	if not slot_progress.select_catalog_tasks(main_id, side_id): return
+	if not _save_active_run():
+		slot_progress.restore_state(before)
+		return
+	_close_task_shop()
+	await change_screen(start_new_slot_run.bind(true), true)
 
 
 func _open_gallery() -> void:
@@ -785,12 +951,16 @@ func open_settings() -> void:
 	if not is_instance_valid(_settings_panel):
 		_settings_panel = SETTINGS_SCRIPT.new()
 		_settings_panel.name = "GameSettings"
+		_settings_panel.developer_tools_enabled = true
+		_settings_panel.tool_requested.connect(_on_settings_tool_requested)
 		_settings_panel.text_settings_path = text_settings_path()
 		_settings_panel.closed.connect(func(): _settings_panel.hide())
 		_settings_panel.volume_changed.connect(func(value: float): _settings_panel.show_save_result(set_volume_preference(value)))
 		_settings_panel.display_changed.connect(func(mode: int): _settings_panel.show_save_result(change_display_preference(mode)))
+		_settings_panel.pixel_edge_aa_changed.connect(func(enabled: bool):
+			_settings_panel.show_save_result(set_pixel_edge_aa_preference(enabled)))
 		design_canvas.add_child(_settings_panel)
-	_settings_panel.sync_values(_preferences.volume, current_display_mode)
+	_settings_panel.sync_values(_preferences.volume, current_display_mode, _preferences.pixel_edge_aa)
 	_settings_panel.show()
 	_settings_panel.move_to_front()
 
@@ -807,4 +977,10 @@ func change_display_preference(mode: int) -> Error:
 	apply_display_mode(mode as DisplayMode)
 	if Engine.is_embedded_in_editor(): return ERR_UNAVAILABLE
 	_preferences.display_mode = mode
+	return _preferences.save_settings()
+
+
+func set_pixel_edge_aa_preference(enabled: bool) -> Error:
+	_preferences.pixel_edge_aa = enabled
+	_layout_render_container()
 	return _preferences.save_settings()

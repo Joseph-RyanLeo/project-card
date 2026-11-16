@@ -7,6 +7,20 @@ extends Resource
 
 const RUNE_ENGRAVER_PROGRESS: StringName = &"rune_engraver_wins"
 const RUNE_ENGRAVER_WINS_REQUIRED: int = 2 # 符文刻匠每次元素贴纸奖励需要的累计胜利存活场数
+const SERAPHINA_PROGRESS := &"seraphina_rush_count"
+const SERAPHINA_REQUIRED := 20 # 塞拉菲娜解锁双突击所需的实际友方突击次数
+const NYX_ROADS_PROGRESS := &"nyx_roads"
+const NYX_ROADS_REQUIRED := 16 # 契约奈克斯任务需选中的指定道路次数
+const MISSION_GOAL := &"secret_mission_goal"
+const MISSION_REWARD := &"secret_mission_reward"
+const MISSION_PROGRESS := &"secret_mission_progress"
+const MISSION_DONE := &"secret_mission_done"
+const MISSION_ZEAL := &"secret_mission_zeal"
+enum MissionGoal { KILLS, FULL_SLOTS, PACKS, SPELLS, SCRAPERS, MINING }
+const MISSION_TARGETS := [10, 1, 5, 10, 15, 6] # 六种任务对应的完成门槛
+const MISSION_GOAL_TEXT := ["消灭10个敌人", "佩戴者纹章和符文全满", "打开5个卡包", "打出10次法术", "使用15次刮刀", "开采6张资源卡"]
+const MISSION_REWARD_TEXT := ["50金币", "10个纹章", "2个大卡包", "装备保留，+6/+10", "5个装备", "装备保留，-3行动值、+10热诚", "10个矿物及幽魂矿镐", "4个元素贴纸", "万能和混沌贴纸各一", "本局刮刀无限"]
+const TEMPORARY_EQUIPMENT := &"temporary_equipment"
 const STAT_BASE_VALUE: StringName = &"base_value"
 const STAT_MAX_HEALTH: StringName = &"max_health"
 const STAT_BASE_ARMOR: StringName = &"base_armor"
@@ -96,6 +110,9 @@ func initialize(
 	if instance_rng == null:
 		layout_rng.randomize()
 	if definition != null:
+		if definition.content_effect == &"secret_mission":
+			progress_by_source[MISSION_GOAL] = layout_rng.randi_range(0, MISSION_TARGETS.size() - 1)
+			progress_by_source[MISSION_REWARD] = layout_rng.randi_range(0, MISSION_REWARD_TEXT.size() - 1)
 		if definition.acquisition_action_types.size() > 1 and not definition.has_keyword(&"balance"):
 			resolved_action_type = definition.acquisition_action_types[layout_rng.randi_range(0, definition.acquisition_action_types.size() - 1)]
 		else:
@@ -148,12 +165,25 @@ func set_acquired_action_type(value: int) -> void:
 
 
 func get_effect_text_for_row(row: StringName) -> String:
+	if card_data != null and card_data.content_effect == &"secret_mission" and progress_by_source.has(MISSION_GOAL):
+		var reward := int(progress_by_source.get(MISSION_REWARD, -1))
+		var goal := int(progress_by_source[MISSION_GOAL])
+		if reward >= 0 and reward < MISSION_REWARD_TEXT.size() and goal >= 0 and goal < MISSION_GOAL_TEXT.size():
+			if progress_by_source.has(MISSION_DONE):
+				return "已完成：%s。" % MISSION_REWARD_TEXT[reward]
+			return "任务：%s（%d/%d）。\n奖励：%s。" % [MISSION_GOAL_TEXT[goal], int(progress_by_source.get(MISSION_PROGRESS, 0)), MISSION_TARGETS[goal], MISSION_REWARD_TEXT[reward]]
+
 	if card_data == null:
 		return ""
 	var text := card_data.get_effect_text_for_row(row)
 	if card_data.id == &"rune_engraver":
 		var wins := int(progress_by_source.get(RUNE_ENGRAVER_PROGRESS, 0))
 		text = text.replace("还剩2次", "还剩%d次" % (RUNE_ENGRAVER_WINS_REQUIRED - wins))
+	if card_data.id == &"seraphina_starsinger":
+		var count := clampi(int(progress_by_source.get(SERAPHINA_PROGRESS, 0)), 0, SERAPHINA_REQUIRED)
+		text = text.replace("累计20次友方突击", "累计友方突击 %d/%d" % [count, SERAPHINA_REQUIRED])
+	if card_data.id == &"nyx_contract_demon":
+		text = text.replace("选择16次", "已选择%d/%d次" % [int(progress_by_source.get(NYX_ROADS_PROGRESS, 0)), NYX_ROADS_REQUIRED])
 	if card_data.equipment_durability > 0:
 		text = text.replace("整局剩余10次", "整局剩余%d次" % equipment_durability)
 	return text
@@ -161,6 +191,27 @@ func get_effect_text_for_row(row: StringName) -> String:
 
 func is_valid() -> bool:
 	return not instance_id.is_empty() and card_data != null
+
+
+func tracks_mission(goal: int) -> bool:
+	return card_data != null and card_data.content_effect == &"secret_mission" and int(progress_by_source.get(MISSION_GOAL, -1)) == goal and not progress_by_source.has(MISSION_DONE)
+
+
+func mission_complete() -> bool:
+	var goal := int(progress_by_source.get(MISSION_GOAL, -1))
+	return goal >= 0 and goal < MISSION_TARGETS.size() and tracks_mission(goal) and int(progress_by_source.get(MISSION_PROGRESS, 0)) >= MISSION_TARGETS[goal]
+
+
+func has_full_mission_slots() -> bool:
+	for slot: Dictionary in emblem_slots:
+		if slot.is_empty(): return false
+	for index: int in rune_revealed.size():
+		if not rune_revealed[index] and rune_stickers[index].is_empty(): return false
+	return not rune_revealed.is_empty() and not emblem_slots.is_empty()
+
+
+func is_temporary_equipment() -> bool:
+	return card_data != null and card_data.card_type == CardData.CardType.EQUIPMENT and progress_by_source.get(TEMPORARY_EQUIPMENT, 0) == 1
 
 
 func apply_permanent_growth(stat: StringName, amount: float) -> bool:
@@ -343,7 +394,27 @@ func _all_wound_slot_indices() -> Array[int]:
 func set_wound_slot(slot_index: int, slot_state: Dictionary) -> bool:
 	if slot_index < 0 or slot_index >= wound_slots.size():
 		return false
+	if wound_slots[slot_index].get("locked", false) and not slot_state.get("locked", false):
+		return false
 	wound_slots[slot_index] = slot_state.duplicate(true)
+	return true
+
+
+func has_forbidden_layout() -> bool:
+	return int(progress_by_source.get(&"forbidden_layout", 0)) == 1
+
+
+func apply_forbidden_wounds(states: Array, convert_layout: bool) -> bool:
+	var counts := CardSlotLayoutScript.resolve_counts(card_data, convert_layout or has_forbidden_layout())
+	if states.size() != counts.x: return false
+	if convert_layout:
+		for index: int in emblem_slots.size():
+			set_emblem_slot(index, {})
+		emblem_slots.clear()
+		for index: int in slot_layout.size():
+			if slot_layout[index] == CardSlotLayoutScript.Kind.EMBLEM: slot_layout[index] = CardSlotLayoutScript.Kind.WOUND
+		progress_by_source[&"forbidden_layout"] = 1
+	wound_slots.assign(states.duplicate(true))
 	return true
 
 
@@ -465,8 +536,9 @@ func restore_state(snapshot: Dictionary) -> bool:
 	wound_slots.assign((snapshot.get("wound_slots", []) as Array).duplicate(true))
 	emblem_slots.assign((snapshot.get("emblem_slots", []) as Array).duplicate(true))
 	var restored_layout: Array = snapshot.get("slot_layout", []) as Array
+	var forbidden_layout := int((snapshot.get("progress_by_source", {}) as Dictionary).get(&"forbidden_layout", 0)) == 1
 	slot_layout.assign(
-		(restored_layout if CardSlotLayoutScript.is_valid_layout(card_data, restored_layout) else CardSlotLayoutScript.get_stable_layout(card_data)).duplicate()
+		(restored_layout if CardSlotLayoutScript.is_valid_layout(card_data, restored_layout, forbidden_layout) else CardSlotLayoutScript.get_stable_layout(card_data)).duplicate()
 	)
 	rune_revealed.assign((snapshot.get("rune_revealed", []) as Array).duplicate())
 	rune_scrape_masks.assign(prevalidated_rune_scrape_masks)

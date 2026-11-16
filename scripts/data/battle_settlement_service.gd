@@ -81,6 +81,9 @@ func settle(
 		return _failure("snapshot_restore_failed", battle_id)
 
 	var rollback_collection := owned_collection.capture_state()
+	var expiring_equipment: Array[StringName] = []
+	for item: OwnedCard in owned_collection.get_cards():
+		if item.is_temporary_equipment(): expiring_equipment.append(item.instance_id)
 	var rollback_rewards := reward_state.capture_state()
 	var rollback_resource_board := resource_board_state.capture_state() if resource_board_state != null else {}
 	var growth_applied := 0
@@ -200,9 +203,11 @@ func settle(
 				var actual_delta := reward_state.apply_gold_delta(int((entry.get("parameters", {}) as Dictionary).get("gold_delta", 0)))
 				gold_added += actual_delta
 			BattleRunRewardLedger.KIND_OWNED_CARD_AWARD:
-				var card_id := StringName(String((entry.get("parameters", {}) as Dictionary).get("card_id", "")))
+				var parameters := entry.get("parameters", {}) as Dictionary
+				var card_id := StringName(String(parameters.get("card_id", "")))
 				var card_data := card_registry.get(card_id) as CardData
-				if card_data == null or owned_collection.create_card(card_data) == null:
+				var awarded := owned_collection.create_temporary_equipment(card_data, parameters) if parameters.has("temporary_equipment_growth") else owned_collection.create_card(card_data)
+				if awarded == null:
 					_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 					return _failure("resource_card_award_apply_failed", battle_id)
 				resource_cards_awarded += amount
@@ -233,7 +238,13 @@ func settle(
 				resource_board_state.restore_state(rollback_resource_board, card_registry)
 				return _failure("deployed_resource_consumption_failed", battle_id)
 		resource_board_state.clear_level_resources()
+	var expired_mission_rewards := {}
+	for expired_id: StringName in expiring_equipment:
+		var expired := owned_collection.remove_by_instance_id(expired_id)
+		if expired != null and expired.mission_complete():
+			expired_mission_rewards[String(expired_id)] = int(expired.progress_by_source[OwnedCard.MISSION_REWARD])
 	var random_card_names: Array = []
+	var random_card_awards: Dictionary = {}
 	if random_card_resolver.is_valid():
 		var resolved: Dictionary = random_card_resolver.call()
 		if not bool(resolved.get("success", false)):
@@ -241,6 +252,7 @@ func settle(
 			if resource_board_state != null: resource_board_state.restore_state(rollback_resource_board, card_registry)
 			return _failure(String(resolved.get("reason", "random_card_resolution_failed")), battle_id)
 		random_card_names.assign(resolved.get("cards", []))
+		random_card_awards = resolved.get("awards", {})
 	if not journal.mark_committed(battle_id):
 		_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 		if resource_board_state != null:
@@ -261,6 +273,8 @@ func settle(
 		"gold_added": gold_added,
 		"random_card_requests_queued": random_requests_queued,
 		"random_card_names": random_card_names,
+		"random_card_awards": random_card_awards,
+		"expired_mission_rewards": expired_mission_rewards,
 		"resource_cards_awarded": resource_cards_awarded,
 		"emblem_instances_queued": emblem_instances_queued,
 	}
@@ -312,6 +326,13 @@ func _validate_entries(
 				if owned_card.card_data.equipment_durability <= 0 or owned_card.equipment_durability <= 0: return _failure("invalid_equipment_durability", battle_id)
 			BattleOwnedCardChangeLedger.KIND_DESTROY_CARD:
 				if owned_card.card_data.card_type != CardData.CardType.MINION: return _failure("invalid_destroyed_card", battle_id)
+			BattleOwnedCardChangeLedger.KIND_FORBIDDEN_WOUNDS:
+				var convert: Variant = parameters.get("convert")
+				var wounds: Variant = parameters.get("wounds")
+				if not convert is bool or not wounds is Array or wounds.size() != (owned_card.wound_slots.size() + owned_card.emblem_slots.size() if convert else owned_card.wound_slots.size()):
+					return _failure("invalid_forbidden_wounds", battle_id)
+				for wound: Variant in wounds:
+					if not wound is Dictionary or not _is_valid_slot_state(BattleOwnedCardChangeLedger.KIND_SET_WOUND_SLOT, wound): return _failure("invalid_forbidden_wound", battle_id)
 			BattleOwnedCardChangeLedger.KIND_CONSUME_EQUIPMENT:
 				if (
 					owned_card.card_data.card_type != CardData.CardType.EQUIPMENT
@@ -414,6 +435,8 @@ func _apply_owned_change(
 	var kind := entry.get("kind", &"") as StringName
 	var parameters := entry.get("parameters", {}) as Dictionary
 	match kind:
+		BattleOwnedCardChangeLedger.KIND_FORBIDDEN_WOUNDS:
+			return {"success": owned_card.apply_forbidden_wounds(parameters.wounds, parameters.convert), "applied": 1}
 		BattleOwnedCardChangeLedger.KIND_EQUIPMENT_DURABILITY:
 			owned_card.equipment_durability -= int(parameters.get("amount", 1))
 			return {"success": owned_card.equipment_durability >= 0, "applied": 1}
@@ -475,7 +498,7 @@ func _apply_random_squad_wound_heal(
 		if owned == null:
 			continue
 		for slot_index: int in owned.wound_slots.size():
-			if owned.wound_slots[slot_index].is_empty():
+			if owned.wound_slots[slot_index].is_empty() or owned.wound_slots[slot_index].get("locked", false):
 				continue
 			var slot_key := StringName("%s:wound:%d" % [owned.instance_id, slot_index])
 			if slot_key in (parameters.get("masked_wound_slot_keys", []) as Array):

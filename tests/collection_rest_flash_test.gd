@@ -42,26 +42,32 @@ func _run() -> void:
 			view.set_owned_card(owned)
 			var renderer = view._finish_controller
 			var foil := face in [Appearance.Surface.SILVER, Appearance.Surface.GOLD, Appearance.Surface.RAINBOW, Appearance.Surface.FRACTURED]
-			check((renderer != null and is_instance_valid(renderer._rest_flash) and renderer._rest_flash.visible) == foil, "银／金／彩／碎闪显示静止亮纹")
+			check((renderer != null and is_instance_valid(renderer._rest_flash) and renderer._rest_flash.visible) == (face == Appearance.Surface.FRACTURED), "碎闪使用整卡亮纹，银金彩闪由背景与卡框反光")
 			check(not is_instance_valid(view._collection_hover_surface) and view.find_children("*", "SubViewport", true, false).is_empty(), "未悬停不启用检视或逐卡离屏画布")
 			var visible := (await screen()).get_region(area)
 			grid.blit_rect(visible, Rect2i(Vector2i.ZERO, area.size), Vector2i(face * area.size.x, art * area.size.y))
 			if not foil: continue
-			var light: TextureRect = renderer._rest_flash
-			var mask := light.texture
-			light.visible = false
+			var light: TextureRect = renderer._rest_flash if face == Appearance.Surface.FRACTURED else null
+			var frame_material: ShaderMaterial = renderer._frame_material
+			var mask: Texture2D = light.texture if light != null else null
+			if light != null: light.visible = false
+			else:
+				renderer._frame_material.set_shader_parameter("foil_enabled", false)
+				renderer._background_material.set_shader_parameter("foil_enabled", false)
 			var unlit := (await screen()).get_region(area)
 			check(changed(visible, unlit) > 500, "GPU实际显示未悬停亮面纹路")
-			light.visible = true
 			view._refresh()
-			check(renderer._rest_flash == light and light.texture == mask, "重复刷新复用节点及轮廓遮罩")
+			check((renderer._rest_flash == light and light.texture == mask) if light != null else renderer._frame_material == frame_material, "重复刷新复用晶片遮罩或卡框材质")
 			await hover(view, Vector2(0.7, 0.35))
 			var pool = view._collection_hover_surface
 			check(is_instance_valid(pool) and (not is_instance_valid(pool.card._finish_controller._rest_flash) or not pool.card._finish_controller._rest_flash.visible), "悬停显示层只绘制一次动态亮纹，不叠加静态亮纹")
 			await _motion(Vector2(1270, 700))
 			await create_timer(0.42).timeout
 			var returned := (await screen()).get_region(area)
-			check(not is_instance_valid(view._collection_hover_surface) and changed(visible, returned) == 0, "移开回正后恢复原静止亮纹")
+			var returned_difference := changed(visible, returned)
+			if is_instance_valid(view._collection_hover_surface) or returned_difference > 0:
+				print("REST_RETURN: art=", art, " face=", face, " changed=", returned_difference, " hover=", is_instance_valid(view._collection_hover_surface), " pointer=", frame_material.get_shader_parameter("pointer_force"), " direction=", frame_material.get_shader_parameter("flash_direction_force"))
+			check(not is_instance_valid(view._collection_hover_surface) and returned_difference == 0, "移开回正后恢复原静止亮纹，卡面%d／卡图%d" % [face, art])
 	check(main.ordinary_shop_service.rng.state == random_state, "显示亮纹不消耗玩法随机流")
 	grid.save_png("/private/tmp/project-card-collection-rest-finishes.png")
 	shell.queue_free()

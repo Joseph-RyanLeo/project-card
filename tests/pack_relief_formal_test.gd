@@ -6,6 +6,7 @@ const PackArt = preload("res://scripts/ui/pack_tear_art.gd")
 
 func _run() -> void:
 	create_timer(100).timeout.connect(func(): push_error("正式凹凸与回拉专项超时"); quit(1))
+	PackArt.Settings.load_saved("/private/tmp/project-card-pack-relief-formal-%d.cfg" % OS.get_process_id())
 	shell = DISPLAY.instantiate()
 	main = shell.get_node("RenderContainer/InternalViewport/DesignCanvas/Main")
 	main.short_maze_enabled = false
@@ -30,8 +31,10 @@ func _run() -> void:
 			await click(main._inspection_overlay.get_node("InspectionPackPurchase").get_global_rect().get_center())
 		else:
 			await click(_tile(index).get_global_rect().get_center())
-		await create_timer(0.55).timeout
 		var sequence: CardPackOpening = main._card_pack_opening
+		# 放大动画和背面卡牌逐帧准备都完成后，封口才接收按下事件。
+		while sequence.phase != CardPackOpening.Phase.SEALED or sequence._background_cards.size() < sequence.cards.size():
+			await process_frame
 		var package: InspectionCardSurface = sequence.surface
 		check(package.render_scale == 4.0 and package.scale == Vector2(4, 4), "正式开包4倍光影采样不改变固定4倍显示")
 		check(sequence.tear_art.material.shader == PackArt.RELIEF and not package.effect.get_shader_parameter("use_pack_foil") and not package.effect.get_shader_parameter("use_flash"), "开包内层凹凸与烫金、外层透视无重复扫光")
@@ -89,6 +92,10 @@ func verify_tile(tile: ShopOfferView, tag: String) -> void:
 	if art == null: return
 	check(Vector2(art.source_viewport.size) == art.size and surface.size == art.size, tag + "原图画布、陈列命中及占位尺寸不变")
 	var effect := art.material as ShaderMaterial
+	var small := art.size == Vector2(115, 174)
+	check(bool(effect.get_shader_parameter("use_body_height")) == small and effect.get_shader_parameter("body_height") == (PackArt.SMALL_BODY_HEIGHT if small else PackArt.HEIGHT), tag + "按原生包型使用对应袋身高度")
+	check(not bool(effect.get_shader_parameter("use_center_height")), tag + "普通或定向卡包使用通用袋身")
+	check(is_equal_approx(float(effect.get_shader_parameter("body_strength")), 0.15), tag + "正式袋身默认凹凸为0.15")
 	for entry: Array in [["light_angle_degrees", 60.0], ["light_front", 0.2], ["light_brightness", 0.95], ["light_mouse_influence", 0.8]]:
 		check(is_equal_approx(float(RenderingServer.shader_get_parameter_default(effect.shader.get_rid(), entry[0])), entry[1]), tag + "固定光照参数" + entry[0])
 	check(not surface.effect.get_shader_parameter("use_pack_foil") and not surface.effect.get_shader_parameter("use_flash"), tag + "外层没有重复扫光")
@@ -99,7 +106,7 @@ func verify_tile(tile: ShopOfferView, tag: String) -> void:
 	effect.set_shader_parameter("gold_strength", 0.0)
 	var flat: Image = await image_of(surface.viewport)
 	check(normal.get_data() != flat.get_data() and normal.get_used_rect().get_area() > 100, tag + "实际GPU有凹凸光照且包装非空白")
-	effect.set_shader_parameter("body_strength", 0.65)
+	effect.set_shader_parameter("body_strength", 0.15)
 	effect.set_shader_parameter("gold_strength", 0.45)
 	tile.set_process(true)
 

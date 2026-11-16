@@ -38,7 +38,7 @@ func _run() -> void:
 	check(main.ordinary_shop_open and speech.is_confirming(leave), "首次真实点击离店触发英雄提示并保留商店")
 	check(speech.text_label.text == "临时区域仍有纹章，是否真的要离开" and main.find_child("TemporaryStickerDiscardConfirmation", true, false) == null, "提示使用指定文案，不再弹出原生确认框")
 	check(bag.get_inventory_state() == inventory and main.run_reward_state.gold == gold and main.ordinary_shop_service.rng.state == rng_state, "首次提示不改变库存、金币和商店随机流")
-	check(speech.size.x == 178 and speech.size.y < 142 and speech.get_child(0).texture.resource_path == "res://assets/ui/hero/speech_bubble.png", "底板保留用户178px宽度，并按行数收紧高度")
+	check(speech.size.x == 178 and speech.size.y < 142 and speech._background.texture.resource_path == "res://assets/ui/hero/speech_bubble.png", "底板保留用户178px宽度，并按行数收紧高度")
 	check(speech.mouse_filter == Control.MOUSE_FILTER_IGNORE and speech.text_label.mouse_filter == Control.MOUSE_FILTER_IGNORE, "气泡和文字都不阻挡原有操作")
 	check(speech.get_rect().end.y < main.player_avatar_button.get_global_rect().position.y + speech.HEAD_INSET and Rect2(Vector2.ZERO, main.size).encloses(speech.get_rect()), "气泡默认朝上并保持在720p画布内")
 	await capture("hero-speech-720p")

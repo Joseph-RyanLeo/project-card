@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/gilded_commission/doorboard.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"doorboard"
+display_name = "门板"
+pack_id = &"gilded_commission"
+content_effect = &"doorboard"
+base_value = 4
+cooldown_seconds = 6.0
+max_health = 5
+armor = 4
+runes = Array[int]([0, 1, 2])
+race_type = 7
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(2, 46)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(2, 29)
+})
+effect_text = "每有一个相邻友军被消灭，本卡永久基础生命+1。基础生命高于25时获得遗愿：随机相邻友军本场获得等量生命上限。"

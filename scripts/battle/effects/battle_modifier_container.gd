@@ -1,6 +1,8 @@
 class_name BattleModifierContainer
 extends RefCounted
 
+signal modifier_added(modifier: BattleModifier)
+
 ## 小队的通用修正容器。每一项都保留来源，撤销时不会误删其他效果。
 
 var modifiers: Array[BattleModifier] = []
@@ -14,6 +16,7 @@ func add_modifier(modifier: BattleModifier) -> BattleModifier:
 	modifier.created_order = _next_created_order
 	_next_created_order += 1
 	modifiers.append(modifier)
+	modifier_added.emit(modifier)
 	return modifier
 
 

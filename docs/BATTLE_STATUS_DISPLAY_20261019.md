@@ -2,7 +2,7 @@
 
 ## 整体流程与原因
 
-动员机兵在突击时通过`IronwallRuntime.grant_temporary_emblem()`给相邻友军的`OwnedCard.emblem_slots`写入本场纹章，满槽时可升级。实际战斗随即读取这些槽位，因此效果生效。新建检视卡也会读取当前槽位。
+后勤机器人（2026-11-05与动员机兵交换效果后）在突击时通过`IronwallRuntime.grant_temporary_emblem()`给相邻友军的`OwnedCard.emblem_slots`写入本场纹章，满槽时可升级。实际战斗随即读取这些槽位，因此效果生效。新建检视卡也会读取当前槽位。
 
 战场小卡则复用原来的`CardView`节点。原`set_battle_status_slot_states()`只比较耗尽纹章索引与遮蔽伤势索引；两组索引未变就提前返回，漏掉了实例内部纹章新增、升级、移除，以及同类伤势内容变化。现在每次状态同步都进入已有的完整槽位签名比较；内容相同立即返回，内容改变才更新／复用／删除实际图标。没有增加第二份战斗状态。
 
@@ -10,11 +10,11 @@
 
 ## 关键数据与入口
 
-- `OwnedCard`：原单卡的纹章、伤势、符文与身份。动员的临时新增／升级通过现有`restore_temporary()`撤销，不改战后规则。
+- `OwnedCard`：原单卡的纹章、伤势、符文与身份。后勤机器人的临时新增／升级通过现有`restore_temporary()`撤销，不改战后规则。
 - `BattleSquadState`：本场实际符文元素、遮蔽和有效牌型；控制器另维护纹章耗尽登记。
 - `scripts/ui/card_view.gd`：`set_battle_status_slot_states()`请求核对状态；`_refresh_status_slots()`以完整签名避免重复重建；`copy_runtime_display_state_from()`复制动画快照所需状态。
 - `scripts/main.gd`：`_open_card_inspection()`从实际战斗状态设置检视；`_refresh_inspection_markers()`采用当前有效符文槽和牌型计算高亮。
-- `tests/battle_status_display_consistency_test.gd`：用正式资源和真实主场景开战，检查动员给两个邻居新增／升级、魔像移除、临时纹章撤销与再次新增、余火转火、符文遮蔽、盾牌Ⅲ真实挡伤后耗尽、伤势遮蔽以及快照。
+- `tests/battle_status_display_consistency_test.gd`：用正式资源和真实主场景开战，检查后勤机器人给两个邻居新增／升级、魔像移除、临时纹章撤销与再次新增、余火转火、符文遮蔽、盾牌Ⅲ真实挡伤后耗尽、伤势遮蔽以及快照。
 
 ## Godot／GDScript写法
 

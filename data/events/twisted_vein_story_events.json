@@ -1,0 +1,1046 @@
+{
+  "source_revision": 4997,
+  "appearance": {
+    "so_close": {
+      "floors": [
+        1
+      ],
+      "formal": true
+    },
+    "bald_and_beard": {
+      "floors": [
+        1
+      ],
+      "formal": true,
+      "pack": "twisted_vein"
+    },
+    "repair_mining_camp": {
+      "floors": [
+        1
+      ],
+      "formal": true,
+      "pack": "twisted_vein"
+    },
+    "undead_friends": {
+      "floors": [
+        1
+      ],
+      "formal": true,
+      "pack": "twisted_vein"
+    },
+    "quiet_mining_camp": {
+      "floors": [
+        1
+      ],
+      "formal": true,
+      "pack": "twisted_vein"
+    },
+    "lively_mining_camp": {
+      "floors": [
+        1
+      ],
+      "formal": true,
+      "pack": "twisted_vein"
+    },
+    "magical_mine_lamp": {
+      "floors": [
+        1
+      ],
+      "formal": true,
+      "pack": "twisted_vein"
+    },
+    "mine_collapse": {
+      "floors": [
+        1
+      ],
+      "formal": true,
+      "pack": "twisted_vein"
+    },
+    "underground_river": {
+      "floors": [
+        1
+      ],
+      "formal": true,
+      "pack": "twisted_vein"
+    },
+    "high_risk_mining": {
+      "floors": [
+        1
+      ],
+      "formal": true,
+      "pack": "twisted_vein"
+    }
+  },
+  "events": [
+    {
+      "path_id": "so_close",
+      "kind": "free_event",
+      "name": "一步之遥",
+      "hint": "一步之遥",
+      "reward": "story",
+      "description": "你们刚进入矿脉，就发现一具倒在地上骷髅，看来是想要逃走的矿工，它就差一步就能挖开岩壁出去了，队伍中的气氛因此变得很沉闷",
+      "options": [
+        {
+          "label": "适者生存，拿走它身上的矿镐",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "只有强者才有资格活下去，你和队伍中的成员一起拿走了它身上的矿镐",
+              "source_probability": "-",
+              "effect_text": "获得装备牌“矿镐”",
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "mining_pick",
+                  "unlocked_by": "event"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "安息吧，埋葬这具骷髅",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们挖开泥土安葬了它，在挖掘的时候，发现了几枚金币",
+              "source_probability": "点数 1、2、3、4、5",
+              "effect_text": "获得1-10枚金币",
+              "effects": [
+                {
+                  "kind": "random_gold",
+                  "low": 1,
+                  "high": 10
+                }
+              ],
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ]
+            },
+            {
+              "text": "你们挖开泥土安葬了它，离开的时候大家都觉得脚步轻盈了许多",
+              "source_probability": "点数 6",
+              "effect_text": "获得“天选之子”纹章",
+              "effects": [
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "天选之子"
+                  ],
+                  "count": 1
+                }
+              ],
+              "roll_values": [
+                6
+              ]
+            }
+          ],
+          "roll_sides": 6
+        }
+      ],
+      "fixed_day": 1,
+      "fixed_round": 0
+    },
+    {
+      "path_id": "bald_and_beard",
+      "kind": "free_event",
+      "name": "秃头和胡子",
+      "hint": "秃头和胡子",
+      "reward": "story",
+      "description": "你们进入一间废弃的矮人矿工营地，两个的矮人亡灵正蹲在地上，用一根铁签串着几块锈铁片，凑在炉灶的余烬上烤。铁片已经烧得通红，他们还在翻来覆去地烤，好像真能吃出什么味道。",
+      "options": [
+        {
+          "label": "直接攻击",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们拔出武器，两个亡灵矿工立刻抓起了手边的矿镐。",
+              "source_probability": "-",
+              "effect_text": "获得战斗经验，解锁后续花费金币自行修缮营地（需5次），无额外加成。",
+              "effects": [
+                {
+                  "kind": "mining_camp",
+                  "action": "attack"
+                },
+                {
+                  "kind": "event_battle"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "上前交谈",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们与亡灵交谈了起来，他们一位叫红胡子一位叫秃头，秉承好死不如赖活着的心态在迷宫中打发日子。你们达成了协议，他们会帮忙修缮营地，而你们需要带一些好东西作为交换。",
+              "source_probability": "-",
+              "effect_text": "解锁修缮合作线，需提供3次纹章。",
+              "effects": [
+                {
+                  "kind": "mining_camp",
+                  "action": "cooperate"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "repair_mining_camp",
+      "kind": "free_event",
+      "name": "修缮营地",
+      "hint": "修缮营地",
+      "reward": "story",
+      "description": "宁静的废弃营地，炉灶冷透，石床落满矿尘。需要你自己动手修缮。",
+      "options": [
+        {
+          "label": "花费10金币修缮营地",
+          "condition": "持有≥10金币",
+          "cost": 10,
+          "outcomes": [
+            {
+              "text": "一阵忙碌，废弃的营地有所改善。（废弃的营地终于可以正常使用了）",
+              "source_probability": "-",
+              "effect_text": "进度+1（共5次），最后一次修缮完成后后续在迷宫一层解锁矿工营地事件。",
+              "effects": [
+                {
+                  "kind": "mining_camp",
+                  "action": "repair"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "休息并离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们稍作休息就继续出发。",
+              "source_probability": "-",
+              "effect_text": "下一场战斗所有友方随从获得2点临时最大生命值。",
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "max_health",
+                  "value": 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "undead_friends",
+      "kind": "free_event",
+      "name": "亡灵朋友",
+      "hint": "亡灵朋友",
+      "reward": "story",
+      "description": "红胡子与秃头迎上来，询问你们带没带外面的东西。秃头表示“没带东西也行，说说话解闷闷也挺好”。",
+      "options": [
+        {
+          "label": "提供纹章",
+          "condition": "持有未使用的纹章",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "亡灵收下物品，开始修缮营地。红胡子：“有东西就行。俺们不挑的。”",
+              "source_probability": "-",
+              "effect_text": "进度+1（共3次）。根据提供物品不同，修缮完成后营地获得对应轻微加成",
+              "effects": [
+                {
+                  "kind": "mining_camp",
+                  "action": "donate"
+                }
+              ]
+            }
+          ],
+          "camp_donation": true
+        },
+        {
+          "label": "交流后离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "愉快的交流之后你们告别了亡灵继续出发。",
+              "source_probability": "-",
+              "effect_text": "下一场战斗所有友方随从获得1点强化。",
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "reinforcement",
+                  "value": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "quiet_mining_camp",
+      "kind": "free_event",
+      "name": "冷清的营地",
+      "hint": "冷清的营地",
+      "reward": "story",
+      "description": "营地的炉火还留有余温，铺着兽皮的石床等着新的旅人。",
+      "options": [
+        {
+          "label": "休息并离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们卸下了之前的疲惫重新出发。",
+              "source_probability": "-",
+              "effect_text": "本层的战斗中友方随从获得+1/+2。",
+              "effects": [
+                {
+                  "kind": "mining_camp",
+                  "action": "rest"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "lively_mining_camp",
+      "kind": "free_event",
+      "name": "热闹的营地",
+      "hint": "热闹的营地",
+      "reward": "story",
+      "description": "晃动的炉火映照出两个熟悉的身影，他们正向着你们招手。",
+      "options": [
+        {
+          "label": "休息并离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "愉快的休息与交谈后你们告别的亡灵们。",
+              "source_probability": "-",
+              "effect_text": "本层战斗中友方随从获得+1/+2。根据此前提供的纹章不同获得特殊奖励。",
+              "effects": [
+                {
+                  "kind": "mining_camp",
+                  "action": "rest"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "magical_mine_lamp",
+      "kind": "free_event",
+      "name": "神奇矿灯",
+      "hint": "神奇矿灯",
+      "reward": "story",
+      "description": "矿道壁上挂着一盏的矿灯，淡蓝的荧光勾引着你们。",
+      "options": [
+        {
+          "label": "拿走矿灯",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "获得矿灯鬼火",
+              "source_probability": "1d8 ≥ 5",
+              "effect_text": "获得随从卡矿灯鬼火",
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "mine_lamp_wisp"
+                }
+              ],
+              "roll_values": [
+                5,
+                6,
+                7,
+                8
+              ]
+            },
+            {
+              "text": "矿灯爆开一阵强光让你们心神恍惚。",
+              "source_probability": "1d8 ≤ 4",
+              "effect_text": "随机两名随从受到光血伤势。",
+              "effects": [
+                {
+                  "kind": "mining_lamp_wounds"
+                }
+              ],
+              "roll_values": [
+                1,
+                2,
+                3,
+                4
+              ]
+            }
+          ],
+          "roll_sides": 8
+        },
+        {
+          "label": "离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你克制了冲动继续探索深邃的矿洞。",
+              "source_probability": "-",
+              "effect_text": "-",
+              "effects": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "mine_collapse",
+      "kind": "free_event",
+      "name": "矿难",
+      "hint": "矿难",
+      "reward": "story",
+      "description": "你们正穿过一条看起来还算牢固的矿道，队伍中甚至有人称赞这里的支撑结构相当可靠。但不知是谁无意间碰倒了一根看似牢固实则已经腐朽的支撑木柱。随着一声巨响，整条矿道开始剧烈震动，头顶的岩石接连坠落，你们不得不拼命寻找掩护。",
+      "options": [
+        {
+          "label": "“所有人！带上那该死的帽子！”",
+          "condition": "拥有“矮人的矿工盔”",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们迅速戴上矿工盔，坚固的盔顶挡住了不断坠落的碎石。待震动平息，你们不仅毫发无伤，还在塌落的岩层中发现了一些意外收获。",
+              "source_probability": "-",
+              "effect_text": "获得两张随机资源卡",
+              "effects": [
+                {
+                  "kind": "mine_resources",
+                  "count": 2
+                }
+              ]
+            }
+          ],
+          "requires_card": "dwarven_mining_helmet"
+        },
+        {
+          "label": "“快！拿点你们能用的举到头顶！”",
+          "condition": "拥有至少 3 张防具类装备",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们慌忙举起手中的盾牌与护甲，勉强挡住了接连坠落的碎石。虽然过程十分狼狈，但好在无人受伤，你们甚至还有余力从碎石堆中搜刮一些资源。",
+              "source_probability": "1d10 1–9",
+              "effect_text": "获得两张随机资源卡",
+              "effects": [
+                {
+                  "kind": "mine_resources",
+                  "count": 2
+                }
+              ],
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9
+              ]
+            },
+            {
+              "text": "一块巨石猛地砸向队伍，大多数人及时举起护甲挡住了冲击。虽然那件可怜的装备被砸得粉碎，但至少大家平安无事，还从落石中发现了一些值钱的矿物。",
+              "source_probability": "1d10 = 10",
+              "effect_text": "随机失去一张防具类装备，获得两张随机资源卡",
+              "effects": [
+                {
+                  "kind": "lose_random_armor"
+                },
+                {
+                  "kind": "mine_resources",
+                  "count": 2
+                }
+              ],
+              "roll_values": [
+                10
+              ]
+            }
+          ],
+          "minimum_armor": 3,
+          "roll_sides": 10
+        },
+        {
+          "label": "“去树下躲躲！”",
+          "condition": "拥有纹章“树”，无论是否被装备",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "纹章散发出微弱的光芒，粗壮的树根突然从岩壁中钻出，在你们头顶交织成一道天然的屏障。待矿道平静下来，你们从树根间翻找出了几块不错的矿石。",
+              "source_probability": "1d10 1–9",
+              "effect_text": "获得两张随机资源卡",
+              "effects": [
+                {
+                  "kind": "mine_resources",
+                  "count": 2
+                }
+              ],
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9
+              ]
+            },
+            {
+              "text": "无数树根从岩壁中破土而出，拼命支撑着不断坍塌的矿道。在最后一块巨石落下时，它终于不堪重负，碎成了几片。至少它用自己的牺牲换来了你们的安全，以及几块不错的矿石。",
+              "source_probability": "1d10 = 10",
+              "effect_text": "随机失去一个“树”纹章，获得两张随机资源卡",
+              "effects": [
+                {
+                  "kind": "lose_tree"
+                },
+                {
+                  "kind": "mine_resources",
+                  "count": 2
+                }
+              ],
+              "roll_values": [
+                10
+              ]
+            }
+          ],
+          "requires_sticker": "树",
+          "roll_sides": 10
+        },
+        {
+          "label": "“福尔图娜会保佑我们”",
+          "condition": "拥有装备“余烬空瓶”或纹章“四叶草I/II/III”，无论是否被装备。",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们闭上眼睛，虔诚地向幸运女神祈祷。说来也怪，落石竟恰好避开了所有人，有几块矿石不偏不倚地落在你们脚边。看来女神今天心情不错。",
+              "source_probability": "点数 4",
+              "effect_text": "获得两张随机资源卡",
+              "effects": [
+                {
+                  "kind": "mine_resources",
+                  "count": 2
+                }
+              ],
+              "roll_values": [
+                4
+              ]
+            },
+            {
+              "text": "你们闭上眼睛，虔诚地向幸运女神祈祷。然而女神似乎正忙着别的事情，你们每个人的脑袋都“幸运”地领到了一颗岩石。",
+              "source_probability": "点数 1、2、3",
+              "effect_text": "下一场战斗开始时，所有友军眩晕 2 秒。",
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "sleep",
+                  "value": 2
+                }
+              ],
+              "roll_values": [
+                1,
+                2,
+                3
+              ]
+            }
+          ],
+          "mine_prayer": true,
+          "roll_sides": 4
+        },
+        {
+          "label": "“躲开石头！我们训练过的！”",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们左躲右躲，刚开始还能躲开几颗岩石，直到你看见一颗石头越来越大......",
+              "source_probability": "-",
+              "effect_text": "下一场战斗开始时，所有友军眩晕 2 秒。",
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "sleep",
+                  "value": 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "underground_river",
+      "kind": "free_event",
+      "name": "地下暗河",
+      "hint": "地下暗河",
+      "reward": "story",
+      "description": "一条湍急的暗河横穿矿道，原本架在河上的木桥早已腐朽不堪。",
+      "options": [
+        {
+          "label": "选择一个随从，让其平衡元素力协助队伍渡河",
+          "condition": "拥有随从数量≧1",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们让选中的随从尝试运用元素力量。",
+              "source_probability": "按所选随从的符文判定",
+              "effect_text": "根据实际元素组合结算。",
+              "effects": [
+                {
+                  "kind": "underground_river"
+                }
+              ]
+            }
+          ],
+          "target": true
+        },
+        {
+          "label": "尝试修复桥梁（8金币）",
+          "condition": "拥有≥8金币",
+          "cost": 8,
+          "outcomes": [
+            {
+              "text": "你指挥随从修复了桥梁，也不知道这暂时坚固的桥梁还能挺多久",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "effects": []
+            }
+          ]
+        },
+        {
+          "label": "沿河探索",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们分散开来沿着河岸寻找其他过河方法，好在没过多久就有随从激动地大喊，是一条看似坚固的绳索，你们有惊无险地度过了河",
+              "source_probability": "1d10 1–4",
+              "effect_text": "无事发生",
+              "effects": [],
+              "roll_values": [
+                1,
+                2,
+                3,
+                4
+              ]
+            },
+            {
+              "text": "累了",
+              "source_probability": "1d10 5–10",
+              "effect_text": "下场战斗所有友军获得热诚-2",
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "zeal",
+                  "value": -2
+                }
+              ],
+              "roll_values": [
+                5,
+                6,
+                7,
+                8,
+                9,
+                10
+              ]
+            }
+          ],
+          "roll_sides": 10
+        },
+        {
+          "label": "涉水渡河",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "渡河膈脚",
+              "source_probability": "1d10 = 1",
+              "effect_text": "获得“金币”纹章",
+              "effects": [
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "金币"
+                  ],
+                  "count": 1
+                }
+              ],
+              "roll_values": [
+                1
+              ]
+            },
+            {
+              "text": "渡河膈脚",
+              "source_probability": "1d10 2–3",
+              "effect_text": "随机获得2-5金币",
+              "effects": [
+                {
+                  "kind": "random_gold",
+                  "low": 2,
+                  "high": 5
+                }
+              ],
+              "roll_values": [
+                2,
+                3
+              ]
+            },
+            {
+              "text": "被水冲走",
+              "source_probability": "1d10 4–10",
+              "effect_text": "下场战斗所有友军被眩晕4秒",
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "sleep",
+                  "value": 4
+                }
+              ],
+              "roll_values": [
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10
+              ]
+            }
+          ],
+          "roll_sides": 10
+        },
+        {
+          "label": "听从指引，跟随暗河中的暗流",
+          "condition": "拥有一个“扭曲矿脉”的亡灵随从",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们继续向前。",
+              "source_probability": "-",
+              "effect_text": "进入隐藏关卡",
+              "effects": []
+            }
+          ],
+          "unavailable_reason": "隐藏关卡待补充"
+        }
+      ],
+      "rune_outcomes": [
+        {
+          "text": "*选择的随从*操纵水元素减慢了暗河的流速，同时操纵木元素对木桥进行了简单修补。对元素平衡的领悟提升了。",
+          "effect_text": "选择的随从获得+1热诚、+1生命以及+1护甲"
+        },
+        {
+          "text": "*选择的随从*身上红色的元素能量喷涌，你的随从们身上冒出豆大的汗珠，片刻，整条地下河流竟被蒸干了。你们惊叹着轻松走了过去。",
+          "effect_text": "选择的随从获得永久+2数值"
+        },
+        {
+          "text": "*选择的随从*使用光元素照亮了整条暗河，你们发现旁边竟然有一条看起来很坚固的绳索，你们有惊无险地度过了河",
+          "effect_text": "选择的随从下场战斗获得耀眼"
+        },
+        {
+          "text": "磅礴木元素能量从*选择的随从*身上冒出，木桥上长出数不尽的柳条，柳条的根茎触碰到暗河后，生长速度更是快到超出所有人的预期。直到你们看见所有路被堵住了，柳条才停止了生长。你们耗费了不少时间才清理干净道路",
+          "effect_text": "选择的随从获得+8基础护甲，所有友军下场战斗获得热诚-2"
+        },
+        {
+          "text": "澄澈的水元素能量从*选择的随从*身上升腾，但是除了暗河的水流越来越大之外，没有其他变化，直到河流越来越大，你们再也无法找到陆地落脚",
+          "effect_text": "选择的随从获得+6基础生命值，所有友军下场战斗开时眩晕5秒并受到2伤害"
+        },
+        {
+          "text": "*选择的随从*胡乱地使用自己的元素力，忙活了半天但是好像并没有帮助，好在你趁着他忙碌时候摸黑探索，找到了一条看起来很坚固的绳索，你们有惊无险地度过了河",
+          "effect_text": "选择的随从下场战斗开始时眩晕5秒"
+        }
+      ]
+    },
+    {
+      "path_id": "high_risk_mining",
+      "kind": "free_event",
+      "name": "高危开采",
+      "hint": "高危开采",
+      "reward": "story",
+      "description": "你们屏住呼吸，前方的矿洞简直是个天然的宝库。散落的碎石间铺满高纯度矿石，但十几个毛茸茸的“小山包”正趴在上面呼噜震天。那是由一头体型如小山头的熊祖裂骨带领的兽群。随着它们的呼吸，矿石里的微光化作丝丝缕缕的灵气，被吸进它们的口鼻中。满地都是钱，就看你们有没有命拿了。",
+      "options": [
+        {
+          "label": "潜行拿取矿石·第一次",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你蹑手蹑脚地走过去，从一头小熊的屁股底下抽出了一块上好的灵纹矿。它吧唧了一下嘴，翻了个身，继续睡。",
+              "source_probability": "1d10 1–8",
+              "effect_text": "获得随机3张一级矿石资源",
+              "effects": [
+                {
+                  "kind": "mining_sneak",
+                  "stage": 0
+                }
+              ],
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8
+              ]
+            },
+            {
+              "text": "你刚摸到矿石，裂骨猛地睁开了眼睛，发出一声震耳欲聋的怒吼。整个矿洞的熊瞬间苏醒，双眼通红地朝你们扑来！",
+              "source_probability": "1d10 9–10",
+              "effect_text": "战斗，一张熊祖裂骨与13张随机熊",
+              "effects": [
+                {
+                  "kind": "event_battle"
+                }
+              ],
+              "roll_values": [
+                9,
+                10
+              ]
+            }
+          ],
+          "mining_stage": 0,
+          "roll_sides": 10
+        },
+        {
+          "label": "潜行拿取矿石·第二次",
+          "condition": "已选择过一次",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你胆子大了起来，这次盯上了熊兽王前爪边的一块极品矿。你憋着气，一寸一寸地往外拖。熊兽王的耳朵动了动，你吓得僵在原地。好在它只是打了个响鼻，喷出一团火星。",
+              "source_probability": "1d10 1–6",
+              "effect_text": "获得随机2张二级矿石资源",
+              "effects": [
+                {
+                  "kind": "mining_sneak",
+                  "stage": 1
+                }
+              ],
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            },
+            {
+              "text": "你刚摸到矿石，裂骨猛地睁开了眼睛，发出一声震耳欲聋的怒吼。整个矿洞的熊瞬间苏醒，双眼通红地朝你们扑来！",
+              "source_probability": "1d10 7–10",
+              "effect_text": "战斗，一张熊祖裂骨与13张随机熊",
+              "effects": [
+                {
+                  "kind": "event_battle"
+                }
+              ],
+              "roll_values": [
+                7,
+                8,
+                9,
+                10
+              ]
+            }
+          ],
+          "mining_stage": 1,
+          "roll_sides": 10
+        },
+        {
+          "label": "潜行拿取矿石·第三次",
+          "condition": "已选择过两次",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你的贪欲彻底被点燃了。但熊群周围已经被你拿得只剩些碎渣。你往前凑时，不小心踩到了一根枯骨。极轻微的“咔嚓”一声，。幸运的是身边是巨熊的鼾声震天掩盖了你制造的动静。",
+              "source_probability": "1d10 1–3",
+              "effect_text": "获得随机1张三级矿石资源",
+              "effects": [
+                {
+                  "kind": "mining_sneak",
+                  "stage": 2
+                }
+              ],
+              "roll_values": [
+                1,
+                2,
+                3
+              ]
+            },
+            {
+              "text": "你刚摸到矿石，裂骨猛地睁开了眼睛，发出一声震耳欲聋的怒吼。整个矿洞的熊瞬间苏醒，双眼通红地朝你们扑来！",
+              "source_probability": "1d10 4–10",
+              "effect_text": "战斗，一张熊祖裂骨与13张随机熊",
+              "effects": [
+                {
+                  "kind": "event_battle"
+                }
+              ],
+              "roll_values": [
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10
+              ]
+            }
+          ],
+          "mining_stage": 2,
+          "roll_sides": 10
+        },
+        {
+          "label": "潜行拿取矿石·第四次",
+          "condition": "已选择过三次",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你连呼吸都停了。但这次你刚伸手，却发现一只小熊不知何时醒了，正用乌溜溜的黑眼珠直勾勾地盯着你。你用小熊喜欢的蜂蜜安抚了它，并没吵醒其他巨熊。",
+              "source_probability": "1d10 = 1",
+              "effect_text": "获得随机1张四级矿石资源",
+              "effects": [
+                {
+                  "kind": "mining_sneak",
+                  "stage": 3
+                }
+              ],
+              "roll_values": [
+                1
+              ]
+            },
+            {
+              "text": "你刚摸到矿石，裂骨猛地睁开了眼睛，发出一声震耳欲聋的怒吼。整个矿洞的熊瞬间苏醒，双眼通红地朝你们扑来！",
+              "source_probability": "1d10 2–10",
+              "effect_text": "战斗，一张熊祖裂骨与13张随机熊",
+              "effects": [
+                {
+                  "kind": "event_battle"
+                }
+              ],
+              "roll_values": [
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10
+              ]
+            }
+          ],
+          "mining_stage": 3,
+          "roll_sides": 10
+        },
+        {
+          "label": "见好就收，悄悄撤退",
+          "condition": "至少选择过一次",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你深吸一口气，压制住了内心的贪婪，向队友打了个手势。队伍轻手轻脚地退出了矿洞。身后依然是震天响的呼噜声。",
+              "source_probability": "-",
+              "effect_text": "获得此前的成功获得的的矿石资源",
+              "effects": [
+                {
+                  "kind": "mining_withdraw"
+                }
+              ]
+            }
+          ],
+          "mining_withdraw": true
+        },
+        {
+          "label": "直接发起攻击",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你没耐心玩潜行了，直接拔剑冲锋。裂骨看着你们，缓缓站起了那座肉山。",
+              "source_probability": "-",
+              "effect_text": "战斗，一张熊祖裂骨与13张随机熊",
+              "effects": [
+                {
+                  "kind": "event_battle"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "直接离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "没有直接碰上一群清醒的熊已是福尔图娜的庇佑了，再贪心可没这么好的运气。",
+              "source_probability": "-",
+              "effect_text": "-",
+              "effects": []
+            }
+          ],
+          "initial_mining_only": true
+        },
+        {
+          "label": "让门板去拿",
+          "condition": "拥有门板",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "门板大摇大摆的走了进去，抱起一把矿石扭扭屁股就离开了，裂骨抬了抬眼皮看了一眼翻个身继续打起了呼噜。",
+              "source_probability": "-",
+              "effect_text": "获得随机3张一级矿石资源，随机2张二级矿石资源与1张三级矿石资源",
+              "effects": [
+                {
+                  "kind": "mining_doorboard"
+                }
+              ]
+            }
+          ],
+          "requires_card": "doorboard"
+        }
+      ]
+    }
+  ],
+  "encounters": {
+    "bald_and_beard": {
+      "1": {
+        "front": [
+          "rusted_pickhand",
+          "rusted_pickhand"
+        ],
+        "back": []
+      }
+    }
+  }
+}

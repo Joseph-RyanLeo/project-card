@@ -15,6 +15,7 @@ const KIND_CONSUME_EQUIPMENT: StringName = &"consume_equipment"
 const KIND_HEAL_RANDOM_SQUAD_WOUND: StringName = &"heal_random_squad_wound"
 const KIND_SET_PROGRESS: StringName = &"set_progress"
 const KIND_SET_WOUND_BATTLE_COUNTER: StringName = &"set_wound_battle_counter"
+const KIND_FORBIDDEN_WOUNDS: StringName = &"forbidden_wounds"
 
 var _entries: Array[Dictionary] = []
 
@@ -141,10 +142,13 @@ func record_wound_battle_counter(
 	return true
 
 
-func record_progress_value(owner: BattleEffectOwnerRef, key: StringName, value: int, effect_id: StringName, battle_id: StringName, logical_time_us: int = 0) -> bool:
+func record_progress_value(owner: BattleEffectOwnerRef, key: StringName, value: int, effect_id: StringName, battle_id: StringName, logical_time_us: int = 0, update_existing: bool = false) -> bool:
 	if owner == null or owner.owned_card == null or key.is_empty() or value < 0: return false
 	for entry: Dictionary in _entries:
-		if entry.kind == KIND_SET_PROGRESS and entry.owned_card_instance_id == owner.owned_card_instance_id and entry.parameters.counter_key == key: return false
+		if entry.kind == KIND_SET_PROGRESS and entry.owned_card_instance_id == owner.owned_card_instance_id and entry.parameters.counter_key == key:
+			if not update_existing or entry.effect_id != effect_id or entry.battle_instance_id != battle_id: return false
+			entry.parameters.counter_value = value
+			return true
 	_append_entry(owner, KIND_SET_PROGRESS, effect_id, owner.runtime_id, logical_time_us, battle_id, {"counter_key": key, "counter_value": value})
 	return true
 
@@ -182,7 +186,7 @@ func _append_entry(
 
 func record_content_change(owner: BattleEffectOwnerRef, kind: StringName, parameters: Dictionary, battle_id: StringName) -> bool:
 	if owner == null or owner.owned_card == null or owner.state.battle_summoned: return false
-	if kind not in [KIND_RUNE_ELEMENT, KIND_DESTROY_CARD, KIND_EQUIPMENT_DURABILITY]: return false
+	if kind not in [KIND_RUNE_ELEMENT, KIND_DESTROY_CARD, KIND_EQUIPMENT_DURABILITY, KIND_FORBIDDEN_WOUNDS]: return false
 	if kind != KIND_RUNE_ELEMENT:
 		for entry: Dictionary in _entries:
 			if entry.kind == kind and entry.owned_card_instance_id == owner.owned_card_instance_id: return false

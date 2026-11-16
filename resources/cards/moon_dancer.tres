@@ -18,9 +18,16 @@ armor = 3
 runes = Array[int]([0, 1, 2])
 race_type = 1
 rarity = 2
+background_style = 3
+background_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, -22)
+})
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 2)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(2, 20)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
-&"overframe": Vector2i(1, 27)
+&"overframe": Vector2i(1, 23)
 })
 effect_text = "回响：与相邻友军换位。友军位移后，此卡本场数值+1（单卡冷却0.1秒）。"

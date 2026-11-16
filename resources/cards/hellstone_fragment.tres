@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"hellstone_fragment"
+display_name = "业石碎片"
+pack_id = &"twisted_vein"
+card_type = 1
+equipment_type = 3
+rarity = 2
+keywords = Array[StringName]([&"dazzling"])
+effect_text = "耀眼。造成与受到的伤害翻倍。"

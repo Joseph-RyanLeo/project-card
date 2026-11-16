@@ -1,0 +1,76 @@
+{
+  "读取日期": "2026-11-05",
+  "来源链接": "https://ecnrph3eiw8i.feishu.cn/sheets/TmBns9BTJh8m8FtJuOSc72GFnOd?sheet=QJnggK",
+  "原文": {
+    "revision": 18024,
+    "spreadsheetToken": "TmBns9BTJh8m8FtJuOSc72GFnOd",
+    "valueRange": {
+      "majorDimension": "ROWS",
+      "range": "QJnggK!R19:T30",
+      "revision": 18024,
+      "values": [
+        [
+          null,
+          "类型",
+          "随从"
+        ],
+        [
+          null,
+          "品级",
+          "Ⅳ"
+        ],
+        [
+          null,
+          "种族",
+          "亡灵"
+        ],
+        [
+          null,
+          "行动方式",
+          "魔法"
+        ],
+        [
+          null,
+          "基础数值",
+          2
+        ],
+        [
+          "埃德温·尘灰",
+          "行动冷却",
+          5
+        ],
+        [
+          "🔵🔵",
+          "基础生命值",
+          7
+        ],
+        [
+          "🔴",
+          "基础护甲",
+          0
+        ],
+        [
+          "突击：消灭相邻卡牌，消灭的卡牌不获得伤势转而治愈一个伤势并获得一个随机强化。",
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null
+        ],
+        [
+          "⚪ ⚪ ⚪",
+          null,
+          null
+        ]
+      ]
+    }
+  },
+  "用户确认": "采用此卡；左右相邻友军包括小队和单卡；随机强化更正为随机纹章。"
+}

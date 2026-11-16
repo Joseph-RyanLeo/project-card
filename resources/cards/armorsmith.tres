@@ -17,9 +17,16 @@ max_health = 3
 armor = 3
 runes = Array[int]([4, 0, 2])
 race_type = 2
+background_style = 3
+background_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, -20)
+})
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 1)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-12, 11)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
-&"overframe": Vector2i(-14, 11)
+&"overframe": Vector2i(-14, 12)
 })
 effect_text = "相邻友军每进行一次开采，前排友军获得1点护甲。"

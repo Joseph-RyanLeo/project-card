@@ -29,7 +29,7 @@
 
 - `ResourcePreparationTray` 负责绘制底板、固定六边形布局、禁用格、资源拼图、每格种类图标，统一处理悬停详情、落点解析和预览；绘制层会跨刷新保留，清理预览不修改拖放来源数据。
 - `ResourceBoardState` 保存双方禁用格、部署锚点和抓取偏移，`level_resource_cards` 保存双方本关自动资源；手动资源仍由玩家收藏持有。
-- `Main` 把收藏拖放、板内拖放和点击拾取送入同一落点解析/提交流程，并在开发控制台提供 `resource list`、`resource add <ID或名称>` 与 `resource enemy add <ID或名称>`。
+- `Main` 把收藏拖放、板内拖放和点击拾取送入同一落点解析/提交流程。F2 控制台使用 `card list resource` 查找资源卡，`add card <ID或名称>` 加入本局收藏，`card enemy add <ID或名称>` 部署到敌方资源板。
 - `RunSaveService` 校验手动部署引用收藏、自动部署引用本关容器；schema 5保存双方自动资源及生成标记，迁移保留旧实例，资源板状态往返保存。
 - `BattleResourceState` 保存每个部署资源的战斗生命，不进入随从胜负、存活阵容或阵型注册。`BattleEffectEvent.resource_target` 让普通行动固定扣1、开采按当前剩余生命造成伤害；资源命中不触发直线追击。`BattleRunRewardLedger`、`BattlePermanentGrowthLedger` 与 `BattleOwnedCardChangeLedger` 将战斗期奖励和伤势变化送入原子结算。`RunRewardState.pending_ground_items` 保存溢出的纹章，工具箱面板提供入包、装备和丢弃。成功结算提交后移除部署资源；未部署资源留在收藏。下一关按钮生成新关卡资源状态。
 

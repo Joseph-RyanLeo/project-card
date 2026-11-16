@@ -15,7 +15,7 @@ func load_config() -> bool:
 	return true
 
 
-func build_battle_reward(floor_number: int, won: bool, source_rng: RandomNumberGenerator) -> Dictionary:
+func build_battle_reward(floor_number: int, won: bool, source_rng: RandomNumberGenerator, allow_scraper: bool = true, allow_emblem: bool = true) -> Dictionary:
 	if floor_number < 1 or source_rng == null or config.is_empty():
 		return {"success": false}
 	var next_rng := RandomNumberGenerator.new()
@@ -30,7 +30,9 @@ func build_battle_reward(floor_number: int, won: bool, source_rng: RandomNumberG
 	else:
 		result.gold = int(economy.victory_gold)
 		result.experience = int(experience.victory_base) + (floor_number - 1) * int(experience.victory_per_floor)
-		var weights: Dictionary = economy.drop_weights
+		var weights: Dictionary = economy.drop_weights.duplicate(true)
+		if not allow_scraper: weights.scraper = 0
+		if not allow_emblem: weights.emblem = 0
 		var roll := next_rng.randi_range(1, int(weights.gold) + int(weights.scraper) + int(weights.emblem))
 		if roll <= int(weights.gold):
 			var amount := next_rng.randi_range(int(economy.drop_gold_min), int(economy.drop_gold_max))

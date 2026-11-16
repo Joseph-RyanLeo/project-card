@@ -12,6 +12,10 @@ effect_ids = Array[StringName]([&"sentry_pistol.effect.echo"])
 content_effect = &"sentry_pistol"
 card_type = 1
 equipment_action_delta = 1
+background_style = 3
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 2)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-6, 7)
 effect_text = "本场前2次回响：对随机敌军造成1d6远程伤害。"

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"flickering_lantern"
+display_name = "摇曳青灯"
+pack_id = &"styx_tomb"
+card_type = 1
+rarity = 1
+equipment_type = 4
+equipment_action_delta = 0
+equipment_zeal_delta = 0
+equipment_armor_delta = 2
+content_effect = &"flickering_lantern"
+effect_ids = Array[StringName]([&"flickering_lantern.effect.echo", &"flickering_lantern.effect.last_wish"])
+keywords = Array[StringName]([&"dazzling"])
+effect_text = "耀眼。遗愿：左右相邻友军永久+2生命。触发4次后转换为炽烈青灯。"

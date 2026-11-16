@@ -41,8 +41,9 @@ func _run() -> void:
 		check(view.position == resting and view.get_parent() == original_parent and view._external_lift == 0 and view.rotation == 0, "原卡保持原位置与原父节点，不再跳起或平面轻晃")
 		check(surface.card.get_owned_card() == owned and surface.mouse_filter == Control.MOUSE_FILTER_IGNORE and surface.card.is_snapshot_mode() and view.modulate.a == 0, "显示副本引用同一实例，固定原卡接收输入")
 		check(surface.force.x > 0.2 and surface.force.y < -0.1 and surface.card._finish_controller._art_material.get_shader_parameter("pointer_force") == surface.force, "鼠标位置同时驱动透视与内层罕贵度光照")
-		check(bool(surface.effect.get_shader_parameter("use_flash")) == (owned.surface_finish in [Appearance.Surface.SILVER, Appearance.Surface.GOLD, Appearance.Surface.RAINBOW]) and bool(surface.effect.get_shader_parameter("use_fractured")) == (owned.surface_finish == Appearance.Surface.FRACTURED), "实际卡面工艺在收藏悬停中生效")
-		check(surface.card._finish_controller._overframe_clip.visible == (owned.art_finish == Appearance.Art.OVERFRAME), "超框与普通／全息卡图仍按实例组合")
+		var uses_flash := owned.surface_finish in [Appearance.Surface.SILVER, Appearance.Surface.GOLD, Appearance.Surface.RAINBOW, Appearance.Surface.EMBOSSED, Appearance.Surface.FRACTURED]
+		check(bool(surface.effect.get_shader_parameter("use_flash")) == uses_flash and bool(surface.effect.get_shader_parameter("use_fractured")) == (owned.surface_finish == Appearance.Surface.FRACTURED), "实际卡面工艺在收藏悬停中生效")
+		check((surface.card.art_panel.position == Vector2.ONE and surface.card.art_panel.size == Vector2(97, 134)) == (owned.art_finish == Appearance.Art.OVERFRAME), "超框裁切与普通／全息卡图仍按实例组合")
 		check(surface.viewport.canvas_item_default_texture_filter == Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST, "悬停原画保持最近邻硬像素")
 		await hover(view, Vector2(0.25, 0.65))
 		check(surface.force.x < -0.2 and surface.force.y > 0.1 and view._collection_hover_surface == surface, "卡内移动反向倾斜，复用同一活动画布")

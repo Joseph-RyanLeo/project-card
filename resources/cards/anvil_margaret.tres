@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_card_data")
 id = &"anvil_margaret"
-display_name = "铁砧-玛格丽特"
+display_name = "铁砧玛格丽特"
 pack_id = &"ash_ledger"
 effect_ids = Array[StringName]([&"anvil_margaret.effect.01", &"anvil_margaret.effect.02"])
 keywords = Array[StringName]([&"armor_multiplier", &"zeal", &"same_name_nonstacking"])
@@ -17,9 +17,16 @@ max_health = 8
 armor = 14
 runes = Array[int]([1, 2, 4])
 rarity = 3
+background_style = 3
+background_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, -20)
+})
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 1)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-2, 25)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
-&"overframe": Vector2i(4, 37)
+&"overframe": Vector2i(2, 23)
 })
 effect_text = "友军获得护甲×2；有护甲时热诚-4。"

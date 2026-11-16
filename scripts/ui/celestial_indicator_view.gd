@@ -60,6 +60,13 @@ func get_effect_popup_title() -> String:
 	return CelestialIndicator.NAMES[indicator_data.kind]
 
 func get_effect_popup_text() -> String:
+	if CelestialIndicator.TASK_TARGETS.has(indicator_data.kind):
+		var details := [
+			"每给一名友军实际提供一次正向增益，进度+1。",
+			"耀眼。每场正式战斗全程未阵亡且战后存活，进度+1。",
+			"发出的卡牌与贴纸按卖价计入进度，包含临时补给。",
+		]
+		return "%s\n进度 %d／%d" % [details[indicator_data.kind - CelestialIndicator.Kind.CLEANUP], indicator_data.task_progress, CelestialIndicator.TASK_TARGETS[indicator_data.kind]]
 	return [
 			"基础护甲+8、影蔽；行动时失去影蔽，3秒后恢复，期间再次行动不刷新。",
 			"数值+1、耀眼；遗愿转移给随机友军，并使其本场数值额外+1。",

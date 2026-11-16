@@ -86,7 +86,7 @@ func _run() -> void:
 			var slot: Rect2 = main.emblem_library.get_item_canvas_rect(_ids[previous_count])
 			var icon := sequence._flying[previous_count]
 			var actual := icon.get_global_transform_with_canvas() * icon.pivot_offset
-			check(actual.distance_to(slot.get_center()) < sequence.TOOLBOX_SHAKE + 1.0, "普通纹章或2×2元素贴纸准确落入已保存的真实槽位")
+			check(actual.distance_to(slot.get_center()) < EmblemLibraryView.RECEIPT_SHAKE + 1.0, "普通纹章或2×2元素贴纸准确落入已保存的真实槽位")
 			check(_ids[previous_count] not in main.emblem_library._hidden_item_ids and main.emblem_library._hidden_item_ids.size() == 5 - sequence.stored_count, "只在落槽时显示对应工具箱图标")
 			previous_count = sequence.stored_count
 		await process_frame

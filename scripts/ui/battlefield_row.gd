@@ -50,6 +50,7 @@ const RESERVATION_SWAP_HYSTERESIS: float = 0.5 # 留空换边时过滤亚像素�
 var _drag_enabled: bool = false
 var _drop_enabled: bool = true
 var _prefer_minion: bool = true
+var stacking_allowed: Callable
 # 目标虚影描述放下结果；reservation 则是唯一一块随拖动位置换位的空间预算。
 var _preview_slot: BoardSlot
 var _preview_insert_index: int = -1
@@ -513,8 +514,8 @@ func _preview_equipment_drop(at_position: Vector2, drag_data: Dictionary) -> boo
 		or target_squad == null
 		or target_slot.has_service_ghosts()
 		or (
-			target_squad.get_equipped_item() != null
-			and target_squad.get_equipped_item() != owned_item
+			not target_squad.has_equipped_item(owned_item)
+			and not target_squad.can_equip_item(owned_item)
 		)
 	):
 		_clear_equipment_target_preview()
@@ -951,6 +952,7 @@ func _build_drop_intent(
 
 
 func _can_build_stack_intent(data: Dictionary) -> bool:
+	if stacking_allowed.is_valid() and not stacking_allowed.call(): return false
 	if data.get("kind") == &"card":
 		return true
 	var squad := data.get("squad_data") as SquadData
@@ -1528,6 +1530,7 @@ func _find_slot_at_x(pointer_x: float) -> BoardSlot:
 
 
 func _find_card_stack_target(pointer_x: float, data: Dictionary) -> BoardSlot:
+	if not _can_build_stack_intent(data): return null
 	# 真实拖拽和点击携带都会提供抓取点；缺少该字段的是旧测试或兼容调用，
 	# 继续沿用阶段 4 的鼠标矩形命中，避免把“卡牌左上角=鼠标”误当真实几何。
 	if not data.has("grab_local_position"):
@@ -1675,6 +1678,7 @@ func _find_compact_squad_merge_target(
 	pointer_x: float,
 	data: Dictionary
 ) -> BoardSlot:
+	if not _can_build_stack_intent(data): return null
 	var nearest_target: BoardSlot
 	var nearest_distance := INF
 	var drag_center_x := _get_drag_card_center_x(pointer_x, data)

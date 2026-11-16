@@ -4,6 +4,7 @@ extends RefCounted
 var path := "user://game_preferences.cfg"
 var volume: float = 25.0 # 默认主音量百分比
 var display_mode: int = 1 # 默认1080p窗口，沿用GameDisplay枚举
+var pixel_edge_aa := false
 
 
 func load_settings() -> void:
@@ -11,13 +12,16 @@ func load_settings() -> void:
 	if config.load(path) != OK: return
 	var saved_volume: Variant = config.get_value("settings", "volume", volume)
 	var saved_display: Variant = config.get_value("settings", "display_mode", display_mode)
+	var saved_pixel_edge_aa: Variant = config.get_value("settings", "pixel_edge_aa", false)
 	if (saved_volume is int or saved_volume is float) and is_finite(float(saved_volume)):
 		volume = clampf(float(saved_volume), 0, 100)
 	if saved_display is int and saved_display >= 0 and saved_display <= 3: display_mode = saved_display
+	pixel_edge_aa = saved_pixel_edge_aa is bool and saved_pixel_edge_aa
 
 
 func save_settings() -> Error:
 	var config := ConfigFile.new()
 	config.set_value("settings", "volume", volume)
 	config.set_value("settings", "display_mode", display_mode)
+	config.set_value("settings", "pixel_edge_aa", pixel_edge_aa)
 	return config.save(path)

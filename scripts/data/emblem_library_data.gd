@@ -23,6 +23,8 @@ const RUNE_ELEMENT_BY_ID: Dictionary = {
 
 ## 已确认的无条件静态属性变化。此表只描述属性，不从面向玩家的描述文本推导规则。
 const STATIC_MODIFIERS: Dictionary = {
+	&"奴隶镣铐": {&"base_value": -2, &"base_armor": 2},
+	&"烂面包": {&"max_health": -2},
 	&"长剑": {&"base_value": 1},
 	&"面包": {&"max_health": 2},
 	&"改造": {&"max_health": -1, &"base_armor": 2},
@@ -42,6 +44,8 @@ const STATIC_MODIFIERS: Dictionary = {
 
 # 战斗纹章效果用结构化定义登记；数值不会从卡面或悬停文案解析。
 const BATTLE_EFFECTS: Dictionary = {
+	&"奴隶镣铐": {"slave_shackles": true},
+	&"烂火腿": {"reinforcement": -2},
 	&"火把": {"keyword": &"dazzling"},
 	&"斗篷": {"keyword": &"emblem_shadow", "shadow_duration": 15.0, "release_shadow_on_action": true, "release_shadow_on_damage": true}, # 影蔽持续15秒；行动或实际受伤提前解除
 	&"火腿": {"reinforcement": 2},
@@ -73,6 +77,7 @@ const BATTLE_EFFECTS: Dictionary = {
 
 # 伤势触发也使用结构化定义；它们只在显现伤势槽注册到本场运行时。
 const WOUND_BATTLE_EFFECTS: Dictionary = {
+	&"业火": {"keyword": &"dazzling"},
 	&"脑死亡": {"rush_reinforcement": 8, "echo_sleep_duration": 15.0}, # 回响休眠15秒
 	&"brain_death": {"rush_reinforcement": 8, "echo_sleep_duration": 15.0}, # 兼容稳定ID；回响休眠15秒
 	&"光血": {"keyword": &"dazzling"},
@@ -108,6 +113,9 @@ const WOUND_STATIC_MODIFIERS: Dictionary = {
 }
 
 const DEFINITIONS: Array[Dictionary] = [
+	{"id": &"奴隶镣铐", "name": "奴隶镣铐", "rarity": CardDataScript.Rarity.V, "asset_name": "盾牌Ⅰ"},
+	{"id": &"烂面包", "name": "烂面包", "rarity": CardDataScript.Rarity.I, "asset_name": "面包", "event_only": true},
+	{"id": &"烂火腿", "name": "烂火腿", "rarity": CardDataScript.Rarity.I, "asset_name": "火腿", "event_only": true},
 	{"id": &"火把", "name": "火把", "rarity": CardDataScript.Rarity.I},
 	{"id": &"长剑", "name": "长剑", "rarity": CardDataScript.Rarity.I},
 	{"id": &"面包", "name": "面包", "rarity": CardDataScript.Rarity.I},
@@ -189,7 +197,7 @@ static func get_score_contribution(emblem_id: StringName) -> int:
 static func get_basic_emblem_ids() -> Array[StringName]:
 	var result: Array[StringName] = []
 	for definition: Dictionary in DEFINITIONS:
-		if int(definition.get("rarity", -1)) == CardDataScript.Rarity.I and definition.get("target", "") != "rune":
+		if int(definition.get("rarity", -1)) == CardDataScript.Rarity.I and definition.get("target", "") != "rune" and not definition.get("event_only", false):
 			result.append(definition.get("id", &"") as StringName)
 	return result
 

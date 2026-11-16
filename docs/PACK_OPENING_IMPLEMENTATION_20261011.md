@@ -31,7 +31,9 @@
 
 ## 常用调节参数
 
-当前从 **Esc → 开包特效调整器** 调节。54个参数的默认值、范围、步长与单位集中在[pack_opening_effect_settings.gd](../scripts/ui/pack_opening_effect_settings.gd)的`FIELDS`，不再修改控制器、撕口或光效中的旧常量。保存文件为`user://pack_opening_effects.cfg`。常用键：`auto_tear_seconds`自动撕包、`pack_position_seconds`购买后下移、`burst_seconds`抽出退壳、`tear_shake_pixels`包装4倍画面轻颤、`shake_pixels`与`shake_seconds`画面震动、`beam_width`金光宽度、`halo_radius`光环半径、`collect_seconds`收卡速度、`stack_parallax_x/y`露边幅度。各行都有中文说明。
+2026-11-06：卡面闪纹参数已移至Esc开发工具中的[卡牌纹理调整器](CARD_TEXTURE_TUNER.md)，保存后开包与其他卡牌界面共用；开包调整器继续负责包装、运动、光束和光环。
+
+当前从 **Esc → 开包特效调整器** 调节。参数的默认值、范围、步长与单位集中在[pack_opening_effect_settings.gd](../scripts/ui/pack_opening_effect_settings.gd)的`FIELDS`，不再修改控制器、撕口或光效中的旧常量。保存文件为`user://pack_opening_effects.cfg`。常用键：`auto_tear_seconds`自动撕包、`pack_position_seconds`购买后下移、`burst_seconds`抽出退壳、`tear_shake_pixels`包装4倍画面轻颤、`shake_pixels`与`shake_seconds`画面震动、`beam_width`金光宽度、`halo_radius`光环半径、`collect_seconds`收卡速度、`stack_parallax_x/y`露边幅度。各行都有中文说明。
 
 ## 验证
 
@@ -153,6 +155,8 @@ Apple M4、Godot 4.7.2、真实2K窗口专项计时：修复前购买同步调�
 
 ## 2026-10-12：F2免费开包测试商店
 
+2026-11-14 更新：F2 已移除 `rare shop` 命令。开包特效测试入口为 Esc 菜单中的“开包特效调整器”，其中继续使用内嵌免费测试商店。本节保留旧入口的实现记录。
+
 准备阶段按F2，输入`rare shop`并回车，同一窗口打开“稀有商店 · 开包特效测试”。每次仅提供两个免费大包：灰烬包装的“大普通卡包”固定4张I级＋1张II级，银月包装的“大传奇卡包”固定4张I级＋1张IV级，满足至少一张IV的要求。刷新免费并补回两包；左键购买后沿用真实撕包、金光、抽出、逐张阅览和IV光环。点击离开返回原游戏；商店状态按Esc打开测试商店的暂停菜单，可进入开包特效调整器，开包中的Esc仍沿用工具优先与购买后不可中断的规则。
 
 流程为控制台识别命令→GameDisplay隐藏并停用原Main的处理／Esc输入→加载独立测试Main→免费报价、实际交易与展示→退出恢复原Main。测试卡牌只加入测试收藏，可重复获得同名IV，以便持续测试；临时存档与诊断文件存于跨平台的`user://rare-shop-test-*`，退出清理。正式收藏、金币、商店配置、随机流、迷宫流程和存档不变。
@@ -189,7 +193,7 @@ Apple M4、Godot 4.7.2、真实2K窗口专项计时：修复前购买同步调�
 | 震动 | tear_shake_pixels、tear_frequency_x/y、shake_pixels、shake_seconds、shake_frequency_x/y |
 | 金光 | beam_height、beam_width、normal_height_ratio、normal_width_ratio、beam_layers、beam_taper、beam_outer_alpha、beam_core_alpha、burst_strength、rare_seal_strength、normal_seal_strength、rare_flare_width、normal_flare_width |
 | 光点 | pixel、particle_count、particle_speed、particle_spacing、particle_spread |
-| IV卡 | rare_reveal_seconds、halo_radius、halo_start_ratio、halo_count、halo_point_scale、flash_intensity、stripe_spacing、stripe_width、flash_angle_degrees |
+| IV卡 | rare_reveal_seconds、halo_radius、halo_start_ratio、halo_count、halo_point_scale |
 | 收卡 | collect_seconds、collect_drop、collect_scale、stack_parallax_x/y |
 | 颜色 | gold_r/g/b、core_r/g/b（0～255） |
 

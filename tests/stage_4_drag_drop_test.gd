@@ -494,12 +494,12 @@ func _test_card_art_tuner_preview() -> void:
 		== flash_type_selector.get_selected_id()
 		and not bool(preview_material.get_shader_parameter("use_normal_texture"))
 		and is_zero_approx(float(preview_material.get_shader_parameter("inset")))
-		and is_equal_approx(float(preview_material.get_shader_parameter("stripe_spacing")), 7.0)
-		and is_equal_approx(float(preview_material.get_shader_parameter("stripe_width")), 2.4)
-		and is_equal_approx(float(preview_material.get_shader_parameter("flash_intensity")), 0.32)
+		and is_equal_approx(float(preview_material.get_shader_parameter("stripe_spacing")), CardFinishPreview.SETTINGS.stripe_spacing)
+		and is_equal_approx(float(preview_material.get_shader_parameter("stripe_width")), CardFinishPreview.SETTINGS.stripe_width)
+		and is_equal_approx(float(preview_material.get_shader_parameter("flash_intensity")), CardFinishPreview.SETTINGS.flash_intensity)
 		and not preview_shader_code.contains("character_mask")
-		and preview_shader_code.contains("sample_uv.x * 0.85 + sample_uv.y * 0.55"),
-		"4 倍预览整卡共用 Shader，3D 开关不缩小卡牌，并使用更少、更宽、更弱的光带"
+		and preview_shader_code.contains("card_flash_light("),
+		"4 倍预览整卡共用 Shader，3D 开关不缩小卡牌，并使用统一的全局闪纹参数"
 	)
 	var original_offset: Vector2i = source_card.art_offset
 	tuner.set("preview_art_offset", Vector2i(4, 9))

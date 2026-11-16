@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/gilded_commission/seraphina_starsinger.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"seraphina_starsinger"
+display_name = "“星歌者”塞拉菲娜"
+pack_id = &"gilded_commission"
+content_effect = &"seraphina_starsinger"
+action_type = 2
+base_value = 2
+cooldown_seconds = 5.0
+max_health = 3
+armor = 5
+runes = Array[int]([0, 1, 2])
+race_type = 1
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(9, 41)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(9, 25)
+})
+effect_text = "任务：顶牌且效果生效时，累计20次友方突击（含自己，跨战斗）。奖励：相邻友军的突击触发两次。"

@@ -2,31 +2,45 @@ extends Control
 
 signal close_requested
 
-## 独立样例：两张包装共用鼠标姿态，右侧两张法线分别控制袋身与金纹。
+## 两张包装共用鼠标姿态。右侧复用正式包装素材和光照，可分别调节袋身与印记。
 const Surface = preload("res://scripts/ui/inspection_card_surface.gd")
 const PACK = preload("res://assets/card_ui/shop/ash_ledger_large.png")
 const RELIEF = preload("res://shaders/pack_relief_sample.gdshader")
-const BODY = preload("res://assets/card_ui/shop/relief_sample/body_normal.png")
-const GOLD = preload("res://assets/card_ui/shop/relief_sample/gold_normal.png")
-const HEIGHT = preload("res://assets/card_ui/shop/relief_sample/body_height_input.png")
-const REGIONS = preload("res://assets/card_ui/shop/relief_sample/body_regions.png")
+const PackArt = preload("res://scripts/ui/pack_tear_art.gd")
+const ActionArt = preload("res://scripts/ui/action_card_pack_art.gd")
+const BODY = PackArt.BODY
+const GOLD = PackArt.GOLD
+const HEIGHT = PackArt.HEIGHT
+const REGIONS = PackArt.REGIONS
+const PACK_SAMPLES := [
+	{"label": "灰烬证册 · 大包", "texture": PACK, "detail": "gold_strength"},
+	{"label": "镀金委托 · 小包", "texture": PackArt.GILDED_WRAPPER, "detail": "center_height_strength"},
+	{"label": "灰烬证册 · 小包", "texture": preload("res://assets/card_ui/shop/ash_ledger_small.png")},
+	{"label": "铁壁铭刻 · 小包", "texture": preload("res://assets/card_ui/shop/ironwall_small.png")},
+	{"label": "银月之章 · 小包", "texture": preload("res://assets/card_ui/shop/silvermoon_small.png")},
+	{"label": "近战定向 · 小包", "texture": null},
+]
+const REFERENCE_ORIGIN := Vector2(174, 189) # 左侧大包基准位置，小包按相同中心对齐
+const SAMPLE_ORIGIN := Vector2(870, 189) # 右侧大包基准位置，小包按相同中心对齐
 const VIEW_NAMES := ["材质效果", "高度图 · 越亮越高", "法线 · 当前袋身强度", "素色光照 · 隐藏印刷", "凹凸位置 · 黄高度 / 青脊 / 紫沟"]
 const CANVAS_SIZE := Vector2(1440, 960) # 样例的基准画布尺寸
 const PACK_SCALE := 3.0 # 卡包原生像素放大倍率
-const DEFAULT_BODY := 0.65 # 默认袋身凹凸强度
-const DEFAULT_GOLD := 0.45 # 默认金纹凹凸强度，保持薄压纹而非厚重圆鼓
-const LIGHT_FIELDS := [
-	{"key": "light_angle_degrees", "label": "光源方向", "min": 0.0, "max": 360.0, "step": 1.0, "default": 60.0, "scale": 1.0, "format": "%.0f°", "tip": "光源所在侧：0°右、90°下、180°左、270°上；降低鼠标影响可使用固定方向"}, # 固定光源方位角
-	{"key": "light_front", "label": "正面程度", "min": 0.2, "max": 4.0, "step": 0.05, "default": 0.2, "scale": 1.0, "format": "%.2f", "tip": "越小越贴近表面照射、凹凸对比越强；越大越接近正面照明"}, # 光源正向分量
-	{"key": "light_brightness", "label": "亮度", "min": 0.0, "max": 2.0, "step": 0.05, "default": 0.95, "scale": 1.0, "format": "%.2f×", "tip": "0关灯，1保持原亮度；不影响高度、法线和凹凸位置数据视图"}, # 材质整体亮度倍率
-	{"key": "light_mouse_influence", "label": "鼠标影响", "min": 0.0, "max": 100.0, "step": 1.0, "default": 80.0, "scale": 0.01, "format": "%.0f%%", "tip": "0%使用固定光源方向；100%由鼠标反侧决定方向；中间值平滑混合"}, # 默认80%鼠标反侧、20%固定方向的混合光源
-]
+const Settings = preload("res://scripts/ui/pack_opening_effect_settings.gd")
+const DEFAULT_BODY := Settings.DEFAULT_RELIEF_BODY
+const DEFAULT_GOLD := Settings.DEFAULT_RELIEF_GOLD
+const DEFAULT_SEAL := Settings.DEFAULT_RELIEF_SEAL
+const LIGHT_FIELDS := Settings.RELIEF_LIGHT_FIELDS
 var original: InspectionCardSurface
 var sample: InspectionCardSurface
 var body_slider: HSlider
 var gold_slider: HSlider
 var status: Label
 var view_selector: OptionButton
+var pack_selector: OptionButton
+var _detail_label: Label
+var _save_feedback: Label
+var _detail_parameter := ""
+var _detail_strengths := {"gold_strength": DEFAULT_GOLD, "center_height_strength": DEFAULT_SEAL}
 var lighting_controls: Dictionary = {}
 var lighting_panel: PanelContainer
 var lighting_mode_label: Label
@@ -44,7 +58,7 @@ func _ready() -> void:
 	background.size = CANVAS_SIZE
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
-	_label("灰烬大卡包 · 浅浮雕样例", Vector2(48, 24), 30)
+	_label("卡包凹凸调试", Vector2(48, 24), 30)
 	var back := Button.new()
 	back.name = "CloseReliefPreview"
 	back.text = "返回 · Esc"
@@ -52,18 +66,18 @@ func _ready() -> void:
 	back.size = Vector2(150, 40) # 返回按钮尺寸
 	back.pressed.connect(close_requested.emit)
 	add_child(back)
-	_label("鼠标同步倾斜；双滑块分别调节袋身与金纹。右上切换计算图。", Vector2(48, 69), 20)
+	_label("两侧同步倾斜。右侧可试调袋身、独立印记和灯光。", Vector2(48, 69), 20)
 	_label("现有烫金 · 对照", Vector2(214, 123), 24)
-	_label("袋身 + 金纹 · 法线样例", Vector2(866, 123), 24)
-	original = _pack(Vector2(174, 189))
-	original.effect.set_shader_parameter("use_flash", false)
-	original.effect.set_shader_parameter("use_pack_foil", true)
-	sample = _pack(Vector2(870, 189))
-	sample.effect.shader = RELIEF
-	sample.effect.set_shader_parameter("body_normal", BODY)
-	sample.effect.set_shader_parameter("gold_normal", GOLD)
-	sample.effect.set_shader_parameter("body_height", HEIGHT)
-	sample.effect.set_shader_parameter("body_regions", REGIONS)
+	_label("正式素材 · 凹凸样例", Vector2(866, 123), 24)
+	_label("样包", Vector2(664, 24), 20)
+	pack_selector = OptionButton.new()
+	pack_selector.name = "PackSampleSelector"
+	pack_selector.position = Vector2(732, 18) # 样包选择框位于标题栏右侧
+	pack_selector.size = Vector2(462, 40) # 选择框留足主题和包型的文字宽度
+	for entry: Dictionary in PACK_SAMPLES:
+		pack_selector.add_item(entry.label)
+	pack_selector.item_selected.connect(select_pack)
+	add_child(pack_selector)
 	view_selector = OptionButton.new()
 	view_selector.position = Vector2(1018, 65)
 	view_selector.size = Vector2(374, 38) # 计算图选择框的尺寸
@@ -77,9 +91,17 @@ func _ready() -> void:
 	_build_lighting_panel()
 	_label("袋身凹凸", Vector2(62, 799), 21)
 	body_slider = _slider(Vector2(198, 806), DEFAULT_BODY, "body_strength")
-	_label("金纹压纹", Vector2(754, 799), 21)
-	gold_slider = _slider(Vector2(890, 806), DEFAULT_GOLD, "gold_strength")
+	_detail_label = _label("金纹压纹", Vector2(754, 799), 21)
+	gold_slider = _slider(Vector2(890, 806), DEFAULT_GOLD)
+	gold_slider.value_changed.connect(_set_detail_strength)
 	status = _label("", Vector2(48, 858), 20)
+	var save := Button.new()
+	save.name = "SaveReliefSettings"
+	save.text = "保存"
+	save.position = Vector2(1076, 851) # 保存与恢复默认并排
+	save.size = Vector2(150, 44) # 保存按钮尺寸
+	save.pressed.connect(save_settings)
+	add_child(save)
 	var reset := Button.new()
 	reset.name = "ResetReliefDefaults"
 	reset.text = "恢复默认"
@@ -88,7 +110,14 @@ func _ready() -> void:
 	reset.pressed.connect(reset_defaults)
 	add_child(reset)
 	_label("0 = 关闭该层凹凸 · 原图保留像素取样 · 法线只改变光影", Vector2(48, 914), 18)
-	reset_defaults()
+	_save_feedback = _label("", Vector2(760, 914), 18)
+	var saved := Settings.get_relief_values()
+	_detail_strengths["gold_strength"] = saved.gold_strength
+	_detail_strengths["center_height_strength"] = saved.center_height_strength
+	body_slider.set_value_no_signal(saved.body_strength)
+	for field: Dictionary in LIGHT_FIELDS:
+		lighting_controls[field.key].slider.set_value_no_signal(saved[field.key])
+	select_pack(0)
 
 func _build_lighting_panel() -> void:
 	var panel := PanelContainer.new()
@@ -145,6 +174,7 @@ func _build_lighting_panel() -> void:
 	layout.add_child(help)
 
 func _update_lighting() -> void:
+	_save_feedback.text = ""
 	for field: Dictionary in LIGHT_FIELDS:
 		var slider: HSlider = lighting_controls[field.key].slider
 		var label: Label = lighting_controls[field.key].label
@@ -168,19 +198,59 @@ func reset_lighting() -> void:
 	_update_lighting()
 
 func reset_defaults() -> void:
-	set_strengths(DEFAULT_BODY, DEFAULT_GOLD)
+	_detail_strengths["gold_strength"] = DEFAULT_GOLD
+	_detail_strengths["center_height_strength"] = DEFAULT_SEAL
+	set_strengths(DEFAULT_BODY, float(_detail_strengths.get(_detail_parameter, 0.0)))
 	reset_lighting()
 
-func _pack(origin: Vector2) -> InspectionCardSurface:
-	var art := TextureRect.new()
-	art.texture = PACK
-	art.size = PACK.get_size()
-	art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+func save_settings() -> void:
+	var values := _detail_strengths.duplicate()
+	values["body_strength"] = body_slider.value
+	for field: Dictionary in LIGHT_FIELDS:
+		values[field.key] = lighting_controls[field.key].slider.value
+	var error := Settings.save_relief(values)
+	_save_feedback.text = "已保存 · 正式卡包已应用" if error == OK else "保存失败（%d）· 可重试" % error
+
+func select_pack(index: int) -> void:
+	pack_selector.select(index)
+	var force := sample.force if is_instance_valid(sample) else Vector2.ZERO
+	for surface: InspectionCardSurface in [original, sample]:
+		if is_instance_valid(surface):
+			remove_child(surface)
+			surface.queue_free()
+	var entry: Dictionary = PACK_SAMPLES[index]
+	var wrapper := entry.texture as Texture2D
+	original = _pack(REFERENCE_ORIGIN, wrapper)
+	original.effect.set_shader_parameter("use_flash", false)
+	original.effect.set_shader_parameter("use_pack_foil", true)
+	sample = _pack(SAMPLE_ORIGIN, wrapper)
+	sample.effect = PackArt.create_relief(sample.size, wrapper, RELIEF)
+	sample.material = sample.effect
+	original.set_pointer_force(force)
+	sample.set_pointer_force(force)
+	_detail_parameter = String(entry.get("detail", ""))
+	gold_slider.editable = not _detail_parameter.is_empty()
+	_detail_label.text = "火漆浮雕" if _detail_parameter == "center_height_strength" else ("金纹压纹" if gold_slider.editable else "袋身单层")
+	set_strengths(body_slider.value, float(_detail_strengths.get(_detail_parameter, 0.0)))
+	set_debug_view(view_selector.selected)
+	_update_lighting()
+
+func _pack(origin: Vector2, wrapper: Texture2D) -> InspectionCardSurface:
+	var art: Control
+	if wrapper == null:
+		art = ActionArt.new()
+		art.configure(CardData.ActionType.MELEE)
+	else:
+		var image := TextureRect.new()
+		image.texture = wrapper
+		image.size = wrapper.get_size()
+		image.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		art = image
 	add_child(art)
 	var surface := Surface.new()
 	add_child(surface)
 	surface.setup_art(art, Vector2.ZERO)
-	surface.position = origin
+	surface.position = origin + (Vector2(PACK.get_size()) - surface.size) * PACK_SCALE * 0.5
 	surface.scale = Vector2.ONE * PACK_SCALE
 	surface.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	surface.set_process(false)
@@ -194,17 +264,18 @@ func _label(text: String, origin: Vector2, font_size: int) -> Label:
 	add_child(label)
 	return label
 
-func _slider(origin: Vector2, initial: float, parameter: String) -> HSlider:
+func _slider(origin: Vector2, initial: float, parameter: String = "") -> HSlider:
 	var slider := HSlider.new()
 	slider.position = origin
 	slider.size = Vector2(480, 30) # 每个凹凸滑块的可拖动宽高
 	slider.min_value = 0.0
-	slider.max_value = 2.0 # 浅浮雕试调的强度上限
-	slider.step = 0.05 # 强度调节步长
+	slider.max_value = Settings.RELIEF_MAX_STRENGTH
+	slider.step = Settings.RELIEF_STRENGTH_STEP
 	slider.value = initial
-	slider.value_changed.connect(func(value: float):
-		sample.effect.set_shader_parameter(parameter, value)
-		_update_status())
+	if not parameter.is_empty():
+		slider.value_changed.connect(func(value: float):
+			sample.effect.set_shader_parameter(parameter, value)
+			_update_status())
 	add_child(slider)
 	return slider
 
@@ -212,12 +283,19 @@ func set_strengths(body: float, gold: float) -> void:
 	body_slider.set_value_no_signal(body)
 	gold_slider.set_value_no_signal(gold)
 	sample.effect.set_shader_parameter("body_strength", body_slider.value)
-	sample.effect.set_shader_parameter("gold_strength", gold_slider.value)
+	_set_detail_strength(gold_slider.value)
+
+func _set_detail_strength(value: float) -> void:
+	if not _detail_parameter.is_empty():
+		_detail_strengths[_detail_parameter] = value
+		sample.effect.set_shader_parameter(_detail_parameter, value)
 	_update_status()
 
 func _update_status() -> void:
 	if is_instance_valid(status):
-		status.text = "袋身 %.2f    金纹 %.2f    ｜    %s" % [body_slider.value, gold_slider.value, VIEW_NAMES[view_selector.selected]]
+		_save_feedback.text = ""
+		var detail := "    %s %.2f" % [_detail_label.text, gold_slider.value] if gold_slider.editable else ""
+		status.text = "袋身 %.2f%s    ｜    %s" % [body_slider.value, detail, VIEW_NAMES[view_selector.selected]]
 
 func set_debug_view(index: int) -> void:
 	view_selector.select(index)
@@ -235,7 +313,7 @@ func prepare_close() -> void:
 	set_process(false)
 
 func _input(event: InputEvent) -> void:
-	if get_viewport().is_input_handled() or view_selector.get_popup().visible: return
+	if get_viewport().is_input_handled() or view_selector.get_popup().visible or pack_selector.get_popup().visible: return
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		get_viewport().set_input_as_handled()
 		close_requested.emit()

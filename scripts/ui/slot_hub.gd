@@ -1,6 +1,7 @@
 extends "res://scripts/ui/read_only_card_inspector.gd"
 
 signal new_run_requested
+signal shop_requested
 signal gallery_requested
 signal settings_requested
 signal return_requested
@@ -26,7 +27,7 @@ func _ready() -> void:
 	theme = Style.make_theme()
 	Style.add_background(self)
 	_label(self, "存档 %d · %s" % [slot_index + 1, {"hub": "局外大厅", "summary": "局后总结", "selection": "本次收藏", "preview": "集合预览"}[progress.run.stage]], Vector2(60, 48), 32)
-	_label(self, "积分余额 %d" % progress.profile.points, Vector2(64, 100), 22)
+	_label(self, "积分余额 %d" % progress.profile.points, Vector2(64, 100), 22).name = "PointsBalance"
 	var menu := VBoxContainer.new()
 	menu.position = Vector2(60, 190) # 左栏操作起点
 	menu.add_theme_constant_override("separation", 14) # 左栏操作间距
@@ -34,9 +35,7 @@ func _ready() -> void:
 	if progress.run.stage == "hub":
 		Style.button(menu, "开始新一局", "NewRunButton", new_run_requested.emit)
 		Style.button(menu, "展览馆", "GalleryButton", gallery_requested.emit)
-		var shop := Style.button(menu, "迷宫商店", "MazeShopButton", Callable())
-		shop.disabled = true
-		shop.tooltip_text = "尚未开放"
+		Style.button(menu, "迷宫商店", "MazeShopButton", shop_requested.emit)
 		Style.button(menu, "设置", "HubSettingsButton", settings_requested.emit)
 	elif progress.run.stage == "summary":
 		_build_summary(menu)
@@ -75,6 +74,8 @@ func _build_summary(menu: Control) -> void:
 	var text := "基础分 %d × 倍率 %.1f → %d\n已完成 %d 天 · Boss／半层通关 %d 次\n通关剩余保护 %d" % [int(summary.get("base", 0)), float(summary.get("multiplier_tenths", 10)) / 10.0, int(summary.get("total", 0)), int(summary.get("completed_days", 0)), int(summary.get("bosses", 0)), int(summary.get("protection", 0))]
 	if not summary.get("eligible", true): text += "\n前两天主动放弃不计分、不可选卡；已实际获得的发现已保存。"
 	_label(self, text, Vector2(420, 282), 20)
+	if progress.run.tasks.get("main", {}).get("id", "") not in ["", "tutorial"] and progress.run.tasks.main.completed:
+		Style.button(menu, "任务结尾剧情", "TaskConclusionButton", _show_task_conclusion)
 	Style.button(menu, "查看得分详情", "ScoreDetailsButton", func(): _details.visible = not _details.visible)
 	Style.button(menu, "本次收藏", "SummaryCollectionButton", collection_action_requested.emit.bind(&"show_selection"))
 	_details = ScrollContainer.new()
@@ -115,6 +116,8 @@ func _build_summary(menu: Control) -> void:
 		_score_icon(picture, texture)
 	var gold_picture := _score_tile(rows, "剩余金币 · %d\n1:1计入基础积分" % int(summary.get("gold", 0)))
 	_score_icon(gold_picture, preload("res://assets/ui/board_revision_20261019/gold_icon.png"))
+	var event_score := int(summary.get("event_score", 0))
+	if event_score > 0: _score_tile(rows, "事件奖励 · %d\n计入基础积分" % event_score)
 	_details.hide()
 
 
@@ -391,3 +394,28 @@ func _remove_choice(id: String) -> void:
 
 func _inspect(id: String) -> void:
 	inspect_card(_cells[id].view, _decode(progress.run.candidates[id]))
+
+
+func _show_task_conclusion() -> void:
+	var dialog := AcceptDialog.new()
+	var task := TaskCatalog.get_task(TaskCatalog.selected(progress, "main"))
+	dialog.title = task.source["名称"] + " · 任务完成"
+	dialog.theme = theme
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(20, 16) # 任务结尾正文留白
+	scroll.size = Vector2(900, 300) # 任务结尾长篇剧情滚动范围
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	dialog.add_child(scroll)
+	var label := Label.new()
+	label.text = String(task.source["进程描述"]).split("任务完成：")[-1]
+	label.custom_minimum_size.x = 870 # 正文宽度留出滚动条
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	scroll.add_child(label)
+	add_child(dialog)
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	Style.popup_for_display(dialog, Vector2i(960, 410)) # 任务结尾弹窗尺寸
+
+
+func refresh_balance() -> void:
+	if is_node_ready(): (get_node("PointsBalance") as Label).text = "积分余额 %d" % int(progress.profile.points)

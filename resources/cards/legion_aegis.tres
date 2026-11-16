@@ -14,6 +14,10 @@ rarity = 2
 equipment_type = 2
 equipment_zeal_delta = -2
 equipment_armor_delta = 2
+background_style = 3
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 2)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-21, 14)
 effect_text = "保护2；友军失去所有保护时，对随机敌军造成2无类型伤害。"

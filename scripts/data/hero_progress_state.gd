@@ -5,6 +5,7 @@ extends RefCounted
 ## 经验曲线必须由正式配置传入，不能用测试数值补齐缺失的设计。
 const TALENT_LEVELS: Array[int] = [1, 4, 7, 10]
 
+var progression_enabled := true
 var experience: int = 0
 var level: int = 1
 var selected_talents: Dictionary = {}
@@ -15,7 +16,7 @@ var _level_thresholds: Array[int] = []
 var _talent_choices: Dictionary = {}
 
 
-func initialize(level_thresholds: Array[int], talent_choices: Dictionary) -> bool:
+func initialize(level_thresholds: Array[int], talent_choices: Dictionary, enable_progression: bool = true) -> bool:
 	if level_thresholds.size() < TALENT_LEVELS.back() or level_thresholds[0] != 0:
 		return false
 	for index: int in range(1, level_thresholds.size()):
@@ -36,16 +37,17 @@ func initialize(level_thresholds: Array[int], talent_choices: Dictionary) -> boo
 		validated_choices[str(talent_level)] = ids
 	_level_thresholds.assign(level_thresholds)
 	_talent_choices = validated_choices
+	progression_enabled = enable_progression
 	experience = 0
 	level = 1
 	selected_talents.clear()
-	pending_talent_levels.assign([1])
+	pending_talent_levels.assign([1] if progression_enabled else [])
 	committed_experience_awards.clear()
 	return true
 
 
 func grant_experience(award_id: String, amount: int) -> bool:
-	if _level_thresholds.is_empty() or award_id.is_empty() or amount < 0:
+	if not progression_enabled or _level_thresholds.is_empty() or award_id.is_empty() or amount < 0:
 		return false
 	if award_id in committed_experience_awards:
 		return false
@@ -65,7 +67,7 @@ func get_pending_choices() -> Array[String]:
 
 
 func choose_talent(talent_id: String) -> bool:
-	if pending_talent_levels.is_empty() or talent_id not in get_pending_choices():
+	if not progression_enabled or pending_talent_levels.is_empty() or talent_id not in get_pending_choices():
 		return false
 	var talent_level: int = pending_talent_levels.pop_front()
 	selected_talents[str(talent_level)] = talent_id
@@ -90,6 +92,7 @@ func get_next_level_experience_required() -> int:
 
 func capture_state() -> Dictionary:
 	return {
+		"progression_enabled": progression_enabled,
 		"experience": experience,
 		"level": level,
 		"selected_talents": selected_talents.duplicate(true),
@@ -101,6 +104,8 @@ func capture_state() -> Dictionary:
 func restore_state(snapshot: Dictionary) -> bool:
 	if _level_thresholds.is_empty():
 		return false
+	var saved_enabled: Variant = snapshot.get("progression_enabled", true)
+	if not saved_enabled is bool: return false
 	var saved_experience: Variant = snapshot.get("experience")
 	var saved_level: Variant = snapshot.get("level")
 	var saved_selected: Variant = snapshot.get("selected_talents")
@@ -112,6 +117,7 @@ func restore_state(snapshot: Dictionary) -> bool:
 		return false
 	if not saved_selected is Dictionary or not saved_pending is Array or not saved_awards is Array:
 		return false
+	if not saved_enabled and (int(saved_experience) != 0 or int(saved_level) != 1 or not saved_selected.is_empty() or not saved_pending.is_empty() or not saved_awards.is_empty()): return false
 	var candidate_selected: Dictionary = {}
 	var candidate_pending: Array[int] = []
 	var selection_gap := false
@@ -123,7 +129,7 @@ func restore_state(snapshot: Dictionary) -> bool:
 			continue
 		if not saved_selected.has(key):
 			selection_gap = true
-			candidate_pending.append(talent_level)
+			if saved_enabled: candidate_pending.append(talent_level)
 			continue
 		var talent_id: Variant = saved_selected[key]
 		if selection_gap or not talent_id is String or talent_id not in _talent_choices[key]:
@@ -140,6 +146,7 @@ func restore_state(snapshot: Dictionary) -> bool:
 			return false
 		candidate_awards.append(award_id)
 	# 全部验证通过后一次替换；损坏存档不能污染当前本局状态。
+	progression_enabled = saved_enabled
 	experience = int(saved_experience)
 	level = int(saved_level)
 	selected_talents = candidate_selected
@@ -159,6 +166,7 @@ func _level_for_experience(amount: int) -> int:
 
 func _rebuild_pending_talent_levels() -> void:
 	pending_talent_levels.clear()
+	if not progression_enabled: return
 	for talent_level: int in TALENT_LEVELS:
 		if talent_level <= level and not selected_talents.has(str(talent_level)):
 			pending_talent_levels.append(talent_level)

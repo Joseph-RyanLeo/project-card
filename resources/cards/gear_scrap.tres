@@ -8,10 +8,12 @@ id = &"gear_scrap"
 display_name = "齿轮废料"
 pack_id = &"ironwall_inscription"
 content_effect = &"gear_scrap"
-card_type = 3
-rarity = 0
-effect_text = "收获：为随机一名无装备友军提供一件本场临时装备。"
 is_derived = true
-resource_type = 2
+card_type = 3
 max_health = 2
-armor = 0
+resource_type = 2
+background_style = 3
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 2)
+})
+effect_text = "收获：为随机一名无装备友军提供一件本场临时装备。"

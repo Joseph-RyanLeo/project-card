@@ -158,6 +158,8 @@ static func _build_card(spec: Dictionary, stable_id: String) -> CardData:
 	card.action_type = clampi(int(spec.get("action", CardData.ActionType.MELEE)), 0, CardData.ActionType.size() - 1) as CardData.ActionType
 	var visual_template := ACTION_VISUAL_TEMPLATES[card.action_type]
 	card.background_texture = visual_template.background_texture
+	card.background_style = visual_template.background_style
+	card.background_offsets = visual_template.background_offsets.duplicate()
 	card.art_texture = visual_template.art_texture
 	card.art_normal_texture = visual_template.art_normal_texture
 	card.art_offset = visual_template.art_offset

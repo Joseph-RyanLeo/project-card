@@ -13,10 +13,21 @@ func build(path: Dictionary, registry: Dictionary, revealed_count: int, emblem_c
 		var used_units := 0
 		for entry: Variant in path[region]:
 			var config: Dictionary = {"cards": [entry]} if entry is String else entry
+			var wounds: Array = config.get("wounds", [])
+			if not wounds.is_empty() and config.cards.size() != 1: return {}
 			var squad: SquadData = null
 			for id: String in config.cards:
 				var owned := _create_card(id, CardData.CardType.MINION, collection, registry, rng)
 				if owned == null: return {}
+				for index: int in wounds.size():
+					var wound_id := String(wounds[index])
+					if not EmblemLibraryData.get_wound_definitions().any(func(wound: Dictionary): return wound.id == StringName(wound_id)):
+						return {}
+					var level := 3 if wound_id.ends_with("Ⅲ") else (2 if wound_id.ends_with("Ⅱ") else 1)
+					if not owned.set_wound_slot(index, {
+						"wound_id": StringName(wound_id), "level": level, "temporary": false,
+						"instance_id": StringName("%s:wound:%d" % [owned.instance_id, index]), "source": "encounter",
+					}): return {}
 				var slots: Array[int] = []
 				for slot_index: int in owned.rune_revealed.size(): slots.append(slot_index)
 				for index: int in mini(revealed_count, slots.size()):

@@ -1,0 +1,393 @@
+{
+  "说明": "D3-4第二层独立遭遇初版：使用已实现的迷宫卡牌与新阵容，基础数值继续来自CardData；不重复第一层路径。强度留待实际连续挑战调整。",
+  "enemies": [
+    {
+      "path_id": "floor2_1_0",
+      "kind": "battle",
+      "hint": "墓门守卫在残破石阶前列阵。",
+      "first_day": 9,
+      "last_day": 9,
+      "front": [
+        "guard_remains",
+        "rusted_pickhand"
+      ],
+      "back": [
+        "mine_lamp_wisp"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_1_1",
+      "kind": "battle",
+      "hint": "冥河冷雾中浮现幽灵。",
+      "first_day": 9,
+      "last_day": 9,
+      "front": [
+        "guard_remains",
+        "crystal_skin_sentry"
+      ],
+      "back": [
+        "subterranean_blindfish"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_1_2",
+      "kind": "battle",
+      "hint": "墓道深处的守军封住去路。",
+      "first_day": 9,
+      "last_day": 9,
+      "front": [
+        "rusted_pickhand",
+        "minecart_soul"
+      ],
+      "back": [
+        "mine_wailer"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_2_0",
+      "kind": "battle",
+      "hint": "墓门守卫在残破石阶前列阵。",
+      "first_day": 10,
+      "last_day": 10,
+      "front": [
+        "guard_remains",
+        "rusted_pickhand"
+      ],
+      "back": [
+        "mine_lamp_wisp"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_2_1",
+      "kind": "battle",
+      "hint": "冥河冷雾中浮现幽灵。",
+      "first_day": 10,
+      "last_day": 10,
+      "front": [
+        "guard_remains",
+        "crystal_skin_sentry"
+      ],
+      "back": [
+        "subterranean_blindfish"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_2_2",
+      "kind": "battle",
+      "hint": "墓道深处的守军封住去路。",
+      "first_day": 10,
+      "last_day": 10,
+      "front": [
+        "rusted_pickhand",
+        "minecart_soul"
+      ],
+      "back": [
+        "mine_wailer"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_3_0",
+      "kind": "battle",
+      "hint": "墓门守卫在残破石阶前列阵。",
+      "first_day": 11,
+      "last_day": 11,
+      "front": [
+        "guard_remains",
+        "crystal_skin_sentry",
+        "rusted_pickhand"
+      ],
+      "back": [
+        "mine_wailer"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_3_1",
+      "kind": "battle",
+      "hint": "冥河冷雾中浮现幽灵。",
+      "first_day": 11,
+      "last_day": 11,
+      "front": [
+        "crystal_skin_sentry",
+        "rockwall_tongue_lizard"
+      ],
+      "back": [
+        "mining_disaster_wraith"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_3_2",
+      "kind": "battle",
+      "hint": "墓道深处的守军封住去路。",
+      "first_day": 11,
+      "last_day": 11,
+      "front": [
+        "guard_remains",
+        "guard_remains",
+        "minecart_soul"
+      ],
+      "back": [
+        "mine_lamp_wisp",
+        "subterranean_blindfish"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_4_0",
+      "kind": "battle",
+      "hint": "墓门守卫在残破石阶前列阵。",
+      "first_day": 12,
+      "last_day": 12,
+      "front": [
+        "guard_remains",
+        "crystal_skin_sentry",
+        "rusted_pickhand"
+      ],
+      "back": [
+        "mine_wailer"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_4_1",
+      "kind": "battle",
+      "hint": "冥河冷雾中浮现幽灵。",
+      "first_day": 12,
+      "last_day": 12,
+      "front": [
+        "crystal_skin_sentry",
+        "rockwall_tongue_lizard"
+      ],
+      "back": [
+        "mining_disaster_wraith"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_4_2",
+      "kind": "battle",
+      "hint": "墓道深处的守军封住去路。",
+      "first_day": 12,
+      "last_day": 12,
+      "front": [
+        "guard_remains",
+        "guard_remains",
+        "minecart_soul"
+      ],
+      "back": [
+        "mine_lamp_wisp",
+        "subterranean_blindfish"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_5_0",
+      "kind": "battle",
+      "hint": "墓门守卫在残破石阶前列阵。",
+      "first_day": 13,
+      "last_day": 13,
+      "front": [
+        "crystal_skin_sentry",
+        "guard_remains",
+        "minecart_soul"
+      ],
+      "back": [
+        "mining_disaster_wraith",
+        "mine_wailer"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_5_1",
+      "kind": "battle",
+      "hint": "冥河冷雾中浮现幽灵。",
+      "first_day": 13,
+      "last_day": 13,
+      "front": [
+        "crystal_shell_beetle",
+        "rusted_pickhand",
+        "rockwall_tongue_lizard"
+      ],
+      "back": [
+        "mine_wailer",
+        "mine_lamp_wisp"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_5_2",
+      "kind": "battle",
+      "hint": "墓道深处的守军封住去路。",
+      "first_day": 13,
+      "last_day": 13,
+      "front": [
+        "guard_remains",
+        "crystal_skin_sentry",
+        "crystal_shell_beetle"
+      ],
+      "back": [
+        "minecart_soul",
+        "subterranean_blindfish"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_6_0",
+      "kind": "battle",
+      "hint": "墓门守卫在残破石阶前列阵。",
+      "first_day": 14,
+      "last_day": 14,
+      "front": [
+        "crystal_skin_sentry",
+        "guard_remains",
+        "minecart_soul"
+      ],
+      "back": [
+        "mining_disaster_wraith",
+        "mine_wailer"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_6_1",
+      "kind": "battle",
+      "hint": "冥河冷雾中浮现幽灵。",
+      "first_day": 14,
+      "last_day": 14,
+      "front": [
+        "crystal_shell_beetle",
+        "rusted_pickhand",
+        "rockwall_tongue_lizard"
+      ],
+      "back": [
+        "mine_wailer",
+        "mine_lamp_wisp"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_6_2",
+      "kind": "battle",
+      "hint": "墓道深处的守军封住去路。",
+      "first_day": 14,
+      "last_day": 14,
+      "front": [
+        "guard_remains",
+        "crystal_skin_sentry",
+        "crystal_shell_beetle"
+      ],
+      "back": [
+        "minecart_soul",
+        "subterranean_blindfish"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_7_0",
+      "kind": "battle",
+      "hint": "墓门守卫在残破石阶前列阵。",
+      "first_day": 15,
+      "last_day": 15,
+      "front": [
+        "crystal_skin_sentry",
+        "guard_remains",
+        "minecart_soul"
+      ],
+      "back": [
+        "mining_disaster_wraith",
+        "mine_wailer"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_7_1",
+      "kind": "battle",
+      "hint": "冥河冷雾中浮现幽灵。",
+      "first_day": 15,
+      "last_day": 15,
+      "front": [
+        "golden_golem",
+        "guard_remains"
+      ],
+      "back": [
+        "minecart_soul",
+        "mine_wailer"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_7_2",
+      "kind": "battle",
+      "hint": "墓道深处的守军封住去路。",
+      "first_day": 15,
+      "last_day": 15,
+      "front": [
+        "crystal_skin_sentry",
+        "crystal_skin_sentry",
+        "rusted_pickhand"
+      ],
+      "back": [
+        "mining_disaster_wraith",
+        "mine_lamp_wisp"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_8_0",
+      "kind": "battle",
+      "hint": "墓门守卫在残破石阶前列阵。",
+      "first_day": 16,
+      "last_day": 16,
+      "front": [
+        "crystal_skin_sentry",
+        "guard_remains",
+        "minecart_soul"
+      ],
+      "back": [
+        "mining_disaster_wraith",
+        "mine_wailer"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_8_1",
+      "kind": "battle",
+      "hint": "冥河冷雾中浮现幽灵。",
+      "first_day": 16,
+      "last_day": 16,
+      "front": [
+        "golden_golem",
+        "guard_remains"
+      ],
+      "back": [
+        "minecart_soul",
+        "mine_wailer"
+      ],
+      "floor": 2
+    },
+    {
+      "path_id": "floor2_8_2",
+      "kind": "battle",
+      "hint": "墓道深处的守军封住去路。",
+      "first_day": 16,
+      "last_day": 16,
+      "front": [
+        "crystal_skin_sentry",
+        "crystal_skin_sentry",
+        "rusted_pickhand"
+      ],
+      "back": [
+        "mining_disaster_wraith",
+        "mine_lamp_wisp"
+      ],
+      "floor": 2
+    }
+  ]
+}

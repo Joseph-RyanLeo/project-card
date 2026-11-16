@@ -15,9 +15,17 @@ cooldown_seconds = 5.0
 max_health = 4
 runes = Array[int]([0, 1, 2])
 race_type = 7
+background_style = 3
+background_offsets = Dictionary[int, Vector2i]({
+2: Vector2i(-7, 22),
+3: Vector2i(0, -22)
+})
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 2)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(10, -15)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
-&"overframe": Vector2i(1, 5)
+&"overframe": Vector2i(5, 11)
 })
 effect_text = "休眠30秒。敌军位移后，对随机敌军造成2点无类型伤害（单卡冷却0.1秒）。"

@@ -19,4 +19,7 @@ race_type = 5
 rarity = 2
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(15, 20)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(13, 20)
+})
 effect_text = "突击：获得等同于本局开采次数的强化与生命。"

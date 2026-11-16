@@ -19,4 +19,7 @@ race_type = 3
 rarity = 2
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-3, 3)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-6, 3)
+})
 effect_text = "突击、回响：召唤1个扭曲矿脉随从。"

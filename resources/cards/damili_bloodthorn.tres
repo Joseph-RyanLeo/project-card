@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/gilded_commission/damili_bloodthorn.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"damili_bloodthorn"
+display_name = "达米莉·血棘"
+pack_id = &"gilded_commission"
+content_effect = &"damili_bloodthorn"
+acquisition_action_types = Array[int]([0, 1])
+base_value = 2
+cooldown_seconds = 7.0
+max_health = 5
+armor = 1
+runes = Array[int]([0, 1, 2])
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-12, 26)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-8, 5)
+})
+effect_text = "荣耀：所有存活、未被放逐的友军本场基础行动值+1，恢复2点生命。每次入场最多触发4次。"

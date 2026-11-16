@@ -19,6 +19,11 @@ func select_finish(finish: int) -> void:
 	tuner.finish_selector.select(finish)
 	tuner.finish_selector.item_selected.emit(finish)
 
+func select_background(style: CardData.BackgroundStyle) -> void:
+	tuner.background_selector.select(style)
+	tuner.background_selector.item_selected.emit(style)
+
+
 func select_pack(pack: StringName) -> void:
 	for index: int in tuner.pack_selector.item_count:
 		if tuner.pack_selector.get_item_metadata(index) == pack:
@@ -39,6 +44,10 @@ func _run() -> void:
 	root.add_child(tuner)
 	await process_frame
 	await process_frame
+	for group: StringName in CardPackRegistry.CARD_GROUP_NAMES:
+		select_pack(group)
+		check(tuner.pack_selector.get_item_text(tuner.pack_selector.selected) == CardPackRegistry.CARD_GROUP_NAMES[group]
+			and tuner.card_selector.item_count > 0 and not CardPackRegistry.PACKS.has(group), "事件和开发分组有中文名称，仍可筛选实际资源")
 	select_pack(&"ironwall_inscription")
 	check(tuner.card_selector.item_count == 38, "铁壁38张自动纳入，包含衍生与缺图卡")
 	select_type(CardData.CardType.MINION)
@@ -94,6 +103,35 @@ func _run() -> void:
 	tuner.card_data = load(FIXTURE_PATH)
 	var source := tuner.card_data
 	var original_bytes := FileAccess.get_file_as_bytes(FIXTURE_PATH)
+	var original := CardData.BackgroundStyle.ORIGINAL
+	var alley := CardData.BackgroundStyle.BLUE_ALLEY
+	var plaza := CardData.BackgroundStyle.SUNNY_SQUARE
+	tuner.background_x_spin_box.value = 2
+	select_background(alley)
+	tuner.background_x_spin_box.value = 7
+	tuner.background_y_spin_box.value = -5
+	await process_frame
+	var art := tuner.preview_card.art_background
+	check(art.texture == CardData.BACKGROUND_TEXTURES[alley] and art.size == Vector2(108, 144), "蓝色街巷以108×144原图显示")
+	check(art.position == ((tuner.preview_card.art_panel.size - art.size) * 0.5).floor() + Vector2(7, -5), "预览的背景按像素应用独立偏移")
+	select_background(plaza)
+	tuner.background_y_spin_box.value = 4
+	await process_frame
+	check(art.texture == CardData.BACKGROUND_TEXTURES[plaza] and art.size == Vector2(108, 144), "晴日广场以108×144原图显示")
+	var previous_finish := tuner.finish_selector.selected
+	select_finish(CardFinishPreview.Finish.OVERFRAME)
+	tuner.background_y_spin_box.value = -4
+	await process_frame
+	check(art.size == Vector2(108, 144) and art.position == ((tuner.preview_card.art_panel.size - art.size) * 0.5).floor() + Vector2(0, -4), "随从超框按自己的背景位置显示原生像素")
+	select_finish(previous_finish)
+	check(tuner.background_y_spin_box.value == 4, "随从切回此前工艺后恢复普通背景位置")
+	select_background(original)
+	check(tuner.background_x_spin_box.value == 2, "切回原始背景恢复独立位置")
+	await process_frame
+	check(art.texture == CardData.BACKGROUND_TEXTURES[original] and art.size == Vector2(97, 102), "原始背景使用原始像素尺寸")
+	select_background(alley)
+	check(tuner.background_x_spin_box.value == 7 and tuner.background_y_spin_box.value == -5, "切回蓝色街巷恢复独立位置")
+	check(source.background_style == original and source.background_offsets.is_empty(), "背景编辑只进入草稿")
 	enter_text(tuner.name_input, "新的名称")
 	tuner.value_spin_box.value = 7
 	tuner.health_spin_box.value = 12
@@ -117,6 +155,8 @@ func _run() -> void:
 	tuner.save_button.pressed.emit()
 	var persisted := ResourceLoader.load(FIXTURE_PATH, "", ResourceLoader.CACHE_MODE_IGNORE) as CardData
 	check(persisted.display_name == "新的名称" and persisted.base_value == 7 and persisted.max_health == 12 and persisted.armor == 9 and persisted.get_art_offset_for_finish(&"foil") == Vector2i(1, -3) and persisted.art_offset == Vector2i.ZERO, "显式保存后磁盘读回五字段")
+	check(persisted.background_style == alley and persisted.get_background_offset(alley) == Vector2i(7, -5) and persisted.get_background_offset(plaza) == Vector2i(0, 4) and persisted.get_background_offset(original) == Vector2i(2, 0), "选中的背景和三组位置可从磁盘读回")
+	check(persisted.get_background_offset(plaza, true) == Vector2i(0, -4), "随从超框背景位置独立保存")
 	check(persisted.id == &"tuner_edit_fixture" and persisted.cooldown_seconds == 6 and persisted.content_effect == &"kept_effect" and persisted.keywords == [&"kept_keyword"], "保存保留稳定ID冷却效果与关键词")
 	check(not tuner._has_unsaved_changes(source), "保存清除当前草稿脏标记")
 	enter_text(tuner.name_input, "")
@@ -143,6 +183,7 @@ func _run() -> void:
 	check(tuner.preview_card.card_data.equipment_action_delta == -2 and tuner.preview_card.card_data.equipment_health_delta == -3 and tuner.preview_card.card_data.equipment_armor_delta == 11, "装备编辑正确的修正字段")
 	check(equipment.equipment_action_delta == 1 and equipment.equipment_health_delta == 0 and equipment.equipment_armor_delta == 0, "装备预览不污染原资源")
 	check(tuner.value_title.text == "数值修正" and tuner.health_title.text == "生命修正", "装备字段标签明确")
+	await test_shared_overframe_background()
 	await test_main_save_refresh(source)
 	tuner.queue_free()
 	await process_frame
@@ -150,6 +191,28 @@ func _run() -> void:
 	DirAccess.remove_absolute(FIXTURE_PATH)
 	print("卡面调整器重构：%d条断言，%d失败" % [assertions, failures])
 	quit(1 if failures else 0)
+
+
+func test_shared_overframe_background() -> void:
+	for path: String in ["sentry_pistol", "moonfire", "moondew"]:
+		var definition := (load("res://resources/cards/%s.tres" % path) as CardData).duplicate() as CardData
+		tuner.card_data = definition
+		select_finish(CardFinishPreview.Finish.OVERFRAME)
+		select_background(CardData.BackgroundStyle.BLUE_ALLEY)
+		tuner.background_x_spin_box.value = 6
+		tuner.background_y_spin_box.value = -7
+		await process_frame
+		var art := tuner.preview_card.art_background
+		var panel := tuner.preview_card.art_panel
+		var overframe_location := panel.position + art.position
+		var overframe_window := panel.size
+		for finish: int in range(CardFinishPreview.LABELS.size()):
+			if finish == CardFinishPreview.Finish.OVERFRAME: continue
+			select_finish(finish)
+			await process_frame
+			check(panel.position + art.position == overframe_location and panel.size != overframe_window, "%s 工艺 %d 的背景与超框对齐，裁切仍由卡框决定" % [path, finish])
+			check(tuner.background_x_spin_box.value == 6 and tuner.background_y_spin_box.value == -7, "%s 的各工艺显示同一背景坐标" % path)
+		check(definition.background_overframe_offsets.get(CardData.BackgroundStyle.BLUE_ALLEY) != Vector2i(6, -7), "%s 的背景草稿独立于源资源" % path)
 
 
 func test_finish_offsets(source: CardData) -> void:

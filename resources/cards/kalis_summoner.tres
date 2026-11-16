@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/gilded_commission/kalis_summoner.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"kalis_summoner"
+display_name = "喀利斯"
+pack_id = &"gilded_commission"
+content_effect = &"kalis_summoner"
+action_type = 1
+base_value = 3
+max_health = 6
+armor = 1
+runes = Array[int]([0, 1, 2])
+race_type = 7
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-5, 8)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-4, 7)
+})
+effect_text = "战斗中所在排出现空位后，随机临时复制一张收藏中未部署的随从并召唤到空位。每场成功一次。"

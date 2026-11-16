@@ -2732,7 +2732,7 @@ func _test_prefer_squad_single_source_stack() -> void:
 		not source.visible
 		and not source.pattern_label.is_visible_in_tree()
 		and source.get_current_visual_squad_data().horizontal_cards.is_empty(),
-		"场上单卡拖离原位后不留下空卡位或混乱标签"
+		"场上单卡拖离原位后不留下空卡位或混沌标签"
 	)
 	await _send_left_button(target_position, false)
 	await process_frame

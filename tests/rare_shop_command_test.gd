@@ -1,6 +1,6 @@
 extends "res://tests/card_pack_opening_test.gd"
 
-## 正式F2命令、鼠标购买和磁盘事务，验证免费测试商店及退出后本局不变。
+## F2 旧命令退役后，验证独立测试商店的真实购买与存档隔离。
 func _run() -> void:
 	create_timer(60).timeout.connect(func(): push_error("稀有商店验收超时"); quit(1))
 	shell = DISPLAY.instantiate()
@@ -30,8 +30,10 @@ func _run() -> void:
 		root.push_input(event, true)
 		await process_frame
 	await key(KEY_ENTER)
+	check(not is_instance_valid(shell._rare_shop) and original.visible and original._developer_console.visible, "F2 回车提交旧命令后停留在控制台")
+	check("命令格式无效" in original._developer_console._output.get_parsed_text(), "旧命令返回无效命令提示")
+	check(shell.open_rare_shop(), "通过实验室接口进入独立测试商店")
 	await create_timer(0.5).timeout
-	check(is_instance_valid(shell._rare_shop) and not original.visible and not original._developer_console.visible, "键盘提交rare shop打开测试商店并关闭原控制台")
 	if not is_instance_valid(shell._rare_shop): quit(1); return
 	main = shell._rare_shop
 	check(main.ordinary_shop_open and main.maze_controller == null and main.run_reward_state.gold == 0, "测试商店独立运行且零金币可购买")
@@ -87,8 +89,7 @@ func _run() -> void:
 	main = original
 	await key(KEY_F2)
 	check(original._developer_console.visible, "离开后F2控制台恢复正常")
-	original._developer_console._command_input.text = "rare shop"
-	await key(KEY_ENTER)
+	check(shell.open_rare_shop(), "再次通过实验室接口进入")
 	await create_timer(0.5).timeout
 	main = shell._rare_shop
 	check(main.owned_card_collection.size() == 0, "重新进入得到新的测试收藏")

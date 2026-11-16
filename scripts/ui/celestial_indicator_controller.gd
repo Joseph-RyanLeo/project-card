@@ -16,6 +16,7 @@ var next_attachment_order: int = 1
 var _tray: Control
 var _tray_board: TextureRect
 var _tray_views: Dictionary = {}
+var _event_reward_ids: Array[StringName] = []
 var _tray_positions: Dictionary = {} # 实例ID→临时卡板内的左上角位置，进入存档
 var _last_positions: Dictionary = {}
 var _data: Dictionary = {}
@@ -45,7 +46,7 @@ func initialize(owner_main: Node) -> void:
 	_tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	main.world_content.add_child(_tray)
 	# 当前开发场景提供各一枚用于操作；不作为正式英雄初始库存规则。
-	for kind: int in CelestialIndicator.Kind.values():
+	for kind: int in CelestialIndicator.ASTRAL_KINDS:
 		var item := CelestialIndicator.new()
 		item.kind = kind as CelestialIndicator.Kind
 		item.instance_id = StringName("demo_indicator_%d" % kind)
@@ -119,6 +120,7 @@ func _sync_tray() -> void:
 			view.click_carry_requested.connect(begin_click_carry)
 			view.position = _tray_positions.get(item.instance_id, _default_indicator_position(item)) as Vector2
 			_tray_views[item.instance_id] = view
+			view.visible = item.instance_id not in _event_reward_ids
 			if _last_positions.has(item.instance_id):
 				view.play_drop_feedback(_last_positions[item.instance_id])
 		else:
@@ -245,7 +247,25 @@ func _find_target(
 
 
 func _default_indicator_position(item: CelestialIndicator) -> Vector2:
-	return INDICATOR_START_POSITIONS[item.kind]
+	return _default_tray_position(items.find(item)) if CelestialIndicator.TASK_TARGETS.has(item.kind) else INDICATOR_START_POSITIONS[item.kind]
+
+
+func sync_task_attachments() -> void:
+	var held := {}
+	for item: CelestialIndicator in items:
+		if CelestialIndicator.TASK_TARGETS.has(item.kind): held[item.instance_id] = item
+	for row: BattlefieldRow in _rows():
+		for slot: BoardSlot in row.get_squads():
+			var squad := slot.get_squad_data()
+			var changed := false
+			for entry: Dictionary in squad.indicator_attachments.duplicate():
+				var item: CelestialIndicator = entry.indicator
+				if not CelestialIndicator.TASK_TARGETS.has(item.kind): continue
+				if not held.has(item.instance_id): squad.detach_indicator(item.instance_id)
+				else: item.task_progress = held[item.instance_id].task_progress
+				changed = true
+			if changed: slot.set_squad_data(squad)
+	_sync_tray()
 
 
 func _default_tray_position(index: int) -> Vector2:
@@ -257,6 +277,20 @@ func _default_tray_position(index: int) -> Vector2:
 
 func get_inventory_host() -> Control:
 	return _tray
+
+
+func set_event_reward_ids(ids: Array[StringName]) -> void:
+	if _event_reward_ids == ids: return
+	var previous := _event_reward_ids.duplicate()
+	_event_reward_ids.assign(ids)
+	for id: StringName in _tray_views:
+		if id in previous or id in _event_reward_ids:
+			(_tray_views[id] as Control).visible = id not in _event_reward_ids
+
+
+func get_item_canvas_rect(id: StringName) -> Rect2:
+	var view := _tray_views.get(id) as Control
+	return view.get_global_rect() if is_instance_valid(view) else Rect2()
 
 
 func get_inventory_slot_position(index: int, exclude_id: StringName = &"") -> Vector2:

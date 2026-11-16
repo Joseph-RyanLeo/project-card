@@ -65,3 +65,13 @@ static func button(parent: Control, title: String, node_name: String, action: Ca
 	if action.is_valid(): result.pressed.connect(action)
 	parent.add_child(result)
 	return result
+
+
+static func popup_for_display(dialog: Window, logical_size: Vector2i) -> void:
+	# 子窗口不经过主界面的SubViewportContainer，需单独采用同一显示倍率。
+	var shell := dialog.get_tree().get_first_node_in_group(&"game_display_shell")
+	var display_scale: float = shell.render_container.scale.x if shell != null else 1.0
+	dialog.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	dialog.content_scale_size = Vector2i.ZERO
+	dialog.content_scale_factor = display_scale
+	dialog.popup_centered(Vector2i(Vector2(logical_size) * display_scale))

@@ -118,55 +118,55 @@ func _test_three_card_visible_runes() -> void:
 func _test_all_pattern_rules_and_priority() -> void:
 	var cases: Array[Dictionary] = [
 		{
-			"name": "五条",
+			"name": "五芒",
 			"type": RunePatternResult.PatternType.FIVE_OF_A_KIND,
 			"runes": _runes([0, 0, 0, 0, 0]),
 			"indices": [0, 1, 2, 3, 4],
 		},
 		{
-			"name": "四条",
+			"name": "四象",
 			"type": RunePatternResult.PatternType.FOUR_OF_A_KIND,
 			"runes": _runes([0, 0, 0, 0, 1]),
 			"indices": [0, 1, 2, 3],
 		},
 		{
-			"name": "葫芦",
+			"name": "三相双鸣",
 			"type": RunePatternResult.PatternType.FULL_HOUSE,
 			"runes": _runes([0, 0, 0, 1, 1]),
 			"indices": [0, 1, 2, 3, 4],
 		},
 		{
-			"name": "同花两对",
+			"name": "同源双环",
 			"type": RunePatternResult.PatternType.SAME_ELEMENT_TWO_PAIR,
 			"runes": _runes([0, 0, 1, 0, 0]),
 			"indices": [0, 1, 3, 4],
 		},
 		{
-			"name": "两对",
+			"name": "双环",
 			"type": RunePatternResult.PatternType.TWO_PAIR,
 			"runes": _runes([0, 0, 1, 1, 2]),
 			"indices": [0, 1, 2, 3],
 		},
 		{
-			"name": "三条",
+			"name": "三相",
 			"type": RunePatternResult.PatternType.THREE_OF_A_KIND,
 			"runes": _runes([0, 0, 0, 1, 2]),
 			"indices": [0, 1, 2],
 		},
 		{
-			"name": "对子",
+			"name": "双鸣",
 			"type": RunePatternResult.PatternType.PAIR,
 			"runes": _runes([0, 0, 1, 2, 3]),
 			"indices": [0, 1],
 		},
 		{
-			"name": "混乱",
+			"name": "混沌",
 			"type": RunePatternResult.PatternType.CHAOS,
 			"runes": _runes([0, 1, 2, 3, 4]),
 			"indices": [],
 		},
 		{
-			"name": "顺子",
+			"name": "连星",
 			"type": RunePatternResult.PatternType.STRAIGHT,
 			"runes": _runes([0, 3, 4, 1, 2]),
 			"indices": [0, 1, 2, 3, 4],
@@ -191,12 +191,12 @@ func _test_all_pattern_rules_and_priority() -> void:
 	_expect(
 		RunePatternRules.identify(_runes([0, 0, 0, 1, 1])).pattern_type
 		== RunePatternResult.PatternType.FULL_HOUSE,
-		"3+2 优先识别为葫芦而不是三条或对子"
+		"3+2 优先识别为三相双鸣而不是三相或双鸣"
 	)
 	_expect(
 		RunePatternRules.identify(_runes([0, 0, 1, 1, 2])).pattern_type
 		== RunePatternResult.PatternType.TWO_PAIR,
-		"2+2+1 优先识别为两对而不是对子"
+		"2+2+1 优先识别为双环而不是双鸣"
 	)
 	var four_result := RunePatternRules.identify(_runes([0, 0, 0, 0, 1]))
 	_expect(
@@ -212,31 +212,31 @@ func _test_separated_elements_do_not_merge() -> void:
 			"runes": _runes([0, 0, 1, 0, 1]),
 			"type": RunePatternResult.PatternType.PAIR,
 			"indices": [0, 1],
-			"message": "火火水火水只取前两个连续火组成对子",
+			"message": "火火水火水只取前两个连续火组成双鸣",
 		},
 		{
 			"runes": _runes([0, 0, 1, 0, 0]),
 			"type": RunePatternResult.PatternType.SAME_ELEMENT_TWO_PAIR,
 			"indices": [0, 1, 3, 4],
-			"message": "火火水火火识别为同花两对",
+			"message": "火火水火火识别为同源双环",
 		},
 		{
 			"runes": _runes([0, 0, 1, 2, 0]),
 			"type": RunePatternResult.PatternType.PAIR,
 			"indices": [0, 1],
-			"message": "火火水木火不能跨越其他元素组成三条",
+			"message": "火火水木火不能跨越其他元素组成三相",
 		},
 		{
 			"runes": _runes([0, 0, 2, 1, 1]),
 			"type": RunePatternResult.PatternType.TWO_PAIR,
 			"indices": [0, 1, 3, 4],
-			"message": "火火木水水保留两个不同元素的连续对子",
+			"message": "火火木水水保留两个不同元素的连续双鸣",
 		},
 		{
 			"runes": _runes([0, 0, 0, 1, 0]),
 			"type": RunePatternResult.PatternType.THREE_OF_A_KIND,
 			"indices": [0, 1, 2],
-			"message": "AAABA 只按连续前三个 A 识别三条",
+			"message": "AAABA 只按连续前三个 A 识别三相",
 		},
 	]
 	for test_case: Dictionary in cases:
@@ -263,27 +263,27 @@ func _test_straight_rotations_and_reversals() -> void:
 		_expect(
 			RunePatternRules.identify(forward).pattern_type
 			== RunePatternResult.PatternType.STRAIGHT,
-			"顺子正向循环起点 %d 识别正确" % start_index
+			"连星正向循环起点 %d 识别正确" % start_index
 		)
 		_expect(
 			RunePatternRules.identify(reverse).pattern_type
 			== RunePatternResult.PatternType.STRAIGHT,
-			"顺子反向循环起点 %d 识别正确" % start_index
+			"连星反向循环起点 %d 识别正确" % start_index
 		)
 	_expect(
 		RunePatternRules.identify(_runes([0, 3, 4, 1])).pattern_type
 		== RunePatternResult.PatternType.CHAOS,
-		"只有四枚符文时不能识别为顺子"
+		"只有四枚符文时不能识别为连星"
 	)
 	_expect(
 		RunePatternRules.identify(_runes([0, 1, 2, 3, 4])).pattern_type
 		== RunePatternResult.PatternType.CHAOS,
-		"五种元素齐全但顺序不连续时仍为混乱"
+		"五种元素齐全但顺序不连续时仍为混沌"
 	)
 	_expect(
 		RunePatternRules.identify(_runes([0, 3, 4, 1, 1])).pattern_type
 		== RunePatternResult.PatternType.PAIR,
-		"存在重复元素时不进入顺子并继续使用原牌型优先级"
+		"存在重复元素时不进入连星并继续使用原牌型优先级"
 	)
 
 

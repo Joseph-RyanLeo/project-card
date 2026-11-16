@@ -12,11 +12,22 @@ const PACKS := {
 	&"arcane_codex": {"name": "秘枢典籍", "faction": CardFactionScript.Id.HANSA_FEDERATION},
 	&"gilded_formulae": {"name": "锻金配方", "faction": CardFactionScript.Id.HANSA_FEDERATION},
 	&"thousand_sails_ledger": {"name": "千帆征册", "faction": CardFactionScript.Id.HANSA_FEDERATION},
+	&"thousand_sails_bounty": {"name": "千帆悬赏", "faction": CardFactionScript.Id.HANSA_FEDERATION},
 	&"briar_oath": {"name": "荆林誓约", "faction": CardFactionScript.Id.WILD_BEAST_NEST},
 	&"insect_eaten_bestiary": {"name": "虫蚀图志", "faction": CardFactionScript.Id.WILD_BEAST_NEST},
 	&"beastblood_hide": {"name": "兽血之皮", "faction": CardFactionScript.Id.WILD_BEAST_NEST},
 	&"twisted_vein": {"name": "扭曲矿脉", "faction": CardFactionScript.Id.LABYRINTH},
 	&"labyrinth": {"name": "迷宫", "faction": CardFactionScript.Id.LABYRINTH},
+	&"styx_tomb": {"name": "冥河墓穴", "faction": CardFactionScript.Id.LABYRINTH},
+	&"gilded_commission": {"name": "镀金委托", "faction": CardFactionScript.Id.UNALIGNED},
+}
+
+# 这些归属用于事件或开发资源分类，没有独立卡包。
+const CARD_GROUP_NAMES := {
+	&"event_relics": "事件遗物",
+	&"event_supplies": "事件补给",
+	&"event_potions": "事件药剂",
+	&"development_test": "开发测试",
 }
 
 
@@ -27,7 +38,7 @@ static func get_faction(pack_id: StringName) -> CardFaction.Id:
 
 static func get_display_name(pack_id: StringName) -> String:
 	var pack_data := PACKS.get(pack_id, {}) as Dictionary
-	return str(pack_data.get("name", String(pack_id)))
+	return str(pack_data.get("name", CARD_GROUP_NAMES.get(pack_id, String(pack_id))))
 
 
 static func belongs_to_pack(card: CardData, pack_id: StringName) -> bool:

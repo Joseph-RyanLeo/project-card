@@ -8,7 +8,7 @@
     "musketeer",
     "town_priest",
     "shieldwall_private",
-    "elegy_poet"
+    "militia"
   ],
   "initial_card_notes": {
     "town_priest": "2026-10-03重做为乡邻恢复量+1，恢复可用并进入正式卡池；基础数值沿用现有资源3治疗、3秒冷却、7生命。"

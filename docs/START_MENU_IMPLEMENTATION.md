@@ -27,7 +27,7 @@
 - `scripts/ui/slot_hub.gd`负责档内大厅及原收藏阶段摘要，发出新局、返回、设置和收藏确认信号。布局不承担存档写入；`GameDisplay`收到信号后统一保存，失败恢复原局外快照。
 - `scripts/ui/escape_pause_menu.gd`负责暂停首页、设置和工具子页，继续沿用Main的暂停归属逻辑。`close_subpage`返回是否只需关闭子页，让Esc不穿透成继续游戏。
 - `scripts/ui/menu_style.gd`共用原背景、字体、暖金色边框及按钮样式；`scripts/ui/game_settings_panel.gd`共用设置控件，避免主菜单和对局设置各维护一份不同的选项。
-- `scripts/data/game_preferences.gd`保存主音量与窗口模式；卡牌文字模式复用原`card_text_display_settings.gd`，保留字体调试参数。偏好保存于本机`game_preferences.cfg`、`card_text_display.cfg`，独立于三档；删档不清除设置。设置保存失败会明确提示当前已生效、偏好未能写入。
+- `scripts/data/game_preferences.gd`保存主音量、窗口模式与像素边缘抗锯齿。边缘抗锯齿默认关闭，开启后在 1080p 等非整数倍率下生效。卡牌文字模式复用原`card_text_display_settings.gd`，保留字体调试参数。偏好保存于本机`game_preferences.cfg`、`card_text_display.cfg`，独立于三档；删档不清除设置。设置保存失败会明确提示当前已生效、偏好未能写入。
 - `scripts/main.gd`增加`initialize_maze_run_on_ready`，正常新局沿用原初始化，读档则跳过预开局；`BattleAudioService`的主音量操作复用为静态方法，菜单没有另建一套音频逻辑。
 
 ## 3. 保存与恢复边界
@@ -53,3 +53,18 @@ GPU截图位于`docs/previews/d3_1_menu_20261102/`：启动页、三档选择、
 界面用信号表达「玩家想进入／返回／确认」，显示壳负责保存后决定是否切换，避免按钮绕过失败处理。`Callable`让同一过场动画复用不同进入动作；`await`等待实际初始化和过场完成后才继续输入测试。
 
 局外数据是`RefCounted`，可以在没有Main场景时保留；运行一局才需要完整节点树。`duplicate(true)`复制根数据与嵌套选择，保证失败动作能恢复原值。隐藏Main时还会关闭其Esc输入，因为暂停菜单使用`PROCESS_MODE_ALWAYS`，仅隐藏画面并不足以停止输入。
+
+
+## 2026-11-06：主界面设置中的开发工具
+
+现在可从启动主菜单或档内大厅的“设置→开发工具”直接打开攻击特效、开包特效、卡包凹凸、卡面、卡牌纹理、卡名字体、战斗实验室七个工具；无需创建或进入一局。对局Esc入口保留。工具返回按钮或Esc回到设置中的开发工具页，再按Esc回普通设置，最后关闭设置。对局诊断、受击优先级和启动状态还原仍属于对局菜单。
+
+整体流程：设置发出`tool_requested`→GameDisplay统一调度→暂存当前主菜单／大厅／对局的处理模式并隐藏来源界面→创建原有工具场景→关闭工具并恢复来源→从设置打开时重新显示设置工具页。
+
+数据职责：`developer_tool_catalog.gd`提供两处菜单共用的工具清单；`game_settings_panel.gd`负责设置子页；`game_display.gd`的`open_developer_tool()`集中调度，`_tuner_source`记录来源，`_return_to_tool_settings`记录是否需要回设置。原工具场景、保存位置和预览继续复用，卡面工具保存后只有存在正式Main时才刷新对局卡牌。
+
+初学者说明：隐藏节点只改变显示，不能代替暂停处理；因此沿用原工具的`process_mode`保存与恢复方式，并对正式Main额外暂停Esc输入，避免后台收到同一次按键。关闭后恢复原模式，不重新创建一局，也不读写玩家进度。
+
+验证：真实主菜单原生点击七个工具、全部Esc返回、子页逐层返回、720p入口不越界、未创建本局存档及未更改存档选择，共28项通过。预览见[设置开发工具子页](previews/start_menu_tools_20261106/01_tools_in_settings.png)。
+
+原对局Esc纹理工具51项回归通过，入口与实时调参继续正常；特殊外观GPU157项与收藏静置／悬停85项同轮通过，四组共321项。

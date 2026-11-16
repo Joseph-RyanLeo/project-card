@@ -3,6 +3,7 @@ extends RefCounted
 
 ## 装备指示物由“阵营底座 + 装备类型/品级图案”实时合成并缓存。
 
+const TEMPORARY_EQUIPMENT_TINT := Color(0.66, 0.81, 1.0) # 临时装备的浅蓝色滤镜
 const CardFactionScript = preload("res://scripts/data/card_faction.gd")
 const BASE_ATLAS: Texture2D = preload(
 	"res://assets/card_ui/equipment/source/equipment_indicator_bases.png"

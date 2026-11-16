@@ -1,6 +1,6 @@
 extends SceneTree
 
-## D2-6A：物品实例归属、拖拽途中双形态、鼠标落点与无效区域返还。
+## D2-6A：物品实例归属、拖拽途中双形态、鼠标落点与无效区域原位返回。
 ## 只使用真实 Resource、场景节点与存档服务，不使用 mock。
 
 const OwnedCardCollection = preload("res://scripts/data/owned_card_collection.gd")
@@ -987,11 +987,11 @@ func _test_main_drag_transformation_round_trip() -> void:
 		"战斗区与收藏区之外的区域不会接收装备牌"
 	)
 	_expect(
-		target_slot.get_squad_data().get_equipped_item() == null
-		and target_slot.get_equipment_indicator() == null
+		target_slot.get_squad_data().get_equipped_item() == owned_item
+		and target_slot.get_equipment_indicator() != null
 		and restored_card_slot != null
-		and not bool(restored_card_slot.get_meta("is_deployed_ghost", false)),
-		"无效区域松手后自动卸下，并从松手位置动画返还收藏"
+		and bool(restored_card_slot.get_meta("is_deployed_ghost", false)),
+		"无效区域松手后指示物返回原装备位，收藏仍显示部署虚影"
 	)
 	main.queue_free()
 	await process_frame

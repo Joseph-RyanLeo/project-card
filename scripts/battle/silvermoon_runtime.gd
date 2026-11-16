@@ -219,6 +219,7 @@ func on_layout_changed() -> void:
 		# 只排空本次换排的突击链；同帧再换排前，先按当前排完整结算。
 		controller.effect_runtime.process_due_for_root(controller.elapsed_seconds, rush.root_event_id)
 	for side: int in sides:
+		if controller.gilded != null: controller.gilded.on_movement(side)
 		for listener: BattleSquadState in controller.get_all_states():
 			var dancer := listener.side == side and active(listener, &"moon_dancer")
 			var hawk := listener.side != side and active(listener, &"moon_hawk")
@@ -302,7 +303,7 @@ func on_mining(event: BattleEffectEvent) -> void:
 	for target: BattleSquadState in pool: best = maxf(best, target.get_display_action_value())
 	pool = pool.filter(func(s: BattleSquadState) -> bool: return s.get_display_action_value() == best)
 	var target: BattleSquadState = controller.choose_weighted_target(pool)
-	if target != null: controller._charge_state(target, 0.5)
+	if target != null: controller._charge_state(target, 0.5, event.source, "moondew_collector")
 
 func harvest_moondew(event: BattleEffectEvent) -> void:
 	for target: BattleSquadState in controller.get_living_states(event.resource_target.side):
@@ -458,6 +459,7 @@ func process_due() -> void:
 			banishments.erase(state)
 			state.is_banished = false
 			state.apply_healing_exact(float(state.get_max_health()) * 0.3, null, healing_event)
+			if controller.gilded != null: controller.gilded.on_movement(state.side)
 			controller.effect_runtime.recheck_continuous_conditions()
 	sync_auras()
 	for spell: OwnedCard in controller._get_all_prepared_spell_instances():

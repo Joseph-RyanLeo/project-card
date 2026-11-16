@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/gilded_commission/dialer_beep.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"dialer_beep"
+display_name = "拨号机·哔哔"
+pack_id = &"gilded_commission"
+content_effect = &"dialer_beep"
+acquisition_action_types = Array[int]([0, 2])
+cooldown_seconds = 4.0
+max_health = 2
+runes = Array[int]([0, 1, 2])
+race_type = 3
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-5, 5)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-4, -1)
+})
+effect_text = "所有友军最高牌型为双鸣时，按同元素三相结算倍率与元素派生。"

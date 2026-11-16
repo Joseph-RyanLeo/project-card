@@ -29,8 +29,6 @@ const TOOLBOX_SECONDS := 0.36 # 工具箱半展开、收回及底纸让位的时
 const TOOLBOX_MARGIN := 20.0 # 露出的纹章槽左缘距屏幕左边的距离
 const CONTENT_SHIFT := 100.0 # 工具箱展开时队列与底纸共同向右让位的距离
 const STORE_SECONDS := 0.32 # 单枚贴纸飞入其真实工具箱槽位的时长
-const TOOLBOX_SHAKE := 5.0 # 每枚贴纸入槽后工具箱的最大水平震动位移
-const SHAKE_SECONDS := 0.04 # 工具箱震动每一步的时长
 enum Phase { ENLARGING, SEALED, PEELING, EXTRACTING, REVEALED, DETACHING, TOOLBOX_ENTERING, STORING, TOOLBOX_RETURNING, EMPTY_REVEALED, COLLECTING, FINISHED }
 
 var phase := Phase.ENLARGING
@@ -289,9 +287,7 @@ func _store_next() -> void:
 		remaining.assign(_sticker_ids.slice(stored_count))
 		_library.set_hidden_item_ids(remaining)
 	)
-	animation.tween_property(_library, "position:x", _library_rest.x - TOOLBOX_SHAKE, SHAKE_SECONDS)
-	animation.tween_property(_library, "position:x", _library_rest.x + TOOLBOX_SHAKE, SHAKE_SECONDS)
-	animation.tween_property(_library, "position:x", _library_rest.x, SHAKE_SECONDS)
+	_library.tween_receipt_shake(animation, _library_rest.x)
 	animation.tween_callback(_store_next)
 
 

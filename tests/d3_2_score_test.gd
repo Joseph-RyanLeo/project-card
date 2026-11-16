@@ -22,7 +22,7 @@ func _initialize() -> void:
 	var original := card.capture_state()
 	var plain := Score.card_score(card)
 	check(plain.parts.surface == 40 and plain.parts.art == 40, "卡面与卡图使用积分表80分")
-	check(plain.parts.runes == 9 and plain.parts.pattern == 20, "单卡三条9+20，不叠对子")
+	check(plain.parts.runes == 9 and plain.parts.pattern == 20, "单卡三相9+20，不叠双鸣")
 	check(card.capture_state() == original, "计分不改动原实例")
 	card.rune_revealed.fill(false)
 	card.set_rune_sticker(0, {"emblem_id": &"火贴纸", "element": CardData.ElementType.FIRE})

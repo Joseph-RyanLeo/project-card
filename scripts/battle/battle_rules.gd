@@ -69,9 +69,9 @@ const STRAIGHT_BONUS_CONFIG: Dictionary = {
 	"wood": {"multiplier": 1.0, "pierces_armor": true, "upgrade_primary": false},
 	"light": {"count": 1, "multiplier": 1.0},
 	"fire": {"ticks": 3, "interval": 1.0, "tick_multiplier": 0.5, "finisher_multiplier": 0.0, "can_trigger_element_chain": false},
-} # 顺子额外生成四次 1.0B 即时效果和 3 秒共 1.5B 持续效果；全部不再触发元素连锁
+} # 连星额外生成四次 1.0B 即时效果和 3 秒共 1.5B 持续效果；全部不再触发元素连锁
 
-const SAME_ELEMENT_TWO_PAIR_EFFECT_COUNT: int = 3 # 同花两对使用对应元素的三条档效果
+const SAME_ELEMENT_TWO_PAIR_EFFECT_COUNT: int = 3 # 同源双环使用对应元素的三相档效果
 
 const DEFAULT_EFFECT_STRATEGY: Dictionary = {
 	"inherit_target": true,

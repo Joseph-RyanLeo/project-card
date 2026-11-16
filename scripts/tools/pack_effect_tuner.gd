@@ -19,6 +19,12 @@ var status_label: Label
 var _auto_open := false
 var _last_pack := 1
 var _diagnostic_dialog: FileDialog
+var preview_arrival: Control
+var _previewing_arrival := false
+var _parameter_tabs: TabContainer
+var _preview_title: Label
+var _preview_help: Label
+var _shop_process_mode := Node.PROCESS_MODE_INHERIT
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -32,9 +38,17 @@ func _ready() -> void:
 	preview_shop.diagnostic_context = _capture_diagnostic_context
 	preview_shop.diagnostic_feedback = _on_diagnostic_feedback
 	preview_viewport.add_child(preview_shop)
+	_shop_process_mode = preview_shop.process_mode
 	preview_shop._escape_pause_menu.set_process_input(false)
 	preview_shop._escape_pause_menu.hide()
 	preview_shop.close_requested.connect(return_to_shop, CONNECT_DEFERRED)
+	preview_arrival = preload("res://scripts/tools/pack_arrival_preview.gd").new()
+	preview_arrival.name = "PackArrivalPreview"
+	preview_arrival.texture = preview_shop._ordinary_shop_offer_icon({"kind": "card_pack", "pack_id": "ash_ledger", "size": "large"})
+	preview_arrival.points_changed.connect(_load_controls)
+	preview_viewport.add_child(preview_arrival)
+	preview_arrival.hide()
+	_parameter_tabs.tab_changed.connect(_on_parameter_tab_changed)
 	preview_holder.resized.connect(_layout_preview)
 	_layout_preview.call_deferred()
 	status_label.text = "外观实时更新；时长在下次播放生效。未保存的调整在退出时丢弃。"
@@ -69,6 +83,7 @@ func _build_interface() -> void:
 	body.add_theme_constant_override("separation", 14) # 参数面板和预览之间的间距
 	layout.add_child(body)
 	var tabs := TabContainer.new()
+	_parameter_tabs = tabs
 	tabs.name = "ParameterTabs"
 	tabs.custom_minimum_size.x = CONTROL_WIDTH
 	body.add_child(tabs)
@@ -89,6 +104,7 @@ func _build_interface() -> void:
 	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(right)
 	var preview_title := Label.new()
+	_preview_title = preview_title
 	preview_title.text = "免费测试商店 · 可直接购买、检视、撕包和连点收卡"
 	right.add_child(preview_title)
 	var actions := HBoxContainer.new()
@@ -96,6 +112,7 @@ func _build_interface() -> void:
 	_button(actions, "普通开包", play_pack.bind(0), "PreviewNormal")
 	_button(actions, "传奇开包", play_pack.bind(1), "PreviewRare")
 	_button(actions, "重播", replay, "ReplayEffects")
+	_button(actions, "卡包入场", play_arrival, "PreviewArrival")
 	_button(actions, "IV光环", show_rare_card, "PreviewHalo")
 	_button(actions, "回商店", return_to_shop, "PreviewShop")
 	preview_holder = Control.new()
@@ -113,6 +130,7 @@ func _build_interface() -> void:
 	preview_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	preview_container.add_child(preview_viewport)
 	var help := Label.new()
+	_preview_help = help
 	help.text = "包装颤抖按4×检视画面像素计算；此缩小预览也可操作。\n普通：4张I＋1张II　传奇：4张I＋1张IV；测试收藏与本局独立。"
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(help)
@@ -157,19 +175,24 @@ func _on_value_changed(value: float, key: String) -> void:
 	var normalized: float = Settings.get_values()[key]
 	controls[key].slider.set_value_no_signal(normalized)
 	controls[key].spin.set_value_no_signal(normalized)
-	status_label.text = "已调整 %s：%s；点击保存后用于正式开包，重播可查看新的动画时长。" % [key, normalized]
+	var label := key
+	for field: Dictionary in Settings.FIELDS:
+		if field.key == key: label = field.label; break
+	status_label.text = "已调整%s：%s；点重播预览，保存后用于正式游戏。" % [label, normalized]
+	if is_instance_valid(preview_arrival): preview_arrival.refresh()
 
 func _load_controls() -> void:
 	for key: String in controls:
 		controls[key].slider.set_value_no_signal(Settings.get_values()[key])
 		controls[key].spin.set_value_no_signal(Settings.get_values()[key])
+	if is_instance_valid(preview_arrival): preview_arrival.refresh()
 
 func save_settings() -> void:
 	var error := Settings.save()
 	status_label.text = "已保存；正式开包与下次启动使用这些参数。" if error == OK else "保存失败：%s；当前预览调整仍保留。" % error_string(error)
 
 func reload_settings() -> void:
-	Settings.reload()
+	Settings.load_saved()
 	_load_controls()
 	status_label.text = "已恢复上次保存的参数。"
 
@@ -219,7 +242,15 @@ func _layout_preview() -> void:
 
 func return_to_shop() -> void:
 	_auto_open = false
+	_previewing_arrival = false
+	if is_instance_valid(preview_arrival):
+		preview_arrival.stop()
+		preview_arrival.hide()
+	preview_shop.show()
+	preview_shop.process_mode = _shop_process_mode
 	preview_shop._close_card_inspection(true)
+	_preview_title.text = "免费测试商店 · 可直接购买、检视、撕包和连点收卡"
+	_preview_help.text = "包装颤抖按4×检视画面像素计算；此缩小预览也可操作。\n普通：4张I＋1张II　传奇：4张I＋1张IV；测试收藏与本局独立。"
 
 func play_pack(index: int) -> void:
 	return_to_shop()
@@ -232,7 +263,33 @@ func play_pack(index: int) -> void:
 	_auto_open = true
 
 func replay() -> void:
-	play_pack(_last_pack)
+	if _previewing_arrival: play_arrival()
+	else: play_pack(_last_pack)
+
+
+func _on_parameter_tab_changed(index: int) -> void:
+	if _parameter_tabs.get_child(index).name == "入场": _show_arrival()
+	elif _previewing_arrival: return_to_shop()
+
+
+func _show_arrival() -> void:
+	_auto_open = false
+	_previewing_arrival = true
+	preview_shop._close_card_inspection(true)
+	preview_shop.hide()
+	preview_shop.process_mode = Node.PROCESS_MODE_DISABLED
+	preview_arrival.show()
+	preview_arrival.refresh()
+	_preview_title.text = "卡包入场预览 · 拖动路线点，重播查看效果"
+	_preview_help.text = "预览坐标为1280×720，X向右、Y向下；可拖动三个彩色路线点。\n改动后点重播，满意后保存；此处不会发卡或修改本局进度。"
+
+
+func play_arrival() -> void:
+	for index: int in _parameter_tabs.get_tab_count():
+		if _parameter_tabs.get_child(index).name == "入场": _parameter_tabs.current_tab = index
+	_show_arrival()
+	preview_arrival.replay()
+	status_label.text = "拖动起点／着地点／停止点，或调左侧数值；减速曲线2为匀减速，越大越早减速。保存后下次正式入场生效。"
 
 func show_rare_card() -> void:
 	var sequence: CardPackOpening = preview_shop._card_pack_opening
@@ -260,7 +317,8 @@ func _input(event: InputEvent) -> void:
 		close_requested.emit()
 
 func prepare_close() -> void:
+	if is_instance_valid(preview_arrival): preview_arrival.stop()
 	if is_instance_valid(preview_shop): preview_shop._close_card_inspection(true)
 
 func _exit_tree() -> void:
-	Settings.reload() # 丢弃未保存草稿；已经保存的配置继续用于正式开包。
+	Settings.load_saved() # 丢弃未保存草稿；已经保存的配置继续用于正式开包。

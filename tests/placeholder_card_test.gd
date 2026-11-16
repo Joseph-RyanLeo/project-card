@@ -7,6 +7,8 @@ const MAIN_SCENE: PackedScene = preload("res://scenes/Main.tscn")
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
 const CardArtTuner = preload("res://scripts/tools/card_art_tuner.gd")
 const TUNER_SCENE: PackedScene = preload("res://scenes/tools/CardArtTuner.tscn")
+const ShopCardViewScene = preload("res://scenes/ui/ShopCardView.tscn")
+const TextDisplaySettings = preload("res://scripts/ui/card_text_display_settings.gd")
 const SpellPreparationIconStyle = preload("res://scripts/ui/spell_preparation_icon_style.gd")
 const PLACEHOLDER_PATHS := [
 	"res://resources/cards/frostfang_blade.tres",
@@ -61,6 +63,7 @@ func _run() -> void:
 	_expect(cards.size() == 29 and unique_ids.size() == 29, "manifest 对应 29 张资源且 id 唯一")
 	_test_data_mappings(cards)
 	await _test_card_views(cards)
+	_test_new_card_frames(cards)
 	await _test_collection_and_illegal_drops(cards)
 	await _test_tuner()
 	if _failure_count == 0:
@@ -110,6 +113,9 @@ func _test_data_mappings(cards: Array[CardData]) -> void:
 
 
 func _test_card_views(cards: Array[CardData]) -> void:
+	TextDisplaySettings.is_popup_mode()
+	var previous_mode := TextDisplaySettings.mode
+	TextDisplaySettings.set_mode(self, TextDisplaySettings.Mode.CARD, false)
 	var spell := cards[15]
 	var equipment_positive := cards[0]
 	var equipment_negative := cards[1]
@@ -133,9 +139,11 @@ func _test_card_views(cards: Array[CardData]) -> void:
 		and spell_view.effect_text_label.visible
 		and not spell_view.cooldown_icon.visible
 		and spell_view.health_icon.visible
+		and spell_view.health_icon.texture == CardView.SPELL_DURABILITY_TEXTURE
+		and spell_view.health_icon.position == Vector2(84, 110)
 		and spell_view.health_label.text == str(int(spell_view.card_data.rarity) + 1)
 		and not spell_view.armor_icon.visible,
-		"法术使用中央类型图标，隐藏符文/状态并显示效果文字"
+		"法术使用新耐久图标，隐藏符文/状态并显示效果文字"
 	)
 	var positive_view := CARD_VIEW_SCENE.instantiate() as CardView
 	root.add_child(positive_view)
@@ -143,15 +151,19 @@ func _test_card_views(cards: Array[CardData]) -> void:
 	await process_frame
 	_expect(
 		positive_view.action_icon.texture == CardView.EQUIPMENT_ACTION_INCREASE_TEXTURE
-		and positive_view.action_icon.position == CardView.EQUIPMENT_ACTION_POSITION
+		and positive_view.action_icon.position == Vector2(-7, -9)
+		and positive_view.value_label.position == Vector2(3, 7)
 		and CardView.EQUIPMENT_ACTION_INCREASE_TEXTURE.get_image().get_used_rect()
 		== Rect2i(2, 3, 24, 24)
 		and positive_view.value_label.text == "1"
 		and positive_view.cooldown_icon.texture == CardView.ZEAL_TEXTURE
-		and positive_view.cooldown_icon.position
-		== positive_view.cooldown_icon_position + Vector2(-1.0, -1.0)
+		and positive_view.cooldown_icon.position == Vector2(-2, 20)
+		and positive_view.cooldown_label.position == Vector2(-3, 23)
+		and positive_view.armor_icon.position == Vector2(87, 93)
 		and positive_view.cooldown_icon.size == Vector2(14.0, 18.0)
 		and positive_view.health_icon.texture == CardView.HEALTH_TEXTURE
+		and positive_view.health_icon.position == Vector2(84, 110)
+		and positive_view.health_label.position == Vector2(90, 110)
 		and positive_view.armor_icon.texture == CardView.ARMOR_TEXTURE
 		and positive_view.value_label is RuneNumberDisplay
 		and positive_view.cooldown_label is RuneNumberDisplay
@@ -179,7 +191,56 @@ func _test_card_views(cards: Array[CardData]) -> void:
 	)
 	for view: CardView in [spell_view, positive_view, negative_view]:
 		view.queue_free()
+	TextDisplaySettings.set_mode(self, previous_mode, false)
 	await process_frame
+
+
+func _test_new_card_frames(cards: Array[CardData]) -> void:
+	var resource := preload("res://resources/cards/gear_scrap.tres")
+	var minion := preload("res://resources/cards/militia.tres")
+	var definitions: Array[CardData] = [cards[0], cards[15], resource, minion]
+	var view := CARD_VIEW_SCENE.instantiate() as CardView
+	root.add_child(view)
+	var hidden_view := ShopCardViewScene.instantiate() as ShopCardView
+	root.add_child(hidden_view)
+	for definition: CardData in definitions:
+		view.set_card_data(definition)
+		view.set_owned_card(null)
+		var standard_texture := view.card_frame.texture
+		var action_position := view.action_icon.position
+		var identity_position := view.race_icon.position
+		if definition.card_type != CardData.CardType.MINION:
+			_expect(is_equal_approx(identity_position.x, floorf((99.0 - view.race_icon.size.x) * 0.5)) and identity_position.y + view.race_icon.size.y == 134.0, "%s 的种类图标居中并留底边2px" % definition.display_name)
+			_expect(view.art_panel.position.y + view.art_panel.size.y == 125.0, "%s 显示完整的透明内窗" % definition.display_name)
+			var public_card := ShopCardView.public_definition(definition, {"hint": "rarity"})
+			hidden_view.configure_hidden(public_card, {"hint": "rarity"})
+			var identity_texture := hidden_view._get_identity_texture(public_card)
+			var expected_icon_origin := hidden_view._get_non_minion_identity_position(Vector2(identity_texture.get_size()))
+			var expected_pixels := Vector2(identity_texture.get_image().get_used_rect().position)
+			var displayed_pixels := Vector2(hidden_view.race_icon.texture.get_image().get_used_rect().position)
+			_expect(hidden_view.race_icon.position + displayed_pixels == expected_icon_origin + expected_pixels, "暗单轮播的透明画布保留同一底部图标对齐")
+		if definition.card_type == CardData.CardType.RESOURCE:
+			_expect(view.health_icon.texture == CardView.HEALTH_TEXTURE and view.health_icon.position == view.health_icon_position and action_position == CardView.RESOURCE_BADGE_POSITION, "资源生命和袋子保持原图与坐标")
+		var owned := OwnedCard.new()
+		owned.initialize(definition, &"frame_layout", 0)
+		owned.art_finish = CardAppearance.Art.OVERFRAME
+		view.set_owned_card(owned)
+		_expect(view.card_frame.texture == CardView.OVERFRAME_TEXTURE and view.card_frame.position == Vector2.ONE and view.card_frame.size == Vector2(97, 134) and is_equal_approx(view.card_frame.self_modulate.a, 0.46) and view.card_frame.material == null, "%s 使用原生尺寸和46%%白色硬光框" % definition.display_name)
+		_expect(view.action_icon.position == action_position and view.race_icon.position == identity_position, "切换超框保留两处身份图标坐标")
+		if definition.art_texture != null:
+			var centered := ((view.art_area_size - view.art_texture.size) * 0.5).floor()
+			var art_origin := view.art_area_position + centered + Vector2(definition.get_art_offset_for_finish(owned.get_art_finish_key()))
+			_expect(view.art_panel.position + view.art_texture.position == art_origin, "扩大裁切区后沿用超框立绘取景")
+		view.set_owned_card(null)
+		_expect(view.card_frame.texture == standard_texture and view.card_frame.position == Vector2.ZERO and view.card_frame.size == Vector2(99, 136), "切回普通卡恢复对应品级外框")
+	for rarity: int in CardData.Rarity.size():
+		var definition := cards[rarity]
+		view.set_card_data(definition)
+		var region := Rect2i(Vector2i(CardView.NON_MINION_FRAME_X[rarity], 0), Vector2i(99, 136))
+		var expected := CardView.NON_MINION_FRAME_ATLAS.get_image().get_region(region)
+		_expect(view.card_frame.texture.get_image().get_data() == expected.get_data(), "%d级新外框使用图集对应原像素" % (rarity + 1))
+	view.queue_free()
+	hidden_view.queue_free()
 
 
 func _test_collection_and_illegal_drops(cards: Array[CardData]) -> void:

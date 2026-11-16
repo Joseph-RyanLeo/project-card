@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/gilded_commission/edwin_ash.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"edwin_ash"
+display_name = "埃德温·尘灰"
+pack_id = &"gilded_commission"
+effect_ids = Array[StringName]([&"edwin_ash.effect.rush"])
+content_effect = &"edwin_ash"
+action_type = 2
+base_value = 2
+cooldown_seconds = 5.0
+max_health = 7
+runes = Array[int]([0, 1, 2])
+race_type = 5
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(13, 27)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-12, 20)
+})
+effect_text = "突击：消灭左右相邻友军；这些友军不新增伤势，改为治愈1处伤势并获得1枚随机纹章。"

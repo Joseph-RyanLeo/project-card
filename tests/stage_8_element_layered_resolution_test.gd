@@ -59,10 +59,10 @@ func _test_config_and_element_groups() -> void:
 		_expect(not BattleRules.get_element_config(CardData.ElementType.WOOD, count).is_empty(), "木%d档集中配置" % count)
 	var full_house := _squad_with_runes([CardData.ElementType.LIGHT, CardData.ElementType.LIGHT, CardData.ElementType.LIGHT, CardData.ElementType.WATER, CardData.ElementType.WATER]).get_rune_pattern_result()
 	var full_groups := BattleElementResolver.get_element_groups(full_house)
-	_expect(full_groups.size() == 2 and int(full_groups[0]["count"]) == 3 and int(full_groups[1]["count"]) == 2, "葫芦严格按三条元素→对子元素")
+	_expect(full_groups.size() == 2 and int(full_groups[0]["count"]) == 3 and int(full_groups[1]["count"]) == 2, "三相双鸣严格按三相元素→双鸣元素")
 	var two_pair := _squad_with_runes([CardData.ElementType.WOOD, CardData.ElementType.WOOD, CardData.ElementType.FIRE, CardData.ElementType.FIRE, CardData.ElementType.LIGHT]).get_rune_pattern_result()
 	var pair_groups := BattleElementResolver.get_element_groups(two_pair)
-	_expect(pair_groups.size() == 2 and int(pair_groups[0]["element"]) == CardData.ElementType.WOOD and int(pair_groups[1]["element"]) == CardData.ElementType.FIRE, "两对严格按可见序列第一组→第二组")
+	_expect(pair_groups.size() == 2 and int(pair_groups[0]["element"]) == CardData.ElementType.WOOD and int(pair_groups[1]["element"]) == CardData.ElementType.FIRE, "双环严格按可见序列第一组→第二组")
 	var same_pair := _squad_with_runes([CardData.ElementType.FIRE, CardData.ElementType.FIRE, CardData.ElementType.WATER, CardData.ElementType.FIRE, CardData.ElementType.FIRE]).get_rune_pattern_result()
 	var same_pair_groups := BattleElementResolver.get_element_groups(same_pair)
 	_expect(
@@ -70,7 +70,7 @@ func _test_config_and_element_groups() -> void:
 		and int(same_pair_groups[0]["element"]) == CardData.ElementType.FIRE
 		and int(same_pair_groups[0]["count"]) == 3
 		and is_equal_approx(BattleRules.get_pattern_multiplier(same_pair.pattern_type), 2.0),
-		"同花两对按同元素三条档效果与 2.0 牌型倍率结算"
+		"同源双环按同元素三相档效果与 2.0 牌型倍率结算"
 	)
 
 
@@ -158,7 +158,7 @@ func _test_straight_and_same_element_two_pair() -> void:
 		and same_pair.active_continuous_effects.size() == 1
 		and int(same_pair.active_continuous_effects[0]["ticks_remaining"]) == 3
 		and is_equal_approx(float(same_pair.active_continuous_effects[0]["element_multiplier"]), 0.20),
-		"同花两对完整复用三条火的倍率、三跳持续效果和 2.0B 基础行动"
+		"同源双环完整复用三相火的倍率、三跳持续效果和 2.0B 基础行动"
 	)
 	await _dispose(same_pair)
 
@@ -189,7 +189,7 @@ func _test_straight_and_same_element_two_pair() -> void:
 		and straight.active_continuous_effects.size() == 1
 		and is_equal_approx(float(straight.active_continuous_effects[0]["element_multiplier"]), 0.5)
 		and not bool(straight.active_continuous_effects[0]["can_trigger_element_chain"]),
-		"顺子在 3.0B 主行动后各生成一次 1.0B 连击、扩散、穿刺、折射，并建立不连锁灼烧"
+		"连星在 3.0B 主行动后各生成一次 1.0B 连击、扩散、穿刺、折射，并建立不连锁灼烧"
 	)
 	straight.advance_time(3.01)
 	var tick_total := 0.0
@@ -199,7 +199,7 @@ func _test_straight_and_same_element_two_pair() -> void:
 		straight_ticks.size() == 3
 		and is_equal_approx(tick_total, 45.0)
 		and straight_ticks.all(func(event: BattleEffectEvent) -> bool: return not event.can_trigger_element_chain),
-		"顺子灼烧持续 3 秒、每秒 0.5B、合计 1.5B，持续结算同样禁止连锁"
+		"连星灼烧持续 3 秒、每秒 0.5B、合计 1.5B，持续结算同样禁止连锁"
 	)
 	await _dispose(straight)
 
@@ -878,7 +878,7 @@ func _test_formula_popup_ui() -> void:
 		and two_pair_colors["tail"] == main.EFFECT_COLOR_FIRE
 		and no_element_colors["head"] == main.EFFECT_COLOR_NONE
 		and no_element_colors["tail"] == main.EFFECT_COLOR_NONE,
-		"葫芦按三条→对子、两对按左组→右组生成头尾渐变，无元素保持纯白"
+		"三相双鸣按三相→双鸣、双环按左组→右组生成头尾渐变，无元素保持纯白"
 	)
 	main._on_battle_log_meta_hover_ended("formula:8801:0")
 	main.queue_free()
@@ -947,7 +947,7 @@ func _straight_controller(seed: int) -> BattleController:
 		_entry(_single_squad(CardData.ActionType.HEAL, 1, 500, 0, 9.9), &"enemy_front", 0),
 	]
 	controller.start_battle(players, enemies, seed, false)
-	# 只有这个前排友军受伤，保证顺子治疗的主目标确定且三秒内不会溢出。
+	# 只有这个前排友军受伤，保证连星治疗的主目标确定且三秒内不会溢出。
 	controller.player_states[1].current_health = 300.0
 	controller.player_states[1].displayed_health = 300
 	return controller

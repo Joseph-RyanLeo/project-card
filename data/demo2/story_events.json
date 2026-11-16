@@ -1,7 +1,12 @@
 {
-  "_说明": "按用户2026-10-18确认：第一层试玩暂时忽略原始层数和英雄限制；原始条件保留。未实现的奖励整项禁用，不改写概率。来源表只作为事件内容数据。",
+  "_说明": "出现条件独立于路径快照，旧档中的事件定义和选项索引保持兼容。",
   "source_url": "https://my.feishu.cn/wiki/StamwnVppibRoZknZftcQCXJnQf?sheet=lAwIUd",
-  "test_ignore_appearance_limits": true,
+  "appearance": {
+    "ioann_prayer": {"floors": [3], "excluded_hero": "ioann_warden", "formal": true},
+    "strange_casino": {"floors": [1, 2, 3], "minimum_gold": 5, "formal": true},
+    "bone_tower": {"floors": [2], "formal": true},
+    "fortuna_gift": {"floors": [1, 2, 3, 4], "formal": true}
+  },
   "events": [
     {
       "path_id": "ioann_prayer",

@@ -14,6 +14,11 @@ var _controller: WeakRef
 var _next_break_time: float = INF
 var _rules: Dictionary = {}
 var _next_modifier_id: int = -40000000
+var _lone_star_used := false
+var _lone_star_target: BattleSquadState
+var _lone_star_until := -1.0
+const LONE_STAR_SECONDS := 5.0 # 孤星耀提供全伤害免疫的时长
+const LONE_STAR_ACTIONS := 2 # 孤星耀触发时立刻执行的行动次数
 
 
 func initialize(controller: Node, context: Dictionary) -> void:
@@ -56,6 +61,7 @@ func opening_rush() -> void:
 	var candidates: Array[CardData] = []
 	for card: CardData in c._reward_card_catalog:
 		if card.is_available and not card.is_derived and card.card_type == CardData.CardType.SPELL and card.get_effective_faction() == CardFaction.Id.RADIANT_ALLIANCE:
+			if not c._player_enabled_packs.is_empty() and not c._player_enabled_packs.has(String(card.pack_id)): continue
 			if card.rarity != CardData.Rarity.IV or not c._player_owned_card_ids.has(card.id):
 				candidates.append(card)
 	var counts: Dictionary = c._reward_held_card_counts()
@@ -88,6 +94,10 @@ func process_due(now: float) -> void:
 
 
 func share_damage(event: BattleEffectEvent) -> void:
+	if lone_star_immune(event.target):
+		event.exact_amount = 0.0
+		if event.formula != null: event.formula.exact_result = 0.0
+		return
 	if event.target.side != BattleSquadState.Side.PLAYER or event.exact_amount <= 0.0 or event.log_qualifier == "疲劳":
 		return
 	var region := ""
@@ -128,6 +138,7 @@ func try_protect_direct(target: BattleSquadState, amount: float, pierces: bool) 
 
 
 func try_protect(event: BattleEffectEvent) -> bool:
+	if lone_star_immune(event.target): return true
 	if not event.target.alive or event.target.current_health <= 0.0 or not has("sentry_protection") or sentries.is_empty() or event.target.side != BattleSquadState.Side.PLAYER:
 		return false
 	var hp_damage := event.exact_amount if event.pierces_armor else maxf(event.exact_amount - event.target.current_armor, 0.0)
@@ -191,6 +202,25 @@ func _emit(target: BattleSquadState, amount: float, type: CardData.ActionType, k
 	event.formula = BattleFormulaData.create(effect_name, type, amount, 1.0, 1.0, null, target)
 	event.formula.base_value_sources.append({"source_name": label, "amount": amount, "source_status": "resolved"})
 	c._apply_effect_event(event)
+
+
+func lone_star_immune(target: BattleSquadState) -> bool:
+	var c = _controller.get_ref()
+	return c != null and target != null and target == _lone_star_target and c.elapsed_seconds < _lone_star_until
+
+
+func try_lone_star() -> void:
+	if _lone_star_used or not has("lone_star"): return
+	var c = _controller.get_ref()
+	var living: Array = c.get_living_states(BattleSquadState.Side.PLAYER)
+	if living.size() != 1: return
+	var target := living[0] as BattleSquadState
+	if not target.alive or target.current_health <= 0.0 or target.is_banished: return
+	_lone_star_used = true
+	_lone_star_target = target
+	_lone_star_until = c.elapsed_seconds + LONE_STAR_SECONDS
+	for index: int in LONE_STAR_ACTIONS:
+		if target.alive and target.current_health > 0.0: c.execute_immediate_action(target, target.get_effective_action_type())
 
 
 func _talent(id: String) -> Dictionary:

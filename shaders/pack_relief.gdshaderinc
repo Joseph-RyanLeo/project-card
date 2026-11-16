@@ -4,8 +4,16 @@ uniform sampler2D body_normal : hint_normal, filter_linear, repeat_disable;
 uniform sampler2D gold_normal : hint_normal, filter_linear, repeat_disable;
 uniform sampler2D body_height : filter_linear, repeat_disable;
 uniform sampler2D body_regions : filter_nearest, repeat_disable;
+uniform bool use_body_height = false; // 小包用原尺寸高度图实时计算坡度
+uniform bool use_center_height = false; // 镀金委托额外合成中心火漆
+uniform vec3 extra_gold_color = vec3(-1.0); // 指定包装额外烫金的原图色，负值表示未指定
+const float EXTRA_GOLD_HIGHLIGHT_STRENGTH = 0.5; // 镀金委托金橙纹路扫过亮面时的反光强度
+uniform sampler2D center_height : filter_linear, repeat_disable;
+uniform vec2 center_height_origin_px = vec2(0.0);
+uniform float height_slope_scale = 4.0; // 原图相邻像素的高度差转换为法线坡度的倍率
 uniform int debug_view = 0; // 0材质、1高度、2当前强度法线、3素色光照、4凹凸位置
-uniform float body_strength = 0.65; // 袋身鼓起、封边和短折痕的凹凸强度
+uniform float body_strength = 0.15; // 袋身鼓起、封边和短折痕的凹凸强度
+uniform float center_height_strength = 0.15; // 镀金委托火漆的独立凹凸强度
 uniform float gold_strength = 0.45; // 金色图案的浅压纹强度
 uniform float body_reflection_strength = 0.08; // 袋身柔和反射的亮度，随袋身滑块一起关闭
 uniform float body_reflection_softness = 10.0; // 袋身反射的集中程度；数值越小，亮区越宽
@@ -22,13 +30,56 @@ vec3 relief_normal(vec3 packed_value, float strength) {
 	return normalize(vec3(n.xy * strength, max(n.z, 0.01)));
 }
 
+vec2 relief_height_sample(vec2 uv, vec2 native_size, vec2 strengths) {
+	vec4 bag = texture(body_height, uv);
+	float height = bag.r * strengths.x;
+	if (use_center_height) {
+		vec2 seal_uv = (uv * native_size - center_height_origin_px) / vec2(textureSize(center_height, 0));
+		if (all(greaterThanEqual(seal_uv, vec2(0.0))) && all(lessThan(seal_uv, vec2(1.0)))) {
+			vec4 seal = texture(center_height, seal_uv);
+			height += (seal.r - bag.r) * seal.a * strengths.y;
+		}
+	}
+	return vec2(height, bag.a);
+}
+
+float neighbor_height(vec2 uv, vec2 native_size, vec2 strengths, float fallback) {
+	vec2 sample_height = relief_height_sample(uv, native_size, strengths);
+	return mix(fallback, sample_height.x, sample_height.y);
+}
+
+vec3 small_pack_normal(vec2 uv) {
+	vec2 native_size = vec2(textureSize(body_height, 0));
+	vec2 dx = vec2(1.0 / native_size.x, 0.0);
+	vec2 dy = vec2(0.0, 1.0 / native_size.y);
+	vec2 strengths = vec2(body_strength, center_height_strength);
+	float middle = relief_height_sample(uv, native_size, strengths).x;
+	// 透明轮廓之外使用当前像素高度，避免把挂孔和透明边缘误算成深沟。
+	float slope_x = neighbor_height(uv - dx, native_size, strengths, middle) - neighbor_height(uv + dx, native_size, strengths, middle);
+	float slope_y = neighbor_height(uv + dy, native_size, strengths, middle) - neighbor_height(uv - dy, native_size, strengths, middle);
+	return normalize(vec3(vec2(slope_x, slope_y) * height_slope_scale, 1.0));
+}
+
+vec3 small_pack_regions(vec2 uv) {
+	vec2 native_size = vec2(textureSize(body_height, 0));
+	vec2 dx = vec2(1.0 / native_size.x, 0.0);
+	vec2 dy = vec2(0.0, 1.0 / native_size.y);
+	vec2 strengths = vec2(1.0);
+	float height = relief_height_sample(uv, native_size, strengths).x;
+	float average = (neighbor_height(uv - dx, native_size, strengths, height)
+		+ neighbor_height(uv + dx, native_size, strengths, height)
+		+ neighbor_height(uv - dy, native_size, strengths, height)
+		+ neighbor_height(uv + dy, native_size, strengths, height)) * 0.25;
+	float ridge = (height - average) * 10.625; // 四周平均值相差约24阶灰度时标满
+	return vec3(height, clamp(ridge, 0.0, 1.0), clamp(-ridge, 0.0, 1.0));
+}
+
 vec4 pack_relief_color(vec4 source, vec2 uv, vec2 pointer_force) {
-	bool is_gold = distance(source.rgb, PACK_GOLD) < 0.008
-		|| distance(source.rgb, vec3(0.5764706, 0.4470588, 0.2117647)) < 0.008
-		|| distance(source.rgb, vec3(1.0, 0.8274510, 0.5254902)) < 0.008;
-	vec3 body = relief_normal(texture(body_normal, uv).rgb, body_strength);
+	bool is_extra_gold = distance(source.rgb, extra_gold_color) < 0.008;
+	bool is_gold = is_pack_gold(source.rgb) || is_extra_gold;
+	vec3 body = use_body_height ? small_pack_normal(uv) : relief_normal(texture(body_normal, uv).rgb, body_strength);
 	vec3 normal_value = body;
-	if (is_gold) {
+	if (is_gold && !use_body_height) {
 		vec3 gold = relief_normal(texture(gold_normal, uv).rgb, gold_strength);
 		normal_value = normalize(vec3(body.xy / body.z + gold.xy / gold.z, 1.0));
 	}
@@ -42,7 +93,13 @@ vec4 pack_relief_color(vec4 source, vec2 uv, vec2 pointer_force) {
 	vec2 lighting_force = vec2(-light_xy.x, light_xy.y) / 0.85;
 	float flat_light = light_direction.z;
 	float diffuse_delta = dot(normal_value, light_direction) - flat_light;
-	vec3 color = pack_gold_foil(source.rgb, uv, lighting_force, 0.85);
+	vec3 color = source.rgb;
+	if (is_extra_gold) {
+		// 额外金纹保留包装原色，同一条金属反光只在亮面向白色提亮。
+		color = mix(color, vec3(1.0), pixel_gold_foil_weight(uv, lighting_force) * EXTRA_GOLD_HIGHLIGHT_STRENGTH);
+	} else if (is_gold) {
+		color = pixel_gold_foil(PACK_GOLD, uv, lighting_force, 0.85);
+	}
 	color *= clamp(1.0 + diffuse_delta * 0.85, 0.6, 1.35);
 	vec3 halfway = normalize(light_direction + vec3(0.0, 0.0, 1.0));
 	if (is_gold) {
@@ -61,7 +118,7 @@ vec4 pack_relief_color(vec4 source, vec2 uv, vec2 pointer_force) {
 	}
 	// 局部凸脊与凹沟都由当前高度图重算，平坦区域不加入额外明暗。
 	vec3 height_regions = texture(body_regions, uv).rgb;
-	float shoulder = clamp(height_regions.g + height_regions.b, 0.0, 1.0) * min(body_strength, 1.0);
+	float shoulder = use_body_height ? clamp(length(body.xy) * 2.0, 0.0, 1.0) : clamp(height_regions.g + height_regions.b, 0.0, 1.0) * min(body_strength, 1.0);
 	// 保留XY分量的长度：正中或浅坡处自然减弱，避免归一化近零向量造成明暗翻转。
 	float shoulder_facing = dot(body.xy, light_direction.xy);
 	color *= 1.0 + shoulder_facing * shoulder * support_shadow_strength;
@@ -69,7 +126,7 @@ vec4 pack_relief_color(vec4 source, vec2 uv, vec2 pointer_force) {
 	// 向柔和亮色混合，而非额外叠加发光能量；保留包装原色和印刷细节。
 	color = mix(color, max(color, vec3(0.9, 0.94, 1.0)), shoulder_reflection);
 	if (debug_view == 1) {
-		color = texture(body_height, uv).rgb;
+		color = use_body_height ? vec3(relief_height_sample(uv, vec2(textureSize(body_height, 0)), vec2(1.0)).x) : texture(body_height, uv).rgb;
 	} else if (debug_view == 2) {
 		color = body * 0.5 + 0.5;
 	} else if (debug_view == 3) {
@@ -77,7 +134,7 @@ vec4 pack_relief_color(vec4 source, vec2 uv, vec2 pointer_force) {
 		color = vec3(0.56, 0.59, 0.63) * (0.28 + max(dot(body, light_direction), 0.0) * 0.85);
 		color += vec3(0.1) * pow(max(dot(body, halfway), 0.0), body_reflection_softness) * min(body_strength, 1.0);
 	} else if (debug_view == 4) {
-		vec3 regions = texture(body_regions, uv).rgb;
+		vec3 regions = use_body_height ? small_pack_regions(uv) : texture(body_regions, uv).rgb;
 		color = mix(vec3(0.12), vec3(0.95, 0.65, 0.15), regions.r);
 		color = mix(color, vec3(0.12, 0.85, 1.0), regions.g);
 		color = mix(color, vec3(0.85, 0.22, 0.65), regions.b);

@@ -93,6 +93,7 @@ func configure(
 	)
 	if is_instance_valid(_indicator_visual):
 		_indicator_visual.texture = indicator_texture
+		_indicator_visual.self_modulate = EquipmentIndicatorStyleScript.TEMPORARY_EQUIPMENT_TINT if item != null and item.is_temporary_equipment() else Color.WHITE
 	if is_instance_valid(_indicator_shadow):
 		_indicator_shadow.texture = indicator_texture
 	_update_cursor_and_tooltip()
@@ -290,6 +291,7 @@ func build_drag_data(at_position: Vector2) -> Dictionary:
 		"source_type": &"board",
 		"source_row": source_row,
 		"source_slot": source_slot,
+		"source_view": self,
 		"grab_local_position": FULL_CARD_CENTER,
 		"indicator_grab_local_position": at_position - _indicator_visual.position,
 		"indicator_lifted_grab_local_position": at_position + Vector2(0.0, HOVER_LIFT_OFFSET),
@@ -306,7 +308,7 @@ func _notification(what: int) -> void:
 		var drag_data: Variant = get_viewport().gui_get_drag_data()
 		if (
 			drag_data is Dictionary
-			and (drag_data as Dictionary).get("source_slot") == source_slot
+			and (drag_data as Dictionary).get("source_view") == self
 			and (drag_data as Dictionary).get("kind") == &"equipment_indicator"
 		):
 			visible = false

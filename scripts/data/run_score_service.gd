@@ -38,11 +38,11 @@ static func card_score(card: OwnedCard) -> Dictionary:
 	return {"instance_id": String(card.instance_id), "card_id": String(card.card_data.id), "name": card.card_data.display_name, "parts": parts, "total": total}
 
 
-static func calculate(cards: Array[OwnedCard], exhausted: Dictionary, inventory: Array, gold: int, outcome: String, day: int, results: Array, protection: int) -> Dictionary:
+static func calculate(cards: Array[OwnedCard], exhausted: Dictionary, inventory: Array, gold: int, outcome: String, day: int, results: Array, protection: int, event_score: int = 0) -> Dictionary:
 	var eligible := outcome != "abandoned" or day >= 3
 	var all_cards: Dictionary = {}
 	for card: OwnedCard in cards:
-		if not card.card_data.is_derived: all_cards[String(card.instance_id)] = card
+		if not card.is_temporary_equipment() and not card.card_data.is_derived: all_cards[String(card.instance_id)] = card
 	for id: String in exhausted:
 		if all_cards.has(id): continue
 		var decoded := Save.new()._decode_collection_state({"cards": [exhausted[id]]}, {}, false, false, Save.SCHEMA_VERSION, false, false)
@@ -65,14 +65,15 @@ static func calculate(cards: Array[OwnedCard], exhausted: Dictionary, inventory:
 		var score := sticker_score(sticker)
 		toolbox.append({"name": String(sticker.get("emblem_id", sticker.get("wound_id", ""))), "total": score, "sticker": sticker.duplicate(true)})
 		base += score
-	base += gold
+	base += gold + event_score
 	var completed := 0
 	var bosses := 0
 	for result: Dictionary in results:
+		if result.get("extra", false): continue
 		if result.get("ending", "") in ["boss_loss", "ordinary_loss"] or (outcome == "failed" and int(result.day) == day): continue
 		completed += 1
 		# 第28天是已确认的额外四天半层终点；这里只支持计分语义，不生成路线内容。
 		if result.get("won", false) and (int(result.day) % 8 == 0 or (int(result.day) == 28 and outcome == "cleared")): bosses += 1
 	# 用十分之一的整数保存倍率，最后一次整除，避免1.2的浮点误差。
 	var multiplier_tenths := 10 + completed + bosses * 5 + (protection * 2 if outcome == "cleared" else 0)
-	return {"outcome": outcome, "day": day, "eligible": eligible, "cards": entries, "toolbox": toolbox, "gold": gold, "base": base if eligible else 0, "completed_days": completed, "bosses": bosses, "protection": protection if outcome == "cleared" else 0, "multiplier_tenths": multiplier_tenths, "total": (base * multiplier_tenths) / 10 if eligible else 0}
+	return {"outcome": outcome, "day": day, "eligible": eligible, "cards": entries, "toolbox": toolbox, "gold": gold, "event_score": event_score, "base": base if eligible else 0, "completed_days": completed, "bosses": bosses, "protection": protection if outcome == "cleared" else 0, "multiplier_tenths": multiplier_tenths, "total": (base * multiplier_tenths) / 10 if eligible else 0}

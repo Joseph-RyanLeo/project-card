@@ -15,6 +15,10 @@ static func get_element_groups(pattern: RunePatternResult) -> Array[Dictionary]:
 		RunePatternResult.PatternType.PAIR:
 			return _first_runs_with_lengths(runs, [2])
 		RunePatternResult.PatternType.THREE_OF_A_KIND:
+			if pattern.promoted_pair:
+				var promoted := _first_runs_with_lengths(runs, [2])
+				if not promoted.is_empty(): promoted[0]["count"] = 3
+				return promoted
 			return _first_runs_with_lengths(runs, [3])
 		RunePatternResult.PatternType.FOUR_OF_A_KIND:
 			return _first_runs_with_lengths(runs, [4])

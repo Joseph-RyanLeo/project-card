@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"ultimate_harmony"
+display_name = "终极调和"
+pack_id = &"gilded_commission"
+rarity = 3
+content_effect = &"ultimate_harmony"
+card_type = 2
+spell_type = 0
+spell_trigger_kind = 1
+effect_text = "开战时：每个连星友军分别投1d6和1d10，使同排左右相邻友军本场获得对应行动值及生命加成。"

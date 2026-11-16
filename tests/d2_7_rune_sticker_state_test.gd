@@ -22,7 +22,7 @@ func _run() -> void:
 	var full_house := pattern([1, 1, 0, 0, 0], 2)
 	check(full_house.pattern_type == RunePatternResult.PatternType.FULL_HOUSE and full_house.visible_runes[2] == CardData.ElementType.WATER, "水水万能火火按左侧优先组成三水二火")
 	var four := pattern([1, 1, 1, 0, 0], 3)
-	check(four.pattern_type == RunePatternResult.PatternType.FOUR_OF_A_KIND, "万能优先组成四条")
+	check(four.pattern_type == RunePatternResult.PatternType.FOUR_OF_A_KIND, "万能优先组成四象")
 	var left_pair := pattern([2, 3, 1, 0, 2], 3)
 	check(left_pair.visible_runes[3] == CardData.ElementType.WATER, "同牌型按实际参与符文位置取左侧，不按元素枚举")
 	check(pattern([1, 1, 0], -1, 0).participating_indices.size() == 2, "混沌仍按当前元素正常参与牌型识别")

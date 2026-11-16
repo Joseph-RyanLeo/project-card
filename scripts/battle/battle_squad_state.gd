@@ -28,6 +28,7 @@ var runtime_id: int = 0 # 本场战斗内的稳定实例编号，不作为跨战
 var side: int = Side.PLAYER
 var row_key: StringName = &""
 var direct_damage_guard: Callable # 英雄对无事件的效果直伤提供致命伤害免死检查
+var lethal_equipment_guard: Callable # 在生命与护甲扣减前处理装备免死
 var formation_index: int = 0
 var initial_row_key: StringName = &"" # 战前所在排；换排不改变，用于战后统计定位
 var initial_formation_index: int = -1 # 战前排位保持不变；战中生成单位为-1，用于结算分类和映射
@@ -85,6 +86,10 @@ var battle_armor_granted: float = 0.0
 var battle_health_lost: float = 0.0 # 本场累计生命伤害；治疗与重新入场均不回退
 var runtime_action_type_override: int = -1 # 负数读取原卡行动方式；非负值只在本场战斗覆盖，不写回CardData
 var runtime_base_action_multiplier: float = 1.0 # 只乘卡牌永久基础数值；装备、纹章、伤势等临时加值在乘完后再加入
+var base_action_aura: Callable
+var pair_upgrade_aura: Callable
+var rune_base_multiplier := 1
+var gilded_zeal_penalty := 0
 var runtime_permanent_action_growth: float = 0.0 # 本场已记账、战后才写回收藏的永久数值，结算前也属于基础层
 var runtime_permanent_armor_growth: float = 0.0 # 本场已记账的永久护甲，复活时并入基础护甲恢复
 var masked_rune_slots: Dictionary = {} # 本场被遮蔽的符文槽；键由卡牌实例与槽位组成，值保留显示所需定位
@@ -157,6 +162,11 @@ func initialize(
 
 func clear_precise_runtime() -> void:
 	direct_damage_guard = Callable()
+	lethal_equipment_guard = Callable()
+	base_action_aura = Callable()
+	pair_upgrade_aura = Callable()
+	rune_base_multiplier = 1
+	gilded_zeal_penalty = 0
 	is_banished = false
 	is_repairing = false
 	masking_forbidden = false
@@ -308,7 +318,9 @@ func get_max_health() -> int:
 	if has_unmasked_wound(&"晶体化"):
 		# 临时额外生命已由 BattleEffectRuntime 等量转成临时护甲，不再抬高生命上限。
 		temporary_health = minf(temporary_health, 0.0)
-	return clampi(roundi(base + temporary_health - get_masked_emblem_bonus(&"max_health")), 0, CardData.MAXIMUM_HEALTH)
+	var health := base + temporary_health - get_masked_emblem_bonus(&"max_health")
+	if has_unmasked_wound(&"业火"): health *= 0.5
+	return clampi(roundi(health), 0, CardData.MAXIMUM_HEALTH)
 
 
 func get_target_weight() -> int:
@@ -359,6 +371,8 @@ func has_targeting_keyword(keyword: StringName) -> bool:
 		return true
 	if squad_data == null:
 		return false
+	if keyword == &"dazzling" and squad_data.has_indicator(CelestialIndicator.Kind.MERCENARY):
+		return true
 	# 伤势关键词按当前未遮蔽实例读取，不能在开战时永久复制到运行时关键词表。
 	var active_injuries := get_unmasked_active_injuries()
 	for slot: Dictionary in squad_data.get_visible_wound_slots():
@@ -387,8 +401,9 @@ func get_exact_action_amount() -> float:
 		0,
 		CardData.MAXIMUM_BASE_VALUE
 	)
-	var base_result := BattleRules.calculate_exact_action_amount(modified_base, get_rune_pattern_result().pattern_type)
-	return base_result * maxf(0.0, 1.0 + modifiers.get_additive(BattleModifier.Stat.ACTION_MULTIPLIER))
+	var pattern := get_rune_pattern_result().pattern_type
+	var base_result := BattleRules.calculate_exact_action_amount(modified_base, pattern)
+	return (base_result + get_doorboard_toy_bonus() * BattleRules.get_pattern_multiplier(pattern)) * maxf(0.0, 1.0 + modifiers.get_additive(BattleModifier.Stat.ACTION_MULTIPLIER))
 
 
 func get_active_rune_slots() -> Array[Dictionary]:
@@ -430,8 +445,8 @@ func get_active_rune_stat_bonus(stat: StringName) -> int:
 				if stat == &"zeal": total += 1
 				elif stat == &"target_priority": total -= 1
 	if priority_reduction_forbidden and stat == &"target_priority":
-		return get_active_rune_slots().filter(func(slot: Dictionary) -> bool: return int(slot.get("element", -1)) == CardData.ElementType.LIGHT).size()
-	return total
+		total = get_active_rune_slots().filter(func(slot: Dictionary) -> bool: return int(slot.get("element", -1)) == CardData.ElementType.LIGHT).size()
+	return total * rune_base_multiplier
 
 
 func get_runtime_rune_overrides_by_card() -> Dictionary:
@@ -456,7 +471,11 @@ func get_active_runes() -> Array[CardData.ElementType]:
 
 
 func get_rune_pattern_result() -> RunePatternResult:
-	return RunePatternRules.identify_slots(get_active_rune_slots())
+	var pattern := RunePatternRules.identify_slots(get_active_rune_slots())
+	if pattern.pattern_type == RunePatternResult.PatternType.PAIR and pair_upgrade_aura.is_valid() and pair_upgrade_aura.call(self):
+		pattern.pattern_type = RunePatternResult.PatternType.THREE_OF_A_KIND
+		pattern.promoted_pair = true
+	return pattern
 
 
 func track_fire_rune_reinforcement(card: CardData, rune_index: int, source_id: int) -> void:
@@ -668,6 +687,7 @@ func get_display_action_value() -> int:
 	# 卡面显示“这次普通行动的基础数值”，包含效果修正与尚未消费的强化；牌型倍率仍在结算公式中展示。
 	return clampi(roundi(
 		float(get_action_base_value())
+		+ get_doorboard_toy_bonus()
 		+ modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)
 		+ modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT)
 	), 0, 999)
@@ -679,7 +699,7 @@ func get_action_value_without_reinforcement() -> int:
 	return clampi(
 		roundi(
 			# 金币强化按贪婪压值前的有效数值计算；正式卡面值仍通过 get_action_base_value() 显示为1。
-			float(squad_data.get_effective_action_base_value(get_unmasked_active_injuries(), true, false, runtime_base_action_multiplier, runtime_permanent_action_growth))
+			float(squad_data.get_effective_action_base_value(get_unmasked_active_injuries(), true, false, get_effective_base_action_multiplier(), runtime_permanent_action_growth))
 			+ modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)
 		),
 		0,
@@ -690,13 +710,22 @@ func get_action_value_without_reinforcement() -> int:
 func get_action_base_value() -> int:
 	if get_action_source() == null or squad_data == null:
 		return 0
-	return clampi(squad_data.get_effective_action_base_value(get_unmasked_active_injuries(), true, true, runtime_base_action_multiplier, runtime_permanent_action_growth) - get_masked_emblem_bonus(&"base_value"), 0, CardData.MAXIMUM_BASE_VALUE)
+	return clampi(squad_data.get_effective_action_base_value(get_unmasked_active_injuries(), true, true, get_effective_base_action_multiplier(), runtime_permanent_action_growth) - get_masked_emblem_bonus(&"base_value"), 0, CardData.MAXIMUM_BASE_VALUE)
+
+
+func get_effective_base_action_multiplier() -> float:
+	return runtime_base_action_multiplier * (float(base_action_aura.call(self)) if base_action_aura.is_valid() else 1.0)
+
+
+func get_doorboard_toy_bonus() -> int:
+	return floori(current_health / 5.0) if equipped_card_is(&"doorboard_toy") else 0
 
 
 func get_zeal_layers() -> int:
 	return (
 		roundi(modifiers.get_additive(BattleModifier.Stat.ZEAL)) - get_masked_emblem_bonus(&"zeal")
 		+ get_active_rune_stat_bonus(&"zeal")
+		+ gilded_zeal_penalty
 		+ (squad_data.get_equipment_zeal_delta() if squad_data != null else 0)
 		+ (
 			squad_data.get_visible_status_static_modifier(
@@ -770,26 +799,45 @@ func is_action_ready(epsilon: float = 0.0001) -> bool:
 	return remaining_cooldown <= epsilon or cooldown_progress >= 1.0 - epsilon
 
 
+func accepts_damage_event(event: BattleEffectEvent) -> bool:
+	return not has_active_content_effect(&"maze_ghost") or (event != null and not event.fixed_damage and event.action_type == CardData.ActionType.MAGIC)
+
+
+func equipped_card_is(id: StringName) -> bool:
+	var item := squad_data.get_equipped_item() if squad_data != null else null
+	return item != null and item.card_data.id == id
+
+
+func hellfire_multiplier() -> float:
+	var multiplier := 2.0 if has_unmasked_wound(&"业火") else 1.0
+	if equipped_card_is(&"hellstone_fragment"): multiplier *= 2.0
+	return multiplier
+
+
 func apply_damage_exact(amount: float, source_state: BattleSquadState = null, event: BattleEffectEvent = null, pierces_armor: bool = false) -> Dictionary:
-	if is_banished: return {"armor_damage": 0.0, "health_damage": 0.0, "total": 0.0}
+	if is_banished or not accepts_damage_event(event): return {"armor_damage": 0.0, "health_damage": 0.0, "total": 0.0}
+	if event == null or not event.hellfire_adjusted:
+		amount *= hellfire_multiplier() * (source_state.hellfire_multiplier() if source_state != null else 1.0)
 	if event == null and direct_damage_guard.is_valid() and direct_damage_guard.call(self, amount, pierces_armor):
 		return {"armor_damage": 0.0, "health_damage": 0.0, "total": 0.0}
 	var damage := maxf(amount, 0.0)
 	var health_before: float = current_health
 	var crystal_skin := has_active_content_effect(&"crystal_skin_sentry")
+	var crystal_pierced := crystal_skin and pierces_armor and (event == null or not event.is_environment_damage)
 	if crystal_skin:
 		damage = minf(damage, 1.0)
-		if pierces_armor and (event == null or not event.is_environment_damage):
-			damage = maxf(current_health, damage)
-			card_destruction_requested.emit(self)
-	var armor_damage := 0.0
-	if not pierces_armor:
-		armor_damage = minf(current_armor, damage)
-		_set_exact_armor(current_armor - armor_damage)
-		damage -= armor_damage
-	if crystal_skin and current_armor <= 0.0:
-		damage = maxf(damage, current_health)
-	var health_damage := damage
+		if crystal_pierced: damage = maxf(current_health, damage)
+	var armor_damage := 0.0 if pierces_armor else minf(current_armor, damage)
+	var health_damage := damage - armor_damage
+	var lethal := health_damage >= health_before or (crystal_skin and current_armor - armor_damage <= 0.0)
+	if amount > 0.0 and health_before > 0.0 and lethal and lethal_equipment_guard.is_valid() and lethal_equipment_guard.call(self):
+		if event != null:
+			event.missed = true
+			event.log_qualifier += "；余烬空瓶阻止了致命伤害"
+		return {"armor_damage": 0.0, "health_damage": 0.0, "total": 0.0}
+	if crystal_pierced: card_destruction_requested.emit(self)
+	if not pierces_armor: _set_exact_armor(current_armor - armor_damage)
+	if crystal_skin and current_armor <= 0.0: health_damage = maxf(health_damage, current_health)
 	_set_exact_health(current_health - health_damage)
 	if armor_damage > 0.0:
 		_accumulate(CHANNEL_ARMOR_DAMAGE, armor_damage, source_state, event)

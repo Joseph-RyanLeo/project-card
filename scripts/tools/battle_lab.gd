@@ -350,7 +350,7 @@ func _build_side_editor(side_key: String, title_text: String) -> Control:
 		rune_row.add_child(option)
 	layout.add_child(rune_row)
 	var summary := Label.new()
-	summary.text = "牌型：混乱"
+	summary.text = "牌型：混沌"
 	summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	summary.add_theme_color_override("font_color", Color("9fd6ac"))
 	layout.add_child(summary)

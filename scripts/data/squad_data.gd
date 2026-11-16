@@ -28,6 +28,9 @@ const UNSPECIFIED_EQUIPMENT_INDICATOR_POSITION := Vector2(-1.0, -1.0) # equip_it
 @export var layer_cards: Array[CardData] = [] # 从最上层到最下层保存，第一项提供卡牌效果
 @export var two_card_layout: TwoCardLayout = TwoCardLayout.EXPANDED # 双卡使用紧密或展开吸附布局
 var _owned_cards_by_card: Dictionary = {} # CardData引用→本局唯一OwnedCard；显示层仍可沿用CardData
+var _helmet: OwnedCard
+const DEFAULT_HELMET_POSITION := Vector2(74.0, 68.0) # 独立头盔指示物的默认中心
+var _helmet_position := DEFAULT_HELMET_POSITION
 var _equipped_item: OwnedCard # 装备位引用同一OwnedCard物品实例；指示物只是它的场上显示形态
 var indicator_attachments: Array[Dictionary] = [] # 独立日月星实例、顶牌局部中心与附加顺序，不占装备位
 var _equipment_indicator_card_position: Vector2 = DEFAULT_EQUIPMENT_INDICATOR_POSITION # 指示物中心相对小队最上层卡牌左上角的位置
@@ -73,6 +76,8 @@ func duplicate_squad() -> SquadData:
 	copy.two_card_layout = two_card_layout
 	copy._owned_cards_by_card = _owned_cards_by_card.duplicate()
 	copy._equipped_item = _equipped_item
+	copy._helmet = _helmet
+	copy._helmet_position = _helmet_position
 	copy._equipment_indicator_card_position = _equipment_indicator_card_position
 	for attachment: Dictionary in indicator_attachments:
 		var copied_attachment := attachment.duplicate()
@@ -180,8 +185,10 @@ func get_effect_source_instance() -> OwnedCard:
 
 func can_equip_item(owned_item: OwnedCard) -> bool:
 	return (
-		_equipped_item == null
-		and owned_item != null
+		owned_item != null
+		and (
+			_helmet == null if is_helmet(owned_item) else _equipped_item == null
+		)
 		and owned_item.is_valid()
 		and owned_item.card_data.card_type == CardData.CardType.EQUIPMENT
 		and (not owned_item.card_data.has_keyword(&"squad_equipment") or get_card_count() > 1)
@@ -195,6 +202,11 @@ func equip_item(
 	# 装备位只保存收藏物品实例的引用，不生成第二张“装备指示物卡”。
 	if not can_equip_item(owned_item) or not indicator_position.is_finite():
 		return false
+	if is_helmet(owned_item):
+		_helmet = owned_item
+		if indicator_position != UNSPECIFIED_EQUIPMENT_INDICATOR_POSITION:
+			_helmet_position = indicator_position - _get_effect_source_horizontal_offset()
+		return true
 	_equipped_item = owned_item
 	_equipment_indicator_card_position = (
 		DEFAULT_EQUIPMENT_INDICATOR_POSITION
@@ -208,12 +220,38 @@ func get_equipped_item() -> OwnedCard:
 	return _equipped_item
 
 
+static func is_helmet(item: OwnedCard) -> bool:
+	return item != null and item.card_data != null and item.card_data.id == &"balin_helmet"
+
+
+func get_helmet() -> OwnedCard:
+	return _helmet
+
+
+func get_equipped_items() -> Array[OwnedCard]:
+	var items: Array[OwnedCard] = []
+	if _equipped_item != null: items.append(_equipped_item)
+	if _helmet != null: items.append(_helmet)
+	return items
+
+
+func has_equipped_item(item: OwnedCard) -> bool:
+	return item != null and item in [_equipped_item, _helmet]
+
+
+func get_equipment_stat_bonus(stat: StringName) -> float:
+	var total := 0.0
+	for item: OwnedCard in get_equipped_items():
+		match stat:
+			&"base_value": total += item.card_data.equipment_action_delta + item.get_permanent_growth(stat)
+			&"max_health": total += item.card_data.equipment_health_delta + item.get_permanent_growth(stat)
+			&"base_armor": total += item.card_data.equipment_armor_delta
+			&"zeal": total += item.card_data.equipment_zeal_delta + int(item.progress_by_source.get(OwnedCard.MISSION_ZEAL, 0))
+	return total
+
+
 func get_equipment_zeal_delta() -> int:
-	return (
-		_equipped_item.card_data.equipment_zeal_delta
-		if _equipped_item != null and _equipped_item.card_data != null
-		else 0
-	)
+	return int(get_equipment_stat_bonus(&"zeal"))
 
 
 func get_emblem_zeal_delta() -> int:
@@ -232,6 +270,8 @@ func get_visible_status_static_modifier(
 		var owned_card := get_owned_card(card_data)
 		if owned_card == null:
 			continue
+		if stat == &"zeal":
+			total += int(owned_card.progress_by_source.get(&"event_potion_zeal", 0))
 		total += owned_card.get_emblem_static_modifier(
 			stat,
 			get_visible_emblem_slot_indices(card_data, true)
@@ -266,14 +306,19 @@ func get_visible_rune_stat_bonus(stat: StringName) -> int:
 	return total
 
 
-func get_equipment_indicator_position() -> Vector2:
+func get_equipment_indicator_position(item: OwnedCard = null) -> Vector2:
+	if is_helmet(item): return _helmet_position + _get_effect_source_horizontal_offset()
 	# 对显示、拖拽和存档仍提供小队局部坐标；内部落点跟随当前顶牌移动。
 	if _equipped_item == null:
 		return DEFAULT_EQUIPMENT_INDICATOR_POSITION
 	return _equipment_indicator_card_position + _get_effect_source_horizontal_offset()
 
 
-func set_equipment_indicator_position(value: Vector2) -> bool:
+func set_equipment_indicator_position(value: Vector2, item: OwnedCard = null) -> bool:
+	if is_helmet(item):
+		if _helmet != item or not value.is_finite(): return false
+		_helmet_position = value - _get_effect_source_horizontal_offset()
+		return true
 	if _equipped_item == null or not value.is_finite():
 		return false
 	_equipment_indicator_card_position = value - _get_effect_source_horizontal_offset()
@@ -289,7 +334,12 @@ func _get_effect_source_horizontal_offset() -> Vector2:
 	)
 
 
-func unequip_item() -> OwnedCard:
+func unequip_item(item: OwnedCard = null) -> OwnedCard:
+	if item != null and not has_equipped_item(item): return null
+	if is_helmet(item):
+		_helmet = null
+		_helmet_position = DEFAULT_HELMET_POSITION
+		return item
 	var returned_item := _equipped_item
 	_equipped_item = null
 	_equipment_indicator_card_position = DEFAULT_EQUIPMENT_INDICATOR_POSITION
@@ -299,6 +349,7 @@ func unequip_item() -> OwnedCard:
 func return_equipment_for_split() -> OwnedCard:
 	indicator_attachments.clear()
 	# 拆队不判断装备来自哪一张成员卡；当前规则统一把小队装备退回收藏。
+	if _helmet != null: unequip_item(_helmet)
 	return unequip_item()
 
 
@@ -306,16 +357,18 @@ func merge_equipment_from(other_squad: SquadData) -> Array[OwnedCard]:
 	merge_indicators_from(other_squad)
 	# 收藏容器始终保有这些实例；返回数组只告诉调用者哪些装备已解除绑定。
 	var returned_items: Array[OwnedCard] = []
-	if other_squad == null or other_squad._equipped_item == null:
+	if other_squad == null:
 		return returned_items
-	if _equipped_item == null:
-		_equipped_item = other_squad._equipped_item
-		_equipment_indicator_card_position = other_squad._equipment_indicator_card_position
-		return returned_items
-	returned_items.append(_equipped_item)
-	returned_items.append(other_squad._equipped_item)
-	_equipped_item = null
-	_equipment_indicator_card_position = DEFAULT_EQUIPMENT_INDICATOR_POSITION
+	for item: OwnedCard in other_squad.get_equipped_items():
+		if can_equip_item(item):
+			var local_position := other_squad.get_equipment_indicator_position(item) - other_squad._get_effect_source_horizontal_offset()
+			equip_item(item, local_position + _get_effect_source_horizontal_offset())
+			continue
+		var existing := _helmet if is_helmet(item) else _equipped_item
+		if existing != null:
+			returned_items.append(existing)
+			unequip_item(existing)
+		returned_items.append(item)
 	return returned_items
 
 
@@ -333,7 +386,6 @@ func get_effective_action_base_value(
 		if owned_card != null
 		else (source.base_value if source != null else 0)
 	)
-	var equipment := _equipped_item.card_data if _equipped_item != null else null
 	var visible_greed := false
 	for wound_slot: Dictionary in get_visible_wound_slots(true):
 		var wound_card := wound_slot.get("card") as CardData
@@ -357,7 +409,7 @@ func get_effective_action_base_value(
 				active_wound_ids,
 				filter_wounds_by_active_ids
 			)
-			+ (equipment.equipment_action_delta + _equipped_item.get_permanent_growth(&"base_value") if equipment != null else 0)
+			+ get_equipment_stat_bonus(&"base_value")
 			+ get_ironwall_squad_bonus(&"base_value")
 			+ (CelestialIndicator.SUN_VALUE if has_indicator(CelestialIndicator.Kind.SUN) else 0)
 			+ _get_star_action_value()
@@ -383,10 +435,9 @@ func get_effective_max_health() -> int:
 		if owned_card != null
 		else (source.max_health if source != null else 0)
 	)
-	var equipment := _equipped_item.card_data if _equipped_item != null else null
-	var added_health := (
+	var added_health: float = (
 		get_visible_status_static_modifier(&"max_health")
-		+ (equipment.equipment_health_delta if equipment != null else 0)
+		+ get_equipment_stat_bonus(&"max_health")
 		+ (CelestialIndicator.SUN_HEALTH if has_indicator(CelestialIndicator.Kind.SUN) else 0)
 	)
 	if _has_visible_crystallization():
@@ -410,13 +461,12 @@ func get_effective_base_armor() -> int:
 		if owned_card != null
 		else (source.armor if source != null else 0)
 	)
-	var equipment := _equipped_item.card_data if _equipped_item != null else null
 	var crystallized_health := get_crystallization_extra_health()
 	return clampi(
 		roundi(
 			base + get_visible_rune_stat_bonus(&"base_armor")
 			+ get_visible_status_static_modifier(&"base_armor")
-			+ (equipment.equipment_armor_delta if equipment != null else 0)
+			+ get_equipment_stat_bonus(&"base_armor")
 			+ (CelestialIndicator.MOON_ARMOR if has_indicator(CelestialIndicator.Kind.MOON) else 0)
 			+ crystallized_health
 		),
@@ -435,10 +485,9 @@ func get_crystallization_extra_health() -> int:
 		if owned_card != null
 		else float(source.max_health if source != null else 0)
 	)
-	var equipment := _equipped_item.card_data if _equipped_item != null else null
-	var extras := (
+	var extras: float = (
 		get_visible_status_static_modifier(&"max_health")
-		+ (equipment.equipment_health_delta if equipment != null else 0)
+		+ get_equipment_stat_bonus(&"max_health")
 		+ (CelestialIndicator.SUN_HEALTH if has_indicator(CelestialIndicator.Kind.SUN) else 0)
 	)
 	var base_health := _get_crystallization_base_health()
@@ -499,6 +548,8 @@ func is_valid() -> bool:
 			or not _equipment_indicator_card_position.is_finite()
 		)
 	):
+		return false
+	if _helmet != null and (not _helmet.is_valid() or not is_helmet(_helmet) or not _helmet_position.is_finite()):
 		return false
 	if horizontal_cards.size() > 1 and contains_stacking_forbidden_card():
 		return false

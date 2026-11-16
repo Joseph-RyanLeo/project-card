@@ -2,7 +2,7 @@ extends SceneTree
 
 ## 在反馈保存测试之后用独立进程读回临时工艺资源，不触碰项目正式配置。
 const Settings = preload("res://scripts/ui/card_finish_settings.gd")
-const TUNER = preload("res://scenes/tools/CardArtTuner.tscn")
+const TUNER = preload("res://scenes/tools/CardTextureTuner.tscn")
 const PATH := "/private/tmp/project-card-gallery-finish-feedback/card_finish_settings.tres"
 var checks := 0
 var failures := 0
@@ -15,14 +15,14 @@ func _run() -> void:
 	var saved := ResourceLoader.load(PATH, "", ResourceLoader.CACHE_MODE_IGNORE)
 	check(saved != null and saved.fractured_density == 15, "独立进程从磁盘读回碎闪15")
 	check(is_equal_approx(saved.holographic_strength, 0.9) and saved.embossed_density == 47, "独立进程保留同次保存与外部合并的工艺参数")
-	var tuner := TUNER.instantiate() as CardArtTuner
-	tuner.finish_settings_path = PATH
+	var tuner := TUNER.instantiate() as Control
+	tuner.settings_path = PATH
 	root.add_child(tuner)
 	await process_frame
-	tuner.finish_selector.select(CardFinishPreview.Finish.FRACTURED)
-	tuner.finish_selector.item_selected.emit(CardFinishPreview.Finish.FRACTURED)
+	tuner.style_selector.select(5)
+	tuner.style_selector.item_selected.emit(5)
 	await process_frame
-	check(tuner.finish_density_spin.value == 15 and not tuner._has_finish_changes() and tuner.save_finish_button.disabled, "独立进程打开工具显示15，且没有伪造未保存状态")
+	check(tuner.controls.fractured_density.value == 15 and not tuner.has_changes() and tuner.save_button.disabled, "独立进程打开工具显示15，且没有伪造未保存状态")
 	check(CardFinishPreview.SETTINGS.fractured_density == 15, "项目正式卡面仍读取15")
 	var owned := OwnedCard.new()
 	owned.initialize(load("res://resources/cards/militia.tres"), &"settings_restore_probe", 0)

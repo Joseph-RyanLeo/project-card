@@ -8,6 +8,12 @@ static var _textures: Dictionary = {}
 static func get_texture(kind: int) -> Texture2D:
 	if _textures.has(kind):
 		return _textures[kind] as Texture2D
+	if CelestialIndicator.TASK_TARGETS.has(kind):
+		var ink: String = ["#638c65", "#ad5449", "#5281a0"][kind - CelestialIndicator.Kind.CLEANUP]
+		var icon := Image.new()
+		icon.load_svg_from_string('<svg xmlns="http://www.w3.org/2000/svg" width="30" height="32" viewBox="0 0 30 32"><path fill="#49343d" d="M2 2h25v6h-3v15h4v7H3v-6h3V9H2z"/><path fill="#efd296" d="M7 5h14v22H7z"/><path fill="%s" d="M9 9h10v3H9zm0 6h10v3H9zm0 6h7v3H9z"/></svg>' % ink)
+		_textures[kind] = ImageTexture.create_from_image(icon)
+		return _textures[kind] as Texture2D
 	if kind < 0 or kind >= CELLS.size():
 		return null
 	var source := SOURCE.get_image()

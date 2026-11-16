@@ -4,9 +4,9 @@ extends CardView
 ## 商店卡面沿用 CardView 的组合；暗单仅接收公开提示生成的定义，不持有真卡内容。
 const CAROUSEL_HOLD: float = 0.7 # 暗单每种图标或品级停留的秒数
 const CAROUSEL_FADE: float = 0.35 # 新旧图标交叉渐变的秒数
-const IDENTITY_CAROUSEL_SECONDS: float = 1.29 # 中央种族／种类图标独立轮播间隔，避开左上行动图标的1.05秒节奏
+const IDENTITY_CAROUSEL_SECONDS: float = 1.29 # 种族／种类图标独立轮播间隔，避开左上行动图标的1.05秒节奏
 const ACTION_CAROUSEL_RECT := Rect2(-9, -9, 32, 36) # 左上图标固定透明画布，容纳全部行动、法术角标及装备箭头
-const IDENTITY_CAROUSEL_SIZE := Vector2i(16, 16) # 中央种族／种类图标固定透明画布，保持原像素居中且不拉伸
+const IDENTITY_CAROUSEL_SIZE := Vector2i(16, 16) # 种族／种类图标固定透明画布，保持原像素居中且不拉伸
 const QUESTION_FONT_SIZE: int = 36 # 暗单插画区域问号的字号
 const CROSSFADE_SHADER = preload("res://shaders/shop_card_crossfade.gdshader")
 
@@ -90,30 +90,39 @@ func _refresh() -> void:
 	for icon: Control in [race_icon, action_icon, cooldown_icon, health_icon, armor_icon]:
 		icon.tooltip_text = ""
 	rune_row.visible = false
-	_normalize_carousel_icon(action_icon, ACTION_CAROUSEL_RECT)
-	_normalize_carousel_icon(race_icon, Rect2(Vector2(race_center_pixel) - Vector2(IDENTITY_CAROUSEL_SIZE) * 0.5, Vector2(IDENTITY_CAROUSEL_SIZE)))
+	var action_bounds := ACTION_CAROUSEL_RECT
+	if card_data.card_type == CardData.CardType.EQUIPMENT:
+		action_bounds.position = EQUIPMENT_ACTION_POSITION - (action_bounds.size - EQUIPMENT_ACTION_SIZE) * 0.5
+	_normalize_carousel_icon(action_icon, action_bounds)
+	var identity_size := Vector2(IDENTITY_CAROUSEL_SIZE)
+	var bottom_aligned := card_data.card_type != CardData.CardType.MINION
+	var identity_position := _get_non_minion_identity_position(identity_size) if bottom_aligned else Vector2(race_center_pixel) - identity_size * 0.5
+	_normalize_carousel_icon(race_icon, Rect2(identity_position, identity_size), bottom_aligned)
 	_update_identity_material()
 
 
-func _normalize_carousel_icon(icon: TextureRect, bounds: Rect2) -> void:
+func _normalize_carousel_icon(icon: TextureRect, bounds: Rect2, bottom_aligned: bool = false) -> void:
 	if icon.texture == null: return
-	icon.texture = _icon_canvas(icon.texture, Vector2i(bounds.size))
+	icon.texture = _icon_canvas(icon.texture, Vector2i(bounds.size), bottom_aligned)
 	_set_control_rect(icon, bounds.position, bounds.size)
 	icon.stretch_mode = TextureRect.STRETCH_SCALE
 
 
-func _icon_canvas(source: Texture2D, canvas_size: Vector2i) -> Texture2D:
+func _icon_canvas(source: Texture2D, canvas_size: Vector2i, bottom_aligned: bool = false) -> Texture2D:
 	var key := source.resource_path
 	if source is AtlasTexture:
 		key = source.atlas.resource_path + str(source.region)
 	elif key.is_empty():
 		key = str(source.get_rid())
-	key += str(canvas_size)
+	key += str(canvas_size) + (":bottom:%d" % (int(card_size.x) % 2) if bottom_aligned else ":center")
 	if not _icon_canvases.has(key):
 		var image := source.get_image()
 		image.convert(Image.FORMAT_RGBA8)
 		var canvas := Image.create(canvas_size.x, canvas_size.y, false, Image.FORMAT_RGBA8)
-		canvas.blit_rect(image, Rect2i(Vector2i.ZERO, image.get_size()), (canvas_size - image.get_size()) / 2)
+		var origin := (canvas_size - image.get_size()) / 2
+		if bottom_aligned:
+			origin = Vector2i(_get_non_minion_identity_position(Vector2(image.get_size())) - _get_non_minion_identity_position(Vector2(canvas_size)))
+		canvas.blit_rect(image, Rect2i(Vector2i.ZERO, image.get_size()), origin)
 		_icon_canvases[key] = ImageTexture.create_from_image(canvas)
 	return _icon_canvases[key]
 
@@ -121,7 +130,7 @@ func _icon_canvas(source: Texture2D, canvas_size: Vector2i) -> Texture2D:
 func _identity_texture(definition: CardData, rarity: int) -> Texture2D:
 	var public_card: CardData = definition.duplicate(true)
 	public_card.rarity = rarity as CardData.Rarity
-	return _icon_canvas(_get_identity_texture(public_card), IDENTITY_CAROUSEL_SIZE)
+	return _icon_canvas(_get_identity_texture(public_card), IDENTITY_CAROUSEL_SIZE, definition.card_type != CardData.CardType.MINION)
 
 
 func _update_identity_material() -> void:

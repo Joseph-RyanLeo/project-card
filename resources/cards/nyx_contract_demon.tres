@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://assets/card_art/gilded_commission/nyx_contract_demon.png" id="2_art"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"nyx_contract_demon"
+display_name = "契约之魔·奈克斯"
+pack_id = &"gilded_commission"
+effect_ids = Array[StringName]([&"nyx_contract_demon.effect.rush"])
+content_effect = &"nyx_contract_demon"
+action_type = 3
+base_value = 2
+cooldown_seconds = 6.0
+max_health = 3
+armor = 3
+runes = Array[int]([0, 1, 2])
+race_type = 6
+rarity = 3
+art_texture = ExtResource("2_art")
+art_offset = Vector2i(-2, 27)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-2, 18)
+})
+effect_text = "任务：选择16次奈克斯指定的道路。奖励：突击：所有友军本场热诚+6。"

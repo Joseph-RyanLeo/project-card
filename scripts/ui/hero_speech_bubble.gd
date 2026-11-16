@@ -13,15 +13,20 @@ const SPEAKER_GAP: float = 4.0 # 气泡尾尖与英雄头顶的间距
 const SCREEN_INSET: float = 2.0 # 气泡与逻辑画布边缘的最小间距
 const FONT_SIZE: int = 14 # 英雄台词黑体字号
 const LINE_SPACING: int = 2 # 多行台词之间的额外间距
-const FADE_SECONDS: float = 0.20 # 气泡收起时整体渐隐的时长
+const FADE_SECONDS: float = 0.20 # 气泡出现与收起时整体淡入淡出的时长
 
 var confirmation_button: BaseButton
 var text_label: Label
 var _speaker: Control
+var speaker_head_inset: float = HEAD_INSET # 气泡尾端所指头部距控件顶边的距离
 var _remaining_seconds: float = 0.0
 var _background: NinePatchRect
 var _text_reveal: Tween
 var _fade: Tween
+var _pinned: bool = false
+var _visual: Control
+var _display: Control
+var _display_scale: float = 1.0
 
 
 func _ready() -> void:
@@ -31,6 +36,16 @@ func _ready() -> void:
 	z_index = 2700 # 高于商店棋盘，低于卡牌检视及暂停菜单
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	size = BACKGROUND.get_size()
+	_display = get_tree().get_first_node_in_group(&"game_display_shell") as Control
+	var layer := CanvasLayer.new()
+	layer.name = "SpeechWindowLayer"
+	layer.custom_viewport = get_tree().root
+	layer.layer = 29 # 直接在根窗口绘字，位于卡牌效果悬浮框下方
+	add_child(layer)
+	_visual = Control.new()
+	_visual.name = "SpeechWindowVisual"
+	_visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(_visual)
 	_background = NinePatchRect.new()
 	_background.texture = BACKGROUND
 	_background.patch_margin_left = 8 # 保留原图左右边框
@@ -38,7 +53,8 @@ func _ready() -> void:
 	_background.patch_margin_top = 8 # 保留原图顶端圆角
 	_background.patch_margin_bottom = 16 # 保留原图底边、圆角和尾尖，只伸缩中间纯色区域
 	_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_background)
+	_background.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_visual.add_child(_background)
 	text_label = Label.new()
 	text_label.name = "SpeechText"
 	text_label.position = TEXT_INSET
@@ -51,19 +67,28 @@ func _ready() -> void:
 	text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	text_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	add_child(text_label)
+	# 用完整台词确定换行和居中位置，逐字显示只遮住后面的字。
+	text_label.visible_characters_behavior = TextServer.VC_CHARS_AFTER_SHAPING
+	text_label.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_visual.add_child(text_label)
+	visibility_changed.connect(_sync_visual_visibility)
 	dismiss(true)
 
 
-func say(message: String, speaker: Control, seconds: float = DEFAULT_SECONDS, confirm_button: BaseButton = null) -> void:
+func say(message: String, speaker: Control, seconds: float = DEFAULT_SECONDS, confirm_button: BaseButton = null, pinned: bool = false) -> void:
 	if message.is_empty() or not is_instance_valid(speaker):
 		dismiss()
 		return
 	_speaker = speaker
+	_pinned = pinned
 	confirmation_button = confirm_button
 	if is_instance_valid(_fade): _fade.kill()
 	if is_instance_valid(_text_reveal): _text_reveal.kill()
 	modulate.a = 1.0
+	_visual.modulate.a = 0.0
+	_fade = create_tween()
+	_fade.tween_property(_visual, "modulate:a", 1.0, FADE_SECONDS)
+	_display_scale = _window_transform().get_scale().x
 	text_label.text = message
 	_layout_message(message)
 	_reveal_message(message)
@@ -76,6 +101,7 @@ func say(message: String, speaker: Control, seconds: float = DEFAULT_SECONDS, co
 
 func dismiss(immediate: bool = false) -> void:
 	_speaker = null
+	_pinned = false
 	confirmation_button = null
 	_remaining_seconds = 0.0
 	set_process(false)
@@ -85,21 +111,29 @@ func dismiss(immediate: bool = false) -> void:
 		if is_instance_valid(_fade): _fade.kill()
 		hide()
 		return
-	if is_instance_valid(_fade) and _fade.is_running(): return
+	if is_instance_valid(_fade): _fade.kill()
 	_fade = create_tween()
-	_fade.tween_property(self, "modulate:a", 0.0, FADE_SECONDS)
+	_fade.tween_property(_visual, "modulate:a", 0.0, FADE_SECONDS)
 	_fade.tween_callback(hide)
 
 
 func _layout_message(message: String) -> void:
 	var paragraph := TextParagraph.new()
 	paragraph.break_flags = TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE
-	paragraph.width = BACKGROUND.get_width() - TEXT_INSET.x * 2.0
-	paragraph.add_string(message, text_label.get_theme_font("font"), FONT_SIZE)
-	var text_height := ceilf(paragraph.get_size().y + LINE_SPACING * maxi(0, paragraph.get_line_count() - 1))
+	paragraph.width = (BACKGROUND.get_width() - TEXT_INSET.x * 2.0) * _display_scale
+	var physical_font_size := maxi(1, roundi(FONT_SIZE * _display_scale))
+	var physical_spacing := roundi(LINE_SPACING * _display_scale)
+	text_label.add_theme_font_size_override("font_size", physical_font_size)
+	text_label.add_theme_constant_override("line_spacing", physical_spacing)
+	paragraph.add_string(message, text_label.get_theme_font("font"), physical_font_size)
+	var text_height := ceilf((paragraph.get_size().y + physical_spacing * maxi(0, paragraph.get_line_count() - 1)) / _display_scale)
 	size = Vector2(BACKGROUND.get_width(), text_height + TEXT_INSET.y * 2.0 + TAIL_HEIGHT)
 	_background.size = size
-	text_label.size = Vector2(paragraph.width, text_height)
+	_background.scale = Vector2.ONE * _display_scale
+	text_label.position = (TEXT_INSET * _display_scale).round()
+	text_label.size.x = paragraph.width
+	# 改字号与宽度后，Label需先重算换行；随后再设置高度，避免沿用窄版正文的旧最小高度。
+	text_label.set_deferred("size", Vector2(paragraph.width, text_height * _display_scale).ceil())
 
 
 func _reveal_message(message: String) -> void:
@@ -118,8 +152,12 @@ func is_confirming(button: BaseButton) -> bool:
 
 
 func _process(delta: float) -> void:
+	var menu := get_tree().get_first_node_in_group(&"escape_pause_menus")
+	if menu != null and menu.is_menu_open():
+		_sync_visual_visibility()
+		if _pinned: return
 	_remaining_seconds -= delta
-	if _remaining_seconds <= 0.0 or not is_visible_in_tree() or get_tree().paused or not is_instance_valid(_speaker) or not _speaker.is_visible_in_tree():
+	if (not _pinned and (_remaining_seconds <= 0.0 or get_tree().paused)) or not is_visible_in_tree() or not is_instance_valid(_speaker) or not _speaker.is_visible_in_tree():
 		dismiss()
 		return
 	if is_instance_valid(confirmation_button) and not confirmation_button.is_visible_in_tree():
@@ -129,15 +167,39 @@ func _process(delta: float) -> void:
 
 
 func _update_position() -> void:
+	var display_scale := _window_transform().get_scale().x
+	if not is_equal_approx(display_scale, _display_scale):
+		_display_scale = display_scale
+		_layout_message(text_label.text)
 	var host := get_parent() as Control
 	var speaker_transform := host.get_global_transform_with_canvas().affine_inverse() * _speaker.get_global_transform_with_canvas()
-	var head := speaker_transform * Vector2(_speaker.size.x * 0.5, HEAD_INSET)
+	var head := speaker_transform * Vector2(_speaker.size.x * 0.5, speaker_head_inset)
 	position = (head - Vector2(TAIL_TIP_X, size.y + SPEAKER_GAP)).round()
 	position.x = clampf(position.x, SCREEN_INSET, maxf(SCREEN_INSET, host.size.x - size.x - SCREEN_INSET))
 	position.y = clampf(position.y, SCREEN_INSET, maxf(SCREEN_INSET, host.size.y - size.y - SCREEN_INSET))
+	_visual.position = _window_transform().origin.round()
+	_visual.size = size * _display_scale
+	_sync_visual_visibility()
+
+
+func _window_transform() -> Transform2D:
+	var result := get_global_transform_with_canvas()
+	if is_instance_valid(_display) and get_viewport() == _display.internal_viewport:
+		result = _display.render_container.get_global_transform_with_canvas() * result
+	return result
+
+
+func _sync_visual_visibility() -> void:
+	if not is_instance_valid(_visual): return
+	var visible_here := is_visible_in_tree()
+	if is_instance_valid(_display) and is_instance_valid(_display.screen_transition) and _display.screen_transition.busy: visible_here = false
+	var menu := get_tree().get_first_node_in_group(&"escape_pause_menus") if is_inside_tree() else null
+	if menu != null and menu.is_menu_open(): visible_here = false
+	_visual.visible = visible_here
 
 
 func _input(event: InputEvent) -> void:
+	if _pinned: return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT and is_instance_valid(confirmation_button):
 			var point: Vector2 = confirmation_button.get_global_transform_with_canvas().affine_inverse() * event.position

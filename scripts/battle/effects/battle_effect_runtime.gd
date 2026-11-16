@@ -316,11 +316,13 @@ func resolve_armor_gain_modifiers(target: BattleSquadState) -> Dictionary:
 
 func _handle_trigger(event: BattleRuntimeEvent) -> void:
 	var only_binding_id := int(event.payload.get("binding_id", 0))
+	var selected_bindings: Array = event.payload.get("binding_ids", [])
 	for binding: BattleEffectBinding in bindings:
 		if not binding.enabled or binding.definition == null or binding.definition.trigger != event.trigger:
 			continue
 		if only_binding_id > 0 and binding.binding_id != only_binding_id:
 			continue
+		if not selected_bindings.is_empty() and not selected_bindings.has(binding.binding_id): continue
 		if binding.source != null and binding.source.state != null and binding.source.state.is_banished: continue
 		if not _binding_matches_event_actor(binding, event):
 			continue
@@ -335,10 +337,38 @@ func _handle_trigger(event: BattleRuntimeEvent) -> void:
 		select_event.definition = binding.definition
 		select_event.source = binding.source
 		select_event.payload = event.payload.duplicate(true)
+		if event.trigger == BattleEffectDefinition.Trigger.RUSH:
+			select_event.payload["rush_binding_id"] = binding.binding_id
 		select_event.tags.assign(event.tags)
 		select_event.add_tag(effect_tag)
 		select_event.add_tag(StringName("group:%s" % binding.definition.effect_group))
 		queue.schedule(select_event, event)
+
+
+func available_rush_groups(side: int) -> Array[Dictionary]:
+	var groups := {}
+	var original_rng := _random.state
+	var probe := BattleRuntimeEvent.new()
+	probe.trigger = BattleEffectDefinition.Trigger.RUSH
+	probe.payload = {"retrigger_rush": true}
+	for binding: BattleEffectBinding in bindings:
+		var definition := binding.definition
+		var source := binding.source
+		if not binding.enabled or definition == null or definition.trigger != BattleEffectDefinition.Trigger.RUSH or source == null or not source.is_alive(): continue
+		var actor := source.state
+		if actor.side != side or actor.has_effective_shadow() or actor.has_runtime_keyword(&"silenced"): continue
+		if source.owner_kind == BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE and not actor.squad_data.has_equipped_item(source.owned_card): continue
+		if source.owner_kind == BattleEffectDefinition.OwnerKind.MINION_CARD_INSTANCE and actor.get_effect_source() != source.card_data: continue
+		if controller.gilded != null and not controller.gilded.can_replay_rush(actor, StringName(definition.parameters.get("content_effect", ""))): continue
+		if _resolve_targets(definition, source, probe).is_empty(): continue
+		var group := definition.effect_group if definition.effect_group != &"" else definition.effect_id
+		var key := "%s:%s" % [source.stable_key(), group]
+		if not groups.has(key): groups[key] = {"actor": actor, "binding_ids": []}
+		groups[key].binding_ids.append(binding.binding_id)
+	_random.state = original_rng
+	var result: Array[Dictionary] = []
+	result.assign(groups.values())
+	return result
 
 
 func _handle_select_targets(event: BattleRuntimeEvent) -> void:
@@ -394,6 +424,7 @@ func _handle_apply_operation(event: BattleRuntimeEvent) -> void:
 		event.source.stable_key(),
 		target.runtime_id,
 	]
+	if event.payload.get("seraphina_repeat", false): chain_key += ":seraphina"
 	var chain_count := int(_chain_execution_counts.get(chain_key, 0))
 	var neighbor_modifiers := _get_neighbor_extra_execution_bindings(definition, event.source)
 	var allowed_count := (
@@ -489,10 +520,18 @@ func _apply_definition(
 	instance.contribution_sources.assign(contribution_sources.duplicate(true))
 	active_instances.append(instance)
 
+	var rush_listeners: Array[BattleEffectOwnerRef] = []
+	var rush_neighbors: Array[BattleSquadState] = []
+	if definition.trigger == BattleEffectDefinition.Trigger.RUSH and controller._has_seraphina and controller.task_cards != null and source.state != null:
+		# 先固定突击开始时在场的塞拉菲娜，待效果执行成功再计进度。
+		rush_listeners = controller.task_cards.rush_listeners(source.state)
+		if not rush_listeners.is_empty(): rush_neighbors = controller._get_adjacent_allies(source.state)
 	var supported := _apply_operation(instance, event)
 	if not supported:
 		_end_instance(instance, BattleEffectInstance.EndReason.INSTANT_RESOLVED, event, "操作尚未接入D2-3执行器")
 		return
+	if not rush_listeners.is_empty():
+		controller.task_cards.on_rush_applied(event, rush_listeners, rush_neighbors)
 	if definition.stacking.kind == BattleEffectStacking.Kind.SAME_NAME_NONSTACKING:
 		_recompute_same_name_group(instance.stack_key(), event)
 	_schedule_expiry(instance, event)
@@ -507,6 +546,8 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 	match definition.operation:
 		BattleEffectDefinition.Operation.MINE:
 			controller.execute_effect_mining(target, maxi(roundi(instance.applied_value), 0))
+		BattleEffectDefinition.Operation.TASK_CARDS:
+			return controller.task_cards.execute_trigger(instance.source.state, StringName(definition.parameters.get("content_effect", "")), definition.trigger)
 		BattleEffectDefinition.Operation.IRONWALL:
 			return controller.ironwall.execute_trigger(instance.source.state, StringName(definition.parameters.get("content_effect", "")), definition.trigger, definition.source_owner == BattleEffectDefinition.OwnerKind.EQUIPMENT_INSTANCE, event.payload)
 		BattleEffectDefinition.Operation.SILVERMOON:
@@ -1088,7 +1129,7 @@ func _condition_passes(
 				source.owned_card != null
 				and source.state != null
 				and source.state.squad_data != null
-				and source.state.squad_data.get_equipped_item() == source.owned_card
+				and source.state.squad_data.has_equipped_item(source.owned_card)
 			)
 		BattleEffectDefinition.Condition.EQUIPPED_UNIT_ALIVE:
 			return source.is_alive()
@@ -1274,6 +1315,8 @@ func _binding_matches_event_actor(binding: BattleEffectBinding, event: BattleRun
 		# D2-3 合成测试允许直接发出无 actor 的系统触发；真实战斗钩子始终携带 actor，
 		# 此时必须与效果来源一致，避免其他单位的行动或获得护甲误触发本卡。
 		return actor == null or (binding.source != null and binding.source.state == actor)
+	if event.trigger == BattleEffectDefinition.Trigger.UNIT_DESTROYED:
+		return actor != null
 	if event.trigger == BattleEffectDefinition.Trigger.BATTLE_WON:
 		return (
 			binding.source != null

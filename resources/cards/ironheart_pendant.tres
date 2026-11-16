@@ -13,6 +13,10 @@ card_type = 1
 rarity = 1
 equipment_type = 3
 equipment_armor_delta = 2
+background_style = 3
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 2)
+})
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-11, -6)
 effect_text = "每10秒获得保护1。"

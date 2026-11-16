@@ -15,6 +15,8 @@ const ALIASES := {
 	&"fire_sticker": "火贴纸", &"wood_sticker": "木贴纸", &"chaos_sticker": "混沌贴纸",
 	&"wildcard_sticker": "万能贴纸", &"poison_1": "中毒Ⅰ", &"poison_2": "中毒Ⅱ",
 	&"天选之子": "天选之人",
+	&"业火": "烧伤Ⅱ",
+	&"烂面包": "面包", &"烂火腿": "火腿", &"奴隶镣铐": "盾牌Ⅰ",
 	&"poison_3": "中毒Ⅲ", &"concussion": "脑震荡", &"blind_1": "致盲Ⅰ",
 	&"blind_2": "致盲Ⅱ", &"fracture_1": "骨折Ⅰ", &"fracture_2": "骨折Ⅱ",
 	&"light_blood": "光血", &"internal_1": "内伤Ⅰ", &"internal_2": "内伤Ⅱ",
@@ -52,6 +54,8 @@ static func get_texture(kind: int, status_id: StringName) -> Texture2D:
 static func create_visual(kind: int, status_id: StringName) -> TextureRect:
 	var visual := TextureRect.new()
 	visual.texture = get_texture(kind, status_id)
+	if status_id in [&"烂面包", &"烂火腿"]:
+		visual.modulate = Color(0.62, 1.0, 0.62) # 腐坏食物使用绿色滤镜
 	visual.position = Vector2.ZERO
 	visual.size = DISPLAY_SIZE
 	visual.custom_minimum_size = DISPLAY_SIZE

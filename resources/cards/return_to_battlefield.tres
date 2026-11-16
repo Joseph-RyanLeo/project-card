@@ -15,6 +15,13 @@ rarity = 1
 spell_type = 1
 spell_trigger_kind = 3
 spell_preparation_seconds = 10.0
+background_style = 3
+background_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, -20)
+})
+background_overframe_offsets = Dictionary[int, Vector2i]({
+3: Vector2i(0, 1)
+})
 art_texture = ExtResource("2_art")
 art_finish_offsets = Dictionary[StringName, Vector2i]({
 &"overframe": Vector2i(4, 10)

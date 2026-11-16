@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"signal_jamming"
+display_name = "信号干扰"
+pack_id = &"gilded_commission"
+rarity = 3
+content_effect = &"signal_jamming"
+card_type = 2
+spell_type = 4
+spell_trigger_kind = 1
+effect_text = "开战时：前10秒敌方热诚-10。"

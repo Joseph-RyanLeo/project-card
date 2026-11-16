@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"ember_empty_bottle"
+display_name = "余烬空瓶"
+pack_id = &"event_relics"
+card_type = 1
+equipment_type = 3
+rarity = 4
+content_effect = &"ember_empty_bottle"
+effect_text = "每张卡每局游戏只能使用一次余烬空瓶。装备者在战斗中首次受到致命伤害时阻止该伤害，获得永久数值+4，并回复全部生命值。"

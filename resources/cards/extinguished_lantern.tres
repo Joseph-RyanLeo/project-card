@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"extinguished_lantern"
+display_name = "熄灭青灯"
+pack_id = &"styx_tomb"
+card_type = 1
+rarity = 0
+equipment_type = 4
+equipment_action_delta = 0
+equipment_zeal_delta = -2
+equipment_armor_delta = 2
+content_effect = &"extinguished_lantern"
+effect_ids = Array[StringName]([&"extinguished_lantern.effect.echo", &"extinguished_lantern.effect.last_wish"])
+effect_text = "回响：对场上包括自己的所有角色造成1点伤害。触发10次后转换为摇曳青灯。"

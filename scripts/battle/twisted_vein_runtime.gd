@@ -33,6 +33,23 @@ func active(state: BattleSquadState, key: StringName, equipment: bool = false, a
 	var card: CardData = item.card_data if equipment and item != null else (null if equipment else state.get_effect_source())
 	return card != null and card.is_available and card.content_effect == key
 
+func try_ember_empty_bottle(state: BattleSquadState) -> bool:
+	const EFFECT := &"ember_empty_bottle"
+	const USED := &"ember_empty_bottle_used"
+	if not active(state, EFFECT, true): return false
+	var wearer := state.squad_data.get_effect_source_instance()
+	if wearer == null or int(wearer.progress_by_source.get(USED, 0)) > 0: return false
+	var owner := BattleEffectOwnerRef.for_owned_card_in_state(state, wearer)
+	var timestamp := roundi(controller.elapsed_seconds * 1000000.0)
+	if not state.battle_summoned:
+		if not controller.owned_card_change_ledger.record_progress_value(owner, USED, 1, EFFECT, controller.battle_instance_id, timestamp): return false
+		controller.record_pending_permanent_growth(owner, OwnedCard.STAT_BASE_VALUE, 4, EFFECT, state.runtime_id, timestamp)
+	wearer.progress_by_source[USED] = 1
+	wearer.apply_permanent_growth(OwnedCard.STAT_BASE_VALUE, 4)
+	state.current_health = maxf(state.current_health, state.get_max_health())
+	return true
+
+
 func has_lamp_aura(state: BattleSquadState) -> bool:
 	if state == null: return false
 	for holder: BattleSquadState in controller.get_living_states(state.side):
@@ -126,6 +143,7 @@ func on_mining(event: BattleEffectEvent) -> void:
 	# 记录成功开采当刻的邻居，避免后续召唤插入改变本次监听者。
 	var adjacent_allies: Array[BattleSquadState] = controller._get_adjacent_allies(event.source)
 	mining_events += 1
+	if controller.gilded != null: controller.gilded.on_mission_action(event.source, OwnedCard.MissionGoal.MINING)
 	mining_totals[event.source.side] += 1
 	var mineral: bool = event.resource_target.owned_card.card_data.resource_type == CardData.ResourceType.MINERAL
 	if mineral: mineral_events += 1

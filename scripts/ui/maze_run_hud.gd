@@ -1,5 +1,7 @@
 extends Control
 
+const LIFE_TRACK_POSITION := Vector2(840, 5) # 失败保护和生命值轨道的原生位置
+
 ## 顶栏只读取迷宫数据；滚轮动画不改变天数、轮次或奖励。
 const DIR := "res://assets/ui/board_revision_20261019/"
 const HERO_DIR := "res://assets/ui/hero_progress_20261019/"
@@ -21,6 +23,7 @@ var shown_round: int = -1
 var floor_number: int = 1
 var protection: int = 2
 var alive: bool = true
+var _tutorial_round_icons := false
 const RuneNumber = preload("res://scripts/ui/rune_number_display.gd")
 var _gold: RuneNumber
 var _hero_label: Label
@@ -96,7 +99,12 @@ func initialize(main: Control) -> void:
 
 
 func sync(maze: Node, animate: bool = true) -> void:
-	floor_number = int(maze.content.get("floor", 1))
+	var tutorial: bool = maze._main.is_smith_tutorial()
+	_hero_panel.visible = not tutorial
+	if _tutorial_round_icons != tutorial:
+		_tutorial_round_icons = tutorial
+		shown_round = -1
+	floor_number = maze.floor_number()
 	protection = maze.run.failure_protection
 	alive = maze.run.battle_results.is_empty() or String(maze.run.battle_results.back().ending) not in ["ordinary_loss", "boss_loss"]
 	_gold.text = str(maze._main.run_reward_state.gold)
@@ -104,7 +112,7 @@ func sync(maze: Node, animate: bool = true) -> void:
 	_hero_label.text = "伊奥恩·沃登"
 	_hero_progress_lamps.sync(maze.hero)
 	_hero_panel.tooltip_text = maze.hero_description()
-	maze._main.player_avatar_button.tooltip_text = maze.hero_description() + "\n左键切换视角；右键查看详情"
+	maze._main.player_avatar_button.tooltip_text = "左键切换视角" if maze._main.is_smith_tutorial() else maze.hero_description() + "\n左键切换视角；右键查看详情"
 	for index: int in _talent_slots.size():
 		var level: int = [1, 4, 7, 10][index]
 		var id: String = maze.hero.selected_talents.get(str(level), "")
@@ -115,7 +123,7 @@ func sync(maze: Node, animate: bool = true) -> void:
 		else:
 			var talent: Dictionary = maze.rewards.config.talents[id]
 			slot.tooltip_text = "%d级 · %s\n%s" % [level, talent.display_name, talent.source_text]
-	set_day_marker(maze.run.day, maze.run.round_index, animate)
+	set_day_marker((maze.run.day - 1) % 8 + 1, maze.run.round_index, animate)
 	queue_redraw()
 
 
@@ -147,7 +155,9 @@ func set_day_marker(day: int, round_index: int, animate: bool = true) -> void:
 
 
 func _marker(round_index: int) -> Texture2D:
-	return _art[["day_sun_red", "day_sun_gold", "day_sun_red", "day_moon"][clampi(round_index, 0, 3)]]
+	if round_index == 3: return _art.day_moon
+	if round_index == 1 and _tutorial_round_icons: return _art.day_sun_gold
+	return _art.day_sun_red
 
 
 func _finish_roll() -> void:
@@ -157,9 +167,13 @@ func _finish_roll() -> void:
 		_backs[index].texture = null
 
 
+func life_track_rect() -> Rect2:
+	return get_global_transform_with_canvas() * Rect2(LIFE_TRACK_POSITION, _art.life_track.get_size()).grow(2.0)
+
+
 func _draw() -> void:
 	if _art.is_empty(): return
-	for entry: Array in [["floor_label", Vector2(238, 16)], ["floor_track", Vector2(287, 14)], ["day_label", Vector2(363, 16)], ["day_track", Vector2(395, 14)], ["life_track", Vector2(840, 5)], ["gold_track", Vector2(912, 5)]]:
+	for entry: Array in [["floor_label", Vector2(238, 16)], ["floor_track", Vector2(287, 14)], ["day_label", Vector2(363, 16)], ["day_track", Vector2(395, 14)], ["life_track", LIFE_TRACK_POSITION], ["gold_track", Vector2(912, 5)]]:
 		draw_texture(_art[entry[0]], entry[1])
 	_draw_mirrored_icon(_art.gold_icon, Vector2(977, 4))
 	draw_texture(_art.floor_marker, Vector2(294 + 14 * clampi(floor_number - 1, 0, 2), 15))

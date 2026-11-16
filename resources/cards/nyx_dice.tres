@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = &"nyx_dice"
+display_name = "奈克斯的骰子"
+pack_id = &"gilded_commission"
+card_type = 1
+equipment_type = 3
+rarity = 3
+effect_text = "投掷时每枚骰子的点数+2，最高为该骰子的最大点数。持有时也影响事件骰。"

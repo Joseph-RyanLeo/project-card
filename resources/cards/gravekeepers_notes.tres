@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"gravekeepers_notes"
+display_name = "守墓人的笔记"
+pack_id = &"gilded_commission"
+rarity = 3
+content_effect = &"gravekeepers_notes"
+card_type = 1
+equipment_type = 4
+equipment_armor_delta = -1
+equipment_action_delta = 2
+effect_ids = Array[StringName]([&"gravekeepers_notes.effect.last_wish"])
+effect_text = "基础护甲-1（最低0）。跨战记录双方不同种类的阵亡随从（不含佩戴者）。遗愿：每种已记录随从逐次对随机敌军造成1点固定无属性伤害。"

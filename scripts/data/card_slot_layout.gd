@@ -34,7 +34,7 @@ static func get_default_counts(rarity: CardData.Rarity) -> Vector2i:
 	return Vector2i.ZERO
 
 
-static func resolve_counts(card_data: CardData) -> Vector2i:
+static func resolve_counts(card_data: CardData, forbidden_layout: bool = false) -> Vector2i:
 	if card_data == null:
 		return Vector2i.ZERO
 	var defaults := get_default_counts(card_data.rarity) if card_data.card_type == CardData.CardType.MINION else Vector2i.ZERO
@@ -42,7 +42,7 @@ static func resolve_counts(card_data: CardData) -> Vector2i:
 	var emblems := defaults.y if card_data.emblem_slot_count < 0 else card_data.emblem_slot_count
 	wounds = clampi(wounds, 0, 8)
 	emblems = clampi(emblems, 0, 8 - wounds)
-	return Vector2i(wounds, emblems)
+	return Vector2i(wounds + emblems, 0) if forbidden_layout else Vector2i(wounds, emblems)
 
 
 static func get_stable_layout(card_data: CardData) -> Array[int]:
@@ -65,7 +65,7 @@ static func get_slot_definitions(card_data: CardData, owned_card: Variant = null
 	if card_data == null:
 		return result
 	var configured_kinds: Array = []
-	if owned_card != null and is_valid_layout(card_data, owned_card.slot_layout):
+	if owned_card != null and is_valid_layout(card_data, owned_card.slot_layout, owned_card.has_forbidden_layout()):
 		configured_kinds = owned_card.slot_layout
 	elif is_valid_layout(card_data, card_data.slot_layout):
 		configured_kinds = card_data.slot_layout
@@ -104,10 +104,10 @@ static func _get_stable_default_layout(card_data: CardData) -> Array[int]:
 	return stable_layout
 
 
-static func is_valid_layout(card_data: CardData, layout: Array) -> bool:
+static func is_valid_layout(card_data: CardData, layout: Array, forbidden_layout: bool = false) -> bool:
 	if card_data == null or layout.size() != SLOT_POSITIONS.size():
 		return false
-	var counts := resolve_counts(card_data)
+	var counts := resolve_counts(card_data, forbidden_layout)
 	var used_wounds := 0
 	var used_emblems := 0
 	var left_wounds := 0
@@ -140,7 +140,7 @@ static func is_valid_layout(card_data: CardData, layout: Array) -> bool:
 	return (
 		used_wounds == counts.x
 		and used_emblems == counts.y
-		and abs(left_wounds - right_wounds) <= 1
+		and (forbidden_layout or abs(left_wounds - right_wounds) <= 1)
 		and abs(left_emblems - right_emblems) <= 1
 	)
 

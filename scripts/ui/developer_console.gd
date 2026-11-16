@@ -29,11 +29,12 @@ func set_open(value: bool) -> void:
 		_command_input.grab_focus()
 
 
-func append_output(message: String) -> void:
+func append_output(message: String, show_from_start: bool = false) -> void:
 	if not is_instance_valid(_output):
 		return
-	_output.append_text(message.c_escape() + "\n")
-	_output.scroll_to_line(maxi(0, _output.get_line_count() - 1))
+	var first_line := maxi(0, _output.get_line_count() - 1)
+	_output.add_text(message + "\n")
+	_output.scroll_to_line(first_line if show_from_start else maxi(0, _output.get_line_count() - 1))
 
 
 func _build_contents() -> void:
@@ -55,7 +56,7 @@ func _build_contents() -> void:
 	_output.custom_minimum_size = Vector2(0.0, 110.0) # 保留最近命令结果的可读高度
 	layout.add_child(_output)
 	_command_input = LineEdit.new()
-	_command_input.placeholder_text = "wound add 中毒Ⅰ"
+	_command_input.placeholder_text = "add card 民兵-s-ch"
 	_command_input.text_submitted.connect(_on_command_submitted)
 	_command_input.gui_input.connect(_on_input_gui_event)
 	layout.add_child(_command_input)

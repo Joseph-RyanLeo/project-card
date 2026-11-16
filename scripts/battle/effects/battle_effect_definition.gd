@@ -22,6 +22,7 @@ enum Trigger {
 	SOURCE_HEALTH_LOST_ACCUMULATED,
 	EQUIPPED_UNIT_AFTER_BASIC_ACTION_DAMAGE,
 	ADJACENT_ALLY_MINED,
+	UNIT_DESTROYED,
 }
 
 enum Condition {
@@ -99,6 +100,7 @@ enum Operation {
 	SILVERMOON,
 	IRONWALL,
 	MINE,
+	TASK_CARDS,
 }
 
 enum OwnerKind {
@@ -139,6 +141,7 @@ const TRIGGER_BY_NAME: Dictionary = {
 	"battle_start_spell": Trigger.BATTLE_START_SPELL,
 	"elapsed_battle_time": Trigger.ELAPSED_BATTLE_TIME,
 	"other_ally_action_after": Trigger.OTHER_ALLY_ACTION_AFTER,
+	"unit_destroyed": Trigger.UNIT_DESTROYED,
 	"adjacent_ally_mined": Trigger.ADJACENT_ALLY_MINED,
 	"after_basic_heal": Trigger.AFTER_BASIC_HEAL,
 	"ally_about_to_be_destroyed": Trigger.ALLY_ABOUT_TO_BE_DESTROYED,
@@ -204,6 +207,7 @@ const OPERATION_BY_NAME: Dictionary = {
 	"twisted_vein": Operation.TWISTED_VEIN,
 	"silvermoon": Operation.SILVERMOON,
 	"ironwall": Operation.IRONWALL,
+	"task_cards": Operation.TASK_CARDS,
 	"add_attribute": Operation.ADD_ATTRIBUTE,
 	"add_target_priority": Operation.ADD_TARGET_PRIORITY,
 	"add_action_multiplier": Operation.ADD_ACTION_MULTIPLIER,

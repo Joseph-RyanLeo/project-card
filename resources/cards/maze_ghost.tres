@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"maze_ghost"
+display_name = "幽灵"
+pack_id = &"styx_tomb"
+content_effect = &"maze_ghost"
+base_value = 1
+cooldown_seconds = 3.0
+max_health = 3
+armor = 0
+race_type = 5
+action_type = 0
+runes = Array[int]([0, 1, 2])
+effect_text = "只会受到魔法伤害。"

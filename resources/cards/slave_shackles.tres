@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"slave_shackles"
+display_name = "奴隶镣铐"
+pack_id = &"thousand_sails_bounty"
+content_effect = &"slave_shackles"
+card_type = 1
+equipment_type = 2
+equipment_action_delta = -2
+equipment_armor_delta = 2
+effect_text = "休眠30秒。其他友军即将受到致命伤害时，代为承担。"

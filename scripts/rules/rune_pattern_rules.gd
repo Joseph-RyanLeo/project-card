@@ -11,7 +11,7 @@ const STRAIGHT_CYCLE: Array[CardData.ElementType] = [
 	CardData.ElementType.DARK,
 	CardData.ElementType.WATER,
 	CardData.ElementType.WOOD,
-] # 顺子的循环元素顺序；允许任意起点并可整体反向读取
+] # 连星的循环元素顺序；允许任意起点并可整体反向读取
 
 
 static func identify(
@@ -63,7 +63,7 @@ static func identify(
 		result.pattern_type = RunePatternResult.PatternType.PAIR
 		result.participating_indices = _indices_for_runs([pair_runs[0]])
 	elif _is_straight(visible_runes):
-		# 顺子包含五种不同元素，只会与“混乱”重叠，因此在混乱前判断。
+		# 连星包含五种不同元素，只会与“混沌”重叠，因此在混沌前判断。
 		result.pattern_type = RunePatternResult.PatternType.STRAIGHT
 		result.participating_indices.assign(range(visible_runes.size()))
 	else:
@@ -160,7 +160,7 @@ static func _indices_for_runs(selected_runs: Array) -> Array[int]:
 static func _is_straight(
 	visible_runes: Array[CardData.ElementType]
 ) -> bool:
-	# 顺子必须正好五枚，并沿固定循环向前或向后连续移动一步。
+	# 连星必须正好五枚，并沿固定循环向前或向后连续移动一步。
 	if visible_runes.size() != STRAIGHT_CYCLE.size():
 		return false
 	var first_cycle_index := STRAIGHT_CYCLE.find(visible_runes[0])

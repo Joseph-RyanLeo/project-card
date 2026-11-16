@@ -16,4 +16,7 @@ runes = Array[int]([0, 1, 2])
 race_type = 3
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-4, 19)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(-9, 14)
+})
 effect_text = "休眠30秒。任意一方首次触发开采后，解除休眠。"

@@ -167,7 +167,7 @@ func inspect_card(source: CardView, owned: OwnedCard, basic: bool = false) -> vo
 	surface.name = "CollectionInspectionSurface"
 	surface.render_scale = 4.0 # 大卡合成至少4倍精度
 	overlay.add_child(surface)
-	surface.setup(view, Callable(), view.get_sticker_tooltip)
+	surface.setup(view, Callable(), view.get_sticker_help)
 	surface.position = origin * -surface.content_padding
 	surface.scale = origin.get_scale()
 	overlay.set_meta("return_position", surface.position)

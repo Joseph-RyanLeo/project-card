@@ -1,0 +1,2475 @@
+{
+  "source_revision": 4976,
+  "appearance": {
+    "figure_in_mist": {
+      "floors": [
+        1,
+        2
+      ],
+      "formal": true
+    },
+    "bounty_hunter": {
+      "floors": [
+        1,
+        2,
+        3
+      ],
+      "formal": true
+    },
+    "strange_alchemist": {
+      "floors": [
+        3
+      ],
+      "formal": true
+    },
+    "alchemist": {
+      "floors": [
+        1,
+        2,
+        3
+      ],
+      "formal": true
+    },
+    "roaming_smith": {
+      "floors": [
+        1,
+        2,
+        3
+      ],
+      "formal": true
+    },
+    "silvermoon_guide": {
+      "floors": [
+        1,
+        2,
+        3
+      ],
+      "formal": true
+    },
+    "muleteer_caravan": {
+      "floors": [
+        1,
+        2
+      ],
+      "formal": true
+    },
+    "slave_trader": {
+      "floors": [
+        2,
+        3
+      ],
+      "formal": true
+    },
+    "encounter_of_pain": {
+      "floors": [
+        2,
+        3
+      ],
+      "formal": true
+    },
+    "lone_druid": {
+      "floors": [
+        1,
+        2,
+        3
+      ],
+      "formal": true
+    },
+    "demon_apprentices": {
+      "floors": [
+        1,
+        2
+      ],
+      "formal": true
+    },
+    "last_supper": {
+      "floors": [
+        1,
+        2,
+        3
+      ],
+      "formal": true
+    },
+    "spoils_dispute": {
+      "floors": [
+        1,
+        2,
+        3
+      ],
+      "formal": true
+    },
+    "suspicious_merchant": {
+      "floors": [
+        1,
+        2,
+        3
+      ],
+      "formal": true,
+      "pack": "gilded_commission"
+    },
+    "old_shrine": {
+      "floors": [
+        1,
+        2,
+        3
+      ],
+      "formal": true
+    },
+    "quest_vending_machine": {
+      "floors": [
+        1,
+        2
+      ],
+      "formal": true,
+      "pack": "ironwall_inscription"
+    },
+    "unclaimed_relic": {
+      "floors": [
+        2
+      ],
+      "formal": true,
+      "pack": "silvermoon_chapter"
+    }
+  },
+  "events": [
+    {
+      "path_id": "figure_in_mist",
+      "name": "雾中人",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "雾中人",
+      "description": "前方的灵雾中有一个模糊的人影，静静站着，不动也不说话。雾气太浓，看不清面容。",
+      "options": [
+        {
+          "label": "向他招手喊话",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "一个人从灵雾中走了出来，他气喘吁吁感谢你们指引。",
+              "source_probability": "60%",
+              "effect_text": "随机获得一张其他阵营的随从卡。",
+              "weight": 0.6,
+              "effects": [
+                {
+                  "kind": "random_cards",
+                  "card_type": "minion",
+                  "other_faction": true
+                }
+              ]
+            },
+            {
+              "text": "数个冤魂从灵雾中掠出，尖啸的灵音在你们脑内回荡，它们穿身而过飘向了远方。",
+              "source_probability": "40%",
+              "effect_text": "下一场战斗开始时随机两名友方随从休眠3秒。",
+              "weight": 0.4,
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "sleep",
+                  "value": 3,
+                  "count": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们远离了灵雾另寻他路。",
+              "source_probability": "90%",
+              "effect_text": "无事发生",
+              "weight": 0.9
+            },
+            {
+              "text": "你们远离了灵雾走了其他道路，再次休息时你们恍然警觉一位同伴早已不知所踪。",
+              "source_probability": "10%",
+              "effect_text": "永久随机失去一张不在备战场上的随从牌。",
+              "weight": 0.1,
+              "effects": [
+                {
+                  "kind": "remove_reserve"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "bounty_hunter",
+      "name": "赏金猎人",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "赏金猎人",
+      "description": "一队千帆港的雇佣兵拦住了你们的去路。领头的佣兵是个满脸风霜的人类。他上下打量了一番你们的队伍，目光锁定在你们身后那个颤抖的身影上，咧嘴一笑：“朋友，那人是我们悬赏单上的货。不想见血的话，乖乖交出来。我们只拿钱办事，不想跟你们拼命。”",
+      "options": [
+        {
+          "label": "交出悬赏目标",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你挥手示意身后的人过去。领头佣兵验了验货，满意地拍了拍那人的肩膀，冲你扬了扬下巴：“愿镀金之主保佑你，我的朋友。”佣兵们带着人撤出通道，很快消失在迷宫中。",
+              "source_probability": "-",
+              "effect_text": "失去目标卡，下一次商店所有道具八折。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "bounty_handover"
+                }
+              ]
+            }
+          ],
+          "bounty_target": true
+        },
+        {
+          "label": "攻击",
+          "condition": "备战场有随从",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你的进攻代替了回答。领头佣兵骂了一声，拔出弯刀：“给脸不要脸！兄弟们，剁了他们！”",
+              "source_probability": "-",
+              "effect_text": "进行一场战斗",
+              "weight": 1
+            }
+          ],
+          "unavailable_reason": "额外战斗流程尚未接入"
+        },
+        {
+          "label": "贿赂（付目标卡售价＋5金币）",
+          "condition": "有足够金币",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "领头佣兵收下金币，看了看身后的人，又看了看你们。他把金币揣进怀里，挥了挥手：“行了，今天没看见人。兄弟们，撤。”",
+              "source_probability": "-",
+              "effect_text": "支付目标卡售价加5金币，保留目标。",
+              "weight": 1
+            }
+          ],
+          "bounty_target": true,
+          "bounty_bribe": true
+        },
+        {
+          "label": "（消耗100金币）\n更多的贿赂",
+          "condition": "拥有100金币",
+          "cost": 100,
+          "outcomes": [
+            {
+              "text": "“哦宽恕我吧镀金之主，再别多说了我的朋友，兄弟们跟着你干了。”",
+              "source_probability": "-",
+              "effect_text": "失去100金币，暂获得银月之章的所有卡牌。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "whole_pack",
+                  "pack": "silvermoon_chapter"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "逃跑",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你大喊一声“跑！”，队伍猛地向后撤退。但佣兵们早有防备，火铳手抬起枪口，封住了退路。",
+              "source_probability": "30%",
+              "effect_text": "进行一场劣势的战斗，敌人的突击优先结算",
+              "weight": 0.3
+            },
+            {
+              "text": "你大喊一声“跑！”，队伍拐进一条窄道。佣兵们追了一段，被迷宫复杂的地形甩掉了。",
+              "source_probability": "70%",
+              "effect_text": "无事发生",
+              "weight": 0.7
+            }
+          ],
+          "unavailable_reason": "额外战斗流程尚未接入"
+        }
+      ]
+    },
+    {
+      "path_id": "strange_alchemist",
+      "name": "奇怪的炼金师",
+      "kind": "paid_event",
+      "reward": "story",
+      "hint": "奇怪的炼金师",
+      "description": "一位暗影炼金师正在向进入迷宫的冒险者兜售他的药剂。",
+      "options": [
+        {
+          "label": "选择一个随从免费试用小型禁药",
+          "condition": "拥有至少一个随从",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "选中的随从喝下了力量禁药。",
+              "source_probability": "1/3",
+              "effect_text": "获得不可清除的伤势，永久+1/+2",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "small_forbidden_potion",
+                  "variant": 0
+                }
+              ]
+            },
+            {
+              "text": "选中的随从喝下了热血禁药。",
+              "source_probability": "1/3",
+              "effect_text": "获得不可清除的伤势，永久热诚+5",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "small_forbidden_potion",
+                  "variant": 1
+                }
+              ]
+            },
+            {
+              "text": "选中的随从喝下了刚毛禁药。",
+              "source_probability": "1/3",
+              "effect_text": "获得不可清除的伤势，永久保护+1",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "small_forbidden_potion",
+                  "variant": 2
+                }
+              ]
+            }
+          ],
+          "target": "minion"
+        },
+        {
+          "label": "用123品级的随从各一个随机换取中型禁药。",
+          "condition": "拥有I、II、III级随从至少各一个",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "被你选择的三名随从还没明白发生了什么就被关进了炼金师的笼子，你忐忑不安地接过了一瓶闪烁奇艺光芒的禁药",
+              "source_probability": "1/3",
+              "effect_text": "失去选择的随从，随机获得一瓶中型禁药",
+              "weight": 1
+            }
+          ],
+          "unavailable_reason": "多卡交换和对应禁药尚未接入"
+        },
+        {
+          "label": "用1234品级的随从各一个随机换取大型禁药。",
+          "condition": "拥有I、II、III、IV级随从至少各一个",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "被你选择的四名随从还没明白发生了什么就被关进了炼金师的笼子，*选择的4级随从*想强行挣脱出来，炼金师丢了一瓶泛着紫色气泡的烧瓶过去，四名随从还是依次倒下了。\n“拿着吧，我最伟大的作品”\n你接过了这瓶冒着刺目红光的禁药，心中的狂喜压过了愧疚。",
+              "source_probability": "1/3",
+              "effect_text": "失去选择的随从，随机获得一瓶大型禁药",
+              "weight": 1
+            }
+          ],
+          "unavailable_reason": "多卡交换和对应禁药尚未接入"
+        },
+        {
+          "label": "不做理会",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你看了看他的脸，好像跟通缉令上的传奇恶棍炼金师有点像，带着部队扭头就走",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "alchemist",
+      "name": "炼金师",
+      "kind": "paid_event",
+      "reward": "story",
+      "hint": "炼金师",
+      "description": "一位炼金师正在向进入迷宫的冒险者兜售他的药剂。",
+      "options": [
+        {
+          "label": "选择一个随从免费试用小型药剂",
+          "condition": "拥有至少一个随从",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "*选择的随从*喝下了xx药剂，身体发生了一些细微的变化",
+              "source_probability": "-",
+              "effect_text": "为所选随从随机施加一种小型药剂。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "small_potion"
+                }
+              ]
+            }
+          ],
+          "target": "minion"
+        },
+        {
+          "label": "用4金币随机换取中型合剂。",
+          "condition": "拥有至少4金币",
+          "cost": 4,
+          "outcomes": [
+            {
+              "text": "炼金师递给你一瓶强心骨刺药剂。",
+              "source_probability": "1/6",
+              "effect_text": "获得强心骨刺药剂",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "event_potion_3",
+                  "unlocked_by": "event"
+                }
+              ]
+            },
+            {
+              "text": "炼金师递给你一瓶迅捷骨刺药剂。",
+              "source_probability": "1/6",
+              "effect_text": "获得迅捷骨刺药剂",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "event_potion_5",
+                  "unlocked_by": "event"
+                }
+              ]
+            },
+            {
+              "text": "炼金师递给你一瓶迅捷强心药剂。",
+              "source_probability": "1/6",
+              "effect_text": "获得迅捷强心药剂",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "event_potion_6",
+                  "unlocked_by": "event"
+                }
+              ]
+            },
+            {
+              "text": "炼金师递给你一瓶厚壳骨刺药剂。",
+              "source_probability": "1/6",
+              "effect_text": "获得厚壳骨刺药剂",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "event_potion_9",
+                  "unlocked_by": "event"
+                }
+              ]
+            },
+            {
+              "text": "炼金师递给你一瓶厚壳强心药剂。",
+              "source_probability": "1/6",
+              "effect_text": "获得厚壳强心药剂",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "event_potion_10",
+                  "unlocked_by": "event"
+                }
+              ]
+            },
+            {
+              "text": "炼金师递给你一瓶迅捷厚壳药剂。",
+              "source_probability": "1/6",
+              "effect_text": "获得迅捷厚壳药剂",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "event_potion_12",
+                  "unlocked_by": "event"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "用7金币换取完美合剂。",
+          "condition": "拥有至少7金币",
+          "cost": 7,
+          "outcomes": [
+            {
+              "text": "炼金师递给你一瓶完美合剂。",
+              "source_probability": "-",
+              "effect_text": "获得完美合剂",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "event_potion_15",
+                  "unlocked_by": "event"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "不做理会",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你这两天有点肠胃不适，还是不打算自己喝药剂了",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "roaming_smith",
+      "name": "锤游匠人",
+      "kind": "paid_event",
+      "reward": "story",
+      "hint": "锤游匠人",
+      "description": "一位铁壁关的工匠在迷宫中为冒险者修理装备。",
+      "options": [
+        {
+          "label": "免费为指定随从永久+2基础护甲。",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "*选定的随从*穿上自己的护甲，抱怨它更重了一些",
+              "source_probability": "-",
+              "effect_text": "选定随从+2基础护甲",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "growth",
+                  "base_armor": 2
+                }
+              ]
+            }
+          ],
+          "target": "minion"
+        },
+        {
+          "label": "花费4金币为指定随从永久+4基础护甲，脆弱保护2。",
+          "condition": "拥有至少4金币",
+          "cost": 4,
+          "outcomes": [
+            {
+              "text": "*选定的随从*穿上了护甲，上面新加的雕文闪烁着奇异的光芒",
+              "source_probability": "-",
+              "effect_text": "失去4金币，选定随从获得+4护甲以及脆弱保护2",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "growth",
+                  "base_armor": 4
+                },
+                {
+                  "kind": "battle_buff",
+                  "stat": "fragile_protection",
+                  "value": 2,
+                  "target": "selected",
+                  "battles": -1
+                }
+              ]
+            }
+          ],
+          "target": "minion"
+        },
+        {
+          "label": "花费10金币为指定随从永久+8基础护甲，脆弱保护5，并额外赠送一件随机1级物品。",
+          "condition": "拥有至少10金币",
+          "cost": 10,
+          "outcomes": [
+            {
+              "text": "*选定的随从*接过了护甲，穿上后，护甲上的雕文发出刺目的金光，耳畔甚至仿佛有弥撒声响起。\n哐当，工匠又丢了一件装备给你“拿着吧，用余料随手敲的”",
+              "source_probability": "-",
+              "effect_text": "失去10金币，选定随从获得+8护甲以及脆弱保护5；获得一件随机1级物品",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "growth",
+                  "base_armor": 8
+                },
+                {
+                  "kind": "battle_buff",
+                  "stat": "fragile_protection",
+                  "value": 5,
+                  "target": "selected",
+                  "battles": -1
+                },
+                {
+                  "kind": "random_cards",
+                  "card_type": "equipment",
+                  "rarity": 0
+                }
+              ]
+            }
+          ],
+          "target": "minion"
+        }
+      ]
+    },
+    {
+      "path_id": "silvermoon_guide",
+      "name": "银月引路人",
+      "kind": "paid_event",
+      "reward": "story",
+      "hint": "银月引路人",
+      "description": "一位银月祭祀正在帮助受困于迷宫的冒险者。",
+      "options": [
+        {
+          "label": "免费为指定随从提供持续三场战斗的+1/+3。",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "祭祀念着祷词，*选定的随从*被祝福了。",
+              "source_probability": "-",
+              "effect_text": "指定随从获得持续三场战斗的+1/+3。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "growth",
+                  "base_value": 1,
+                  "max_health": 3,
+                  "target": "selected",
+                  "battles": 3
+                }
+              ]
+            }
+          ],
+          "target": "minion"
+        },
+        {
+          "label": "花费4金币为指定随从治疗随机一处伤势，提供持续三场战斗的+1/+6。",
+          "condition": "拥有至少4金币",
+          "cost": 4,
+          "outcomes": [
+            {
+              "text": "祭祀口中念着祷词并单手抬起，一束月光照下，*选定的随从*身上的伤口开始恢复。",
+              "source_probability": "-",
+              "effect_text": "失去4金币，制定随从治疗随机一处伤势，获得持续三场战斗的+1/+6",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "heal",
+                  "count": 1
+                },
+                {
+                  "kind": "battle_buff",
+                  "stat": "growth",
+                  "base_value": 1,
+                  "max_health": 6,
+                  "target": "selected",
+                  "battles": 3
+                }
+              ]
+            }
+          ],
+          "target": "minion"
+        },
+        {
+          "label": "花费10金币为指定随从治疗所有伤势提供持续三场战斗的+2/+6。",
+          "condition": "拥有至少10金币",
+          "cost": 10,
+          "outcomes": [
+            {
+              "text": "随着祭祀单膝下跪并念着祷词，“选定的随从”沐浴着银色的月光，身上的所有伤口肉眼可见地恢复了。",
+              "source_probability": "-",
+              "effect_text": "失去10金币，指定随从治疗所有伤势，获得持续三场战斗的+2/+6。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "heal",
+                  "count": -1
+                },
+                {
+                  "kind": "battle_buff",
+                  "stat": "growth",
+                  "base_value": 2,
+                  "max_health": 6,
+                  "target": "selected",
+                  "battles": 3
+                }
+              ]
+            }
+          ],
+          "target": "minion"
+        },
+        {
+          "label": "让指定1级随从跟随银月祭祀离开迷宫，随机获得2个纹章。",
+          "condition": "拥有至少一位1级随从",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "“愿银月指引你的方向”，祭祀祝福你，带着*选定的随从*往出口的方向前去。\n你离开时发现地上闪烁着光芒。",
+              "source_probability": "-",
+              "effect_text": "获得两个随机纹章",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "remove_selected"
+                },
+                {
+                  "kind": "stickers",
+                  "names": [],
+                  "count": 2
+                }
+              ]
+            }
+          ],
+          "target": "minion",
+          "target_rarity": 0
+        }
+      ]
+    },
+    {
+      "path_id": "muleteer_caravan",
+      "name": "驮夫商队",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "驮夫商队",
+      "description": "你们碰见了一队正在休息的灰烬岭驮夫，他们围在篝火旁吃着干粮。",
+      "options": [
+        {
+          "label": "和他们一起聊天休息。",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "驮夫介绍了他们背东西时的发力技巧，你的一些随从受益匪浅",
+              "source_probability": "-",
+              "effect_text": "下一场战斗所有I、II级随从获得强化+1。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "reinforcement",
+                  "value": 1,
+                  "max_rarity": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "花费5金币购买5张随机矿物。",
+          "condition": "拥有至少5金币",
+          "cost": 5,
+          "outcomes": [
+            {
+              "text": "你从驮夫那里买了一堆矿物，拿到手后，你感叹不知道为什么要买这么重的东西",
+              "source_probability": "-",
+              "effect_text": "失去5金币，随机获得5张矿物资源卡",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "random_cards",
+                  "card_type": "mineral",
+                  "count": 5
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "花费3金币获取一份食物。",
+          "condition": "拥有至少3金币",
+          "cost": 3,
+          "outcomes": [
+            {
+              "text": "你买了一点食物，正好留在路上充充饥",
+              "source_probability": "-",
+              "effect_text": "失去3金币，从面包，奶酪，火腿，苹果中随机获得一个。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "面包",
+                    "奶酪",
+                    "火腿",
+                    "苹果"
+                  ],
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "花费12金币获得一份可口的食物。",
+          "condition": "拥有至少12金币",
+          "cost": 12,
+          "outcomes": [
+            {
+              "text": "你花钱买了一份大餐，这下能美美享用一餐了",
+              "source_probability": "-",
+              "effect_text": "失去12金币，火腿面包、苹果派、烤面包、烤火腿、烤苹果、奶酪面包、三明治、金苹果\n中随机获得一个。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "火腿面包",
+                    "苹果派",
+                    "烤面包",
+                    "烤火腿",
+                    "烤苹果",
+                    "奶酪面包",
+                    "三明治",
+                    "金苹果"
+                  ],
+                  "count": 1
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "slave_trader",
+      "name": "奴隶贩子",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "奴隶贩子",
+      "description": "一支千帆港的捕奴队与你们相遇，队伍后面牵着菌人，小恶魔和骨头架子。",
+      "options": [
+        {
+          "label": "花费10金币购买一个菌人奴隶",
+          "condition": "拥有至少10金币",
+          "cost": 10,
+          "outcomes": [
+            {
+              "text": "你丢出一堆金币，从奴隶贩子手中牵来了一只菌人，但不知道为什么你队伍里有些随从在吞咽口水",
+              "source_probability": "-",
+              "effect_text": "失去10金币，获得一个自带奴隶镣铐纹章的菌人",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "slave_card",
+                  "race": 8,
+                  "card_type": "minion"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "花费10金币购买一个小恶魔奴隶",
+          "condition": "拥有至少10金币",
+          "cost": 10,
+          "outcomes": [
+            {
+              "text": "你丢出一堆金币，从奴隶贩子手中牵来了一只小恶魔，你队伍里的好多随从都不敢与之对视",
+              "source_probability": "-",
+              "effect_text": "失去10金币，获得一个自带奴隶镣铐纹章的小恶魔",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "slave_card",
+                  "race": 6,
+                  "card_type": "minion"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "花费10金币购买一个亡灵奴隶",
+          "condition": "拥有至少10金币",
+          "cost": 10,
+          "outcomes": [
+            {
+              "text": "你丢出一堆金币，从奴隶贩子手中牵来了一只亡灵，它走起路来哐铛作响，你忍不住怀疑会不会暴露行踪",
+              "source_probability": "-",
+              "effect_text": "失去10金币，获得一个自带奴隶镣铐纹章的亡灵",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "slave_card",
+                  "race": 5,
+                  "card_type": "minion"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "出售一个随从",
+          "condition": "选择英雄为汉萨联邦阵营且至少有一个随从",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "*选择的随从*不可思议地看着你，你从奴隶贩子手中拿过了金币，头也不回地走了",
+              "source_probability": "-",
+              "effect_text": "失去选择的随从，获得3*随从等级的金币",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "sell_slave"
+                }
+              ]
+            }
+          ],
+          "target": "minion",
+          "requires_faction": "hansa"
+        },
+        {
+          "label": "离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "“反正不是卖的人类”你念叨着离开了",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "encounter_of_pain",
+      "name": "苦痛之遇",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "苦痛之遇",
+      "description": "惨叫与愉悦之声将你们引入了一个拐角，一个千咒塔的苦难修士正在进行自我苦修。",
+      "options": [
+        {
+          "label": "治疗他",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "这个修士失去了苦痛的欢愉昏死了过去。",
+              "source_probability": "65%",
+              "effect_text": "无事发生",
+              "weight": 0.65
+            },
+            {
+              "text": "失去了苦痛的修士愤怒的向你们挥鞭攻击，势单力薄的修士被你们几下放倒了。",
+              "source_probability": "25%",
+              "effect_text": "获得苦痛之鞭",
+              "weight": 0.25,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "pain_whip"
+                }
+              ]
+            },
+            {
+              "text": "失去了苦痛的修士愤怒的向你们挥鞭攻击，势单力薄的修士被你们几下放倒了，你队伍里有识货的随从发现那个鞭子好像价值不菲。",
+              "source_probability": "10%",
+              "effect_text": "获得血誓之鞭",
+              "weight": 0.1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "blood_oath_whip"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "加入他",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们一起加入了苦难的修行，一些未曾了解的知识进入了你们的脑海。",
+              "source_probability": "40%",
+              "effect_text": "所有法术行动友方卡牌获得基础数值+1以及突击：受到一点伤害",
+              "weight": 0.4,
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "growth",
+                  "base_value": 1,
+                  "target": "magic",
+                  "battles": -1
+                },
+                {
+                  "kind": "battle_buff",
+                  "stat": "opening_damage",
+                  "value": 1,
+                  "target": "magic",
+                  "battles": -1
+                }
+              ]
+            },
+            {
+              "text": "你们尝试加入这场苦难的修行，但千咒之神并不接纳你们。",
+              "source_probability": "60%",
+              "effect_text": "下一场战斗所有友方卡牌获得突击：受到1点伤害。",
+              "weight": 0.6,
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "opening_damage",
+                  "value": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "杀死他",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们暂时终结了这一亵渎的仪式，离开了此地",
+              "source_probability": "40%",
+              "effect_text": "无事发生",
+              "weight": 0.4
+            },
+            {
+              "text": "剑锋穿过修士的心脏时，你感觉到一股奇异的力量钻入你的脑海，一阵强烈的绞痛感之后你对法术的奥妙有了更深的理解。",
+              "source_probability": "25%",
+              "effect_text": "所有法术行动友方卡牌获得基础数值+1",
+              "weight": 0.25,
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "growth",
+                  "base_value": 1,
+                  "target": "magic",
+                  "battles": -1
+                }
+              ]
+            },
+            {
+              "text": "剑锋穿过修士的心脏时，你的胸口也感到一阵强烈剧痛。千咒之神对你施加了小小惩戒。",
+              "source_probability": "35%",
+              "effect_text": "数值最高的一名近战随从受到魔痕I。",
+              "weight": 0.35,
+              "effects": [
+                {
+                  "kind": "wound",
+                  "wound": "魔痕Ⅰ",
+                  "target": "strongest_melee"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们赶紧远离了这一亵渎之地只求血别溅到自己身上。",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "lone_druid",
+      "name": "独行德鲁伊",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "独行德鲁伊",
+      "description": "你们碰见了一位疲惫的野性之地德鲁伊，他正带着一些没被迷宫影响心智的菌人离开迷宫。",
+      "options": [
+        {
+          "label": "提供3份食物帮助",
+          "condition": "拥有3个未装备的苹果，面包，火腿等食物相关的纹章。",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "德鲁伊对你们的慷慨表示感谢并为回赠你们自然印记。",
+              "source_probability": "-",
+              "effect_text": "失去选择的3个食物纹章，获得3个种子纹章",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "种子"
+                  ],
+                  "count": 3
+                }
+              ]
+            }
+          ],
+          "food_choices": [
+            "面包",
+            "火腿面包",
+            "火腿",
+            "苹果",
+            "苹果派",
+            "烤面包",
+            "烤火腿",
+            "烤苹果",
+            "奶酪",
+            "奶酪面包",
+            "三明治",
+            "金苹果"
+          ]
+        },
+        {
+          "label": "提供金币帮助",
+          "condition": "拥有10金币",
+          "cost": 10,
+          "outcomes": [
+            {
+              "text": "德鲁伊对你们的慷慨表示感谢并为你们施加了自然庇护。",
+              "source_probability": "-",
+              "effect_text": "失去10金币，本层的剩余战斗中所有友军的生命值+2，包括战斗召唤物",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "max_health",
+                  "value": 2,
+                  "battles": -1,
+                  "scope": "floor"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "提供自然之力的帮助",
+          "condition": "拥有两个木符文贴纸或树纹章，无论是否装备",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "德鲁伊吸收了自然的力量脸色恢复红润，他向你们施加了林恩的祝福以表示感谢。",
+              "source_probability": "-",
+              "effect_text": "所有上一场战斗的友军获得+1/+2。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "nature"
+                },
+                {
+                  "kind": "growth",
+                  "target": "last_battle",
+                  "base_value": 1,
+                  "max_health": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "爱莫能助",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你略表歉意地摇了摇头，德鲁伊点了点头，疲惫地继续倚着法杖前行。",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "demon_apprentices",
+      "name": "恶魔学步",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "恶魔学步",
+      "description": "你们在一个岔路口发现了一堆物资：几袋的粮食、十几桶麦酒，一些风干的火腿，甚至还有灰烬岭民兵丢的草叉。几个穿着极不合身、甚至穿反了的人类礼服的地底乡下小恶魔，正围着一块破布长桌，用树枝当叉子，试图极其做作地享用这顿大餐。",
+      "options": [
+        {
+          "label": "征用物资",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你清了清嗓子，掏出本子，用极其傲慢的纯正贵族腔调宣布：“以暗影城与王国的协议，你们涉嫌非法盗窃。我宣布，这些物资由我们‘合法征用’。”小恶魔们被你的气场唬住了，甚至为了表现得“体面”，主动帮忙把物资打包好，还歪歪扭扭的鞠了个躬。",
+              "source_probability": "60%",
+              "effect_text": "获得一个面包，火腿纹章，一张啤酒杯",
+              "weight": 0.6,
+              "effects": [
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "面包"
+                  ],
+                  "count": 1
+                },
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "火腿"
+                  ],
+                  "count": 1
+                },
+                {
+                  "kind": "card",
+                  "card": "beer_mug"
+                }
+              ]
+            },
+            {
+              "text": "你清了清嗓子，正准备用纯正贵族腔调宣布：“以暗影城与王国的名义……嗝——！”一个极其响亮且带着劣质麦酒味的饱嗝，直接喷在了领头小恶魔的脸上。小恶魔们愣住了。领头的小恶魔捏着鼻子退后两步，一脸嫌弃地挥了挥手：“一点都不体面，粗鄙！太粗鄙了！走走走，别理这些乡巴佬，真扫兴。”说完，他们物资也不拿，一溜烟钻进了旁边的地洞里。",
+              "source_probability": "40%",
+              "effect_text": "获得烂面包，烂火腿纹章，酸啤酒杯一张。",
+              "weight": 0.4,
+              "effects": [
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "烂面包"
+                  ],
+                  "count": 1
+                },
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "烂火腿"
+                  ],
+                  "count": 1
+                },
+                {
+                  "kind": "card",
+                  "card": "sour_beer_mug",
+                  "unlocked_by": "ironwall_inscription"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "让驮夫运送出迷宫物归原主",
+          "condition": "队伍中拥有辎重驮夫",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们让队伍中的驮夫把这些物资原封不动地运回灰烬岭或周边的据点。失主们感激涕零。",
+              "source_probability": "-",
+              "effect_text": "失去一张辎重驮夫，本局基础积分+1000。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "send_muleteer"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "加入他们",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们拉过几个木桩坐下，用比他们还夸张的做作姿态开始共进晚餐。小恶魔们感动得热泪盈眶，觉得终于遇到了懂他们的上流社会。",
+              "source_probability": "60%",
+              "effect_text": "战场上的随机4名随从获得+1/+2",
+              "weight": 0.6,
+              "effects": [
+                {
+                  "kind": "growth",
+                  "target": "deployed",
+                  "count": 4,
+                  "base_value": 1,
+                  "max_health": 2
+                }
+              ]
+            },
+            {
+              "text": "你们拉过几个木桩坐下，用比他们还夸张的做作姿态开始共进晚餐。小恶魔们感动得热泪盈眶，觉得终于遇到了懂他们的上流社会。不过可能物资都放太久了，用餐之后你们总觉得肠胃不太舒适。",
+              "source_probability": "40%",
+              "effect_text": "战场上的随机4名随从获得-2基础生命值（该次减除不会使其低于1）。",
+              "weight": 0.4,
+              "effects": [
+                {
+                  "kind": "growth",
+                  "target": "deployed",
+                  "count": 4,
+                  "max_health": -2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "合法征用",
+          "condition": "拥有任意高等恶魔随从",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "高等恶魔随从捏着鼻子，用看垃圾的眼神扫了他们一眼，伸出两根手指：“按照暗影城《飞地资源管理条例》第8条，跨阶层越权享用物资，需缴纳十倍的‘体面税’。现在，把东西交出来，然后滚。”小恶魔们感恩戴德地留下了所有东西。",
+              "source_probability": "-",
+              "effect_text": "获得一个面包，火腿纹章，一张啤酒杯，以及10金币。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "面包"
+                  ],
+                  "count": 1
+                },
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "火腿"
+                  ],
+                  "count": 1
+                },
+                {
+                  "kind": "card",
+                  "card": "beer_mug"
+                }
+              ],
+              "gold": 10
+            }
+          ],
+          "requires_race": 6
+        },
+        {
+          "label": "离开",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们看了就离开了，并不想和愚蠢有贪婪的小恶魔搅合在一起。",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "last_supper",
+      "name": "最后的晚餐",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "最后的晚餐",
+      "description": "你们找了个还算干燥的角落，准备停下来吃点东西。然而翻遍行囊才发现，剩下的食物只有一箱了。箱子里传来一股不太对劲的气味，几名队员面面相觑，谁也不愿意第一个打开它。",
+      "options": [
+        {
+          "label": "强行吃",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们硬着头皮吃下了这些食物。没过多久，队伍中便接连响起痛苦的呻吟。看来接下来的路程，所有人都得夹紧屁股赶路了。",
+              "source_probability": "1d10≤7",
+              "effect_text": "下回合开始所有友军眩晕2秒",
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7
+              ],
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "sleep",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "text": "你们小心地剥去食物腐坏的部分，发现里面竟然还算新鲜。虽然味道实在不怎么样，但至少填饱了肚子。",
+              "source_probability": "1d10≥8",
+              "effect_text": "无事发生",
+              "roll_values": [
+                8,
+                9,
+                10
+              ]
+            }
+          ],
+          "roll_sides": 10
+        },
+        {
+          "label": "四处搜寻",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们循着一股香味找到了一处废弃的补给点，里面竟然还存放着几份完好的干粮。饱餐一顿后，所有人都恢复了不少精神。",
+              "source_probability": "1d10=10",
+              "effect_text": "下回合开始所有友军获得强化2",
+              "roll_values": [
+                10
+              ],
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "reinforcement",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "text": "你们在岩缝间找到了一些能够食用的菌菇和苔藓。虽然嚼起来像湿透的皮革，但总算能暂时压住饥饿。",
+              "source_probability": "5<1d10<10",
+              "effect_text": "无事发生",
+              "roll_values": [
+                6,
+                7,
+                8,
+                9
+              ]
+            },
+            {
+              "text": "你们搜遍了附近的岩洞，连一只老鼠都没找到。又饿又累地返回营地后，队伍中的抱怨声变得越来越大。",
+              "source_probability": "1d10≤5",
+              "effect_text": "下回合开始所有友军眩晕3秒",
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "sleep",
+                  "value": 3
+                }
+              ]
+            }
+          ],
+          "roll_sides": 10
+        },
+        {
+          "label": "蘑菇大餐",
+          "condition": "拥有一个*菌人*随从",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "饥饿的目光逐渐聚集到队伍中的*选择的随从*身上。*选择的随从*似乎意识到了什么，拼命往后缩，但已经来不及了。你们终于吃上了一顿热乎的蘑菇大餐，只是席间没人愿意讨论食材的来源。",
+              "source_probability": "-",
+              "effect_text": "失去*选择的随从*，下回合开始所有友军获得强化2",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "remove_selected"
+                },
+                {
+                  "kind": "battle_buff",
+                  "stat": "reinforcement",
+                  "value": 2
+                }
+              ]
+            }
+          ],
+          "target": "minion",
+          "target_race": 8
+        },
+        {
+          "label": "饿着",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们决定把最后一点食物留到更需要的时候。众人饿着肚子继续前进，脚步越来越沉重。",
+              "source_probability": "-",
+              "effect_text": "下回合开始所有友军获得-2强化",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "reinforcement",
+                  "value": -2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "吃随从偷藏的苹果",
+          "condition": "拥有至少一个*苹果*纹章",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "正当大家饿得两眼发昏时，你们发现一名队员偷偷藏着一颗苹果。虽然每人只分到一小口，但那股久违的清甜还是让大家振作了起来。",
+              "source_probability": "-",
+              "effect_text": "失去一个随机苹果纹章，无事发生",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "consume_sticker",
+                  "sticker": "苹果"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "吃树皮",
+          "condition": "拥有至少一个*树*纹章",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "一名队员找来了一些可以食用的树皮。你们把它们切成细条，勉强煮成了一锅糊糊。味道和木屑没什么区别，但至少肚子里不再空荡荡的了。",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "weight": 1
+            }
+          ],
+          "requires_sticker": "树"
+        }
+      ]
+    },
+    {
+      "path_id": "spoils_dispute",
+      "name": "分赃不均",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "分赃不均",
+      "description": "你们刚刚清点完战利品，*随机上场的随从A*和*随机上场的随从B*两名队员便因为一件值钱的宝物争执起来。双方都认为自己在之前的战斗中出力最多，谁也不肯让步，其他队员也开始各自站队。",
+      "options": [
+        {
+          "label": "调和矛盾",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你费了不少口舌，总算说服两人各退一步。作为补偿，你们将剩余的战利品重新分配，虽然双方都有些不情愿，但这场争执总算平息了。",
+              "source_probability": "1d6≥4",
+              "effect_text": "两个随从各粘贴一个随机纹章",
+              "roll_values": [
+                4,
+                5,
+                6
+              ],
+              "effects": [
+                {
+                  "kind": "dispute_emblem",
+                  "indices": [
+                    0,
+                    1
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "你们试图劝说两人冷静下来，没想到双方越说越激动，最后竟当着众人的面大打出手。等你们终于将两人拉开时，他们已经鼻青脸肿，谁也没占到便宜。",
+              "source_probability": "1d6<4",
+              "effect_text": "两个随从获得-2最大生命值（最低到1）",
+              "roll_values": [
+                1,
+                2,
+                3
+              ],
+              "effects": [
+                {
+                  "kind": "growth",
+                  "target": "dispute",
+                  "max_health": -2
+                }
+              ]
+            }
+          ],
+          "roll_sides": 6,
+          "dispute_targets": true
+        },
+        {
+          "label": "支持*随从A*",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你宣布宝物应当归随从A所有。*随从A*得意地收下了战利品，*随从B*则愤愤不平地退到一旁。虽然争执暂时结束，但*随从B*显然还在生闷气。",
+              "source_probability": "-",
+              "effect_text": "A随从粘贴一个随机纹章，B随从下场战斗获得热诚-5",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "dispute_emblem",
+                  "indices": [
+                    0
+                  ]
+                },
+                {
+                  "kind": "dispute_zeal",
+                  "index": 1
+                }
+              ]
+            }
+          ],
+          "dispute_targets": true
+        },
+        {
+          "label": "支持*随从B*",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你站在了*随从B*一边，认定这件宝物理应归他所有。*随从B*心满意足地将战利品收入囊中，*随从A*却冷哼一声，转身走开了。看来这件事还没那么容易过去。",
+              "source_probability": "-",
+              "effect_text": "B随从粘贴一个随机纹章，A随从下场战斗获得热诚-5",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "dispute_emblem",
+                  "indices": [
+                    1
+                  ]
+                },
+                {
+                  "kind": "dispute_zeal",
+                  "index": 0
+                }
+              ]
+            }
+          ],
+          "dispute_targets": true
+        }
+      ]
+    },
+    {
+      "path_id": "suspicious_merchant",
+      "name": "可疑的商人",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "可疑的商人",
+      "description": "一个背着巨大行囊的流浪商人拦住了你们，声称自己急着赶路，愿意把所有货物低价出售。虽然价格诱人，但他始终不肯让你们仔细检查货物。每当有人想凑近看看，他便笑嘻嘻地把行囊往身后挪。",
+      "options": [
+        {
+          "label": "买吧（金币-20）",
+          "condition": "金币数量≥20",
+          "cost": 20,
+          "outcomes": [
+            {
+              "text": "你们付完钱，商人便匆匆离开。打开货物后，你们惊讶地发现里面竟然藏着一件寻路者的通信徽章。看来这家伙根本不知道自己卖掉了什么宝贝。",
+              "source_probability": "1d6=6",
+              "effect_text": "获得1个镀金委托卡包和1个纹章包",
+              "roll_values": [
+                6
+              ],
+              "effects": [
+                {
+                  "kind": "gilded_pack"
+                },
+                {
+                  "kind": "emblem_pack"
+                }
+              ]
+            },
+            {
+              "text": "你们拆开包裹，里面的东西虽然没有想象中那么珍贵，但至少都是些货真价实的冒险装备。这笔买卖还算划得来。",
+              "source_probability": "1d6=5",
+              "effect_text": "获得1个随机大卡包和2把符文刮刀",
+              "roll_values": [
+                5
+              ],
+              "effects": [
+                {
+                  "kind": "scrapers",
+                  "count": 2
+                }
+              ],
+              "packs": [
+                "large"
+              ]
+            },
+            {
+              "text": "你们打开行囊，里面装着一些寻常的冒险用品。东西倒是没什么问题，只是算下来，似乎也没便宜多少。",
+              "source_probability": "1d6=4",
+              "effect_text": "获得1个随机小包和2把符文刮刀",
+              "roll_values": [
+                4
+              ],
+              "effects": [
+                {
+                  "kind": "scrapers",
+                  "count": 2
+                }
+              ],
+              "packs": [
+                "small"
+              ]
+            },
+            {
+              "text": " 你们打开包裹，里面只有一把生锈的刮刀、一个干瘪的苹果和一罐散发着怪味的奶酪。等你们反应过来时，商人早已跑得没影了。",
+              "source_probability": "1d6<4",
+              "effect_text": "获得1把符文刮刀、1个*苹果*和1个*奶酪*",
+              "roll_values": [
+                1,
+                2,
+                3
+              ],
+              "effects": [
+                {
+                  "kind": "scrapers",
+                  "count": 1
+                },
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "苹果"
+                  ],
+                  "count": 1
+                },
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "奶酪"
+                  ],
+                  "count": 1
+                }
+              ]
+            }
+          ],
+          "unavailable_reason": "需要可开出的镀金委托卡包",
+          "roll_sides": 6
+        },
+        {
+          "label": "讲价（至少拥有10金币）",
+          "condition": "金币数量≥10",
+          "cost": 10,
+          "outcomes": [
+            {
+              "text": " 你们和商人讨价还价了半天，他终于不耐烦地从行囊里掏出几件用布包好的武器。虽然都是些旧货，但看起来还算结实。",
+              "source_probability": "1d20≥18",
+              "effect_text": "-10金币，随机获得1个III级装备、2个I级装备",
+              "roll_values": [
+                18,
+                19,
+                20
+              ],
+              "effects": [
+                {
+                  "kind": "random_cards",
+                  "card_type": "equipment",
+                  "rarity": 2
+                },
+                {
+                  "kind": "random_cards",
+                  "card_type": "equipment",
+                  "rarity": 0,
+                  "count": 2
+                }
+              ]
+            },
+            {
+              "text": "商人见你们迟迟不肯松口，便神秘兮兮地拿出一件所谓的「压箱底宝贝」。你们付完钱才发现，不过是把普通刮刀，外加一颗快要烂掉的苹果。",
+              "source_probability": "13≤1d20<18",
+              "effect_text": "-10金币，获得1把符文刮刀和1个*苹果*",
+              "roll_values": [
+                13,
+                14,
+                15,
+                16,
+                17
+              ],
+              "effects": [
+                {
+                  "kind": "scrapers",
+                  "count": 1
+                },
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "苹果"
+                  ],
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "text": "你们把价格压得越来越低，商人的笑容也逐渐消失。最后他气得一把夺回货物，骂骂咧咧地走了，临走前还夸你们比地精更会做生意......也许是夸吧",
+              "source_probability": "1d20<13",
+              "effect_text": "无事发生",
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12
+              ],
+              "cost": 0
+            }
+          ],
+          "roll_sides": 20
+        },
+        {
+          "label": "抢劫",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们刚亮出武器，商人便慌忙掏出一枚烟雾弹砸向地面。众人警惕地后退一步，却只听见一声闷响。烟雾弹在地上滚了几圈，什么也没发生。商人随便丢下几件东西撒腿就跑。",
+              "source_probability": "1d10≥6",
+              "effect_text": "获得1个随机小卡包以及一个纹章包",
+              "roll_values": [
+                6,
+                7,
+                8,
+                9,
+                10
+              ],
+              "effects": [
+                {
+                  "kind": "emblem_pack"
+                }
+              ],
+              "packs": [
+                "small"
+              ]
+            },
+            {
+              "text": "你们正准备动手，商人突然将一枚烟雾弹砸在脚下。浓烟瞬间吞没了整条道路，等你们冲出烟雾时，他早已跑得无影无踪。更糟糕的是，有几名队员被呛得连连咳嗽，眼神也点迷离。",
+              "source_probability": "1d10<6",
+              "effect_text": "下场战斗所有随从获得+3热诚，但是在战斗第10秒时会眩晕3秒",
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "zeal",
+                  "value": 3
+                },
+                {
+                  "kind": "battle_buff",
+                  "stat": "sleep",
+                  "value": 3,
+                  "delay": 10
+                }
+              ]
+            }
+          ],
+          "roll_sides": 10
+        },
+        {
+          "label": "永不上当",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们打量着商人鼓鼓囊囊的行囊，又看了看他那张过分热情的笑脸，最终决定还是不要冒险。商人在身后不断降价，但你们头也不回地离开了。",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "old_shrine",
+      "name": "破旧的神龛",
+      "kind": "free_event",
+      "reward": "story",
+      "hint": "破旧的神龛",
+      "description": "你们在一处岔路口发现了一座荒废已久的神龛。供桌上积满灰尘，神像的面容也已经模糊不清，唯独祭坛中央的石碗干净得有些异常。或许这座被遗忘的神龛，仍然能够回应虔诚的祈愿。",
+      "options": [
+        {
+          "label": "献上几个金币（金币-3）",
+          "condition": "金币≥3",
+          "cost": 3,
+          "outcomes": [
+            {
+              "text": "你们将几枚金币投入石碗，紧接着，神像的双眼闪过一丝微光，一股难以言喻的力量涌入队伍。看来这位神明虽然无人供奉，却依然愿意为慷慨的信徒赐福。",
+              "source_probability": "1d6≥4",
+              "effect_text": "下场战斗开始随机+3热诚或者+1数值或者+4护甲或者+3生命",
+              "roll_values": [
+                4,
+                5,
+                6
+              ],
+              "effects": [
+                {
+                  "kind": "shrine_blessing"
+                }
+              ]
+            },
+            {
+              "text": "金币在石碗里发出清脆的响声，随后便再无动静。你们等了许久，甚至有人试着摇晃神像，但什么也没有发生。看来这位神明要么已经沉睡，要么对三枚金币不太满意。",
+              "source_probability": "1d6<4",
+              "effect_text": "失去3金币，无事发生。",
+              "roll_values": [
+                1,
+                2,
+                3
+              ]
+            }
+          ],
+          "roll_sides": 6
+        },
+        {
+          "label": "献上金苹果（随机失去一个金苹果）",
+          "condition": "有纹章*金苹果*（无论是否装备）",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们将一颗金苹果放入石碗。苹果瞬间化作一道金色光芒，消失在神像掌心。片刻之后，伴随着一阵叮叮当当的声响，大量金币竟从神龛顶部倾泻而下。你们手忙脚乱地捡起金币，看来这位神明很懂得等价交换。",
+              "source_probability": "50%",
+              "effect_text": "随机获得30-50金币",
+              "weight": 0.5,
+              "effects": [
+                {
+                  "kind": "random_gold",
+                  "low": 30,
+                  "high": 50
+                }
+              ]
+            },
+            {
+              "text": "金苹果缓缓融入石碗，原本斑驳的石质表面浮现出淡金色的纹路。温暖的光芒笼罩了整个队伍，你们感到体内的力量正在逐渐苏醒。神龛很快恢复了沉寂，但这份祝福似乎会陪伴你们一段时间。",
+              "source_probability": "50%",
+              "effect_text": "拥有的所有随从获得+1/+2",
+              "weight": 0.5,
+              "effects": [
+                {
+                  "kind": "growth",
+                  "target": "all",
+                  "base_value": 1,
+                  "max_health": 2
+                }
+              ]
+            }
+          ],
+          "sticker_cost": "金苹果"
+        },
+        {
+          "label": "献上苹果（随机失去一个苹果）",
+          "condition": "有纹章*苹果*（无论是否装备）",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们将苹果放在石碗中央，闭上眼睛默默祈祷。一阵微风突然拂过神龛，苹果在你们眼前渐渐枯萎，最终化作灰烬。与此同时，队伍中那些尚未愈合的伤口开始缓缓恢复，疼痛也随之消散。",
+              "source_probability": "1d6≥4",
+              "effect_text": "治愈场上随机1个随从的所有伤势（优先选择有伤势的随从）",
+              "roll_values": [
+                4,
+                5,
+                6
+              ],
+              "effects": [
+                {
+                  "kind": "heal",
+                  "target": "deployed",
+                  "count": -1
+                }
+              ]
+            },
+            {
+              "text": "苹果从石碗中消失了，你们随即感到一阵莫名的轻松。有人声称自己听见了神明的低语，还有人觉得身体充满了力量。然而仔细检查后，你们发现伤口依旧疼痛，身体的疲惫也如常。也许只是心理作用吧。",
+              "source_probability": "1d6<4",
+              "effect_text": "无事发生",
+              "roll_values": [
+                1,
+                2,
+                3
+              ]
+            }
+          ],
+          "sticker_cost": "苹果",
+          "roll_sides": 6
+        },
+        {
+          "label": "重新雕刻一下神像",
+          "condition": "拥有随从“铁砧-玛格丽特”",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "玛格丽特盯着残破的神像看了许久，突然掏出工具，自顾自地敲打起来。石屑纷飞间，原本模糊的神像逐渐变成了「铁火匠神·法罗斯」的模样。当她完成最后一锤时，神像竟迸发出炽热的火星。玛格丽特满意地拍了拍手，看来匠神很欣赏她的手艺。",
+              "source_probability": "-",
+              "effect_text": "本局游戏中你的所有装备获得+1/+2（包括后续的）",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "battle_buff",
+                  "stat": "equipment_growth",
+                  "base_value": 1,
+                  "max_health": 2,
+                  "battles": -1
+                }
+              ]
+            }
+          ],
+          "requires_card": "anvil_margaret"
+        },
+        {
+          "label": "砸开看看神像里有啥",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们用力砸开神像，无数团耀眼的光芒突然从裂缝中冲了出来。一个被困在石像中不知多少年的灵魂缓缓浮现，向你们表达了谢意。作为报答，它祝福了你们，随后消失在远方。",
+              "source_probability": "1d6=6",
+              "effect_text": "获得纹章*天选之子*",
+              "roll_values": [
+                6
+              ],
+              "effects": [
+                {
+                  "kind": "stickers",
+                  "names": [
+                    "天选之子"
+                  ],
+                  "count": 1
+                }
+              ]
+            },
+            {
+              "text": "神像碎裂后，你们发现石像内部刻满了密密麻麻的古老符文。正当你们试图辨认时，符文突然泛起暗红色的光芒。离开神龛后，队伍中一名成员始终感觉有一道目光注视着自己，你终于想起了，那是厄里尼丝的目光。",
+              "source_probability": "1d6≤5",
+              "effect_text": "随机场上随从获得厄运缠身",
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "effects": [
+                {
+                  "kind": "wound",
+                  "wound": "厄运缠身",
+                  "target": "deployed"
+                }
+              ]
+            }
+          ],
+          "roll_sides": 6
+        },
+        {
+          "label": "跪拜一下",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们在神像前恭恭敬敬地跪下，默默祈求接下来的旅途能够平安顺利。过了好一会儿，神龛依旧毫无反应。正当你们准备离开时，头顶突然落下一片落叶。或许神明确实注意到了你们，只是懒得回应。",
+              "source_probability": "-",
+              "effect_text": "无事发生",
+              "weight": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "quest_vending_machine",
+      "name": "自动任务贩卖车",
+      "kind": "paid_event",
+      "reward": "story",
+      "hint": "自动任务贩卖车",
+      "description": "有一辆自动贩卖车，上面有机器人贩卖或者什么，可以领取一个机器人完成指定任务，获得对应奖励",
+      "options": [
+        {
+          "label": "清扫垃圾",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们按下了标有「清扫垃圾」的按钮。车厢里传来一阵齿轮转动的声音，片刻后，一台圆滚滚的回收机械人推开车门，拖着一只比自己还大的垃圾袋走了出来。它熟练地向你们鞠了一躬，又从肚子里吐出一张皱巴巴的卷轴，似乎已经迫不及待想要开始工作了。",
+              "source_probability": "-",
+              "effect_text": "获得一个回收机械人以及指示物“任务卷轴：清扫垃圾”（装备指示物的友军累计提供40次增益后消失并提供5金币、一个随机大卡包以及一个纹章包）",
+              "weight": 1
+            }
+          ],
+          "unavailable_reason": "需要任务卷轴进度与奖励"
+        },
+        {
+          "label": "临时镖客",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们选择了「临时镖客」。车厢内部突然响起一阵激昂的军乐，一台提着大喇叭的动员机兵踏着整齐的步伐走了出来。它郑重地向你们行了个军礼，将一张卷轴递到你们面前。随后，它举起手中的武器，摆出一副随时准备奔赴战场的架势。",
+              "source_probability": "-",
+              "effect_text": "获得一个动员机兵以及指示物“任务卷轴：临时镖客”（耀眼，装备指示物的友军累计存活3次后消失并提供5金币、一个随机小卡包以及一个纹章包）",
+              "weight": 1
+            }
+          ],
+          "unavailable_reason": "需要任务卷轴进度与奖励"
+        },
+        {
+          "label": "丰衣足食",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们按下「丰衣足食」的按钮，车厢里顿时传来物资箱碰撞的声音。不一会儿，一台背着巨大补给箱的后勤机器人摇摇晃晃地走了出来。它先是热情地向你们展示了自己的储物空间，随后从一堆杂物中翻出任务卷轴，郑重其事地交到了你们手里。",
+              "source_probability": "-",
+              "effect_text": "获得一个后勤机器人以及指示物“任务卷轴：丰衣足食”（提供总价值30金币的补给后消失，提供2个物品卡、2张法术卡以及1个纹章包）",
+              "weight": 1
+            }
+          ],
+          "unavailable_reason": "需要任务卷轴进度与奖励"
+        },
+        {
+          "label": "买个打折的牛逼机器人（消耗8金币）",
+          "condition": "拥有8金币",
+          "cost": 8,
+          "outcomes": [
+            {
+              "text": "你们注意到贩卖车角落里还有一个不起眼的按钮，上面写着「超强战斗机兵，限时特价8金币！」。投币后，整辆贩卖车突然剧烈震动起来。伴随着一阵金属摩擦声，一台扛着剑盾的步行战斗机从车厢里挤了出来。它锈迹斑斑的盔甲上贴着一张崭新的标签：「原价80金币，现价8金币，售出概不退换。」",
+              "source_probability": "-",
+              "effect_text": "失去8金币，获得一张带有两处随机I级伤势的步行战斗机。",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "wounded_card",
+                  "card": "walking_fighter",
+                  "count": 2
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path_id": "unclaimed_relic",
+      "name": "无主的圣物",
+      "kind": "paid_event",
+      "reward": "story",
+      "hint": "无主的圣物",
+      "description": "你们发现一具身穿神殿服饰的骸骨，胸前紧紧抱着一枚刻有日月纹样的护符。护符虽然满是裂痕，却仍散发着微弱的光芒。骸骨旁的石壁上刻着几个歪歪扭扭的字：「神光不再」",
+      "options": [
+        {
+          "label": "取走圣徽",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们掰开骸骨僵硬的手指，取下那枚护符。一张折叠的羊皮纸随之滑落，上面写着：「圣座已降下启示，天穹的倒影沉入凡尘。持此护符深入，寻回失落的圣辉，将荣光重归于天空。」",
+              "source_probability": "-",
+              "effect_text": "获得装备“日月护符”",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "sunmoon_amulet"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "尝试祈祷",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们按照神殿的礼仪念诵祷词，圣徽竟重新亮起。一道温暖的辉光拂过，随后又渐渐熄灭。看来神明并未完全抛弃这里，只是不知道为何始终没有回应那名骑士。",
+              "source_probability": "-",
+              "effect_text": "获得法术卡“星火术”",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "starfire"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "安葬骸骨",
+          "condition": "-",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "你们将骑士的遗骸安葬在遗迹旁。正准备离开时，一道模糊的幽灵从坟墓中缓缓浮现。它神情呆滞，茫然地望着前方，对你们的呼唤毫无反应。你们试着离开，却发现它不知何时已经跟在了队伍后面。",
+              "source_probability": "-",
+              "effect_text": "获得一张随从卡“幽灵”",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "card",
+                  "card": "maze_ghost",
+                  "unlocked_by": "silvermoon_chapter"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "让伊奥恩检查",
+          "condition": "使用的英雄是伊奥恩·沃登",
+          "cost": 0,
+          "outcomes": [
+            {
+              "text": "熟悉的纹章。 伊奥恩认出了盔甲上的徽记，沉默许久后将圣徽从骸骨怀中取出。他试着唤醒其中的神术，却发现自己同样无法得到回应。「他等到最后，也没等来答案。」伊奥恩将圣徽放回原处，转身离开。",
+              "source_probability": "-",
+              "effect_text": "伊奥恩获得本级一半的经验",
+              "weight": 1,
+              "effects": [
+                {
+                  "kind": "hero_experience"
+                }
+              ]
+            }
+          ],
+          "requires_hero": "ioann_warden"
+        }
+      ]
+    }
+  ],
+  "activated_options": {
+    "bone_tower": {
+      "0": {
+        "0": [
+          {
+            "kind": "card",
+            "card": "hellstone_fragment"
+          }
+        ],
+        "1": [
+          {
+            "kind": "hellfire_wound"
+          }
+        ]
+      }
+    },
+    "bounty_hunter": {
+      "1": {
+        "0": [
+          {
+            "kind": "event_battle"
+          }
+        ]
+      },
+      "4": {
+        "0": [
+          {
+            "kind": "event_battle",
+            "enemy_first": true
+          }
+        ]
+      }
+    },
+    "quest_vending_machine": {
+      "0": {
+        "0": [
+          {
+            "kind": "card",
+            "card": "recycling_robot"
+          },
+          {
+            "kind": "task_scroll",
+            "scroll": "CLEANUP"
+          }
+        ]
+      },
+      "1": {
+        "0": [
+          {
+            "kind": "card",
+            "card": "mobilization_machine"
+          },
+          {
+            "kind": "task_scroll",
+            "scroll": "MERCENARY"
+          }
+        ]
+      },
+      "2": {
+        "0": [
+          {
+            "kind": "card",
+            "card": "logistics_robot"
+          },
+          {
+            "kind": "task_scroll",
+            "scroll": "SUPPLIES"
+          }
+        ]
+      }
+    },
+    "strange_casino": {
+      "2": {
+        "0": [
+          {
+            "kind": "casino_cheat"
+          }
+        ],
+        "1": [
+          {
+            "kind": "casino_cheat",
+            "caught": true
+          }
+        ]
+      },
+      "3": {
+        "0": [
+          {
+            "kind": "gilded_pack"
+          },
+          {
+            "kind": "random_pack",
+            "size": "large"
+          },
+          {
+            "kind": "emblem_pack"
+          },
+          {
+            "kind": "gold",
+            "amount": 10
+          }
+        ],
+        "1": [
+          {
+            "kind": "random_pack",
+            "size": "large"
+          },
+          {
+            "kind": "emblem_pack"
+          },
+          {
+            "kind": "gold",
+            "amount": 10
+          }
+        ],
+        "2": [
+          {
+            "kind": "random_pack",
+            "size": "small"
+          },
+          {
+            "kind": "gold",
+            "amount": 10
+          }
+        ],
+        "3": [
+          {
+            "kind": "gold",
+            "amount": 1
+          }
+        ]
+      }
+    },
+    "suspicious_merchant": {
+      "0": {
+        "0": [
+          {
+            "kind": "gilded_pack"
+          },
+          {
+            "kind": "emblem_pack"
+          }
+        ]
+      }
+    },
+    "strange_alchemist": {
+      "1": {
+        "0": [
+          {
+            "kind": "trade_potion",
+            "tier": "medium",
+            "rarities": [
+              0,
+              1,
+              2
+            ]
+          }
+        ]
+      },
+      "2": {
+        "0": [
+          {
+            "kind": "trade_potion",
+            "tier": "large",
+            "rarities": [
+              0,
+              1,
+              2,
+              3
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "encounters": {
+    "bounty_hunter": {
+      "1": {
+        "front": [
+          "militia",
+          "shieldwall_private"
+        ],
+        "back": [
+          "musketeer"
+        ]
+      },
+      "2": {
+        "front": [
+          "shieldwall_private",
+          "militia",
+          "militia"
+        ],
+        "back": [
+          "musketeer",
+          "scout",
+          "town_priest"
+        ]
+      },
+      "3": {
+        "front": [
+          {
+            "cards": [
+              "shieldwall_private",
+              "militia"
+            ],
+            "top": 0
+          },
+          "phalanx_officer",
+          "shieldwall_private"
+        ],
+        "back": [
+          "musketeer",
+          "scout",
+          "war_drum_musician",
+          "town_priest"
+        ]
+      }
+    }
+  }
+}

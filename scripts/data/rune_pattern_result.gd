@@ -20,29 +20,30 @@ var pattern_type: PatternType = PatternType.CHAOS # 最终命中的唯一牌型
 var visible_runes: Array[CardData.ElementType] = [] # 识别时从左到右的真实可见符文
 var element_counts: Dictionary = {} # 按元素统计的总数量，供显示和后续规则查询
 var participating_indices: Array[int] = [] # 参与牌型的 visible_runes 下标
+var promoted_pair := false # 哔哔将两枚真实符文按三相结算，不增加实际符文槽
 
 
 func get_pattern_name() -> String:
 	# 名称映射集中保存，避免规则层和 UI 各自维护一份中文文案。
 	match pattern_type:
 		PatternType.FIVE_OF_A_KIND:
-			return "五条"
+			return "五芒"
 		PatternType.FOUR_OF_A_KIND:
-			return "四条"
+			return "四象"
 		PatternType.FULL_HOUSE:
-			return "葫芦"
+			return "三相双鸣"
 		PatternType.SAME_ELEMENT_TWO_PAIR:
-			return "同花两对"
+			return "同源双环"
 		PatternType.TWO_PAIR:
-			return "两对"
+			return "双环"
 		PatternType.THREE_OF_A_KIND:
-			return "三条"
+			return "三相"
 		PatternType.PAIR:
-			return "对子"
+			return "双鸣"
 		PatternType.STRAIGHT:
-			return "顺子"
+			return "连星"
 		_:
-			return "混乱"
+			return "混沌"
 
 
 func get_element_count(element_type: CardData.ElementType) -> int:

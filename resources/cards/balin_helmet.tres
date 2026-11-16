@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"balin_helmet"
+display_name = "巴林头盔"
+pack_id = &"gilded_commission"
+rarity = 3
+content_effect = &"balin_helmet"
+card_type = 1
+equipment_type = 2
+equipment_armor_delta = 2
+equipment_zeal_delta = -2
+effect_text = "独立头盔位，基础护甲+2，热诚-2。突击：临时复制同队的普通装备到收藏，沿用成长和剩余耐久，下场战斗结算后消失。"
+effect_ids = Array[StringName]([&"balin_helmet.effect.rush"])

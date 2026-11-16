@@ -18,4 +18,7 @@ runes = Array[int]([0, 1, 2])
 rarity = 1
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(5, 21)
+art_finish_offsets = Dictionary[StringName, Vector2i]({
+&"overframe": Vector2i(4, 10)
+})
 effect_text = "遗愿：对相邻友军造成等同于自身当前数值的伤害。"

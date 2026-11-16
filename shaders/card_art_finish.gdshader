@@ -1,11 +1,14 @@
 shader_type canvas_item;
 render_mode unshaded;
 
-#include "res://shaders/card_finish.gdshaderinc"
+#include "res://shaders/card_layer_flash.gdshaderinc"
 #include "res://shaders/card_projection.gdshaderinc"
 
-uniform vec2 pointer_force = vec2(0.0);
 uniform bool background_layer = false;
+uniform bool foil_enabled = false;
+uniform bool pointer_light_enabled = false; // 所有特殊卡面／卡图共用鼠标柔光
+uniform int flash_type = 0;
+uniform float foil_shade_strength = 0.45; // 随鼠标倾斜的漫反射明暗幅度
 uniform bool use_3d = false;
 uniform float max_tilt_degrees = 10.0; // 与整卡共用的最大倾角，不额外叠加旋转
 uniform float fov = 72.0; // 与整卡共用的透视视野角
@@ -19,8 +22,9 @@ uniform sampler2D surface_normal : hint_normal, filter_nearest;
 uniform float effect_strength = 0.75; // 浮雕明暗和局部反光的强度
 uniform float texture_density = 42.0; // 细密压纹线条的重复密度
 uniform int card_finish = -1; // 2为全息；碎闪由合成后的整卡材质统一处理
-uniform vec2 layer_origin = vec2(0.0); // 当前图层在卡面中的原生像素起点
-uniform vec2 card_size = vec2(99.0, 136.0); // 共用卡面坐标，让两层材质纹理接续
+
+#include "res://shaders/card_film.gdshaderinc"
+
 varying vec4 item_modulate;
 varying vec2 finish_position;
 
@@ -74,6 +78,10 @@ void fragment() {
 	vec4 source = texture(TEXTURE, uv);
 	vec3 output_color = source.rgb;
 	vec2 finish_uv = original_position / max(card_size, vec2(1.0));
+	// 景深只移动素材，闪纹仍按当前像素在整张卡上的位置取样。
+	if (foil_enabled && background_layer) {
+		output_color += card_layer_flash(finish_position, flash_type);
+	}
 	if (card_finish == 2) {
 		output_color = holographic_finish(output_color, finish_uv, pointer_force, effect_strength, texture_density);
 	}
@@ -98,6 +106,17 @@ void fragment() {
 		output_color *= mix(1.0, 0.7 + diffuse * 0.32, effect_strength);
 		output_color += finish_spectrum(dot(normal.xy, light.xy) * 1.7 + uv.y * 0.2)
 			* specular * effect_strength * 0.4;
+	}
+	if (film_kind != 0) { output_color = card_film_finish(output_color, (background_layer ? finish_position : original_position) / max(card_size, vec2(1.0)), uv, pointer_force, background_layer ? 1 : 0); }
+	if (pointer_light_enabled) { output_color *= card_pointer_light((original_position + foil_padding) / (card_size + foil_padding * 2.0), pointer_force, foil_shade_strength); }
+	if (outline_highlight_enabled && source.a >= 0.5) {
+		vec2 dx = vec2(TEXTURE_PIXEL_SIZE.x, 0.0);
+		vec2 dy = vec2(0.0, TEXTURE_PIXEL_SIZE.y);
+		output_color += card_outline_flash(finish_position, source,
+			texture(TEXTURE, clamp(uv - dx, vec2(0.0), vec2(1.0))),
+			texture(TEXTURE, clamp(uv + dx, vec2(0.0), vec2(1.0))),
+			texture(TEXTURE, clamp(uv - dy, vec2(0.0), vec2(1.0))),
+			texture(TEXTURE, clamp(uv + dy, vec2(0.0), vec2(1.0))));
 	}
 	COLOR = vec4(output_color, source.a) * item_modulate;
 }
