@@ -58,11 +58,11 @@ func _run() -> void:
 			var price := tile.get_node("ShopPrice") as Control
 			var before := price.get_global_transform_with_canvas()
 			await move(tile.get_global_rect().get_center())
-			await create_timer(0.2).timeout
+			await create_timer(0.32).timeout
 			check(price.get_global_transform_with_canvas() == before, offer.kind + "底部价格不随图片旋转或抬起")
 			if offer.kind != "single_card":
-				check(not tile.is_processing() and tile._visual.position == Vector2.ZERO and tile._visual.rotation == 0, offer.kind + "服务图片指向时保持静止")
-	check(scraper_tile != null and scraper_tile._visual.get_child(0).size == Vector2(59, 59), "商店刮刀保持原生59像素尺寸")
+				check(not tile.is_processing() and tile._visual.position == Vector2.ZERO and tile._visual.rotation == 0, offer.kind + "服务图片停稳后落在原位")
+	check(scraper_tile != null and scraper_tile._visual.get_child(0).size == Vector2(116, 112), "商店刮刀的可见区域按原像素放大四倍")
 	await move(Vector2(40, 650))
 	await capture("compact-table")
 	# PNG编码是同步操作，先跨过两帧，避免编码耗时成为新Tween的首帧delta。

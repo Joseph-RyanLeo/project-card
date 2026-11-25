@@ -24,12 +24,13 @@ func _entry(card: CardData, row: StringName, index: int) -> Dictionary:
 func _sentry(region: String, capacity: float = 6.0) -> Dictionary:
 	return {"instance_id": "test_" + region, "visual_variant": 0, "region": region, "capacity": capacity, "remaining": capacity}
 
-func _controller(talents: Array[String], sentries: Array[Dictionary], level: int = 4, fortify: bool = false, seed_value: int = 91038, health: int = 99) -> Node:
+func _controller(talents: Array[String], sentries: Array[Dictionary], level: int = 4, fortify: bool = false, seed_value: int = 91038, health: int = 99, armor: int = 0) -> Node:
 	var controller := Controller.new()
 	root.add_child(controller)
 	var front := _card("militia")
 	front.cooldown_seconds = 99.0
 	front.max_health = health
+	front.armor = armor
 	var back := _card("militia")
 	back.cooldown_seconds = 99.0
 	back.max_health = health
@@ -56,7 +57,36 @@ func _hit(controller: Node, target: BattleSquadState, amount: float, type: CardD
 	controller._apply_effect_event(event)
 	return event
 
+func _test_supernova() -> void:
+	var controller := _controller(["supernova"], [], 10, false, 91038, 20, 6)
+	var player: BattleSquadState = controller.player_states[0]
+	var enemy: BattleSquadState = controller.enemy_states[0]
+	_expect(player.get_max_health() == 40 and player.current_health == 40.0 and player.current_armor == 12.0, "超星燃爆将本场总生命及护甲翻倍")
+	_expect(not enemy.supernova_active and enemy.get_max_health() == 99, "超星燃爆只影响友军")
+	var reinforcement := BattleModifier.new()
+	reinforcement.stat = BattleModifier.Stat.REINFORCEMENT
+	reinforcement.value = 2.0
+	player.modifiers.add_modifier(reinforcement)
+	_expect(player.get_display_action_value() == 6 and controller._action_multipliers(player).back().value == 2.0, "总数值与行动公式均乘二，包含尚未消耗的强化")
+	_hit(controller, player, 4.0, CardData.ActionType.MELEE)
+	_expect(player.current_armor == 8.0, "四点攻击先消耗临时护甲")
+	player.apply_damage_exact(25.0, null, null, true)
+	controller.hero_runtime.process_due(4.99)
+	_expect(player.supernova_active and player.current_armor == 8.0, "五秒前仍保留临时效果")
+	controller.hero_runtime.process_due(5.0)
+	_expect(not player.supernova_active and player.current_armor == 6.0 and player.get_max_health() == 20 and player.current_health == 15.0, "五秒到期只撤回剩余临时护甲并按旧规则回落生命")
+	controller.elapsed_seconds = controller.fatigue_start_seconds
+	var at_start: Array = controller._prepare_fatigue_events([player, enemy])
+	_expect(at_start.size() == 1 and at_start[0].target == enemy, "敌军按原时点开始疲劳")
+	for index: int in range(1, 6):
+		controller.elapsed_seconds = controller.fatigue_start_seconds + index
+		at_start = controller._prepare_fatigue_events([player, enemy])
+	_expect(at_start.size() == 2 and at_start[0].target == player and at_start[0].exact_amount == 1.0 and at_start[1].exact_amount == 3.0, "友军晚五秒进入疲劳，从首次伤害阶梯开始")
+	controller.free()
+
+
 func _run() -> void:
+	_test_supernova()
 	var c := _controller(["sentry_guard"], [_sentry("front"), _sentry("back"), _sentry("spells")])
 	_expect(c.player_states[0].current_armor == 12.0 and c.player_states[1].current_armor == 0.0, "护：三枚哨位每枚给所有前排+4，后排不加")
 	var event := _hit(c, c.player_states[1], 4.0, CardData.ActionType.MELEE)

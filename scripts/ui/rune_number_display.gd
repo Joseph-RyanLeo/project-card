@@ -68,7 +68,30 @@ const SIGN_HEIGHT: float = 10.0 # 用户提供的正负号原图画布高度，�
 const SIGN_TOP: float = 1.0 # 10px符号画布在12px中号数字旁的垂直居中偏移
 const SIGN_PLUS_REGION := Rect2(0, 0, 7, 10) # 用户正号在原图中的7×10裁切区域
 const SIGN_MINUS_REGION := Rect2(14, 0, 7, 10) # 用户负号在原图中的7×10裁切区域
+const STAT_PLUS_MEDIUM = preload("res://assets/fonts/rune_stat_plus_medium.png")
+const STAT_MINUS_MEDIUM = preload("res://assets/fonts/rune_stat_minus_medium.png")
+const STAT_PLUS_LARGE = preload("res://assets/fonts/rune_stat_plus_large.png")
+const STAT_MINUS_LARGE = preload("res://assets/fonts/rune_stat_minus_large.png")
+const STAT_GAIN_COLOR := Color("#8dff4e") # 加成数字的白色像素替换色
+const STAT_LOSS_COLOR := Color("#ff5b5b") # 减益数字的白色像素替换色
+const STAT_SIGN_OVERLAP := 1.0 # 字形描边和符号相接时重叠的像素列数
+const STAT_LEADING_ONE_SHIFT := 1.0 # 右侧首位为窄字形 1 时额外左移的像素数
+const STAT_SIGN_TOP := 3.0 # 加减号相对于同组整数的顶部偏移
+const STAT_WHITE_SHADER := preload("res://shaders/emblem_fusion_white.gdshader")
+const STAT_WHITEN_END := 0.22 # 当前值完全变为白色剪影的进度
+const STAT_SPLIT_START := 0.28 # 白色合影停顿结束、开始分离的进度
+const STAT_SPLIT_END := 0.76 # 两侧数字抵达检视坐标、开始恢复原色的进度
+const STAT_SIGN_APPEAR := 0.48 # 加减号开始在固定锚点浮现的进度
 static var _infinity_texture: ImageTexture
+static var _stat_palettes: Dictionary = {}
+
+var _stat_color := Color.WHITE
+var _stat_base_text := ""
+var _stat_delta_text := ""
+var _stat_positive := false
+var _stat_single_offset := Vector2.ZERO
+var _stat_split_progress := 1.0
+var _stat_white_material: ShaderMaterial
 
 @export var number_style: NumberStyle = NumberStyle.LARGE:
 	set(value):
@@ -96,71 +119,179 @@ func _draw() -> void:
 	if text == "∞":
 		_draw_infinity()
 		return
-	match number_style:
-		NumberStyle.LARGE:
-			draw_large_digits(self, text, Vector2.ZERO, character_spacing)
-		NumberStyle.MEDIUM:
-			_draw_digit_run(self, text, MEDIUM_TEXTURE, MEDIUM_GLYPH_RECTS, Vector2.ZERO, character_spacing)
-		NumberStyle.COOLDOWN:
-			_draw_cooldown()
+	if _stat_delta_text.is_empty():
+		_draw_number(text, Vector2.ZERO, _stat_color)
+		return
+	if _stat_split_progress >= 1.0:
+		_draw_number(_stat_base_text, Vector2.ZERO, Color.WHITE)
+		draw_texture(_get_stat_sign(), get_stat_sign_offset())
+		_draw_number(_stat_delta_text, Vector2(_get_stat_delta_x(), 0.0), _stat_color)
+		return
+	if _stat_split_progress <= STAT_SPLIT_START:
+		var single_color := Color.WHITE if number_style == NumberStyle.COOLDOWN else _stat_color
+		_draw_number(text, _stat_single_offset, single_color)
+		return
+	var separation := _get_stat_separation()
+	var single_center := _stat_single_offset + Vector2(_measure_number(text).x * 0.5, 0.0)
+	var base_at_join := single_center - Vector2(_measure_number(_stat_base_text).x * 0.5, 0.0)
+	var delta_at_join := single_center - Vector2(_measure_number(_stat_delta_text).x * 0.5, 0.0)
+	var sign_alpha := smoothstep(STAT_SIGN_APPEAR, STAT_SPLIT_END, _stat_split_progress)
+	_draw_number(_stat_base_text, base_at_join.lerp(Vector2.ZERO, separation).round(), Color.WHITE)
+	if sign_alpha > 0.0:
+		draw_texture(_get_stat_sign(), get_stat_sign_offset(), Color(1.0, 1.0, 1.0, sign_alpha))
+	_draw_number(_stat_delta_text, delta_at_join.lerp(Vector2(_get_stat_delta_x(), 0.0), separation).round(), _stat_color)
 
 
 func get_rendered_size() -> Vector2:
 	if text == "∞": return Vector2(14, LARGE_HEIGHT)
+	if not _stat_delta_text.is_empty():
+		var delta_size := _measure_number(_stat_delta_text)
+		return Vector2(_get_stat_delta_x() + delta_size.x, delta_size.y)
+	return _measure_number(text)
+
+
+func set_stat_format(color: Color, base_text: String = "", delta_text: String = "", positive: bool = false) -> void:
+	if _stat_color == color and _stat_base_text == base_text and _stat_delta_text == delta_text and _stat_positive == positive:
+		return
+	_stat_color = color
+	_stat_base_text = base_text
+	_stat_delta_text = delta_text
+	_stat_positive = positive
+	_sync_stat_silhouette()
+	_sync_size_and_redraw()
+
+
+func set_stat_single_offset(offset: Vector2) -> void:
+	if _stat_single_offset == offset: return
+	_stat_single_offset = offset
+	if has_stat_breakdown() and _stat_split_progress < 1.0: queue_redraw()
+
+
+func set_stat_split_progress(progress: float) -> void:
+	if _stat_split_progress == progress: return
+	_stat_split_progress = progress
+	_sync_stat_silhouette()
+	queue_redraw()
+
+
+func _get_stat_separation() -> float:
+	var travel := clampf(inverse_lerp(STAT_SPLIT_START, STAT_SPLIT_END, _stat_split_progress), 0.0, 1.0)
+	return 1.0 - pow(1.0 - travel, 3.0)
+
+
+func _sync_stat_silhouette() -> void:
+	var whiten := 0.0
+	if has_stat_breakdown() and _stat_split_progress > 0.0 and _stat_split_progress < 1.0:
+		whiten = smoothstep(0.0, STAT_WHITEN_END, _stat_split_progress) * (1.0 - smoothstep(STAT_SPLIT_END, 1.0, _stat_split_progress))
+	if is_zero_approx(whiten):
+		if _stat_white_material != null and material == _stat_white_material: material = null
+		return
+	if _stat_white_material == null:
+		_stat_white_material = ShaderMaterial.new()
+		_stat_white_material.shader = STAT_WHITE_SHADER
+	if material != _stat_white_material: material = _stat_white_material
+	_stat_white_material.set_shader_parameter("white_amount", whiten)
+
+
+func has_stat_breakdown() -> bool:
+	return not _stat_delta_text.is_empty()
+
+
+func get_stat_sign_offset() -> Vector2:
+	return Vector2(_measure_number(_stat_base_text).x - STAT_SIGN_OVERLAP, STAT_SIGN_TOP)
+
+
+func _get_stat_sign() -> Texture2D:
+	if number_style == NumberStyle.LARGE:
+		return STAT_PLUS_LARGE if _stat_positive else STAT_MINUS_LARGE
+	return STAT_PLUS_MEDIUM if _stat_positive else STAT_MINUS_MEDIUM
+
+
+func _get_stat_delta_x() -> float:
+	var tight_shift := STAT_LEADING_ONE_SHIFT if _stat_delta_text.begins_with("1") else 0.0
+	return get_stat_sign_offset().x + _get_stat_sign().get_width() - STAT_SIGN_OVERLAP - tight_shift
+
+
+func _draw_number(value: String, origin: Vector2, color: Color) -> void:
 	match number_style:
 		NumberStyle.LARGE:
-			return measure_large_digits(text, character_spacing)
+			_draw_digit_run(self, value, _get_stat_palette(LARGE_TEXTURE, color), LARGE_GLYPH_RECTS, origin, character_spacing)
 		NumberStyle.MEDIUM:
-			return Vector2(_measure_digit_run(text, MEDIUM_GLYPH_RECTS, character_spacing), MEDIUM_HEIGHT)
+			_draw_digit_run(self, value, _get_stat_palette(MEDIUM_TEXTURE, color), MEDIUM_GLYPH_RECTS, origin, character_spacing)
 		NumberStyle.COOLDOWN:
-			return _measure_cooldown()
+			_draw_cooldown(value, origin, color)
+
+
+func _measure_number(value: String) -> Vector2:
+	match number_style:
+		NumberStyle.LARGE:
+			return measure_large_digits(value, character_spacing)
+		NumberStyle.MEDIUM:
+			return Vector2(_measure_digit_run(value, MEDIUM_GLYPH_RECTS, character_spacing), MEDIUM_HEIGHT)
+		NumberStyle.COOLDOWN:
+			return _measure_cooldown(value)
 	return Vector2.ZERO
 
 
-static func draw_large_digits(canvas: CanvasItem, value: String, origin: Vector2, spacing: int = 0) -> void:
-	_draw_digit_run(canvas, value, LARGE_TEXTURE, LARGE_GLYPH_RECTS, origin, spacing)
+static func draw_large_digits(canvas: CanvasItem, value: String, origin: Vector2, spacing: int = 0, color: Color = Color.WHITE) -> void:
+	_draw_digit_run(canvas, value, _get_stat_palette(LARGE_TEXTURE, color), LARGE_GLYPH_RECTS, origin, spacing)
 
 
 static func measure_large_digits(value: String, spacing: int = 0) -> Vector2:
 	return Vector2(_measure_digit_run(value, LARGE_GLYPH_RECTS, spacing), LARGE_HEIGHT)
 
 
-func _draw_cooldown() -> void:
-	var parts := text.split(".", false, 1)
+func _draw_cooldown(value: String, origin: Vector2, color: Color) -> void:
+	var parts := value.split(".", false, 1)
+	var medium := _get_stat_palette(MEDIUM_TEXTURE, color)
 	if parts.size() != 2:
 		# 10秒及以上只显示紧贴的中号整数，不再要求必须存在小数点。
-		_draw_digit_run(self, text, MEDIUM_TEXTURE, MEDIUM_GLYPH_RECTS, Vector2.ZERO, character_spacing)
+		_draw_digit_run(self, value, medium, MEDIUM_GLYPH_RECTS, origin, character_spacing)
 		return
 	var integer_text := parts[0]
 	var fraction_text := parts[1]
 	var integer_width := _measure_digit_run(integer_text, MEDIUM_GLYPH_RECTS, character_spacing)
-	_draw_digit_run(self, integer_text, MEDIUM_TEXTURE, MEDIUM_GLYPH_RECTS, Vector2.ZERO, character_spacing)
+	_draw_digit_run(self, integer_text, medium, MEDIUM_GLYPH_RECTS, origin, character_spacing)
 	_draw_digit_run(
 		self,
 		fraction_text,
-		SMALL_TEXTURE,
+		_get_stat_palette(SMALL_TEXTURE, color),
 		SMALL_GLYPH_RECTS,
-		Vector2(integer_width + 1.0, COOLDOWN_FRACTION_TOP),
+		origin + Vector2(integer_width + 1.0, COOLDOWN_FRACTION_TOP),
 		character_spacing
 	)
 	# 最后绘制小数点，使其左右黑边覆盖整数、小数各自边缘的 1px。
 	draw_texture_rect(
-		DECIMAL_POINT_TEXTURE,
+		_get_stat_palette(DECIMAL_POINT_TEXTURE, color),
 		Rect2(
-			Vector2(integer_width - COOLDOWN_JOIN_OVERLAP, COOLDOWN_POINT_TOP),
+			origin + Vector2(integer_width - COOLDOWN_JOIN_OVERLAP, COOLDOWN_POINT_TOP),
 			DECIMAL_POINT_TEXTURE.get_size()
 		),
 		false
 	)
 
 
-func _measure_cooldown() -> Vector2:
-	var parts := text.split(".", false, 1)
+func _measure_cooldown(value: String) -> Vector2:
+	var parts := value.split(".", false, 1)
 	if parts.size() != 2:
-		return Vector2(_measure_digit_run(text, MEDIUM_GLYPH_RECTS, character_spacing), MEDIUM_HEIGHT)
+		return Vector2(_measure_digit_run(value, MEDIUM_GLYPH_RECTS, character_spacing), MEDIUM_HEIGHT)
 	var integer_width := _measure_digit_run(parts[0], MEDIUM_GLYPH_RECTS, character_spacing)
 	var fraction_width := _measure_digit_run(parts[1], SMALL_GLYPH_RECTS, character_spacing)
 	return Vector2(integer_width + 1.0 + fraction_width, MEDIUM_HEIGHT)
+
+
+static func _get_stat_palette(atlas: Texture2D, color: Color) -> Texture2D:
+	if color == Color.WHITE:
+		return atlas
+	var key := [atlas, color]
+	if not _stat_palettes.has(key):
+		var image := atlas.get_image()
+		for row: int in image.get_height():
+			for column: int in image.get_width():
+				if image.get_pixel(column, row) == Color.WHITE:
+					image.set_pixel(column, row, color)
+		_stat_palettes[key] = ImageTexture.create_from_image(image)
+	return _stat_palettes[key]
 
 
 static func _draw_digit_run(

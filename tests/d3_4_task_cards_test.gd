@@ -78,7 +78,9 @@ func _run() -> void:
 		state = c.player_states[1]
 		kill(state, c.enemy_states[0])
 		var growth: Array = c.permanent_growth_ledger.get_entries()
-		check(growth.size() == 2 and growth.all(func(entry: Dictionary): return entry.stat == &"max_health" and entry.amount == 2), "摇曳遗愿为左右相邻友军各永久+2生命")
+		check(growth.size() == 2 and growth.all(func(entry: Dictionary): return entry.stat == OwnedCard.STAT_BONUS_MAX_HEALTH and entry.amount == 2), "摇曳遗愿为左右相邻友军各永久最大生命+2")
+		var ally: BattleSquadState = c.player_states[0]
+		check(ally.get_max_health() == 4 and ally.current_health == 4 and ally.get_display_base_stats(ally.get_active_rune_slots()).y == 2, "摇曳青灯即时增加上限和当前，不改基础白字")
 		check(c.task_cards.commit_to_collection(collection), "跨战斗保留青灯遗愿进度")
 	check(item.card_data.id == &"blazing_lantern" and item.card_data.equipment_action_delta == 1 and item.card_data.equipment_zeal_delta == 2, "4次遗愿后变为炽烈青灯并读取正式属性")
 	c = battle([squad(owned("militia"), item)], [squad(owned("golden_golem")), squad(owned("golden_golem"))], 5)

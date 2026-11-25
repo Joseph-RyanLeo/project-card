@@ -28,8 +28,8 @@ func _run() -> void:
 
 func _test_fixed_geometry_and_translation() -> void:
 	var cells := Layout.valid_cells()
-	_expect(cells.size() == 27, "图4几何包含27格")
-	_expect(Layout.center(Vector2i(0, 0)) == Vector2(17, 32) and Layout.center(Vector2i(1, 0)) == Vector2(44, 16) and Layout.center(Vector2i(5, 6)) == Vector2(152, 144), "六列交错中心坐标对应图4")
+	_expect(cells.size() == 19 and Layout.valid_cells(1).size() == 27, "当前资源区是19格，旧存档仍识别27格布局")
+	_expect(Layout.center(Vector2i(0, 0)) == Vector2(17, 48) and Layout.center(Vector2i(1, 0)) == Vector2(44, 32) and Layout.center(Vector2i(4, 4)) == Vector2(125, 112), "五列交错格心使用当前棋盘坐标")
 	for size in range(1, 6):
 		var rng := RandomNumberGenerator.new()
 		rng.seed = size * 101

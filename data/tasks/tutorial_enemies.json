@@ -1,5 +1,5 @@
 {
-  "说明": "四天教程的三条同日路径共用阵容。首战改为光血矿道哀嚎者与矿车亡魂。",
+  "说明": "四天教程均使用扭曲矿脉敌人。同日三条路径共用阵容；旧局已发出的遭遇保留原阵容。",
   "enemies": [
     {
       "path_id": "tutorial_1_0",
@@ -92,11 +92,20 @@
       "first_day": 2,
       "last_day": 2,
       "front": [
-        "militia",
-        "timid_infantry"
+        "subterranean_blindfish",
+        "mine_wailer"
       ],
       "back": [],
-      "tutorial": true
+      "tutorial": true,
+      "previous_formations": [
+        {
+          "front": [
+            "militia",
+            "timid_infantry"
+          ],
+          "back": []
+        }
+      ]
     },
     {
       "path_id": "tutorial_2_1",
@@ -105,11 +114,20 @@
       "first_day": 2,
       "last_day": 2,
       "front": [
-        "militia",
-        "timid_infantry"
+        "subterranean_blindfish",
+        "mine_wailer"
       ],
       "back": [],
-      "tutorial": true
+      "tutorial": true,
+      "previous_formations": [
+        {
+          "front": [
+            "militia",
+            "timid_infantry"
+          ],
+          "back": []
+        }
+      ]
     },
     {
       "path_id": "tutorial_2_2",
@@ -118,11 +136,20 @@
       "first_day": 2,
       "last_day": 2,
       "front": [
-        "militia",
-        "timid_infantry"
+        "subterranean_blindfish",
+        "mine_wailer"
       ],
       "back": [],
-      "tutorial": true
+      "tutorial": true,
+      "previous_formations": [
+        {
+          "front": [
+            "militia",
+            "timid_infantry"
+          ],
+          "back": []
+        }
+      ]
     },
     {
       "path_id": "tutorial_3_0",
@@ -131,13 +158,24 @@
       "first_day": 3,
       "last_day": 3,
       "front": [
-        "militia",
-        "militia"
+        "ghostface_beetle",
+        "subterranean_blindfish"
       ],
       "back": [
-        "musketeer"
+        "rockwall_tongue_lizard"
       ],
-      "tutorial": true
+      "tutorial": true,
+      "previous_formations": [
+        {
+          "front": [
+            "militia",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ]
+        }
+      ]
     },
     {
       "path_id": "tutorial_3_1",
@@ -146,13 +184,24 @@
       "first_day": 3,
       "last_day": 3,
       "front": [
-        "militia",
-        "militia"
+        "ghostface_beetle",
+        "subterranean_blindfish"
       ],
       "back": [
-        "musketeer"
+        "rockwall_tongue_lizard"
       ],
-      "tutorial": true
+      "tutorial": true,
+      "previous_formations": [
+        {
+          "front": [
+            "militia",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ]
+        }
+      ]
     },
     {
       "path_id": "tutorial_3_2",
@@ -161,13 +210,24 @@
       "first_day": 3,
       "last_day": 3,
       "front": [
-        "militia",
-        "militia"
+        "ghostface_beetle",
+        "subterranean_blindfish"
       ],
       "back": [
-        "musketeer"
+        "rockwall_tongue_lizard"
       ],
-      "tutorial": true
+      "tutorial": true,
+      "previous_formations": [
+        {
+          "front": [
+            "militia",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ]
+        }
+      ]
     },
     {
       "path_id": "tutorial_4_0",
@@ -176,13 +236,24 @@
       "first_day": 4,
       "last_day": 4,
       "front": [
-        "shieldwall_private",
-        "militia"
+        "crystal_shard_beetle",
+        "minecart_soul"
       ],
       "back": [
-        "musketeer"
+        "mine_lamp_wisp"
       ],
-      "tutorial": true
+      "tutorial": true,
+      "previous_formations": [
+        {
+          "front": [
+            "shieldwall_private",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ]
+        }
+      ]
     },
     {
       "path_id": "tutorial_4_1",
@@ -191,13 +262,24 @@
       "first_day": 4,
       "last_day": 4,
       "front": [
-        "shieldwall_private",
-        "militia"
+        "crystal_shard_beetle",
+        "minecart_soul"
       ],
       "back": [
-        "musketeer"
+        "mine_lamp_wisp"
       ],
-      "tutorial": true
+      "tutorial": true,
+      "previous_formations": [
+        {
+          "front": [
+            "shieldwall_private",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ]
+        }
+      ]
     },
     {
       "path_id": "tutorial_4_2",
@@ -206,13 +288,24 @@
       "first_day": 4,
       "last_day": 4,
       "front": [
-        "shieldwall_private",
-        "militia"
+        "crystal_shard_beetle",
+        "minecart_soul"
       ],
       "back": [
-        "musketeer"
+        "mine_lamp_wisp"
       ],
-      "tutorial": true
+      "tutorial": true,
+      "previous_formations": [
+        {
+          "front": [
+            "shieldwall_private",
+            "militia"
+          ],
+          "back": [
+            "musketeer"
+          ]
+        }
+      ]
     }
   ]
 }

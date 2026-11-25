@@ -40,8 +40,8 @@ func _ordinary_shop_offer_text(offer: Dictionary, definitions: Dictionary = {}) 
 		return "%s · 免费 · 4张I级＋1张%s级" % [offer.display_name, "II" if offer.pack_id == "ash_ledger" else "IV"]
 	return super._ordinary_shop_offer_text(offer, definitions)
 
-func _open_shop_pack_inspection(offer: Dictionary, source: Control = null, opening: bool = false, acquired: Array[OwnedCard] = [], offer_index: int = -1, sticker_ids: Array[StringName] = []) -> void:
-	super._open_shop_pack_inspection(offer, source, opening, acquired, offer_index, sticker_ids)
+func _open_shop_pack_inspection(offer: Dictionary, source: Control = null, opening: bool = false, acquired: Array[OwnedCard] = [], offer_index: int = -1, sticker_ids: Array[StringName] = [], additional_awards: Array[Dictionary] = []) -> void:
+	super._open_shop_pack_inspection(offer, source, opening, acquired, offer_index, sticker_ids, additional_awards)
 	if offer.has("display_name") and is_instance_valid(_inspection_overlay):
 		_inspection_overlay.get_node("InspectionPackName").text = String(offer.display_name) + " · 免费"
 

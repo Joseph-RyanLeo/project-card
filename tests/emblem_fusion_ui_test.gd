@@ -149,7 +149,7 @@ func _run() -> void:
 	check(not grid._can_drop_data(grid.get_global_transform_with_canvas().affine_inverse() * toolkit_point, drag_data), "工具箱中的可配对纹章格仍拒绝合成")
 	drag_data.drag_visual.free()
 	await click(entry_for(&"sword").get_global_rect().get_center())
-	check(not main._click_carry_data.is_empty() and main._inspection_surface._fusion_rects.size() == 1 and main._inspection_surface._fusion_rects[0] == main._get_emblem_slot_rect(target_index), "拖动时仅卡牌可合成纹章显示紫色呼吸光")
+	check(not main._click_carry_data.is_empty() and main._inspection_surface._fusion_targets.size() == 1 and main._inspection_surface._fusion_targets[0].rect == main._get_emblem_slot_rect(target_index), "拖动时仅卡牌可合成纹章显示紫色呼吸光")
 	await capture("card-highlight")
 	await click(toolkit_point)
 	check(main._emblem_fusion_overlay == null and main.emblem_library.get_inventory_state() == before, "真实点击工具箱另一材料不打开公式、不消耗材料")
@@ -182,7 +182,7 @@ func _run() -> void:
 	await motion(sword_point)
 	await button(true)
 	await motion(sword_point + Vector2(32, 5), true)
-	check(shell.internal_viewport.gui_is_dragging() and surface._fusion_rects.size() == 1, "原生长按拖动也提示卡上的合成目标")
+	check(shell.internal_viewport.gui_is_dragging() and surface._fusion_targets.size() == 1, "原生长按拖动也提示卡上的合成目标")
 	await motion(surface.card_canvas_point(target_local), true)
 	await button(false)
 	overlay = main._emblem_fusion_overlay

@@ -10,14 +10,34 @@ const FORBIDDEN_PROTECTION := &"forbidden_protection"
 const FORBIDDEN_IMMUNITY := &"forbidden_immunity"
 
 
+static func mask_for(card: CardData) -> int:
+	var effect := String(card.content_effect)
+	if not effect.begins_with("event_potion_"):
+		return 0
+	var mask := int(effect.trim_prefix("event_potion_"))
+	return mask if mask > 0 and mask <= (BONE | HEART | SWIFT | SHELL) else 0
+
+
+static func attribute_deltas(mask: int) -> Vector4i:
+	var bone := 1 if mask & BONE else 0
+	return Vector4i(bone, (2 if mask & HEART else 0) - bone, 2 if mask & SHELL else 0, 1 if mask & SWIFT else 0)
+
+
+static func equipment_display_deltas(card: CardData) -> Vector4i:
+	var mask := mask_for(card)
+	if mask != 0:
+		return attribute_deltas(mask)
+	return Vector4i(card.equipment_action_delta, card.equipment_health_delta, card.equipment_armor_delta, card.equipment_zeal_delta)
+
+
 static func growth(mask: int, owned: OwnedCard) -> Dictionary:
+	var deltas := attribute_deltas(mask)
 	var changes := {}
-	if mask & BONE: changes[OwnedCard.STAT_BASE_VALUE] = 1
-	if mask & (BONE | HEART):
-		var amount := (2 if mask & HEART else 0) - (1 if mask & BONE else 0)
+	if deltas.x != 0: changes[OwnedCard.STAT_BASE_VALUE] = deltas.x
+	if deltas.y != 0:
 		var health := int(owned.get_base_stat_with_permanent_growth(OwnedCard.STAT_MAX_HEALTH))
-		changes[OwnedCard.STAT_MAX_HEALTH] = maxi(amount, 1 - health) if amount < 0 else amount
-	if mask & SHELL: changes[OwnedCard.STAT_BASE_ARMOR] = 2
+		changes[OwnedCard.STAT_MAX_HEALTH] = maxi(deltas.y, 1 - health) if deltas.y < 0 else deltas.y
+	if deltas.z != 0: changes[OwnedCard.STAT_BASE_ARMOR] = deltas.z
 	return changes
 
 

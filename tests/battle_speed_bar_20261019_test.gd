@@ -9,6 +9,15 @@ func capture_speed(label: String) -> void:
 		shell.internal_viewport.get_texture().get_image().save_png("/private/tmp/project-card-speed-%s.png" % label)
 
 
+func press_playback_key(code: Key) -> void:
+	for pressed: bool in [true, false]:
+		var event := InputEventKey.new()
+		event.keycode = code
+		event.pressed = pressed
+		root.push_input(event)
+		await process_frame
+
+
 func _run() -> void:
 	shell = DISPLAY.instantiate()
 	main = shell.get_node("RenderContainer/InternalViewport/DesignCanvas/Main")
@@ -71,10 +80,39 @@ func _run() -> void:
 	check(paused and bar.selected_slot == 0 and not main._manual_pause_requested, "速度按钮不能解除其他系统持有的暂停")
 	main.set_special_spell_pause_requested(false)
 	check(not paused and bar.selected_slot == 3 and main.battle_controller.battle_speed_multiplier == 3.0, "外部暂停解除后显示实际选择的3倍")
+	await press_playback_key(KEY_SPACE)
+	check(paused and main._manual_pause_requested, "空格调用实际暂停入口")
+	await press_playback_key(KEY_SPACE)
+	check(not paused and bar.selected_slot == 3, "手动暂停期间再次按空格，恢复原速")
+	await press_playback_key(KEY_SPACE)
+	await press_playback_key(KEY_1)
+	check(not paused and main.battle_controller.battle_speed_multiplier == 1.0, "手动暂停时按1解除暂停并切至1倍")
+	await press_playback_key(KEY_2)
+	check(main.battle_controller.battle_speed_multiplier == 2.0, "数字键2切至2倍")
+	main.set_special_spell_pause_requested(true)
+	await press_playback_key(KEY_3)
+	check(paused and main.battle_controller.battle_speed_multiplier == 3.0, "数字键3可选速，外部暂停仍有效")
+	main.set_special_spell_pause_requested(false)
+	await press_playback_key(KEY_SPACE)
+	main._open_card_inspection(owned.card_data, owned)
+	main._open_gameplay_teaching("tutorial:step:wounds")
+	await press_playback_key(KEY_1)
+	check(main._escape_pause_menu.is_teaching_book_open() and paused and main.battle_controller.battle_speed_multiplier == 3.0,
+		"战斗检视中打开教程书后，倍速键不会传到底层")
+	await press_playback_key(KEY_ESCAPE)
+	check(not main._escape_pause_menu.is_teaching_book_open() and is_instance_valid(main._inspection_overlay) and paused,
+		"战斗中关教程仍保留检视暂停")
+	main._close_card_inspection(true)
+	check(paused and main._manual_pause_requested, "退出检视保留此前的手动暂停")
+	await press_playback_key(KEY_SPACE)
+	check(not paused and bar.selected_slot == 3, "空格继续时仍使用进入检视前的3倍速")
 	await create_timer(0.25).timeout
 	await capture_speed("3x")
 	check(main.save_run_to_path(SPEED_SAVE) == OK and main.load_run_from_path(SPEED_SAVE), "真实战斗存档恢复到战前准备")
 	check(main.current_phase == main.GamePhase.PREPARE and not bar.visible, "读档离开战斗后隐藏速度条")
+	var prepare_speed: int = main.battle_speed_index
+	await press_playback_key(KEY_2)
+	check(main.battle_speed_index == prepare_speed and not paused, "准备阶段不响应战斗数字键")
 	paused = false
 	shell.queue_free()
 	await process_frame

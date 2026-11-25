@@ -102,6 +102,7 @@ func _run() -> void:
 	var purchased: OwnedCard = main.owned_card_collection.create_card(load("res://resources/cards/heavy_knight.tres"))
 	check(main.save_run_to_path(path) == OK and main.profile_progress.run.stage == "active" and main.profile_progress.profile.points == 0, "普通保存不结束整局")
 	main._on_escape_pause_menu_requested()
+	while main._escape_pause_menu.is_transitioning(): await process_frame
 	var abandon := main._escape_pause_menu.find_child("AbandonRunButton", true, false) as Button
 	await click(abandon)
 	check(main.profile_progress.run.stage == "active", "点击放弃仅弹确认，不提前结束")
@@ -117,6 +118,7 @@ func _run() -> void:
 	await capture("00_empty_preview")
 	await click(button("CollectionConfirmButton"))
 	check(shell.slot_progress.run.stage == "hub", "零张最终确认回大厅")
+	shell.slot_progress.profile.unlocks.routes.append("eight_days")
 	check(await shell.start_new_slot_run(), "完成收藏后开始新局")
 	main = shell.main_screen
 	# 八天正常通关使用真实正式资源、事件和战斗；只用成长构造稳定胜利输入。

@@ -3,6 +3,7 @@ extends TextureRect
 
 ## 小队装备位的场上表现。它不拥有第二份物品数据，只保存并拖动同一个OwnedCard引用。
 
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const CardViewScript = preload("res://scripts/ui/card_view.gd")
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const EquipmentIndicatorStyleScript = preload(
@@ -188,7 +189,7 @@ func inspect_at(local: Vector2) -> bool:
 
 func _on_mouse_exited() -> void:
 	_clear_hover_card()
-	_try_finish_hover_reentry(get_viewport().get_mouse_position())
+	_try_finish_hover_reentry(CrtProjection.viewport_mouse(get_viewport()))
 	if not _left_button_pressed:
 		clear_pointer_hover_feedback()
 

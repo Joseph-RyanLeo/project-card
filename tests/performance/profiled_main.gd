@@ -43,19 +43,12 @@ func _build_collection_cards(
 func _create_page_turn_snapshot(
 	page_side: int,
 	page_index: int,
-	filtered_cards: Array[CardData],
-	page_texture: Texture2D,
-	include_cards: bool
+	physical_page_count: int
 ) -> Control:
 	var began := Time.get_ticks_usec()
-	var result = super._create_page_turn_snapshot(page_side, page_index, filtered_cards, page_texture, include_cards)
+	var result = super._create_page_turn_snapshot(page_side, page_index, physical_page_count)
 	diagnostic_record("_create_page_turn_snapshot", began)
 	return result
-
-func _swap_page_turn_face(moving_page: Control, target_side: int) -> void:
-	var began := Time.get_ticks_usec()
-	super._swap_page_turn_face(moving_page, target_side)
-	diagnostic_record("_swap_page_turn_face", began)
 
 func _create_collection_card_slot(
 	card_data: CardData,

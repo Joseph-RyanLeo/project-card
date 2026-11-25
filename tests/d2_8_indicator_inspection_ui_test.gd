@@ -93,7 +93,7 @@ func effective_z(node: CanvasItem) -> int:
 
 func _test_layers(slot: Control) -> void:
 	main._on_escape_pause_menu_requested()
-	await process_frame
+	while main._escape_pause_menu.is_transitioning(): await process_frame
 	check(main._escape_pause_menu.is_menu_open() and paused and slot.pattern_label.visible, "暂停菜单打开，牌型保留在底层桌面")
 	for label: Control in [slot.pattern_label, slot.battle_status_label, slot.battle_action_label, slot.target_priority_badge]:
 		check(effective_z(label) < effective_z(main._escape_pause_menu), "小队标签层低于暂停菜单：" + label.name)

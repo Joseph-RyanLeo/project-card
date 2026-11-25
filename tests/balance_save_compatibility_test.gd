@@ -45,5 +45,22 @@ func _run() -> void:
 	old_pendant.hint_value = "V"
 	check(not shop.validate_saved_state({"offers": [old_pendant]}, ids, [], definitions), "未知等级提示仍被拒绝")
 	check(pendant.rarity == CardData.Rarity.II and tree.action_type == CardData.ActionType.MELEE, "旧商品校验不污染当前共享卡牌定义")
+	pack.procurement_action = 3
+	pack.price = 9
+	old_single.price = 6
+	old_single.sold = true
+	var legacy := {"offers": [pack, old_single], "reveals": {"old_tree": "moonlight_treant"}}
+	var prepared: Variant = shop.prepare_saved_state(legacy, ids, [], definitions, true)
+	check(prepared != null and prepared.bounty_discount and prepared.offers == legacy.offers and prepared.reveals == legacy.reveals and not legacy.has("bounty_discount"), "旧在店档保留行动采购折扣、已售和已揭晓内容")
+	var departed: Variant = shop.prepare_saved_state(legacy, ids, [], definitions, null)
+	check(departed != null and departed.bounty_discount and shop.initialize(1013, departed), "旧离店档可从完整报价批次识别八折，初始化保留记录")
+	check(shop.prepare_saved_state(legacy, ids, [], definitions, false) == null, "无折扣资格的在店档不能冒用八折报价")
+	pack.price = 12
+	check(shop.prepare_saved_state(legacy, ids, [], definitions, null) == null, "旧档整批报价只接受同一种规则，拒绝混用原价和八折")
+	old_pendant.hidden = false
+	old_pendant.hint = ""
+	old_pendant.hint_value = ""
+	old_pendant.price = 9
+	check(shop.validate_saved_state({"offers": [old_pendant], "bounty_discount": true}, ids, [], definitions), "历史品级的原明单同样可按八折规则读档")
 	print("平衡旧存档兼容：%d项，%d失败" % [checks, failures])
 	quit(failures)

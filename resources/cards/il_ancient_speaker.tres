@@ -31,4 +31,4 @@ art_offset = Vector2i(5, 31)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
 &"overframe": Vector2i(-2, 21)
 })
-effect_text = "均衡。突击：双方各小队光每净多1枚，永久+2生命；暗每净多1枚，永久+1数值。"
+effect_text = "均衡。突击：双方各小队光每净多1枚，永久基础生命+2；暗每净多1枚，永久+1数值。"

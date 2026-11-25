@@ -208,6 +208,7 @@ func _play_roll() -> void:
 	_roll = EventDiceRoll.new()
 	_roll.show_caption = false
 	_roll.presentation_scale = ROLL_SCALE
+	_roll.motion_scale = ROLL_SCALE
 	_surface.add_child(_roll)
 	_roll.size.x = _canvas.size.x
 	_roll.finished.connect(_finish_roll)

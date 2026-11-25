@@ -35,7 +35,7 @@ func click(point: Vector2) -> void:
 
 func open_export() -> void:
 	main._on_escape_pause_menu_requested()
-	await process_frame
+	while main._escape_pause_menu.is_transitioning(): await process_frame
 	var button := main._escape_pause_menu.find_child("ExportRunDiagnosticsButton", true, false) as Button
 	check(button != null and button.is_visible_in_tree(), "Esc菜单中存在可见的诊断导出入口")
 	await click(button.get_global_rect().get_center())

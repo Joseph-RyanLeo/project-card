@@ -149,6 +149,14 @@ func _set_progress(value: float) -> void:
 	art.set_peel_progress(progress)
 
 
+func peel_with_gamepad(upward: float) -> void:
+	if phase not in [Phase.SEALED, Phase.PEELING] or _auto_peeling or _dragging or upward <= 0.0: return
+	phase = Phase.PEELING
+	_target_angle = 0.0
+	_set_progress(maxf(progress, upward))
+	if progress >= 1.0: _extract_sheet()
+
+
 func auto_peel() -> void:
 	if phase not in [Phase.SEALED, Phase.PEELING] or _auto_peeling: return
 	phase = Phase.PEELING

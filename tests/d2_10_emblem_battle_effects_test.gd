@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_covered_emblem_clock_and_masked_fire_rune()
 	_test_wound_action_windows()
 	_test_poison_damage_windows()
+	_test_construct_poison_immunity()
 	_test_fracture_battle_growth()
 	_test_tear_echo_armor_order()
 	_test_corpse_poison_and_temporary_restore()
@@ -447,8 +448,7 @@ func _test_poison_damage_windows() -> void:
 		"中毒Ⅰ行动附加的2点生命伤害先作用于生命且绕过护甲"
 	)
 	_free(action_controller)
-	var support_owner := _owned_with_wounds(&"poison_support_action", &"中毒Ⅰ")
-	support_owner.card_data.action_type = CardData.ActionType.DEFENSE
+	var support_owner := _owned_with_wounds(&"poison_support_action", &"中毒Ⅰ", CardData.ActionType.DEFENSE)
 	var support_controller := _start(
 		[_entry(SquadData.from_owned_card(support_owner), &"player_front", 0, 0.5)],
 		[_entry(SquadData.from_card(_card(&"poison_support_enemy", CardData.ActionType.MELEE)), &"enemy_front", 0, 60.0)]
@@ -467,8 +467,7 @@ func _test_poison_damage_windows() -> void:
 		"中毒附伤作用于护甲行动主目标，伤害忽略护甲"
 	)
 	_free(support_controller)
-	var heal_poison_owner := _owned_with_wounds(&"poison_heal_action", &"中毒Ⅱ")
-	heal_poison_owner.card_data.action_type = CardData.ActionType.HEAL
+	var heal_poison_owner := _owned_with_wounds(&"poison_heal_action", &"中毒Ⅱ", CardData.ActionType.HEAL)
 	var injured_ally := SquadData.from_card(_card(&"poison_heal_target", CardData.ActionType.MELEE))
 	var heal_controller := _start(
 		[_entry(SquadData.from_owned_card(heal_poison_owner), &"player_front", 0, 0.5), _entry(injured_ally, &"player_front", 1, 60.0)],
@@ -498,6 +497,45 @@ func _test_poison_damage_windows() -> void:
 		"中毒Ⅱ每2秒造成2点直失生命且不消耗护甲"
 	)
 	_free(periodic_controller)
+
+
+func _test_construct_poison_immunity() -> void:
+	var poisoned := _owned_with_wounds(&"construct_poison_carrier", &"中毒Ⅱ")
+	poisoned.slot_layout.assign([0, 1, -1, -1, 1, -1, -1, -1])
+	var construct := _card(&"construct_effect_source", CardData.ActionType.MELEE)
+	construct.race_type = CardData.RaceType.CONSTRUCT
+	var squad := SquadData.from_cards(_typed_cards([poisoned.card_data, construct]))
+	squad.bind_owned_card(poisoned.card_data, poisoned)
+	squad.layer_cards.assign([construct, poisoned.card_data])
+	var attacker := _owned_with_wounds(&"construct_poison_attacker", &"中毒Ⅰ")
+	var controller := _start(
+		[_entry(squad, &"player_front", 0, 60.0)],
+		[_entry(SquadData.from_owned_card(attacker), &"enemy_front", 0, 60.0)]
+	)
+	var target := controller.player_states[0]
+	var source := controller.enemy_states[0]
+	var poison_events: Array[BattleEffectEvent] = []
+	var attacks: Array[BattleEffectEvent] = []
+	controller.effect_resolved.connect(func(event: BattleEffectEvent) -> void:
+		if event.target != target: return
+		if event.visual_kind in [&"wound_poison_tick", &"wound_poison_action"]:
+			poison_events.append(event)
+		elif event.source == source and event.effect_kind == BattleEffectEvent.EffectKind.DAMAGE:
+			attacks.append(event)
+	)
+	_expect(target.has_unmasked_wound(&"中毒Ⅱ"), "混搭小队的中毒槽实际显现")
+	var health := target.current_health
+	controller.execute_immediate_action(source, CardData.ActionType.MELEE)
+	controller.advance_time(2.0)
+	_expect(attacks.size() == 1 and attacks[0].health_amount > 0.0 and is_equal_approx(target.current_health, health - attacks[0].health_amount) and poison_events.is_empty(), "顶层效果卡为造物时同时免疫两种中毒伤害，普通攻击照常扣血")
+	target.squad_data.layer_cards.assign([poisoned.card_data, construct])
+	controller.advance_time(2.0)
+	_expect(poison_events.size() == 1 and poison_events.back().visual_kind == &"wound_poison_tick", "下层造物不生效，失去造物后在下一个周期正常扣血")
+	target.grant_runtime_race(&"test_conversion", CardData.RaceType.CONSTRUCT)
+	controller.execute_immediate_action(source, CardData.ActionType.MELEE)
+	controller.advance_time(2.0)
+	_expect(poison_events.size() == 1, "由改造等战斗效果获得造物种族后，立即免疫两种中毒伤害")
+	_free(controller)
 
 
 func _test_probability_wound_rolls() -> void:
@@ -724,29 +762,37 @@ func _test_crystallization_conversion() -> void:
 	var owner := _owned_with_wounds(&"crystallization_owner", &"晶体化")
 	owner.card_data.armor = 2
 	owner.apply_permanent_growth(OwnedCard.STAT_MAX_HEALTH, 2.0)
+	owner.apply_permanent_growth(OwnedCard.STAT_BONUS_MAX_HEALTH, 4.0)
 	var squad := SquadData.from_owned_card(owner)
-	_expect(squad.get_effective_max_health() == 30 and squad.get_effective_base_armor() == 4, "晶体化把正向永久额外生命转为护甲且不增加最大生命")
+	_expect(squad.get_effective_max_health() == 32 and squad.get_effective_base_armor() == 6, "晶体化保留基础生命成长，只把额外最大生命转为护甲")
 	var controller := _start([_entry(squad, &"player_front", 0, 60.0)], [])
 	var state := controller.player_states[0]
+	var attack := BattleEffectEvent.new()
+	attack.is_attack_action_damage = true
 	state.current_armor = 0.0
+	_expect(controller.permanent_growth_ledger.get_entries().is_empty(), "移除护甲归零不触发晶体化")
+	state.current_armor = 2.0
+	state.apply_damage_exact(2.0)
+	_expect(controller.permanent_growth_ledger.get_entries().is_empty(), "非攻击伤害打空护甲不触发晶体化")
+	state.current_armor = 2.0
+	state.apply_damage_exact(2.0, null, attack)
 	_expect(
 		is_equal_approx(state.current_armor, 1.0)
-		and state.get_max_health() == 29
+		and state.get_max_health() == 31
+		and state.get_display_base_stats(state.get_active_rune_slots()).y == 31
+		and state.get_display_base_stats(state.get_active_rune_slots()).z == 3
 		and owner.crystallization_health_loss == 0
 		and controller.permanent_growth_ledger.get_entries().size() == 2
 		and controller.permanent_growth_ledger.get_entries()[0].get("stat") == BattlePermanentGrowthLedger.STAT_CRYSTALLIZATION_HEALTH_LOSS,
 		"護甲首次歸零時戰鬥內生命-1並護甲+1，永久變更只記入戰後賬本"
 	)
-	state.current_armor = 0.0
-	_expect(controller.permanent_growth_ledger.get_entries().size() == 4 and state.get_max_health() == 28, "重新获得的护甲再次归零可触发晶体化")
-	state.current_armor = 1.0
-	state.current_armor = 0.0
-	_expect(controller.permanent_growth_ledger.get_entries().size() == 6 and state.get_max_health() == 27, "再次获得护甲后第三次归零继续转换")
+	state.apply_damage_exact(1.0, null, attack)
+	_expect(controller.permanent_growth_ledger.get_entries().size() == 4 and state.get_max_health() == 30, "重新获得的护甲再次被攻击打空可触发晶体化")
 	_free(controller)
 
 	var zero_armor_owner := _owned_with_wounds(&"crystallization_zero_armor", &"晶体化")
 	var zero_armor_controller := _start([_entry(SquadData.from_owned_card(zero_armor_owner), &"player_front", 0, 60.0)], [])
-	zero_armor_controller.player_states[0].apply_damage_exact(1.0)
+	zero_armor_controller.player_states[0].apply_damage_exact(1.0, null, attack)
 	_expect(zero_armor_controller.permanent_growth_ledger.get_entries().is_empty(), "开战时护甲已为0后承受伤害不会触发晶体化")
 	_free(zero_armor_controller)
 
@@ -754,11 +800,34 @@ func _test_crystallization_conversion() -> void:
 	floor_owner.card_data.max_health = 2
 	var floor_controller := _start([_entry(SquadData.from_owned_card(floor_owner), &"player_front", 0, 60.0)], [])
 	var floor_state := floor_controller.player_states[0]
-	floor_state.current_armor = 0.0
 	floor_state.current_armor = 1.0
-	floor_state.current_armor = 0.0
-	_expect(floor_controller.permanent_growth_ledger.get_entries().size() == 2 and floor_state.get_max_health() == 1, "晶体化生命降至1后停止永久护甲循环")
+	floor_state.apply_damage_exact(1.0, null, attack)
+	_expect(floor_state.has_unmasked_wound(&"结晶") and floor_state.has_effective_race(CardData.RaceType.CONSTRUCT) and floor_state.get_max_health() == 1, "基础生命降至1时原槽转结晶并兼作造物")
+	var changes: Array[Dictionary] = floor_controller.owned_card_change_ledger.get_entries()
+	_expect(changes.size() == 1 and changes[0].parameters.slot_state.wound_id == &"结晶", "结晶替换写入原槽位账本")
+	floor_state.current_health = 0.5
+	floor_state.apply_healing_exact(3.0)
+	floor_state.apply_max_health_increase(1, -2.0)
+	_expect(floor_state.current_health == 1.0 and floor_state.current_armor == 1.0, "结晶的治疗照常恢复生命，生命减益不扣甲")
+	floor_state.apply_max_health_increase(1, 2.0, true)
+	_expect(floor_state.current_armor == 3.0 and floor_state.get_max_health() == 1, "结晶把正向基础生命转成护甲")
+	floor_state.apply_damage_exact(4.0, null, attack)
+	_expect(floor_controller.permanent_growth_ledger.get_entries().size() == 2 and floor_state.current_health == 0.0, "结晶停止破甲成长，溢出伤害可致死")
+	floor_state.current_health = 1.0
+	floor_state.current_armor = 5.0
+	floor_state.apply_damage_exact(1.0, null, attack, true)
+	_expect(floor_state.current_health == 0.0 and floor_state.current_armor == 5.0, "穿甲可以直接击败结晶")
 	_free(floor_controller)
+
+	var mixed_owner := _owned_with_emblems(&"crystallization_mixed", [&"面包", &"改造"])
+	mixed_owner.set_wound_slot(0, {"wound_id": &"晶体化", "level": 1})
+	var mixed_squad := SquadData.from_owned_card(mixed_owner)
+	_expect(mixed_squad.get_effective_max_health() == 29 and mixed_squad.get_effective_base_armor() == 4, "晶体化把面包加成转甲，改造仍使生命减1")
+	var mixed_controller := _start([_entry(mixed_squad, &"player_front", 0, 60.0)], [])
+	_expect(mixed_controller.player_states[0].get_max_health() == 29 and mixed_controller.player_states[0].current_armor == 4.0, "晶体化的备战与开战采用相同的正负生命结算")
+	_free(mixed_controller)
+	mixed_owner.set_wound_slot(0, {"wound_id": &"结晶", "level": 1})
+	_expect(mixed_squad.get_effective_max_health() == 1 and mixed_squad.get_effective_base_armor() == 33, "结晶不以改造的生命减益扣除转化护甲")
 
 
 func _empty_wound_owner(card_id: StringName) -> OwnedCard:
@@ -893,9 +962,9 @@ func _owned_with_emblems(card_id: StringName, emblem_ids: Array[StringName]) -> 
 	return owned
 
 
-func _owned_with_wounds(card_id: StringName, wound_id: StringName) -> OwnedCard:
+func _owned_with_wounds(card_id: StringName, wound_id: StringName, action_type: CardData.ActionType = CardData.ActionType.MELEE) -> OwnedCard:
 	serial += 1
-	var card := _card(card_id, CardData.ActionType.MELEE)
+	var card := _card(card_id, action_type)
 	card.wound_slot_count = 1
 	var owned := OwnedCard.new()
 	owned.initialize(card, StringName("%s_owned_%d" % [card_id, serial]), serial)

@@ -11,10 +11,22 @@ func _run() -> void:
 	root.add_child(shell)
 	await process_frame
 	maze = main.maze_controller
+	if "bounty-shop-only" in OS.get_cmdline_user_args():
+		_test_bounty_shop_save()
+		await _finish()
+		return
+	if "alchemist-only" in OS.get_cmdline_user_args():
+		await _test_alchemist_potions()
+		await _finish()
+		return
+	await _test_developer_event_panel()
+	_test_last_supper_apple()
 	_test_bone_tower()
 	_test_whips_and_multipliers()
+	_test_effect_stat_channels()
 	_test_forbidden_and_dice()
 	_test_forbidden_exchange()
+	await _test_alchemist_potions()
 	_test_casino_dependencies()
 	_test_gilded_rewards()
 	_test_gilded_battle_cards()
@@ -22,12 +34,103 @@ func _run() -> void:
 	_test_nyx_road_selection()
 	_test_legacy_edwin_runes()
 	_test_ambush()
+	_test_bounty_shop_save()
 	_test_scrolls()
+	await _finish()
+
+
+func _finish() -> void:
 	shell.queue_free()
 	await process_frame
 	DirAccess.remove_absolute(BRANCH_SAVE)
 	print("事件分支：%d断言，%d失败" % [assertions, failures])
 	quit(1 if failures else 0)
+
+
+func _test_developer_event_panel() -> void:
+	if _deal("fortuna_gift", 23) < 0: return
+	check(main.save_run_to_path(BRANCH_SAVE) == OK, "保存正式对局供隔离回归")
+	var original := FileAccess.get_file_as_string(BRANCH_SAVE)
+	var base_paths := maze.run.paths.duplicate(true)
+	var panel := main._developer_console as DeveloperConsole
+	var session: RefCounted = main._developer_event_test
+	panel.set_open(true)
+	panel._event_query.text = "最后的晚餐"
+	panel._event_query.text_changed.emit(panel._event_query.text)
+	check(panel._events.item_count == 1, "F2可用中文名称从真实事件池搜索")
+	panel._deal.pressed.emit()
+	check(session.is_active() and maze.run.paths.all(func(path: Dictionary) -> bool: return path.path_id == "last_supper"), "按钮向正式牌桌发出指定事件")
+	if not session.is_active(): return
+	var table: Control = maze._event_table
+	await _click(table._deck)
+	if table.busy: await table.choices_ready
+	await _click(table.cards[0])
+	await create_timer(1.3).timeout
+	check(session.can_retry() and maze.run.selected_path.get("path_id") == "last_supper", "真实翻牌选中事件并保存重试点")
+	panel.set_open(true)
+	panel._dice_option.select(1)
+	panel._dice_option.item_selected.emit(1)
+	panel._dice_point.select(10)
+	panel._dice_point.item_selected.emit(10)
+	panel._tabs.current_tab = 1
+	var original_count: int = main.owned_card_collection.size()
+	panel._data_query.text = "militia"
+	panel._data_query.text_changed.emit("militia")
+	panel._add.pressed.emit()
+	check(main.owned_card_collection.size() == original_count + 1, "表单通过原加卡入口添加测试卡")
+	panel._gold.text = "50"
+	var apply_gold := panel.find_child("ApplyGold", true, false) as Button
+	apply_gold.pressed.emit()
+	check(main.run_reward_state.gold == 50, "表单可设定测试局金币")
+	panel._data_kind.select(1)
+	panel._data_kind.item_selected.emit(1)
+	panel._data_query.text = "苹果"
+	panel._data_query.text_changed.emit("苹果")
+	check(panel._data_items.item_count >= 1, "局内调整可搜索贴纸")
+	panel._add.pressed.emit()
+	check(maze._story_stickers("苹果").size() == 1, "表单通过原库存入口加入苹果")
+	panel.set_open(false)
+	check(maze.choose_story_option(1) and int(maze.run.selected_path.story_result.roll) == 10, "指定选项按设置的10点走正式骰子结算")
+	panel.set_open(true)
+	panel._retry.pressed.emit()
+	check(not maze.run.selected_path.has("story_result") and maze._story_stickers("苹果").is_empty() and main.run_reward_state.gold == 23 and main.owned_card_collection.size() == original_count, "一键重试恢复原选项、金币、收藏和库存")
+	panel.set_open(true)
+	panel._stop.pressed.emit()
+	check(not session.is_active() and main.run_save_path == BRANCH_SAVE and maze.run.paths == base_paths and main.run_reward_state.gold == 23, "退出测试恢复原牌桌、金币和存档路径")
+	check(FileAccess.get_file_as_string(BRANCH_SAVE) == original, "测试期间正式存档的文件内容保持原样")
+
+
+func _test_last_supper_apple() -> void:
+	var label := "吃随从偷藏的苹果"
+	for source: String in ["无苹果", "工具箱", "卡牌"]:
+		if _deal("last_supper") < 0: return
+		var owner: OwnedCard = maze._story_minions()[0]
+		var apple := {"instance_id": "last_supper_apple", "emblem_id": "苹果"}
+		if source == "工具箱":
+			check(maze._grant_emblem(apple.emblem_id, apple.instance_id), "工具箱可放入苹果夹具")
+		elif source == "卡牌":
+			owner.set_emblem_slot(0, apple)
+		check(maze.select_path("last_supper"), "可进入最后的晚餐")
+		if source == "无苹果":
+			check(main.load_run_from_path(BRANCH_SAVE), "可读回尚未结算的最后的晚餐")
+		var options: Array[Node] = maze._detail_body.find_children("*", "Button", true, false)
+		var apple_button := options.filter(func(button: Button) -> bool: return button.text == label)
+		if source == "无苹果":
+			check(apple_button.is_empty(), "无苹果时普通界面隐藏吃苹果")
+			maze.set_event_debug_details(true)
+			options = maze._detail_body.find_children("*", "Button", true, false)
+			apple_button = options.filter(func(button: Button) -> bool: return button.text == label)
+		check(apple_button.size() == 1, "事件提供一个吃苹果选项")
+		if apple_button.size() != 1: return
+		var button := apple_button[0] as Button
+		var can_eat := source != "无苹果"
+		check(button.disabled == not can_eat, "苹果选项随持有状态更新：" + source)
+		if not can_eat:
+			check(button.tooltip_text.contains("需要纹章「苹果」"), "无苹果时显示缺少纹章的提示")
+		var option_index := int(button.get_meta("story_option"))
+		check(maze.choose_story_option(option_index) == can_eat, "结算与按钮使用相同的苹果条件：" + source)
+		check(maze._story_stickers("苹果").is_empty(), "结算后苹果候选为空：" + source)
+		maze.set_event_debug_details(false)
 
 
 func _test_bone_tower() -> void:
@@ -75,6 +178,7 @@ func _test_whips_and_multipliers() -> void:
 	fight.start_battle([{"squad_data": team, "row_key": &"player_front"}], [{"squad_data": SquadData.from_owned_card(enemy), "row_key": &"enemy_front"}], 8, false)
 	state = fight.player_states[0]
 	check(fight.permanent_growth_ledger.get_amount_for_owned_card(carrier.instance_id, &"max_health") == -3, "血誓之鞭突击登记永久生命损失")
+	check(state.current_health > state.get_max_health() and state.get_display_base_stats(state.get_active_rune_slots()).y == team.get_display_base_health(team.get_vitals_source(), 0) - 3, "血誓之鞭只降低基础和上限，白字即时更新")
 	fight._apply_blood_oath_glory(state, fight.enemy_states[0])
 	fight._apply_blood_oath_glory(state, fight.enemy_states[0])
 	check(fight.permanent_growth_ledger.get_amount_for_owned_card(blood.instance_id, &"max_health") == 5 and fight.permanent_growth_ledger.get_amount_for_owned_card(blood.instance_id, &"base_value") == 2, "血誓之鞭荣耀只触发一次并归装备实例")
@@ -83,8 +187,38 @@ func _test_whips_and_multipliers() -> void:
 	carrier.set_wound_slot(0, {"wound_id": "业火", "instance_id": "event_fixture_fire", "level": 1})
 	fight.start_battle([{"squad_data": team, "row_key": &"player_front"}], [{"squad_data": SquadData.from_owned_card(enemy), "row_key": &"enemy_front"}], 8, false)
 	state = fight.player_states[0]
-	check(state.hellfire_multiplier() == 4 and state.get_max_health() == roundi(float(team.get_effective_max_health()) * 0.5) and state.current_health == state.get_max_health(), "业火减半初始生命，和业石乘算")
+	check(state.hellfire_multiplier() == 4 and state.get_max_health() == roundi(team.get_unconverted_max_health() * 0.5) and state.current_health == state.get_max_health(), "业火减半初始生命，和业石乘算")
+	check(team.get_effective_max_health() == state.get_max_health() and state.get_display_base_stats(state.get_active_rune_slots()).y > state.get_max_health(), "单卡预览和战场都把业火减半归入红色生命差额")
 	check(state.apply_damage_exact(1.0, fight.enemy_states[0], null, true).health_damage == 4.0, "业火和业石的直伤倍率只算一次")
+	fight.free()
+
+
+func _test_effect_stat_channels() -> void:
+	var mage := _fixture_owned("spark_mage", "event_fixture_base_action")
+	mage.rune_revealed.fill(false)
+	mage.set_acquired_action_type(CardData.ActionType.MAGIC)
+	mage.set_emblem_slot(0, {"emblem_id": &"面包", "instance_id": &"effect_stat_bread"})
+	var team := SquadData.from_owned_card(mage)
+	var moon := CelestialIndicator.new()
+	moon.kind = CelestialIndicator.Kind.MOON
+	moon.instance_id = &"effect_stat_moon"
+	check(team.attach_indicator(moon, Vector2(30, 30), 0), "在测试小队附上月亮")
+	var native_health := team.get_display_base_health(team.get_vitals_source(), 0)
+	var native_armor := team.get_display_base_armor(team.get_vitals_source(), 0)
+	check(team.get_effective_max_health() == native_health + 2 and team.get_effective_base_armor() == native_armor + 8, "面包和月亮加成只进入差额层")
+	var fight := BattleController.new()
+	root.add_child(fight)
+	var formation: Array[Dictionary] = [{"squad_data": team, "row_key": &"player_front"}]
+	var buffs: Array[Dictionary] = [{"stat": "growth", "base_value": 1, "target": "magic", "battles": -1}]
+	fight.prepare_battle_preview(formation, [], 8, buffs)
+	var state := fight.player_states[0]
+	var new_base := state.get_display_base_stats(state.get_active_rune_slots()).x
+	check(new_base == mage.card_data.base_value + 1 and state.get_action_base_value() == new_base, "已有存档格式的苦痛之遇直接进基础数值")
+	state.runtime_base_action_multiplier = 2.0
+	check(state.get_action_base_value() == new_base * 2, "苦痛之遇随基础数值乘法结算")
+	var old_life := state.get_max_health()
+	fight.silvermoon.permanent_health(state, 2, state, &"il_ancient_speaker")
+	check(state.get_display_base_stats(state.get_active_rune_slots()).y == native_health + 2 and state.get_max_health() == old_life + 2 and state.current_health == old_life + 2, "古语者基础生命同步更新白字、上限与当前")
 	fight.free()
 
 
@@ -118,6 +252,66 @@ func _test_forbidden_and_dice() -> void:
 	fight.free()
 
 
+func _test_alchemist_potions() -> void:
+	var expected := {
+		1: Vector4i(1, -1, 0, 0), 2: Vector4i(0, 2, 0, 0),
+		4: Vector4i(0, 0, 0, 1), 8: Vector4i(0, 0, 2, 0),
+		3: Vector4i(1, 1, 0, 0), 5: Vector4i(1, -1, 0, 1),
+		6: Vector4i(0, 2, 0, 1), 9: Vector4i(1, -1, 2, 0),
+		10: Vector4i(0, 2, 2, 0), 12: Vector4i(0, 0, 2, 1),
+		15: Vector4i(1, 1, 2, 1),
+	}
+	var view: CardView = main.CARD_VIEW_SCENE.instantiate()
+	view.set_snapshot_mode(true)
+	root.add_child(view)
+	for mask: int in expected:
+		var card: CardData = load("res://resources/cards/event_potion_%d.tres" % mask)
+		var deltas: Vector4i = expected[mask]
+		view.set_card_data(card)
+		check(
+			view.value_label.text == str(deltas.x) and view.health_label.text == str(deltas.y)
+			and view.armor_label.text == str(deltas.z) and view.cooldown_label.text == ("+1" if deltas.w else "0")
+			and view.cooldown_icon.position == CardView.EQUIPMENT_ZEAL_POSITION
+			and card.effect_text == "突击：消耗并使装备者获得属性",
+			"药剂%s显示正确数值、沿用热诚位置及采用统一描述" % card.display_name
+		)
+	view.free()
+	if _deal("fortuna_gift") < 0: return
+	check(maze.select_path("fortuna_gift") and maze.complete_event(false, true), "从随机事件进入炼金师所在的付费事件轮")
+	maze.run.paths.clear()
+	var alchemist: Dictionary = maze.content.paid_events.filter(func(path: Dictionary) -> bool: return path.path_id == "alchemist")[0]
+	check(maze.run.set_paths([alchemist, alchemist, alchemist]) and maze.select_path("alchemist"), "通过正式选牌进入炼金师试用")
+	var owner: OwnedCard = maze._story_minions()[0]
+	var owner_id := owner.instance_id
+	var before := _potion_growth(owner)
+	var count: int = main.owned_card_collection.size()
+	check(maze.select_enhancement_card({"kind": &"card", "owned_card": owner}) and maze.choose_story_option(0), "炼金师免费试用对选择的随从立即生效")
+	var potion_id := String(maze.run.selected_path.get("story_result", {}).get("potion_id", ""))
+	var mask := int(potion_id.trim_prefix("event_potion_"))
+	check(mask in [1, 2, 4, 8] and _potion_growth(owner) - before == expected.get(mask), "试用的持久增量与实际展示的单项药剂一致")
+	var previews := maze._event_table.find_child("EventRewardCards", false, false)
+	var preview := previews.get_child(0).get_child(0) as CardView if previews != null else null
+	check(preview != null and preview.card_data.id == StringName(potion_id) and main.owned_card_collection.size() == count, "试用结果展示实际药剂卡且没有额外领取")
+	if "--capture-events" in OS.get_cmdline_user_args():
+		await create_timer(0.5).timeout # 截图前等选中的随从回到原位
+	await _capture("alchemist-sample")
+	check(main.load_run_from_path(BRANCH_SAVE) and maze.run.selected_path.get("story_result", {}).get("potion_id") == potion_id and not maze.choose_story_option(0), "读档恢复原药剂且拒绝重复试用")
+	owner = main.owned_card_collection.get_by_instance_id(owner_id)
+	check(owner != null and _potion_growth(owner) - before == expected.get(mask), "读档保留随从的单次试用增量")
+	var result: Dictionary = maze.run.selected_path.get("story_result", {})
+	result.erase("potion_id")
+	check(main.save_run_to_path(BRANCH_SAVE) == OK and main.load_run_from_path(BRANCH_SAVE) and not maze.choose_story_option(0), "没有展示字段的旧试用结果仍可读取且不会重复结算")
+
+
+func _potion_growth(owner: OwnedCard) -> Vector4i:
+	return Vector4i(
+		roundi(owner.get_permanent_growth(OwnedCard.STAT_BASE_VALUE)),
+		roundi(owner.get_permanent_growth(OwnedCard.STAT_MAX_HEALTH)),
+		roundi(owner.get_permanent_growth(OwnedCard.STAT_BASE_ARMOR)),
+		int(owner.progress_by_source.get(&"event_potion_zeal", 0))
+	)
+
+
 func _test_forbidden_exchange() -> void:
 	_deal("fortuna_gift")
 	check(maze.select_path("fortuna_gift") and maze.complete_event(false, true), "从随机事件进入禁药强化轮")
@@ -147,7 +341,7 @@ func _test_forbidden_exchange() -> void:
 	var team := SquadData.from_owned_card(owner)
 	team.equip_item(potion)
 	main.front_row.add_squad(team, 0)
-	check(maze.complete_event(true, true) and maze.select_path(maze.run.paths[0].path_id) and maze.leave_shop(true), "带大型禁药进入日末战斗")
+	check(maze.complete_event(true, true) and maze.run.get_round_kind() == "battle", "带大型禁药从首日付费事件进入日末战斗")
 	check(maze.select_path(maze.run.paths[0].path_id) and main.start_battle(-1, false), "从真实开战入口触发大型禁药")
 	_finish_test_battle()
 	check(owner.has_forbidden_layout() and owner.wound_slots.size() == expected_wounds and collection.get_by_instance_id(potion.instance_id) == null, "正式结算写回转换后的伤势槽并消耗禁药")
@@ -307,6 +501,49 @@ func _test_ambush() -> void:
 	check(main.load_run_from_path(BRANCH_SAVE), "当日继续的存档可恢复")
 
 
+func _test_bounty_shop_save() -> void:
+	if _deal("bounty_hunter", 100) < 0: return
+	maze.run.skip_first_day_shop = false # 旧存档的首日商店仍需能读能继续
+	var awarded: bool = maze.select_path("bounty_hunter") and maze.choose_story_option(0) and maze.story_shop_discount
+	check(awarded, "走赏金猎人的正式交付分支获得商店八折")
+	if not awarded: return
+	var entered: bool = (
+		maze.complete_event(true, true) and maze.select_path(maze.run.paths[0].path_id)
+		and maze.complete_event(false, true) and maze.select_path(maze.run.paths[0].path_id)
+	)
+	check(entered, "沿真实事件事务进入八折商店")
+	if not entered: return
+	maze.enter_selected_shop()
+	main._refresh_ordinary_shop()
+	var shop: OrdinaryShopService = main.ordinary_shop_service
+	check(shop.refresh_count == 1 and shop.offers.all(func(offer: Dictionary) -> bool:
+		return offer.kind != "card_pack" or int(offer.price) == (14 if offer.size == "large" else 9)
+	), "刷新后普通和定向卡包仍保留八折向下取整")
+	var item := shop.offers.find_custom(func(offer: Dictionary): return offer.kind == "single_card" and offer.hidden)
+	check(item >= 0, "商城提供可售的暗单")
+	if item < 0: return
+	var offer := shop.offers[item]
+	var old_gold: int = main.run_reward_state.gold
+	main._on_ordinary_shop_offer_pressed(item)
+	check(offer.get("sold", false) and shop.reveal_by_offer.get(offer.offer_id) == offer.card_id and main.run_reward_state.gold == old_gold - int(offer.price), "按折后原价买入，保留已售和揭晓记录")
+	# JSON 读取后整数变为浮点，比较磁盘表示以保留对每一项报价和随机数的核对。
+	var expected: Dictionary = JSON.parse_string(JSON.stringify(shop.capture_state()))
+	var same_shop := func() -> bool:
+		return JSON.parse_string(JSON.stringify(shop.capture_state())) == expected
+	var saved := RunSaveService.new()
+	check(main.load_run_from_path(BRANCH_SAVE) and main.ordinary_shop_open and same_shop.call(), "八折商店正式购买后读档保留完整报价和随机流")
+	var checkpoint: Dictionary = saved.load_checkpoint(BRANCH_SAVE).checkpoint
+	checkpoint.ordinary_shop_state.erase("bounty_discount")
+	checkpoint.short_maze.run.erase("skip_first_day_shop")
+	check(saved.save_checkpoint(BRANCH_SAVE, checkpoint) == OK and main.load_run_from_path(BRANCH_SAVE) and same_shop.call(),
+		"旧在店存档从赏金猎人状态识别折扣并保留原报价")
+	check(maze.leave_shop(true) and not maze.story_shop_discount and maze.run.get_round_kind() == "battle", "读档后可正常离开商店并进入挑战轮")
+	checkpoint = saved.load_checkpoint(BRANCH_SAVE).checkpoint
+	checkpoint.ordinary_shop_state.erase("bounty_discount")
+	check(saved.save_checkpoint(BRANCH_SAVE, checkpoint) == OK and main.load_run_from_path(BRANCH_SAVE) and same_shop.call(),
+		"旧离店存档可读取留存的折扣商品，路线已进入挑战轮")
+
+
 func _test_legacy_edwin_runes() -> void:
 	var edwin := _fixture_owned("edwin_ash", "old_gilded_edwin")
 	var old := edwin.capture_state()
@@ -348,7 +585,7 @@ func _test_scrolls() -> void:
 	main.front_row.add_squad(team, 0)
 	var helper: OwnedCard = maze._story_minions()[1]
 	main.front_row.add_squad(SquadData.from_owned_card(helper), 1)
-	check(maze.complete_event(true, true) and maze.select_path(maze.run.paths[0].path_id) and maze.leave_shop(true), "带卷轴进入日末战斗")
+	check(maze.complete_event(true, true) and maze.run.get_round_kind() == "battle", "带卷轴从首日付费事件进入日末战斗")
 	check(maze.select_path(maze.run.paths[0].path_id) and main.start_battle(-1, false), "带卷轴通过正式开战")
 	check(main.battle_controller.player_states[0].has_targeting_keyword(&"dazzling"), "临时镖客为佩戴小队提供耀眼")
 	var combat: BattleController = main.battle_controller

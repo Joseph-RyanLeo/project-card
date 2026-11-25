@@ -21,4 +21,4 @@ art_offset = Vector2i(-12, 26)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
 &"overframe": Vector2i(-8, 5)
 })
-effect_text = "荣耀：所有存活、未被放逐的友军本场基础行动值+1，恢复2点生命。每次入场最多触发4次。"
+effect_text = "荣耀：所有存活、未被放逐的友军本场数值+1，恢复2点生命。每次入场最多触发4次。"

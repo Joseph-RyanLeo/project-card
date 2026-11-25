@@ -336,11 +336,8 @@ func _run() -> void:
 		var battle_time_before_inspection: float = main.battle_controller.elapsed_seconds
 		await create_timer(0.15, true).timeout
 		check(tree.paused and is_equal_approx(main.battle_controller.elapsed_seconds, battle_time_before_inspection), "真实战斗检视暂停战斗时间，并保留打开前的手动暂停状态")
-		await _click(main._inspection_library_toggle.get_global_rect().get_center())
-		await create_timer(0.3, true).timeout
-		check(tree.paused and main._inspection_library_expanded, "战斗暂停检视时露边控件仍能展开工具箱")
-		await _click(main._inspection_library_toggle.get_global_rect().get_center())
-		await create_timer(0.3, true).timeout
+		main.set_inspection_library_expanded(true)
+		check(tree.paused and main._inspection_library_toggle == null and not main._inspection_library_expanded, "战斗暂停检视维持只读，不创建工具箱按钮或接受展开操作")
 		var close_click := InputEventMouseButton.new()
 		close_click.button_index = MOUSE_BUTTON_RIGHT
 		close_click.pressed = true

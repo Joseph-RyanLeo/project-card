@@ -21,8 +21,9 @@ func advance_to_battle(maze: ShortMazeController) -> void:
 	check(maze.complete_event(false), "随机事件正常推进")
 	check(maze.select_path(maze.run.paths[0].path_id), "选择强化事件")
 	check(maze.complete_event(false), "跳过强化正常推进")
-	check(maze.select_path(maze.run.paths[0].path_id), "进入商店")
-	check(maze.leave_shop(), "正常离开商店")
+	if maze.run.get_round_kind() == "shop":
+		check(maze.select_path(maze.run.paths[0].path_id), "进入商店")
+		check(maze.leave_shop(), "正常离开商店")
 	check(maze.select_path(maze.run.paths[0].path_id), "选择战斗")
 
 func fight() -> void:
@@ -59,6 +60,7 @@ func _run() -> void:
 	check(maze.continue_after_battle() and maze.run.day == 2, "进入第二天")
 	var defender: OwnedCard = main.owned_card_collection.find_first_by_definition(load("res://resources/cards/shieldwall_private.tres"))
 	var defender_id := defender.instance_id
+	defender.rune_revealed.fill(false)
 	check(defender.set_wound_slot(0, {"wound_id": &"晶体化", "instance_id": "regression_crystallization", "temporary": false}), "真实拥有随从具有晶体化伤势")
 	main.back_row.add_squad(SquadData.from_owned_card(defender), 0)
 	advance_to_battle(maze)
@@ -69,11 +71,14 @@ func _run() -> void:
 			state = candidate
 	check(state != null and state.has_unmasked_wound(&"晶体化"), "真实战斗注册晶体化")
 	if state == null: quit(1); return
-	# 用实际伤害入口两次打空护甲，触发伤势效果及真实永久成长账本。
-	state.apply_damage_exact(state.current_armor)
-	state.apply_damage_exact(state.current_armor)
+	# 真实攻击通道累计打空三次，把基础4生命扣到1并转化原槽。
+	var attack := BattleEffectEvent.new()
+	attack.is_attack_action_damage = true
+	for _index: int in 3: state.apply_damage_exact(state.current_armor, null, attack)
 	var entries: Array[Dictionary] = main.battle_controller.permanent_growth_ledger.get_entries()
-	check(entries.size() == 4 and defender.crystallization_health_loss == 0, "两次护甲归零仅记录两组生命-1、护甲+1，未提前写回拥有实例")
+	check(entries.size() == 6 and defender.crystallization_health_loss == 0 and state.has_unmasked_wound(&"结晶"), "三次被攻击打空护甲记录三组成长，最后原槽转为结晶")
+	if entries.is_empty(): quit(1); return
+	check(main.battle_controller.record_pending_permanent_growth(BattleEffectOwnerRef.for_owned_card_in_state(state, defender), OwnedCard.STAT_BONUS_MAX_HEALTH, 2.0, &"flickering_lantern", state.runtime_id, 0), "登记独立的永久最大生命差额")
 	var empty_entries: Array[Dictionary] = []
 	for invalid_amount: float in [0.0, 1.0, -0.5, INF]:
 		var invalid: Dictionary = entries[0].duplicate()
@@ -93,12 +98,15 @@ func _run() -> void:
 	defender = main.owned_card_collection.get_by_instance_id(defender_id)
 	check(bool(main._last_battle_settlement_result.get("success", false)) and maze.run.step == ShortMazeRunState.Step.BATTLE_RESULT, "晶体化实际战后写回成功并进入迷宫结算")
 	check(defender.crystallization_health_loss == loss and defender.get_permanent_growth(OwnedCard.STAT_MAX_HEALTH) == 0.0 and defender.get_permanent_growth(OwnedCard.STAT_BASE_ARMOR) == armor_growth, "负生命变化转为正损失量，护甲成长完整写回，不混入普通生命成长")
+	check(defender.wound_slots[0].get("wound_id") == &"结晶", "战后提交结晶至原伤势槽")
 	check(maze.hero.experience == 4 and main.continue_next_level_button.is_visible_in_tree() and not main.continue_next_level_button.disabled, "第二天经验累加到4，下一天按钮可见可用")
 	check(not main.battle_result_summary_label.text.contains("待写回"), "结算摘要不再显示待写回")
 	var gold: int = main.run_reward_state.gold
 	check(bool(main.settle_current_battle().get("success", false)) and defender.crystallization_health_loss == loss and defender.get_permanent_growth(OwnedCard.STAT_BASE_ARMOR) == armor_growth and maze.hero.experience == 4 and main.run_reward_state.gold == gold, "重复结算不重复扣生命、增护甲或发奖励")
 	check(main.load_run_from_path(main.run_save_path), "晶体化结算存档可以读回")
 	defender = main.owned_card_collection.get_by_instance_id(defender_id)
+	check(defender.wound_slots[0].get("wound_id") == &"结晶", "真实存档读回结晶原槽")
+	check(defender.get_permanent_growth(OwnedCard.STAT_BONUS_MAX_HEALTH) == 2.0 and defender.get_permanent_growth(OwnedCard.STAT_MAX_HEALTH) == 0.0, "永久最大生命差额独立写回存档")
 	check(defender.crystallization_health_loss == loss and defender.get_permanent_growth(OwnedCard.STAT_BASE_ARMOR) == armor_growth and maze.hero.experience == 4 and main.continue_next_level_button.visible, "读档保留成长、经验和继续按钮")
 	main._on_continue_next_level_pressed()
 	check(maze.run.day == 3 and maze.run.step == ShortMazeRunState.Step.CHOOSING and main.current_phase == main.GamePhase.PREPARE, "正式继续入口进入第三天")

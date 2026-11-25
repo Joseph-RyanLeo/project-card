@@ -2,6 +2,9 @@
 
 [ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
 [ext_resource type="Texture2D" path="res://assets/card_art/spells/volley_order.png" id="2_art"]
+[ext_resource type="Texture2D" path="res://assets/card_backgrounds/ash_ledger_volley_order.png" id="3_background"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/layers/volley_order_arrows.png" id="layer_arrows"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/layers/volley_order_front_light.png" id="layer_front_light"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -13,16 +16,19 @@ keywords = Array[StringName]([&"立即行动", &"远程", &"群体行动"])
 card_type = 2
 spell_trigger_kind = 3
 spell_preparation_seconds = 5.0
-background_style = 3
+background_texture = ExtResource("3_background")
 background_offsets = Dictionary[int, Vector2i]({
 3: Vector2i(0, -20)
 })
 background_overframe_offsets = Dictionary[int, Vector2i]({
+0: Vector2i(1, 2),
 3: Vector2i(0, 1)
 })
 art_texture = ExtResource("2_art")
-art_offset = Vector2i(16, -4)
-art_finish_offsets = Dictionary[StringName, Vector2i]({
-&"overframe": Vector2i(5, 21)
+inspection_art_layers = Array[Texture2D]([ExtResource("layer_arrows"), ExtResource("layer_front_light")])
+inspection_art_layer_names = PackedStringArray("箭矢", "前景光效")
+inspection_art_depths = Dictionary[StringName, float]({
+&"res://assets/card_art/spells/layers/volley_order_front_light.png": 0.83
 })
+art_offset = Vector2i(1, 18)
 effect_text = "准备5秒：后排远程友军立即行动1次。"

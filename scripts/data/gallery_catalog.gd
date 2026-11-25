@@ -132,8 +132,7 @@ func sticker_texture(entry: Dictionary) -> Texture2D:
 	return StatusIndicatorStyle.get_texture(preload("res://scripts/data/card_slot_layout.gd").Kind.WOUND if entry.category == "wound" else preload("res://scripts/data/card_slot_layout.gd").Kind.EMBLEM, entry.id)
 
 func sticker_text(entry: Dictionary) -> String:
-	var text := EmblemLibraryData.get_wound_tooltip(entry.id) if entry.category == "wound" else EmblemLibraryData.get_tooltip(entry.id)
-	return text.split("\n资料状态：")[0].split("\n待确认：")[0]
+	return EmblemLibraryData.get_wound_tooltip(entry.id) if entry.category == "wound" else EmblemLibraryData.get_tooltip(entry.id)
 
 func derived_for(source: CardData, profile: Dictionary) -> Array[CardData]:
 	var result: Array[CardData] = []

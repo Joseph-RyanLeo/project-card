@@ -23,6 +23,8 @@ const MISSION_REWARD_TEXT := ["50金币", "10个纹章", "2个大卡包", "装�
 const TEMPORARY_EQUIPMENT := &"temporary_equipment"
 const STAT_BASE_VALUE: StringName = &"base_value"
 const STAT_MAX_HEALTH: StringName = &"max_health"
+const STAT_BONUS_VALUE: StringName = &"bonus_value" # 本局永久的普通数值加成，计入绿字差额
+const STAT_BONUS_MAX_HEALTH: StringName = &"bonus_max_health" # 永久保留的最大生命加成，属于差额
 const STAT_BASE_ARMOR: StringName = &"base_armor"
 const RuneRevealCoverStyleScript = preload("res://scripts/ui/rune_reveal_cover_style.gd")
 const RUNE_SCRAPE_SIZE: int = RuneRevealCoverStyleScript.SIZE
@@ -143,7 +145,8 @@ func roll_pack_appearance(source_rng: RandomNumberGenerator) -> void:
 		appearance_rng.seed = ("pack_appearance:%s:%s:%d" % [instance_id, card_data.id, source_rng.state]).hash()
 	else:
 		appearance_rng.randomize()
-	surface_finish = Appearance.pick_ticket(Appearance.SURFACE_WEIGHTS, appearance_rng.randi_range(1, 100)) as Appearance.Surface
+	var surface_weights := Appearance.get_surface_weights(card_data.rarity)
+	surface_finish = Appearance.pick_ticket(surface_weights, appearance_rng.randi_range(1, 100)) as Appearance.Surface
 	art_finish = Appearance.pick_ticket(Appearance.ART_WEIGHTS, appearance_rng.randi_range(1, 100)) as Appearance.Art
 
 
@@ -215,7 +218,7 @@ func is_temporary_equipment() -> bool:
 
 
 func apply_permanent_growth(stat: StringName, amount: float) -> bool:
-	if stat not in [STAT_BASE_VALUE, STAT_MAX_HEALTH, STAT_BASE_ARMOR] or is_zero_approx(amount):
+	if stat not in [STAT_BASE_VALUE, STAT_MAX_HEALTH, STAT_BASE_ARMOR, STAT_BONUS_VALUE, STAT_BONUS_MAX_HEALTH] or is_zero_approx(amount) or not is_finite(amount):
 		return false
 	permanent_growth[stat] = float(permanent_growth.get(stat, 0.0)) + amount
 	return true
@@ -224,10 +227,7 @@ func apply_permanent_growth(stat: StringName, amount: float) -> bool:
 func apply_crystallization_health_loss(amount: int = 1) -> bool:
 	if amount <= 0 or card_data == null:
 		return false
-	crystallization_health_loss = mini(
-		crystallization_health_loss + amount,
-		maxi(card_data.max_health - 1, 0)
-	)
+	crystallization_health_loss += amount
 	return true
 
 
@@ -283,6 +283,7 @@ func get_effective_max_health_for_status_slots(
 	return clampi(
 		roundi(
 			get_base_stat_with_permanent_growth(STAT_MAX_HEALTH)
+			+ get_permanent_growth(STAT_BONUS_MAX_HEALTH)
 			+ get_emblem_static_modifier(&"max_health", active_emblem_slot_indices)
 			+ get_wound_static_modifier(&"max_health", active_wound_slot_indices)
 		),
@@ -319,7 +320,7 @@ func get_effective_base_armor_for_status_slots(
 	)
 
 
-func get_emblem_static_modifier(stat: StringName, active_slot_indices: Array[int]) -> int:
+func get_emblem_static_modifier(stat: StringName, active_slot_indices: Array[int], base_only: bool = false, positive_only: bool = false) -> int:
 	var total := 0
 	for slot_index: int in active_slot_indices:
 		if slot_index < 0 or slot_index >= emblem_slots.size():
@@ -327,10 +328,10 @@ func get_emblem_static_modifier(stat: StringName, active_slot_indices: Array[int
 		var state := emblem_slots[slot_index]
 		if state.is_empty():
 			continue
-		total += EmblemLibraryDataScript.get_static_modifier(
-			StringName(String(state.get("emblem_id", ""))),
-			stat
-		)
+		var emblem_id := StringName(state.get("emblem_id", ""))
+		if not base_only or emblem_id in EmblemLibraryDataScript.BASE_STAT_EMBLEMS:
+			var amount := EmblemLibraryDataScript.get_static_modifier(emblem_id, stat)
+			total += maxi(amount, 0) if positive_only else amount
 	return total
 
 

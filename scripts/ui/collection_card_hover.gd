@@ -145,7 +145,7 @@ func _process(delta: float) -> void:
 	if card.showing_effect != source.showing_effect:
 		card.showing_effect = source.showing_effect
 		card._refresh()
-	var target := readonly_pointer if read_only else ((source.get_local_mouse_position() / source.card_size - Vector2(0.5, 0.5)) * 2.0).clamp(-Vector2.ONE, Vector2.ONE)
+	var target := readonly_pointer if read_only else ((CrtProjection.local_mouse(source) / source.card_size - Vector2(0.5, 0.5)) * 2.0).clamp(-Vector2.ONE, Vector2.ONE)
 	update_pointer_force(target, delta)
 
 func return_to_rest() -> void:

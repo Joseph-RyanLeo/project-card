@@ -18,6 +18,7 @@ signal card_click_carry_requested(data: Dictionary, pointer_global_position: Vec
 signal squads_changed
 signal card_inspection_requested(card_view: CardView, card_data: CardData, owned_card: OwnedCard)
 
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const BOARD_SLOT_SCENE: PackedScene = preload("res://scenes/ui/BoardSlot.tscn")
 const OwnedCard = preload("res://scripts/data/owned_card.gd")
 const EquipmentIndicatorStyle = preload("res://scripts/ui/equipment_indicator_style.gd")
@@ -101,7 +102,7 @@ func _process(_delta: float) -> void:
 		placement_overlay
 		.get_global_transform_with_canvas()
 		.affine_inverse()
-		* get_viewport().get_mouse_position()
+		* CrtProjection.viewport_mouse(get_viewport())
 	)
 	_update_stack_target_feedback(local_position.x, _active_stack_feedback_drag_data)
 
@@ -1407,27 +1408,25 @@ func _notification(what: int) -> void:
 			# 与点按携带一样，在来源缩小的同一轮输入里建立原位虚影。
 			# 若等到下一次 mouse motion，HBox 会先把剩余卡居中一帧。
 			var board_drag := drag_data as Dictionary
+			var pointer := CrtProjection.viewport_mouse(get_viewport())
 			if (
 				board_drag.get("source_row") == self
 				and board_drag.get("kind") in [&"card", &"squad"]
 			):
 				var pointer_local := (
 					placement_overlay.get_global_transform_with_canvas().affine_inverse()
-					* get_viewport().get_mouse_position()
+					* pointer
 				)
 				if Rect2(Vector2.ZERO, placement_overlay.size).has_point(pointer_local):
 					preview_card_drop(pointer_local, board_drag)
-			update_stack_target_feedback_global(
-				get_viewport().get_mouse_position(),
-				drag_data as Dictionary
-			)
+			update_stack_target_feedback_global(pointer, board_drag)
 	elif what == NOTIFICATION_DRAG_END:
 		var return_global_position: Variant = null
 		if is_instance_valid(_hidden_source_slot) and not get_viewport().gui_is_drag_successful():
 			return_global_position = (
 				_active_drag_visual.get_card_global_position(true)
 				if is_instance_valid(_active_drag_visual)
-				else _active_drag_last_position if _active_drag_last_position.is_finite() else get_viewport().get_mouse_position() - _active_drag_preview_offset
+				else _active_drag_last_position if _active_drag_last_position.is_finite() else CrtProjection.viewport_mouse(get_viewport()) - _active_drag_preview_offset
 			)
 		_finish_card_drag(return_global_position)
 

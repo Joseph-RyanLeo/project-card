@@ -111,7 +111,7 @@ func execute_trigger(state: BattleSquadState, key: StringName, trigger: int) -> 
 			c.ironwall.add(ally, BattleModifier.Stat.ACTION_VALUE, bonus, key, state)
 			var previous_max := ally.get_max_health()
 			c.ironwall.add(ally, BattleModifier.Stat.MAX_HEALTH, bonus, key, state)
-			ally.current_health += maxf(ally.get_max_health() - previous_max, 0.0)
+			ally.apply_max_health_increase(previous_max, bonus)
 		return true
 	if key == &"balin_ashslag":
 		if not dead or not c.twisted_vein.active(state, key, false, true): return false
@@ -143,7 +143,10 @@ func execute_trigger(state: BattleSquadState, key: StringName, trigger: int) -> 
 			_advance(state, item, ECHO_REQUIRED, &"flickering_lantern")
 		&"flickering_lantern":
 			if not dead: return false
-			for ally: BattleSquadState in c.get_death_neighbors(state): c.silvermoon.permanent_health(ally, 2, state, &"flickering_lantern")
+			for ally: BattleSquadState in c.get_death_neighbors(state):
+				var owner := BattleEffectOwnerRef.for_state(ally, BattleEffectDefinition.OwnerKind.ARMOR_PROVIDER_CARD)
+				if c.record_pending_permanent_growth(owner, OwnedCard.STAT_BONUS_MAX_HEALTH, 2.0, &"flickering_lantern", state.runtime_id, roundi(c.elapsed_seconds * 1000000.0)):
+					c.twisted_vein.gain_health(ally, 2.0, &"flickering_lantern")
 			_advance(state, item, WISH_REQUIRED, &"blazing_lantern")
 		&"blazing_lantern":
 			if not dead: return false

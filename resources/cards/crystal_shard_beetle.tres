@@ -22,4 +22,4 @@ art_offset = Vector2i(-3, -8)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
 &"overframe": Vector2i(-5, -5)
 })
-effect_text = "开采；开采时数值+1、生命+1。"
+effect_text = "开采；开采时数值+1、最大生命+1。"

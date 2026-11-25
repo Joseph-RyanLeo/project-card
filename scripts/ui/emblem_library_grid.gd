@@ -134,10 +134,8 @@ func clear_move_preview() -> void:
 
 
 func _cell_for_drag(data: Dictionary, global_pointer_position: Vector2) -> Vector2i:
-	var placement_offset := data.get("placement_offset", Vector2.ZERO) as Vector2
-	var item_origin_local := get_global_transform_with_canvas().affine_inverse() * (
-		global_pointer_position + placement_offset
-	)
+	var transform := get_global_transform_with_canvas()
+	var item_origin_local := InspectionItemDrag.placement_origin(transform, global_pointer_position, data, transform.get_scale())
 	return inventory_view.cell_for_local_position(item_origin_local - GRID_ORIGIN)
 
 

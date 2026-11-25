@@ -1,10 +1,12 @@
 extends Control
 
 ## 高光在卡面本地坐标中绘制，进入检视合成画布后与整张卡一起透视。
-const MARGIN := 5.0 # 金光与卡牌边缘的距离
+const FocusOutline = preload("res://scripts/ui/focus_outline.gd")
 const SPEED := 70.0 # 环绕光点每秒移动的逻辑像素距离
 const TRAIL_LENGTH := 16 # 每束光的像素尾迹长度
 var selected := false
+var _mask: Texture2D
+var _curves: Array[Curve2D] = []
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -12,30 +14,42 @@ func _ready() -> void:
 	set_process(selected)
 
 func set_selected(value: bool) -> void:
+	if value == selected: return
 	selected = value
+	_mask = null
 	set_process(selected)
 	queue_redraw()
 
 func _process(_delta: float) -> void:
 	queue_redraw()
 
-func _edge_point(distance: float, rect: Rect2) -> Vector2:
-	var p := fposmod(distance, 2.0 * (rect.size.x + rect.size.y))
-	if p < rect.size.x: return rect.position + Vector2(p, 0)
-	p -= rect.size.x
-	if p < rect.size.y: return rect.position + Vector2(rect.size.x, p)
-	p -= rect.size.y
-	if p < rect.size.x: return rect.end - Vector2(p, 0)
-	return rect.position + Vector2(0, rect.size.y - (p - rect.size.x))
+func _refresh_contours() -> void:
+	var shape := FocusOutline.card_mask(get_parent() as Control)
+	if shape.is_empty() or shape.texture == _mask: return
+	_mask = shape.texture
+	_curves.clear()
+	var image := _mask.get_image()
+	var bits := BitMap.new()
+	bits.create_from_image_alpha(image)
+	var bounds: Rect2 = shape.bounds
+	for points: PackedVector2Array in bits.opaque_to_polygons(Rect2i(Vector2i.ZERO, image.get_size()), 0.3):
+		var curve := Curve2D.new()
+		curve.bake_interval = 1.0 # 按原生像素走角标轮廓，拐角不抄近路
+		for point: Vector2 in points: curve.add_point(point + bounds.position)
+		curve.add_point(curve.get_point_position(0))
+		_curves.append(curve)
 
 func _draw() -> void:
 	if not selected: return
-	var frame := Rect2(Vector2.ZERO, size).grow(MARGIN)
-	draw_rect(frame, Color(1.0, 0.74, 0.3, 0.5), false, 1.0)
-	var perimeter := 2.0 * (frame.size.x + frame.size.y)
+	if _mask == null: _refresh_contours()
 	# 原卡与共享合成副本读同一时钟，悬停交接时尾迹不会跳到另一位置。
 	var elapsed := Time.get_ticks_msec() / 1000.0
-	for beam: int in 2:
-		for step: int in TRAIL_LENGTH:
-			var at := _edge_point(elapsed * SPEED + beam * perimeter * 0.5 - step * 2.0, frame).floor()
-			draw_rect(Rect2(at - Vector2.ONE, Vector2(2, 2)), Color(1.0, 0.9, 0.55, 1.0 - float(step) / TRAIL_LENGTH))
+	for curve: Curve2D in _curves:
+		draw_polyline(curve.get_baked_points(), Color(1.0, 0.74, 0.3, 0.5), 1.0)
+		var length := curve.get_baked_length()
+		if length <= 0.0: continue
+		for beam: int in (2 if length > 80.0 else 1):
+			for step: int in mini(TRAIL_LENGTH, ceili(length * 0.25)):
+				var along := fposmod(elapsed * SPEED + beam * length * 0.5 - step * 2.0, length)
+				var at := curve.sample_baked(along).floor()
+				draw_rect(Rect2(at - Vector2.ONE, Vector2(2, 2)), Color(1.0, 0.9, 0.55, 1.0 - float(step) / TRAIL_LENGTH))

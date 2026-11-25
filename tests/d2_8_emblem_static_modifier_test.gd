@@ -606,12 +606,15 @@ func _test_paste_and_scrape_updates_card_view() -> void:
 		main.free()
 		return
 	main._drop_emblem_on_inspection_card(main._inspection_card_view, point, drag_data)
-	await process_frame
+	await create_timer(CardView.STAT_CHANGE_SECONDS + 0.05).timeout
 	_expect(
 		owned.get_effective_base_value() == base_value + 3
 		and main._inspection_card_view.value_label.text == str(base_value + 3)
+		and main._inspection_card_view.value_label.has_stat_breakdown()
+		and main._inspection_card_view.value_label._stat_base_text == str(base_value + 2)
+		and main._inspection_card_view.value_label._stat_delta_text == "1"
 		and main._inspection_card_view.get_node("StatusSlotLayer").get_child_count() == 1,
-		"检视中粘贴长剑后属性即时生效并显示，且与永久成长相加"
+		"检视中粘贴长剑后，白字永久基础成长与绿字加成分开显示"
 	)
 	var scraper_control: TextureRect = main.emblem_library._scraper
 	var scraper_data: Dictionary = scraper_control._build_drag_data(scraper_control.blade_point, false)
@@ -652,7 +655,7 @@ func _pointer_for_blade_center(surface: InspectionCardSurface, data: Dictionary,
 	var offset := (data.get("hit_rect_offset", Vector2.ZERO) as Vector2) / scale
 	var hit_size := (data.get("hit_rect_size", Vector2.ZERO) as Vector2) / scale
 	var blade_center_offset := offset + hit_size * 0.5
-	var surface_point := surface.PADDING + card_point - blade_center_offset
+	var surface_point := surface.content_padding + card_point - blade_center_offset
 	for _iteration: int in 8:
 		var sample_point := surface_point + blade_center_offset
 		var projected := surface.card_point(sample_point)

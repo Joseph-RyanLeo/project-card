@@ -827,14 +827,14 @@ func _test_prepared_spell_page_turn(main: Node, wanted: OwnedCard) -> void:
 		"翻页动画中的固定页与活动页快照继续显示同一法术实例虚影"
 	)
 	_expect(not main.turn_collection_page(origin_spread, &"direct"), "动画未结束时快速再次翻页被阻止")
-	await create_timer(main.PAGE_TURN_HALF_DURATION * 2.0 + 0.15).timeout
+	await create_timer(main.PAGE_TURN_DURATION + 0.15).timeout
 	_expect(main.turn_collection_page(origin_spread, &"direct"), "可向反方向翻回法术所在展开页")
 	await process_frame
 	_expect(
 		_turn_overlay_ghost_state(main, wanted).get("ghost", false),
 		"反向翻页动画快照仍按OwnedCard准备状态显示虚影"
 	)
-	await create_timer(main.PAGE_TURN_HALF_DURATION * 2.0 + 0.15).timeout
+	await create_timer(main.PAGE_TURN_DURATION + 0.15).timeout
 	_expect(
 		_visible_collection_ghost_state(main, wanted).get("ghost", false),
 		"翻页结束后重建的真实收藏卡仍保持已准备虚影"

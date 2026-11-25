@@ -4,6 +4,7 @@ extends Control
 const Style = preload("res://scripts/ui/menu_style.gd")
 const Save = preload("res://scripts/data/run_save_service.gd")
 const CARD = preload("res://scenes/ui/CardView.tscn")
+const EventPotionRules = preload("res://scripts/data/event_potion_rules.gd")
 const INSPECT_SCALE := 4.0 # 右键单卡检视固定4倍显示
 const INSPECTION_OPEN_SECONDS := 0.28 # 卡片从原位放大到4倍的时长
 const INSPECTION_CLOSE_SECONDS := 0.22 # 取消检视时卡牌缩回原位、蒙版淡出的时长
@@ -303,7 +304,9 @@ func _detail_text(owned: OwnedCard) -> String:
 	if card.card_type == CardData.CardType.SPELL: lines.append("%s · 剩余次数：%s（入藏恢复全新次数）" % [card.get_spell_type_name(), "无限" if card.spell_durability_unlimited else str(owned.spell_durability)])
 	if card.card_type == CardData.CardType.EQUIPMENT:
 		lines.append("%s · 剩余耐久：%d" % [card.get_equipment_type_name(), owned.equipment_durability])
-		lines.append("装备修正：数值 %+d · 生命 %+d · 护甲 %+d · 热诚 %s" % [card.equipment_action_delta, card.equipment_health_delta, card.equipment_armor_delta, ("+" if card.equipment_zeal_delta > 0 else "") + str(card.equipment_zeal_delta)])
+		var deltas := EventPotionRules.equipment_display_deltas(card)
+		var label := "消耗后永久获得" if EventPotionRules.mask_for(card) != 0 else "装备修正"
+		lines.append("%s：数值 %+d · 生命 %+d · 护甲 %+d · 热诚 %s" % [label, deltas.x, deltas.y, deltas.z, ("+" if deltas.w > 0 else "") + str(deltas.w)])
 	if not owned.permanent_growth.is_empty():
 		var growth: Array[String] = []
 		for key: String in ["base_value", "max_health", "base_armor"]:

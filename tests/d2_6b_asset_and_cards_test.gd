@@ -32,6 +32,7 @@ func _run() -> void:
 	_test_spell_assignments_and_badges()
 	_test_resource_card_face()
 	_test_formal_equipment()
+	await _test_ash_ledger_card_art()
 	if failures == 0:
 		print("D2-6B asset and card checks passed.")
 	else:
@@ -108,6 +109,46 @@ func _test_formal_equipment() -> void:
 		var expected := FORMAL_EQUIPMENT[card_id] as Dictionary
 		_expect(card != null and card.pack_id == &"ash_ledger" and card.card_type == CardData.CardType.EQUIPMENT and card.rarity == expected["rarity"] and card.equipment_type == expected["type"] and card.equipment_action_delta == expected["action"] and card.equipment_zeal_delta == expected["zeal"] and card.equipment_armor_delta == expected["armor"], "正式装备遵守已确认品级、类型和当前热诚方向：%s" % card_id)
 		_expect(card != null and card.effect_ids == catalog.card_effect_ids.get(card_id, []), "正式装备绑定已确认的全部效果ID：%s" % card_id)
+	var order := load("res://resources/cards/recruitment_ledger.tres") as CardData
+	_expect(order != null and order.id == &"recruitment_ledger" and order.display_name == "征兵令", "征兵令使用新显示名并保留稳定ID")
+
+
+func _test_ash_ledger_card_art() -> void:
+	var capture := "--capture" in OS.get_cmdline_user_args() and DisplayServer.get_name() != "headless"
+	if capture: root.size = Vector2i(1280, 720)
+	var views: Array[CardView] = []
+	var backgrounds := {}
+	var totals := {CardData.CardType.MINION: 0, CardData.CardType.SPELL: 0, CardData.CardType.EQUIPMENT: 0}
+	for filename: String in DirAccess.get_files_at("res://resources/cards"):
+		if not filename.ends_with(".tres"): continue
+		var card := load("res://resources/cards/" + filename) as CardData
+		if card == null or card.pack_id != &"ash_ledger": continue
+		var background := card.get_background_texture()
+		_expect(card.art_texture != null and background == card.background_texture and background != null and background.get_size() == Vector2(108, 144), "%s 绑定正式卡图及新版原始背景" % card.display_name)
+		if background != null: backgrounds[background.resource_path] = true
+		totals[card.card_type] = int(totals.get(card.card_type, 0)) + 1
+		var view := CARD_VIEW_SCENE.instantiate() as CardView
+		view.set_snapshot_mode(true)
+		view.position = Vector2(28 + (views.size() % 10) * 124, 54 + floori(views.size() / 10.0) * 175)
+		view.set_card_data(card)
+		root.add_child(view)
+		views.append(view)
+	_expect(totals == {CardData.CardType.MINION: 21, CardData.CardType.SPELL: 4, CardData.CardType.EQUIPMENT: 5} and backgrounds.size() == 8, "新版覆盖30张灰烬证册卡与8套背景")
+	for appearance: CardAppearance.Art in [CardAppearance.Art.PLAIN, CardAppearance.Art.OVERFRAME]:
+		for view: CardView in views:
+			var owned := OwnedCard.new()
+			owned.initialize(view.card_data, view.card_data.id, 0)
+			owned.art_finish = appearance
+			view.set_owned_card(owned)
+			var window := Rect2(Vector2.ZERO, view.art_panel.size)
+			var backdrop := Rect2(view.art_background.position, view.art_background.size)
+			var illustration := Rect2(view.art_texture.position, view.art_texture.size)
+			_expect(backdrop.encloses(window) and illustration.intersects(window), "%s 的%s取景有立绘且背景覆盖整窗" % [view.card_data.display_name, CardAppearance.ART_LABELS[appearance]])
+		if capture:
+			await process_frame
+			await RenderingServer.frame_post_draw
+			_expect(root.get_texture().get_image().save_png("/private/tmp/project-card-ash-ledger-%s.png" % appearance) == OK, "保存实际卡面总览")
+	for view: CardView in views: view.free()
 
 
 func _expect(condition: bool, message: String) -> void:

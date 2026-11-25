@@ -55,6 +55,8 @@ var _pending_press_position := Vector2.ZERO
 var _pending_press_cell: Variant = null
 var _battle_health_by_id: Dictionary = {}
 var _battle_display_snapshot: Array = []
+var authored_drop: Callable
+var authored_context_click: Callable
 
 func _ready() -> void:
 	set_process(true)
@@ -208,6 +210,12 @@ func resolve_drop(pointer_global_position: Vector2, data: Dictionary) -> Diction
 	if board_state.is_level_resource(side, String(owned.instance_id)):
 		return {"valid": false}
 	if data.get("source_type") not in [&"collection", &"resource_preparation"]:
+		return {"valid": false}
+	if data.get("source_type") == &"collection" and authored_drop.is_valid():
+		var point := get_global_transform_with_canvas().affine_inverse() * pointer_global_position
+		var candidate := _nearest_axial_cell(point - LAYOUT_ORIGIN)
+		if _is_valid_board_cell(candidate) and _contains_hex_point(LAYOUT_ORIGIN + Layout.center(candidate), point):
+			return authored_drop.call(owned, candidate)
 		return {"valid": false}
 	var shape := owned.resource_shape
 	if shape.is_empty(): return {"valid": false}
@@ -398,6 +406,11 @@ func inspect_at(local: Vector2) -> bool:
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+		if authored_context_click.is_valid():
+			var cell := _nearest_axial_cell(event.position - LAYOUT_ORIGIN)
+			if _is_valid_board_cell(cell) and _contains_hex_point(LAYOUT_ORIGIN + Layout.center(cell), event.position) and authored_context_click.call(cell):
+				accept_event()
+				return
 		if inspect_at(event.position): accept_event()
 		return
 	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
@@ -465,7 +478,7 @@ func _drop_data(at_position: Vector2, data: Variant) -> void:
 func _set_drag_visual_mode(data: Dictionary, resolution: Dictionary) -> void:
 	var visual := data.get("drag_visual") as CardDragPreview
 	var owned := data.get("owned_card") as OwnedCard
-	if visual != null and owned != null and bool(resolution.get("has_target", true)):
+	if visual != null and owned != null and bool(resolution.get("has_target", true)) and not resolution.has("editor_cell"):
 		visual.set_resource_puzzle_mode(
 			true,
 			owned.resource_shape,
@@ -502,6 +515,11 @@ func _draw_overlay() -> void:
 			for pair in placement.shape:
 				_draw_hex_outline(LAYOUT_ORIGIN + Layout.center(anchor + Vector2i(pair[0], pair[1])), HOVER_COLOR)
 	if _preview_visible:
+		if _preview_resolution.has("editor_cell"):
+			var cell: Vector2i = _preview_resolution.editor_cell
+			var outline := HOVER_COLOR if _preview_resolution.valid else PREVIEW_INVALID
+			_draw_hex_outline(LAYOUT_ORIGIN + Layout.center(cell), outline)
+			return
 		var owned := _preview_data.get("owned_card") as OwnedCard
 		if owned != null and _preview_resolution.has("anchor"):
 			var color := PREVIEW_VALID if bool(_preview_resolution.get("valid", false)) else PREVIEW_INVALID

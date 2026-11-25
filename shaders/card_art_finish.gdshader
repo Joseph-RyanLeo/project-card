@@ -16,6 +16,7 @@ uniform float layer_depth = 0.0; // 图层距卡框平面的深度；正数在�
 uniform vec2 projection_size = vec2(129.0, 155.0); // 整卡合成画布的原生尺寸，与外层投影坐标一致
 uniform vec2 card_origin = vec2(0.0); // 卡牌在合成画布中的位置，包含图标安全边
 uniform vec2 layer_size = vec2(1.0); // 当前图层的原生绘制尺寸，用于还原素材坐标
+uniform vec4 layer_clip_rect = vec4(0.0); // 超框插画窗口的卡面局部左上和右下坐标，零表示沿用普通卡裁切
 uniform bool embossed = false;
 uniform bool has_normal_texture = false;
 uniform sampler2D surface_normal : hint_normal, filter_nearest;
@@ -61,6 +62,9 @@ float relief_height(vec4 color) {
 }
 
 void fragment() {
+	if (layer_clip_rect.z > layer_clip_rect.x && (any(lessThan(finish_position, layer_clip_rect.xy)) || any(greaterThanEqual(finish_position, layer_clip_rect.zw)))) {
+		discard;
+	}
 	vec3 projection = depth_projection(pointer_force);
 	vec2 original_position = finish_position;
 	vec2 uv = UV;

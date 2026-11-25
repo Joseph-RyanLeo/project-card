@@ -3586,7 +3586,7 @@
     },
     {
       "card_id": "recruitment_ledger",
-      "display_name": "征兵册",
+      "display_name": "征兵令",
       "source_record_id": "recvudySZru5QI",
       "source_cell": "S97",
       "card_type": "装备",

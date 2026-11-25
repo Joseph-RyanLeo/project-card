@@ -6,6 +6,7 @@ extends Control
 
 signal close_requested
 
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const BattleLabScenario = preload("res://scripts/tools/battle_lab_scenario.gd")
 const BattleLabEffectLibrary = preload("res://scripts/tools/battle_lab_effect_library.gd")
 const BattleController = preload("res://scripts/battle/battle_controller.gd")
@@ -14,6 +15,8 @@ const BattleFormulaPresenter = preload("res://scripts/battle/battle_formula_pres
 const BattleElementResolver = preload("res://scripts/battle/battle_element_resolver.gd")
 const BattleAttackEffectProfiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
 const BattleAttackTrailRenderer = preload("res://scripts/battle/battle_attack_trail_renderer.gd")
+const LineupEditor = preload("res://scripts/tools/enemy_lineup_editor.gd")
+const LineupMetrics = preload("res://scripts/tools/enemy_lineup_metrics.gd")
 const BOARD_SLOT_SCENE: PackedScene = preload("res://scenes/ui/BoardSlot.tscn")
 const BATTLE_LOG_FONT: Font = preload("res://assets/fonts/chill_7.ttf")
 const SCENARIO_SAVE_PATH := "user://battle_lab_scenario.json"
@@ -58,6 +61,8 @@ var _trace_lines: Array[String] = []
 var _battle_state_slots: Dictionary = {}
 var _visuals_enabled: bool = true
 var _fire_burn_visuals: Dictionary = {}
+var _lineup_editor: LineupEditor
+var _lineup_trial: Dictionary = {}
 
 var scenario_name_edit: LineEdit
 var preset_option: OptionButton
@@ -82,6 +87,7 @@ var player_drawer_button: Button
 var enemy_drawer_button: Button
 var output_drawer_button: Button
 var battle_effect_layer: Control
+var _lab_interface: Control
 
 
 func _ready() -> void:
@@ -97,6 +103,7 @@ func _ready() -> void:
 	battle_controller.action_resolved.connect(_on_action_resolved)
 	battle_controller.projectile_launched.connect(_on_projectile_launched)
 	battle_controller.effect_resolved.connect(_on_effect_resolved)
+	battle_controller.damage_applied.connect(_on_damage_applied)
 	battle_controller.direct_damage_resolved.connect(_on_direct_damage_resolved)
 	battle_controller.effect_trace_emitted.connect(_on_effect_trace_emitted)
 	battle_controller.battle_finished.connect(_on_battle_finished)
@@ -118,11 +125,16 @@ func _exit_tree() -> void:
 
 
 func _build_interface() -> void:
+	_lab_interface = Control.new()
+	_lab_interface.name = "LabInterface"
+	_lab_interface.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_lab_interface)
+	_lab_interface.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var background := ColorRect.new()
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.color = Color("10161d")
 	background.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(background)
+	_lab_interface.add_child(background)
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -130,7 +142,7 @@ func _build_interface() -> void:
 	margin.add_theme_constant_override("margin_right", 12)
 	margin.add_theme_constant_override("margin_top", 10)
 	margin.add_theme_constant_override("margin_bottom", 10)
-	add_child(margin)
+	_lab_interface.add_child(margin)
 	var root_layout := VBoxContainer.new()
 	root_layout.add_theme_constant_override("separation", 8)
 	margin.add_child(root_layout)
@@ -144,7 +156,7 @@ func _build_interface() -> void:
 	battle_effect_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	battle_effect_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	battle_effect_layer.z_index = EFFECT_LAYER_Z_INDEX
-	add_child(battle_effect_layer)
+	_lab_interface.add_child(battle_effect_layer)
 	_build_drawers()
 	_build_formula_popup()
 
@@ -190,6 +202,11 @@ func _build_top_bar() -> Control:
 	enemy_drawer_button = _make_drawer_button("敌方配置")
 	enemy_drawer_button.toggled.connect(func(open: bool) -> void: _set_drawer_open("enemy", open))
 	bar.add_child(enemy_drawer_button)
+	var lineups := Button.new()
+	lineups.name = "EncounterLineupsButton"
+	lineups.text = "关卡阵容"
+	lineups.pressed.connect(_open_lineup_editor)
+	bar.add_child(lineups)
 	output_drawer_button = _make_drawer_button("日志与轨迹")
 	output_drawer_button.toggled.connect(func(open: bool) -> void: _set_drawer_open("output", open))
 	bar.add_child(output_drawer_button)
@@ -197,6 +214,31 @@ func _build_top_bar() -> Control:
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar.add_child(spacer)
 	return bar
+
+
+func _open_lineup_editor() -> void:
+	if _playing and not _paused: _toggle_pause()
+	if not is_instance_valid(_lineup_editor):
+		_lineup_editor = LineupEditor.new()
+		_lineup_editor.name = "EnemyLineupEditor"
+		add_child(_lineup_editor)
+		_lineup_editor.visibility_changed.connect(func(): _lab_interface.visible = not _lineup_editor.visible)
+		_lineup_editor.trial_requested.connect(_start_lineup_trial)
+		_lineup_editor.custom_enemy_requested.connect(func():
+			_lineup_trial.clear()
+			_return_to_configuration_preview())
+	_lineup_editor.show()
+	_lab_interface.hide()
+
+
+func close_lineup_layer() -> bool:
+	return is_instance_valid(_lineup_editor) and _lineup_editor.visible and _lineup_editor.close_active_layer()
+
+
+func _start_lineup_trial(lineup: Dictionary, day: int, tutorial: bool, seed_value: int) -> void:
+	_lineup_trial = {"lineup": lineup, "day": day, "tutorial": tutorial}
+	seed_spin.set_value_no_signal(seed_value)
+	_start_battle()
 
 
 func _make_drawer_button(label_text: String) -> Button:
@@ -209,10 +251,10 @@ func _make_drawer_button(label_text: String) -> Button:
 func _build_drawers() -> void:
 	player_drawer = _build_side_editor("player", "我方阵容")
 	_configure_side_drawer(player_drawer, true)
-	add_child(player_drawer)
+	_lab_interface.add_child(player_drawer)
 	enemy_drawer = _build_side_editor("enemy", "敌方阵容")
 	_configure_side_drawer(enemy_drawer, false)
-	add_child(enemy_drawer)
+	_lab_interface.add_child(enemy_drawer)
 	output_drawer = _build_output_tabs()
 	output_drawer.anchor_left = 0.0
 	output_drawer.anchor_right = 1.0
@@ -224,7 +266,7 @@ func _build_drawers() -> void:
 	output_drawer.offset_bottom = -DRAWER_EDGE_MARGIN
 	output_drawer.z_index = 2000
 	output_drawer.visible = false
-	add_child(output_drawer)
+	_lab_interface.add_child(output_drawer)
 
 
 func _configure_side_drawer(drawer: Control, on_left: bool) -> void:
@@ -518,7 +560,7 @@ func _build_formula_popup() -> void:
 	style.set_corner_radius_all(4)
 	style.set_content_margin_all(9.0)
 	formula_popup.add_theme_stylebox_override("panel", style)
-	add_child(formula_popup)
+	_lab_interface.add_child(formula_popup)
 	formula_popup_text = RichTextLabel.new()
 	formula_popup_text.fit_content = false
 	formula_popup_text.scroll_active = true
@@ -627,6 +669,7 @@ func _on_editor_changed(side_key: String) -> void:
 	if _loading_editor:
 		return
 	_commit_editor(side_key)
+	if side_key == "enemy": _lineup_trial.clear()
 	_refresh_editor_summary(side_key)
 	_validate_current_scenario()
 	_return_to_configuration_preview()
@@ -649,7 +692,7 @@ func _refresh_editor_summary(side_key: String) -> void:
 func _validate_current_scenario() -> bool:
 	if scenario == null:
 		return false
-	var errors := scenario.validate()
+	var errors := scenario.validate(_lineup_trial.is_empty())
 	if errors.is_empty():
 		validation_label.text = "配置就绪：正式规则可运行"
 		validation_label.visible = false
@@ -668,13 +711,25 @@ func _start_battle() -> void:
 	_clear_outputs()
 	battle_controller.use_projectile_timing = true
 	battle_controller.set_battle_speed_multiplier(SPEED_VALUES[_speed_index])
-	battle_controller.start_battle(scenario.build_player_formation(), scenario.build_enemy_formation(), scenario.random_seed, false)
-	_register_effect_test_cards(true)
+	if _lineup_trial.is_empty():
+		battle_controller.start_battle(scenario.build_player_formation(), scenario.build_enemy_formation(), scenario.random_seed, false)
+		_register_effect_test_cards(true)
+	else:
+		var prepared := _prepare_lineup_trial()
+		if prepared.has("error"):
+			validation_label.text = prepared.error
+			validation_label.show()
+			return
+		battle_controller.start_battle(scenario.build_player_formation(), prepared.formation, scenario.random_seed, false, &"", [], prepared.spells, [], prepared.resources, [], [], {"floor": floori(float(_lineup_trial.day - 1) / ShortMazeRunState.DAYS) + 1}, {"resource_board": prepared.resource_board, "card_registry": _lineup_editor.registry})
 	_playing = true
 	_paused = false
 	pause_button.text = "暂停"
 	_update_live_state_visuals()
 	_refresh_status()
+
+
+func _prepare_lineup_trial() -> Dictionary:
+	return LineupMetrics.prepare(_lineup_trial.lineup, _lineup_editor.registry, _lineup_editor.content, _lineup_trial.day, _lineup_trial.tutorial, scenario.random_seed)
 
 
 func _toggle_pause() -> void:
@@ -726,6 +781,7 @@ func _use_new_seed() -> void:
 
 
 func _on_apply_preset_pressed() -> void:
+	_lineup_trial.clear()
 	scenario = BattleLabScenario.create_preset(PRESET_IDS[preset_option.selected])
 	_load_scenario_into_controls()
 	_clear_outputs()
@@ -746,6 +802,7 @@ func _save_scenario() -> void:
 
 
 func _load_saved_scenario() -> void:
+	_lineup_trial.clear()
 	if not FileAccess.file_exists(SCENARIO_SAVE_PATH):
 		validation_label.text = "尚未保存过实验室配置"
 		validation_label.visible = true
@@ -886,6 +943,12 @@ func _play_effect_visual(event: BattleEffectEvent) -> void:
 	if event == null or not is_instance_valid(battle_effect_layer):
 		return
 	BattleFireVisual.play_event(event, _fire_burn_visuals, battle_controller, _battle_state_slots, battle_effect_layer, FIRE_BACKGROUND_Z_INDEX, EFFECT_LAYER_Z_INDEX)
+
+
+func _on_damage_applied(armor: float, health: float, _event: BattleEffectEvent, target: BattleSquadState) -> void:
+	if not _visuals_enabled or armor + health <= 0.0: return
+	var slot := _battle_state_slots.get(target) as BoardSlot
+	if is_instance_valid(slot): slot.play_battle_hit(battle_controller.battle_speed_multiplier)
 
 
 func _sync_fire_burn_visuals() -> void:
@@ -1160,7 +1223,8 @@ func _update_live_state_visuals() -> void:
 			state.displayed_armor,
 			state.remaining_cooldown,
 			state.get_buff_stacks(BattleRules.FATIGUE_BUFF_ID),
-			state.get_display_action_value()
+			state.get_display_action_value(),
+			-1, null, [], {}, {}, {}, -1, {}, state.get_display_base_stats(state.get_active_rune_slots())
 		)
 
 
@@ -1186,12 +1250,16 @@ func _return_to_configuration_preview() -> void:
 	_playing = false
 	_paused = true
 	pause_button.text = "暂停"
+	var enemy_formation := scenario.build_enemy_formation()
+	if not _lineup_trial.is_empty():
+		var prepared := _prepare_lineup_trial()
+		if prepared.has("formation"): enemy_formation = prepared.formation
 	battle_controller.prepare_battle_preview(
 		scenario.build_player_formation(),
-		scenario.build_enemy_formation(),
+		enemy_formation,
 		scenario.random_seed
 	)
-	_register_effect_test_cards(false)
+	if _lineup_trial.is_empty(): _register_effect_test_cards(false)
 	_clear_outputs()
 	_refresh_state_view()
 	_update_live_state_visuals()
@@ -1293,7 +1361,7 @@ func _on_log_meta_hover_started(meta: Variant) -> void:
 	var safe_size := Vector2(minf(desired_size.x, viewport_size.x), minf(desired_size.y, viewport_size.y))
 	formula_popup.size = safe_size
 	formula_popup_text.scroll_active = true
-	var mouse := get_viewport().get_mouse_position()
+	var mouse := CrtProjection.viewport_mouse(get_viewport())
 	formula_popup.position = BattleFormulaPresenter.place_popup(
 		mouse, viewport_size, safe_size, FORMULA_POPUP_MOUSE_GAP
 	)
@@ -1320,7 +1388,7 @@ func _hide_formula_popup_after_pointer_transition(generation: int) -> void:
 	await get_tree().create_timer(0.2).timeout
 	if generation != _formula_popup_hide_generation or not is_instance_valid(formula_popup):
 		return
-	if not formula_popup.get_global_rect().has_point(get_viewport().get_mouse_position()):
+	if not formula_popup.get_global_rect().has_point(CrtProjection.viewport_mouse(get_viewport())):
 		formula_popup.visible = false
 
 

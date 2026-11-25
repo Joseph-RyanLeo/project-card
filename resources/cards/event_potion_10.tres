@@ -11,4 +11,4 @@ content_effect = &"event_potion_10"
 card_type = 1
 equipment_type = 5
 rarity = 1
-effect_text = "突击：消耗，携带者永久获得基础生命+2、基础护甲+2。"
+effect_text = "突击：消耗并使装备者获得属性"

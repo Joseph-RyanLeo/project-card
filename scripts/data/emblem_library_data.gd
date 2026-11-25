@@ -1,8 +1,7 @@
 class_name EmblemLibraryData
 extends RefCounted
 
-## 开发用纹章与伤势目录。
-## CSV 导入的描述仅用于资料提示；是否实现仍以已确认的玩法规则和运行逻辑为准。
+## 统一提供纹章、贴纸和伤势的玩家提示，目录另保留内部审阅字段。
 
 const CardDataScript = preload("res://scripts/data/card_data.gd")
 const StatusIndicatorStyleScript = preload("res://scripts/ui/status_indicator_style.gd")
@@ -41,6 +40,7 @@ const STATIC_MODIFIERS: Dictionary = {
 	&"三明治": {&"max_health": 5},
 	&"树": {&"max_health": 5},
 }
+const BASE_STAT_EMBLEMS: Array[StringName] = [&"名剑", &"盾牌Ⅲ"]
 
 # 战斗纹章效果用结构化定义登记；数值不会从卡面或悬停文案解析。
 const BATTLE_EFFECTS: Dictionary = {
@@ -175,6 +175,7 @@ static func get_wound_definitions() -> Array[Dictionary]:
 			"id": StringName(entry.get("名称", "")),
 			"name": String(entry.get("名称", "")),
 			"effect_hint": String(entry.get("规范描述", "")),
+			"maze_only": entry.get("限定", "") == "迷宫专属",
 			"review_status": String(entry.get("审阅状态", "")),
 			"open_questions": String(entry.get("待确认事项", "")),
 		})
@@ -215,11 +216,9 @@ static func get_tooltip(emblem_id: StringName) -> String:
 			break
 	if display_name.is_empty():
 		return "未知纹章"
-	if emblem_id == &"混沌贴纸":
-		return "混沌贴纸\n贴上及每日首次翻牌前随机变为木／水／火／光／暗之一。参与牌型时，每枚本场首次触发一次全队奖励：木使全队每张随从永久基础护甲+2并补当前护甲；水使永久基础生命值+2并补当前生命；火使永久基础数值+1；光获得4金币；暗从全队未遮挡的非空伤势槽中随机移除一处。不会额外增加牌型倍率。"
 	var entry := _find_catalog_entry(display_name, "纹章")
 	if entry.is_empty():
-		return display_name + "\n本地尚未导入效果提示"
+		return display_name
 	return _format_catalog_hint(entry)
 
 
@@ -227,19 +226,14 @@ static func get_wound_tooltip(wound_id: StringName) -> String:
 	var display_name := String(StatusIndicatorStyleScript.ALIASES.get(wound_id, String(wound_id)))
 	var entry := _find_catalog_entry(display_name, "伤势")
 	if entry.is_empty():
-		return display_name + "\n本地尚未导入伤势提示"
+		return display_name
 	return _format_catalog_hint(entry)
 
 
 static func _format_catalog_hint(entry: Dictionary) -> String:
-	var text := String(entry.get("名称", "")) + "\n" + String(entry.get("规范描述", "暂无描述"))
-	var review_status := String(entry.get("审阅状态", ""))
-	if not review_status.is_empty():
-		text += "\n资料状态：" + review_status
-	var open_questions := String(entry.get("待确认事项", ""))
-	if not open_questions.is_empty():
-		text += "\n待确认：" + open_questions
-	return text
+	var display_name := String(entry.get("名称", ""))
+	var description := String(entry.get("玩家文案", entry.get("规范描述", "")))
+	return display_name if description.is_empty() else display_name + "\n" + description
 
 
 static func _find_catalog_entry(display_name: String, category: String) -> Dictionary:

@@ -54,7 +54,8 @@ func _run() -> void:
 		check(action.text == "出售" and not action.disabled and main._shop_board_view._amount.text == "+%d" % prices[index], names[index] + "售价正确")
 		if index == 4:
 			await create_timer(0.4).timeout
-			await capture("sticker-sale-water")
+			var rendered := await frame()
+			rendered.save_png("/private/tmp/project-card-revision-sticker-sale-water.png")
 		await _click(action)
 		check(main.emblem_library.get_inventory_item(id).is_empty() and main.run_reward_state.gold == gold + prices[index], "确认出售仅移除这一实例并增加对应金币")
 		check(action.text == "撤销" and main._shop_board_view._amount.text == "-%d" % prices[index], "出售后复用单笔撤销及金币显示")
@@ -78,7 +79,9 @@ func entry(id: StringName) -> Control:
 	return null
 
 func frame() -> Image:
-	await RenderingServer.frame_post_draw
+	await process_frame
+	# 工具箱稳定后可进入空闲绘制，截图主动取一帧，避免等待无更新的画面。
+	RenderingServer.force_draw(false)
 	return shell.internal_viewport.get_texture().get_image()
 
 func can_accept(id: StringName) -> bool:

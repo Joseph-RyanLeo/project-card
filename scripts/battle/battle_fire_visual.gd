@@ -4,6 +4,7 @@ extends Node2D
 ## 显示火的持续伤害／治疗／护甲；状态、每跳和结束时间由战斗控制器提供。
 const Profiles = preload("res://scripts/battle/battle_attack_effect_profiles.gd")
 const FIRE_SHADER: Shader = preload("res://shaders/battle_pixel_fire.gdshader")
+const CardFlash = preload("res://scripts/battle/battle_card_flash.gd")
 const SIDE_MARGIN := 16.0 # 火焰伸出卡面左右边缘的逻辑像素
 const CANVAS_WIDTH_SCALE := 2.0 # 横向绘制留白，容纳摆动与每跳膨胀后的完整火焰
 const FOREGROUND_DEPTH := 14.0 # 外侧火团向卡面内延伸的最大逻辑像素，只在卡外确实有火时显示
@@ -15,16 +16,16 @@ const FIRE_OPACITY := 1.0 # 火灼烧特效的整体不透明度，1.0为100%
 const APPEAR_SECONDS := 0.12 # 火焰出现所需战斗秒数
 const PULSE_SECONDS := 0.28 # 每跳或终结增强的战斗秒数
 const WHITE_FLASH_SECONDS := 0.12 # 每跳结算时卡面瞬白并恢复的战斗秒数
-const FLASH_CORNER_PIXELS := 2.0 # 瞬白轮廓沿裸卡四角保留的像素切角
 
 var effect: ShaderMaterial
 var flame: ColorRect
 var foreground: ColorRect
-var white_flash: Node2D
+var white_flash: CardFlash
 var _profile := {}
 var _started_at := -1.0
 var _pulse_at := -1000.0
 var _finisher := false
+var _flash_cards := true
 
 
 func configure(profile: Dictionary, foreground_z_index: int = 30) -> void:
@@ -49,7 +50,7 @@ func configure(profile: Dictionary, foreground_z_index: int = 30) -> void:
 		add_child(foreground)
 	foreground.z_index = foreground_z_index
 	if white_flash == null:
-		white_flash = Node2D.new()
+		white_flash = CardFlash.new()
 		white_flash.name = "CardWhiteFlash"
 		white_flash.z_as_relative = false
 		white_flash.visible = false
@@ -62,9 +63,10 @@ func configure(profile: Dictionary, foreground_z_index: int = 30) -> void:
 		(foreground.material as ShaderMaterial).set_shader_parameter(key, float(_profile[key]))
 
 
-func pulse(time: float, finisher: bool = false) -> void:
+func pulse(time: float, finisher: bool = false, flash_cards: bool = true) -> void:
 	_pulse_at = time
 	_finisher = finisher
+	_flash_cards = flash_cards
 
 
 func has_pulse(time: float) -> bool:
@@ -96,30 +98,8 @@ func update_visual(bounds: Rect2, time: float, strength: float = 1.0, opacity: f
 	front_effect.set_shader_parameter("foreground_depth", FOREGROUND_DEPTH * card_scale)
 	front_effect.set_shader_parameter("foreground_tip_depth", FOREGROUND_TIP_DEPTH * card_scale)
 	front_effect.set_shader_parameter("opacity", float(effect.get_shader_parameter("opacity")) * FOREGROUND_OPACITY)
-	var flash_cards: Array[Rect2] = []
-	flash_cards.assign(card_bounds)
-	if flash_cards.is_empty(): flash_cards.append(bounds)
-	_update_white_flash(flash_cards, time)
-
-
-func _update_white_flash(cards: Array[Rect2], time: float) -> void:
-	var amount := clampf(1.0 - (time - _pulse_at) / WHITE_FLASH_SECONDS, 0.0, 1.0)
-	white_flash.visible = amount > 0.0
-	if not white_flash.visible: return
-	white_flash.modulate.a = amount * amount
-	while white_flash.get_child_count() < cards.size():
-		white_flash.add_child(Polygon2D.new())
-	for index: int in white_flash.get_child_count():
-		var surface := white_flash.get_child(index) as Polygon2D
-		surface.visible = index < cards.size()
-		if not surface.visible: continue
-		var rect := cards[index]
-		var corner := FLASH_CORNER_PIXELS * rect.size.y / CARD_HEIGHT
-		var w := rect.size.x
-		var h := rect.size.y
-		surface.position = rect.position
-		# 每张实体卡单独覆盖，随真实卡面移动；不扩大卡框，也不修改卡面原材质。
-		surface.polygon = PackedVector2Array([Vector2(corner, 0), Vector2(w - corner, 0), Vector2(w, corner), Vector2(w, h - corner), Vector2(w - corner, h), Vector2(corner, h), Vector2(0, h - corner), Vector2(0, corner)])
+	var amount := clampf(1.0 - (time - _pulse_at) / WHITE_FLASH_SECONDS, 0.0, 1.0) if _flash_cards else 0.0
+	white_flash.show_pulse(card_bounds if not card_bounds.is_empty() else [bounds], amount)
 
 
 static func play_event(event: BattleEffectEvent, visuals: Dictionary, controller: BattleController, slots: Dictionary, layer: CanvasItem, background_z: int, foreground_z: int) -> void:
@@ -127,7 +107,8 @@ static func play_event(event: BattleEffectEvent, visuals: Dictionary, controller
 		return
 	var visual := _ensure_target(event.target, visuals, layer, background_z, foreground_z)
 	if event.visual_kind != &"fire_burn":
-		visual.pulse(controller.elapsed_seconds, event.visual_kind == &"fire_finish")
+		# 真实火伤已走统一受击闪白，火治疗与护甲仍显示原有结算闪光。
+		visual.pulse(controller.elapsed_seconds, event.visual_kind == &"fire_finish", not event.is_damage())
 	sync_targets(visuals, controller, slots, layer, background_z, foreground_z)
 
 

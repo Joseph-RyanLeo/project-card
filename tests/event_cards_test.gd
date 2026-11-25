@@ -43,6 +43,8 @@ func _deal(id: String, gold: int = 30) -> int:
 
 
 func _click(control: Control) -> void:
+	if is_instance_valid(maze._event_table) and control == maze._event_table._deck:
+		while is_instance_valid(maze._event_table._deck_arrival): await process_frame
 	var point: Vector2 = shell.render_container.get_global_transform_with_canvas() * control.get_global_rect().get_center()
 	for pressed: bool in [true, false]:
 		var event := InputEventMouseButton.new()
@@ -148,10 +150,8 @@ func _run() -> void:
 	check(maze.choose_story_option(0), "锤游匠人从右侧卡槽给指定随从强化")
 	trainee = main.owned_card_collection.get_by_instance_id(trainee_id)
 	check(trainee.get_permanent_growth(OwnedCard.STAT_BASE_ARMOR) == armor_before + 2, "强化永久写入原有单卡实例")
-	check(maze.complete_event(true, true), "读完强化结果后进入商店轮")
-	check(maze.select_path(maze.run.paths[0].path_id) and main.ordinary_shop_open, "选择商店牌后打开真实商店")
-	main._toggle_ordinary_shop()
-	check(maze.run.get_round_kind() == "battle" and maze.run.paths.size() == 3, "离店后发三张战斗牌")
+	check(maze.complete_event(true, true) and maze.run.get_round_kind() == "battle"
+		and maze.run.paths.size() == 3 and not main.ordinary_shop_open, "首日读完强化结果后直接发三张战斗牌")
 	check(maze.select_path(maze.run.paths[0].path_id) and maze.can_start_battle(), "战斗牌选定后进入准备")
 	await process_frame
 	var before := maze.capture_state()
@@ -233,6 +233,7 @@ func _run() -> void:
 	check(maze.choose_story_option(2) and main.run_reward_state.gold == 23, "7金币购买完美合剂")
 	var elixir: OwnedCard = main.owned_card_collection.find_first_by_definition(load("res://resources/cards/event_potion_15.tres"))
 	check(elixir != null and elixir.card_data.rarity == CardData.Rarity.III, "完美合剂是III级真实装备实例")
+	await _capture("alchemist-perfect")
 	if elixir != null:
 		var owner: OwnedCard = main.owned_card_collection.get_cards()[0]
 		# 本夹具让佩戴者撑过敌方开场法术，以验证之后的突击窗口。
@@ -240,14 +241,17 @@ func _run() -> void:
 		var squad := SquadData.from_owned_card(owner)
 		check(squad.equip_item(elixir), "完美合剂可装备到随从")
 		main.front_row.add_squad(squad, 0)
-		check(maze.complete_event(true, true) and maze.select_path(maze.run.paths[0].path_id) and maze.leave_shop(true), "带合剂通过商店进入战斗轮")
+		check(maze.complete_event(true, true) and maze.run.get_round_kind() == "battle", "带合剂从首日付费事件进入战斗轮")
 		check(maze.select_path(maze.run.paths[0].path_id) and main.start_battle(-1, false), "合剂随从进入正式战斗")
 		while main.battle_controller._opening_spell_active:
 			main.battle_controller.resolve_next_batch()
 		var effects: Array[Dictionary] = main.battle_controller.owned_card_change_ledger.get_entries()
 		check(effects.any(func(entry: Dictionary) -> bool: return entry.kind == &"consume_equipment" and entry.owned_card_instance_id == elixir.instance_id), "突击将合剂消耗记入正式战后账本")
-		var growth: Array[Dictionary] = main.battle_controller.permanent_growth_ledger.get_entries()
-		check(growth.size() >= 3 and effects.any(func(entry: Dictionary) -> bool: return entry.parameters.get("counter_key") == &"event_potion_zeal"), "合剂登记数值、生命、护甲及热诚永久变化")
+		var growth := {}
+		for entry: Dictionary in main.battle_controller.permanent_growth_ledger.get_entries():
+			if entry.effect_id == elixir.card_data.id:
+				growth[entry.stat] = entry.amount
+		check(growth == {OwnedCard.STAT_BASE_VALUE: 1.0, OwnedCard.STAT_MAX_HEALTH: 1.0, OwnedCard.STAT_BASE_ARMOR: 2.0} and effects.any(func(entry: Dictionary) -> bool: return entry.parameters.get("counter_key") == &"event_potion_zeal" and entry.parameters.get("counter_value") == 1), "合剂登记数值+1、净生命+1、护甲+2与热诚+1")
 	# 覆盖概率边界：使用真实随机源，不替换业务服务。
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 751

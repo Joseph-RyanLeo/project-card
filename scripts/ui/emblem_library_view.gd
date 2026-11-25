@@ -4,6 +4,7 @@ extends Panel
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 signal scraper_action_mode_requested
 signal inventory_changed
+signal sticker_drop_committed(instance_id: StringName, source_entry: Control)
 signal expand_requested
 
 ## 纹章库的唯一 UI 实例。
@@ -12,6 +13,7 @@ signal expand_requested
 const EmblemLibraryEntryScript = preload("res://scripts/ui/emblem_library_entry.gd")
 const EmblemLibraryGridScript = preload("res://scripts/ui/emblem_library_grid.gd")
 const StickerInventoryScript = preload("res://scripts/data/emblem_sticker_inventory.gd")
+const FreeItemPlacement = preload("res://scripts/ui/free_item_placement.gd")
 const BOARD_TEXTURE: Texture2D = preload("res://assets/card_ui/emblems/source/sticker_board_horizontal.png")
 
 const BOARD_SIZE := Vector2(195.0, 148.0) # 横放工具箱按原图像素尺寸显示
@@ -37,7 +39,7 @@ var _hidden_item_ids: Array[StringName] = []
 var _event_reward_ids: Array[StringName] = []
 const RECEIPT_SHAKE := 5.0 # 每次入库工具箱的水平震动幅度
 const RECEIPT_SHAKE_SECONDS := 0.04 # 工具箱震动每一步的时间
-var _reserved_item_ids: Array[StringName] = []
+var _reserved_items_by_source := {}
 var _drop_stack_order: Array[StringName] = []
 
 
@@ -110,10 +112,9 @@ func set_definitions(values: Array[Dictionary]) -> void:
 
 
 func set_inspect_mode(value: bool) -> void:
+	if _inspect_mode == value: return
 	_inspect_mode = value
-	if is_node_ready():
-		_set_display_layout()
-		_refresh_entries()
+	if is_node_ready(): _set_display_layout()
 
 
 func set_drag_enabled(value: bool) -> void:
@@ -126,8 +127,9 @@ func set_drag_enabled(value: bool) -> void:
 func _sync_entry_state(entry: Control) -> void:
 	var id := StringName(String(entry.definition.returned_state.instance_id))
 	var waiting := id in _event_reward_ids
-	entry.set_drag_enabled(_drag_enabled and not fusion_busy and not waiting and not id in _reserved_item_ids)
-	entry.modulate.a = 0.0 if id in _hidden_item_ids else CardView.COLLECTION_DRAG_GHOST_ALPHA if id in _reserved_item_ids else 1.0
+	var reserved := _reserved_items_by_source.values().any(func(ids: Array) -> bool: return id in ids)
+	entry.set_drag_enabled(_drag_enabled and not fusion_busy and not waiting and not reserved)
+	entry.modulate.a = 0.0 if id in _hidden_item_ids else CardView.COLLECTION_DRAG_GHOST_ALPHA if reserved else 1.0
 
 
 func set_scraper_count(value: int) -> void:
@@ -244,14 +246,18 @@ func try_move_sticker_global(instance_id: StringName, global_position: Vector2, 
 		var item := get_inventory_item(instance_id)
 		var span := 2 if bool(item.get("element_sticker", false)) else 1
 		var item_size := Vector2.ONE * (17.0 * span - 3.0)
-		var origin := _grid.get_global_transform_with_canvas().affine_inverse() * (global_position + (drag_data.get("placement_offset", Vector2.ZERO) as Vector2))
-		var point := (origin - EmblemLibraryGridScript.DROP_AREA.position).clamp(Vector2.ZERO, EmblemLibraryGridScript.DROP_AREA.size - item_size)
+		var transform := _grid.get_global_transform_with_canvas()
+		var origin := InspectionItemDrag.placement_origin(transform, global_position, drag_data, transform.get_scale())
+		var point := FreeItemPlacement.clamp_origin(EmblemLibraryGridScript.DROP_AREA, item_size, origin) - EmblemLibraryGridScript.DROP_AREA.position
 		if not _sticker_inventory.move_to_drop(instance_id, point): return false
 		_refresh_entries()
 		bring_dropped_sticker_to_front(instance_id)
 		inventory_changed.emit()
+		sticker_drop_committed.emit(instance_id, drag_data.get("source_entry") as Control)
 		return true
-	return move_sticker(instance_id, _grid.cell_for_drag(drag_data, global_position))
+	if not move_sticker(instance_id, _grid.cell_for_drag(drag_data, global_position)): return false
+	sticker_drop_committed.emit(instance_id, drag_data.get("source_entry") as Control)
+	return true
 
 
 func preview_sticker_move_global(instance_id: StringName, global_position: Vector2, drag_data: Dictionary) -> bool:
@@ -411,12 +417,8 @@ func _refresh_entries() -> void:
 	_entries.clear()
 	var display_definitions: Array[Dictionary] = []
 	for state: Dictionary in _sticker_inventory.get_items():
-		var item_id := String(state.get("wound_id", "") if String(state.get("kind", "emblem")) == "wound" else state.get("emblem_id", ""))
-		for definition: Dictionary in _definitions:
-			if String(definition.id) == item_id:
-				var inventory_definition := definition.duplicate(true)
-				inventory_definition["returned_state"] = state
-				display_definitions.append(inventory_definition)
+		var definition := get_item_display_definition(state)
+		if not definition.is_empty(): display_definitions.append(definition)
 	var dropped_entries := {}
 	for definition: Dictionary in display_definitions:
 		var entry: Variant = EmblemLibraryEntryScript.new()
@@ -503,8 +505,24 @@ func tween_receipt_shake(animation: Tween, rest_x: float) -> void:
 	animation.chain().tween_property(self, "position:x", rest_x, RECEIPT_SHAKE_SECONDS)
 
 
-func set_reserved_item_ids(instance_ids: Array) -> void:
-	_reserved_item_ids.assign(instance_ids)
+func get_item_display_definition(state: Dictionary) -> Dictionary:
+	var kind := "wound_id" if state.get("kind", "emblem") == "wound" else "emblem_id"
+	var item_id := String(state.get(kind, ""))
+	if item_id.is_empty(): return {}
+	for definition: Dictionary in _definitions:
+		if String(definition.id) != item_id: continue
+		var display := definition.duplicate(true)
+		display["returned_state"] = state
+		return display
+	return {}
+
+
+func set_reserved_item_ids(instance_ids: Array, source: StringName = &"shop_service") -> void:
+	if instance_ids.is_empty():
+		if not _reserved_items_by_source.erase(source): return
+	else:
+		if _reserved_items_by_source.get(source, []) == instance_ids: return
+		_reserved_items_by_source[source] = instance_ids.duplicate()
 	set_drag_enabled(_drag_enabled)
 
 

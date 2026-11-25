@@ -327,6 +327,7 @@ func _test_main_transactions_and_save() -> bool:
 	var hidden_owned: OwnedCard = main.owned_card_collection.get_cards()[hidden_cards_before] if main.owned_card_collection.get_cards().size() > hidden_cards_before else null
 	_expect(hidden_offer.get("hint") == "action_type" and not hidden_card_id.is_empty() and hidden_owned != null and String(hidden_owned.card_data.id) == hidden_card_id and hidden_owned.resolved_action_type == hidden_action_type and bool(service.offers[hidden_index].get("sold", false)) and service.reveal_by_offer.get(String(hidden_offer.get("offer_id", ""))) == hidden_card_id, "暗牌购买揭晓具体定义且行动提示与真正获得的实例行动方式一致")
 	_expect(not _shop_list_contains_offer_index(main.ordinary_shop_offer_list, hidden_index), "购买后的商品从可购买报价列表移除")
+	if is_instance_valid(main._card_acquisition): await main._card_acquisition.finished
 	offer_weights["single_card_visibility"] = {"visible": 1}
 	service.config["temporary_offer_weights"] = offer_weights
 	_expect(main._generate_ordinary_shop(false), "以配置分布生成明单卡验收报价")
@@ -363,6 +364,7 @@ func _test_main_transactions_and_save() -> bool:
 	# 枪械大师等会追加获得奖励卡；比较新增加的主卡，不能把数组末尾的奖励当成商品。
 	var purchased_visible_card: OwnedCard = main.owned_card_collection.get_cards()[visible_cards_before] if main.owned_card_collection.get_cards().size() > visible_cards_before else null
 	_expect(purchased_visible_card != null and purchased_visible_card.resolved_action_type == preview_action and purchased_visible_card.resolved_runes == preview_runes and purchased_visible_card.slot_layout == preview_layout, "明单预览与实购复用同一随机行动方式、符文和槽位实例结果")
+	if is_instance_valid(main._card_acquisition): await main._card_acquisition.finished
 	var scraper_index := -1
 	for index: int in service.offers.size():
 		if service.offers[index].get("kind") == "scraper":
@@ -475,7 +477,7 @@ func _test_tear_confirmation_and_equipment_return(main: MainScript) -> bool:
 	var row_slot: BoardSlot
 	if equipment != null and squad.equip_item(equipment):
 		row_slot = main.front_row.add_squad(squad, main.front_row.get_squad_count())
-	_expect(equipment != null and row_slot != null and row_slot.get_squad_data().get_equipped_item() == equipment, "测试卡牌宿主携带真实收藏装备")
+	_expect(equipment != null and row_slot != null and row_slot.get_squad_data().has_equipped_item(equipment), "测试卡牌宿主携带真实收藏装备")
 	var same_name_owned := main.owned_card_collection.create_card(owned.card_data, main.ordinary_shop_service.rng)
 	var same_name_squad := SquadData.from_owned_card(same_name_owned)
 	var same_name_slot := main.back_row.add_squad(same_name_squad, main.back_row.get_squad_count())

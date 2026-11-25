@@ -1,6 +1,7 @@
 extends PanelContainer
 
 ## 日志悬停动画独立于战斗暂停；文字、滚动条与公式链接仍使用原有子控件。
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const HOVER_SCALE: float = 2.0 # 鼠标指向日志时，整个面板与文字放大的倍率
 const HOVER_SECONDS: float = 0.22 # 日志放大或缩回原尺寸的动画时长
 var _hovered: bool = false
@@ -16,7 +17,7 @@ func _process(_delta: float) -> void:
 	if not is_visible_in_tree():
 		return
 	# 按动画中的实际范围判断，移到文字、滚动条或放大后新增的区域不会闪缩。
-	var pointer := get_global_transform_with_canvas().affine_inverse() * get_viewport().get_mouse_position()
+	var pointer := get_global_transform_with_canvas().affine_inverse() * CrtProjection.viewport_mouse(get_viewport())
 	var hovered := Rect2(Vector2.ZERO, size).has_point(pointer)
 	if hovered == _hovered:
 		return

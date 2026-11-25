@@ -28,6 +28,7 @@ func _run() -> void:
 	root.add_child(tuner)
 	await process_frame
 	check(tuner.style_selector.item_count == 8 and tuner.tabs.get_tab_count() == 6, "新增两种具名工艺和独立调参页")
+	check(is_equal_approx(tuner.sliders.frosted_shadow_visibility.value, 0.20), "磨砂闪页提供独立的暗处颗粒滑块，默认20%")
 	var militia := tuner._paths.find("res://resources/cards/militia.tres")
 	tuner.card_selector.select(militia)
 	var all_poses := Image.create(540 * 3, 688 * 2, false, Image.FORMAT_RGBA8)
@@ -65,6 +66,7 @@ func _run() -> void:
 					if absf(delta.r - delta.g) > 0.009 or absf(delta.g - delta.b) > 0.009: tinted_pixels += 1
 			check(white_pixels > 10 and tinted_pixels == 0, "磨砂新增的GPU反光为白色")
 		tuner.controls[key + "_strength"].value = fixture.get(key + "_strength")
+		if kind == 1: await _check_frosted_grain(tuner, surface)
 		# 固定鼠标位置，只改变最近有效方向。旧薄膜即使移动光带也过不了此检查。
 		pointer(surface, Vector2.ZERO)
 		var directions: Array[Image] = []
@@ -143,6 +145,7 @@ func _run() -> void:
 	root.add_child(external_card)
 	external_card.hide()
 	tuner.controls.frosted_strength.value = 0.3
+	tuner.sliders.frosted_shadow_visibility.value = 0.35
 	tuner.controls.fingerprint_strength.value = 0.35
 	tuner.controls.fingerprint_angle.value = 28
 	check(tuner.save_settings(), "实验参数走现有合并保存流程")
@@ -150,6 +153,7 @@ func _run() -> void:
 	check(is_equal_approx(saved.fractured_brightness, 0.35), "碎闪明度随其他参数一起保存并读回")
 	check(is_equal_approx(saved.fractured_saturation, 0.85) and saved.fractured_hue_degrees == 45.0, "碎闪饱和度和色相分别保存并读回")
 	check(is_equal_approx(saved.frosted_strength, 0.3) and is_equal_approx(saved.fingerprint_strength, 0.35) and saved.fingerprint_angle == 28, "两种工艺的参数真实写盘并读回")
+	check(is_equal_approx(saved.frosted_shadow_visibility, 0.35), "暗处颗粒参数随其他工艺设置一起保存")
 	check(is_equal_approx(external_card._finish_controller._art_material.get_shader_parameter("film_strength"), 0.35), "保存后已存在的正式卡面立即更新")
 	var later: CardView = CARD.instantiate()
 	later.set_card_data(owned.card_data)
@@ -161,12 +165,79 @@ func _run() -> void:
 	external_card.free()
 	later.free()
 	check(CardAppearance.is_valid(CardAppearance.Surface.FROSTED, 0) and CardAppearance.is_valid(CardAppearance.Surface.FINGERPRINT, 0), "新工艺有稳定有效的实例编号")
-	var tickets := []
-	for ticket: int in range(1, 101): tickets.append(CardAppearance.pick_ticket(CardAppearance.SURFACE_WEIGHTS, ticket))
-	check(tickets.count(0) == 40 and tickets.count(5) == 5 and tickets.count(6) == 0 and tickets.count(7) == 0, "实验工艺不改变现有开包概率")
 	check(FileAccess.get_file_as_bytes(Settings.PATH) == bytes, "未覆盖用户全局配置")
 	tuner.free()
 	await process_frame
 	await process_frame
 	print("Experimental card films GPU/UI: %d checks, %d failures" % [checks, failures])
 	quit.call_deferred(1 if failures else 0)
+
+
+func _check_frosted_grain(tuner: Control, surface: InspectionCardSurface) -> void:
+	var grain_slider: Range = tuner.controls.frosted_detail
+	var shadow_slider: Range = tuner.sliders.frosted_shadow_visibility
+	var detail := grain_slider.value
+	var shadow_visibility := shadow_slider.value
+	var inspect_scale := surface.render_scale
+	var frame: ShaderMaterial = surface.card._finish_controller._frame_material
+	var pointer_light: bool = frame.get_shader_parameter("pointer_light_enabled")
+	shadow_slider.value = 1.0
+	frame.set_shader_parameter("pointer_light_enabled", false)
+	var grain := await shot(surface)
+	grain_slider.value = 0.0
+	frame.set_shader_parameter("pointer_light_enabled", false)
+	var smooth := await shot(surface)
+	grain_slider.value = detail
+	var frame_strip := Rect2i(
+		Vector2i((surface.card.position + Vector2(surface.card.card_size.x - 3.0, 30.0)) * inspect_scale),
+		Vector2i(Vector2(2.0, 50.0) * inspect_scale)
+	)
+	var crisp_edges := 0
+	var blank_samples := 0
+	var bright_samples: Array[int] = []
+	for row: int in range(frame_strip.position.y, frame_strip.end.y):
+		for column: int in range(frame_strip.position.x, frame_strip.end.x - 1):
+			var left := grain.get_pixel(column, row).r - smooth.get_pixel(column, row).r
+			var right := grain.get_pixel(column + 1, row).r - smooth.get_pixel(column + 1, row).r
+			if absf(right - left) >= 14.0 / 255.0: crisp_edges += 1
+			if smooth.get_pixel(column, row).r >= 0.8: continue
+			var increment := roundi(left * 255.0)
+			if increment <= 1: blank_samples += 1
+			else: bright_samples.append(increment)
+	check(crisp_edges > 90, "4倍卡框在扣除柔光后仍有清楚的单像素颗粒边缘：%d" % crisp_edges)
+	bright_samples.sort()
+	var sample_count := bright_samples.size()
+	check(blank_samples > 50 and sample_count > 50, "磨砂同时保留连片颗粒和无颗粒留白")
+	if sample_count > 50:
+		var low := bright_samples[floori(sample_count * 0.05)]
+		var high := bright_samples[floori(sample_count * 0.95)]
+		check(high - low <= 2, "去掉整体光照后，颗粒只剩一个反光强度（8位通道：%d–%d）" % [low, high])
+	shadow_slider.value = 0.0
+	frame.set_shader_parameter("pointer_light_enabled", false)
+	var spotlight := await shot(surface)
+	var retained := 0
+	var suppressed := 0
+	for edge_x: float in [1.0, surface.card.card_size.x - 3.0]:
+		var strip := Rect2i(
+			Vector2i((surface.card.position + Vector2(edge_x, 30.0)) * inspect_scale),
+			frame_strip.size
+		)
+		for row: int in range(strip.position.y, strip.end.y):
+			for column: int in range(strip.position.x, strip.end.x):
+				var baseline := smooth.get_pixel(column, row).r
+				var uniform_gain := grain.get_pixel(column, row).r - baseline
+				if baseline >= 0.8 or uniform_gain < 14.0 / 255.0: continue
+				var spot_gain := spotlight.get_pixel(column, row).r - baseline
+				if spot_gain <= uniform_gain * 0.4: suppressed += 1
+				if absf(spot_gain - uniform_gain) <= 2.0 / 255.0: retained += 1
+	check(suppressed > 50 and retained > 50, "调低暗处可见度只削弱暗区颗粒，保留光带上的强度：%d／%d" % [suppressed, retained])
+	shadow_slider.value = shadow_visibility
+	surface.render_scale = 1.0
+	surface._sync_viewport_resolution()
+	var small_grain := await shot(surface)
+	grain_slider.value = 0.0
+	check((await shot(surface)).get_data() == small_grain.get_data(), "原尺寸下无法分辨的细颗粒收敛为均匀反光")
+	grain_slider.value = detail
+	surface.render_scale = inspect_scale
+	surface._sync_viewport_resolution()
+	frame.set_shader_parameter("pointer_light_enabled", pointer_light)

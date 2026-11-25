@@ -6,9 +6,11 @@ signal drop_requested(data: Dictionary, insertion_index: int)
 signal click_carry_requested(data: Dictionary, pointer_global_position: Vector2)
 signal inspection_requested(card_view: CardView, card_data: CardData, owned_card: OwnedCard)
 
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const SPELL_ICON_SCRIPT: Script = preload("res://scripts/ui/spell_preparation_icon.gd")
 const SPELL_ICON_STYLE = preload("res://scripts/ui/spell_preparation_icon_style.gd")
 const CARD_VIEW_SCENE: PackedScene = preload("res://scenes/ui/CardView.tscn")
+const HEADER_LIGHT: Shader = preload("res://shaders/spell_header_light.gdshader")
 const COLUMN_NAMES: Array[String] = ["即时", "条件", "准备"]
 const BOARD_LEFT: Texture2D = preload("res://assets/ui/board_revision_20261019/spell_tray_left.png")
 const BOARD_RIGHT: Texture2D = preload("res://assets/ui/board_revision_20261019/spell_tray_right.png")
@@ -18,6 +20,7 @@ const HEADERS: Array[Texture2D] = [
 	preload("res://assets/ui/board_revision_20261019/spell_header_prepared.png"),
 ]
 var enemy_display: bool = false
+var header_light_settings := SpellHeaderLightSettings.new()
 const TRAY_SIZE := Vector2(195.0, 324.0) # 左右法术空框按原生195×324像素显示
 const BOARD_BACKGROUND_Z_INDEX: int = -1 # 底板位于本托盘的法术图标下方
 const COLUMN_WIDTH: float = 52.0 # 三类法术各自的滚动列宽
@@ -32,11 +35,19 @@ const INSERTION_MARKER_COLOR := Color("f7d882") # 拖动排序时插入线颜色
 const INSERTION_GHOST_ALPHA: float = 0.42 # 目标位置法术图标虚影的透明度
 const DROP_TRANSITION_DURATION: float = 0.16 # 卡牌落入准备栏并转为图标的动画时长
 const SORT_TRANSITION_DURATION: float = 0.12 # 同列排序时图标滑向新位置的动画时长
+const HEADER_CHARGE_SECONDS: float = 0.18 # 放下、移走或释放令牌后的分类标识变色时长
+const HEADER_CHARGE_HALF_COUNT: float = 3.0 # 三枚同类令牌时达到一半的常态提亮和增饱和
+const HEADER_RELEASE_RISE_RATIO: float = 0.72 # 单次释放演出中，边缘光增强所占的比例
 const HOVER_REVEAL_OFFSET: float = SPELL_ICON_SCRIPT.ICON_SIZE.y - ICON_STEP # 下方图标只补足悬停图标与半图标步长的差值
 
 var _prepared_cards: Array[OwnedCard] = []
 var _icons_by_instance_id: Dictionary = {}
 var _columns: Array[Control] = []
+var _header_materials: Array[ShaderMaterial] = []
+var _header_token_counts: Array[int] = [0, 0, 0]
+var _header_charge_tweens: Array[Tween] = [null, null, null]
+var _header_release_tweens: Array[Tween] = [null, null, null]
+var _displaying_battle_spells := false
 var _scrolls: Array[ScrollContainer] = []
 var _lists: Array[Control] = []
 var _drop_enabled: bool = true
@@ -63,25 +74,100 @@ var _hover_card_popup: CardView
 
 func _ready() -> void:
 	_build_columns()
+	header_light_settings.changed.connect(_apply_header_light_settings)
+	_apply_header_light_settings()
 	_refresh_cards()
+	_update_prepared_header_charge()
 
 
 func set_prepared_cards(cards: Array[OwnedCard]) -> void:
 	_prepared_cards.assign(cards)
-	if is_inside_tree():
+	if not _header_materials.is_empty():
+		if _displaying_battle_spells:
+			_displaying_battle_spells = false
+			for column: int in _header_materials.size():
+				if _header_release_tweens[column] != null:
+					_header_release_tweens[column].kill()
+					_header_release_tweens[column] = null
+				_header_materials[column].set_shader_parameter("release_glow", 0.0)
 		_refresh_cards()
+		_update_prepared_header_charge()
 
 
 func sync_battle_spells(entries: Array[Dictionary]) -> void:
+	_displaying_battle_spells = true
 	var cards: Array[OwnedCard] = []
 	for entry: Dictionary in entries:
 		cards.append(entry.spell)
 	if cards != _prepared_cards:
-		set_prepared_cards(cards)
+		_prepared_cards = cards
+		_refresh_cards()
+	var counts: Array[int] = [0, 0, 0]
 	for entry: Dictionary in entries:
-		var icon: Control = _icons_by_instance_id.get(entry.spell.instance_id)
+		var spell: OwnedCard = entry.spell
+		var icon: Control = _icons_by_instance_id.get(spell.instance_id)
 		if is_instance_valid(icon):
 			icon.set_battle_status(entry.remaining, entry.spent)
+			if not entry.spent:
+				counts[spell.card_data.get_spell_preparation_column()] += 1
+	_update_header_charge(counts)
+
+
+func play_spell_release(instance_id: StringName, presentation_seconds: float) -> void:
+	var icon: Control = _icons_by_instance_id.get(instance_id)
+	if not is_instance_valid(icon):
+		return
+	var column: int = icon.owned_card.card_data.get_spell_preparation_column()
+	if _header_release_tweens[column] != null:
+		_header_release_tweens[column].kill()
+	var tween := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(
+		_header_materials[column], "shader_parameter/release_glow", 1.0,
+		presentation_seconds * HEADER_RELEASE_RISE_RATIO
+	)
+	tween.tween_property(
+		_header_materials[column], "shader_parameter/release_glow", 0.0,
+		header_light_settings.get_value("fade_seconds")
+	)
+	_header_release_tweens[column] = tween
+
+
+func _apply_header_light_settings() -> void:
+	# 首枚令牌的 charge 是 1/(1+3)；反推材质满充加成，让面板填写首枚令牌的百分比。
+	var first_token_scale := (1.0 + HEADER_CHARGE_HALF_COUNT) / 100.0
+	var brightness_gain := header_light_settings.get_value("brightness") * first_token_scale
+	var saturation_gain := header_light_settings.get_value("saturation") * first_token_scale
+	var release_strength := header_light_settings.get_value("release_strength") / 100.0
+	for material: ShaderMaterial in _header_materials:
+		material.set_shader_parameter("brightness_gain", brightness_gain)
+		material.set_shader_parameter("saturation_gain", saturation_gain)
+		material.set_shader_parameter("release_strength", release_strength)
+
+
+func _update_prepared_header_charge() -> void:
+	var counts: Array[int] = [0, 0, 0]
+	for owned: OwnedCard in _prepared_cards:
+		if owned == null or owned.card_data == null:
+			continue
+		var column := owned.card_data.get_spell_preparation_column()
+		if column >= 0:
+			counts[column] += 1
+	_update_header_charge(counts)
+
+
+func _update_header_charge(counts: Array[int]) -> void:
+	for column: int in _header_materials.size():
+		var count := counts[column]
+		if count == _header_token_counts[column]:
+			continue
+		_header_token_counts[column] = count
+		if _header_charge_tweens[column] != null:
+			_header_charge_tweens[column].kill()
+		var charge := count / (count + HEADER_CHARGE_HALF_COUNT)
+		var tween := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		tween.tween_property(_header_materials[column], "shader_parameter/charge", charge, HEADER_CHARGE_SECONDS)
+		_header_charge_tweens[column] = tween
 
 
 func set_capacity(capacity: int) -> void:
@@ -129,6 +215,14 @@ func _build_columns() -> void:
 		header.position = Vector2(ENEMY_ICON_LEFT if enemy_display else 6, 9) # 对齐原稿分类图标；右侧仍使用左侧完整图
 		header.size = HEADERS[column_index].get_size()
 		header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		header.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		var material := ShaderMaterial.new()
+		material.shader = HEADER_LIGHT
+		material.set_shader_parameter("header_size", header.size)
+		material.set_shader_parameter("charge", 0.0)
+		material.set_shader_parameter("release_glow", 0.0)
+		header.material = material
+		_header_materials.append(material)
 		column.add_child(header)
 		var scroll := ScrollContainer.new()
 		scroll.position = Vector2(0.0, LIST_TOP)
@@ -403,7 +497,8 @@ func _refresh_cards() -> void:
 				icon.connect("inspection_requested", _on_icon_inspection_requested)
 				icon_list.add_child(icon)
 				_icons_by_instance_id[owned.instance_id] = icon
-			else:
+			# 悬停会重排图标，战斗中的读秒和已释放亮度继续使用现有数据。
+			elif not _displaying_battle_spells or icon.owned_card != owned:
 				icon.call("configure", owned, self)
 			var hover_offset := (
 				HOVER_REVEAL_OFFSET
@@ -418,7 +513,8 @@ func _refresh_cards() -> void:
 				icon.position = icon_list.get_global_transform_with_canvas().affine_inverse() * old_global
 			var ghost := _service_ghost_ids.has(owned.instance_id)
 			icon.call("set_drag_enabled", _drop_enabled and not ghost)
-			icon.modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA if ghost else 1.0
+			if not _displaying_battle_spells:
+				icon.modulate.a = CardView.COLLECTION_DRAG_GHOST_ALPHA if ghost else 1.0
 			icon.mouse_filter = Control.MOUSE_FILTER_IGNORE if ghost else Control.MOUSE_FILTER_STOP
 			icon.z_index = card_index
 			icon_list.move_child(icon, card_index)
@@ -461,7 +557,7 @@ func _set_hovered_instance(instance_id: StringName) -> void:
 	_hover_card_popup.visible = true
 	call_deferred("_set_mouse_filter_recursive", _hover_card_popup)
 	_position_hover_card_popup()
-	_hover_card_popup.show_effect_popup()
+	if not get_tree().paused: _hover_card_popup.show_effect_popup()
 	_refresh_cards()
 
 
@@ -532,29 +628,48 @@ func _hovered_row_index(column_index: int) -> int:
 
 
 func _update_hover_from_pointer(pointer_override: Vector2 = Vector2.INF) -> void:
-	var pointer := pointer_override if pointer_override.is_finite() else get_viewport().get_mouse_position()
-	var next_instance_id: StringName = &""
+	var pointer := pointer_override if pointer_override.is_finite() else CrtProjection.viewport_mouse(get_viewport())
+	var instance_id := _spell_at_pointer(pointer, get_tree().paused)
+	if instance_id.is_empty():
+		clear_hover_card()
+	else:
+		_set_hovered_instance(instance_id)
+
+
+func has_spell_at(pointer: Vector2) -> bool:
+	return not _spell_at_pointer(pointer, true).is_empty()
+
+
+func hover_at(pointer: Vector2) -> CardView:
+	_update_hover_from_pointer(pointer)
+	return _hover_card_popup if is_instance_valid(_hover_card_popup) and _hover_card_popup.visible else null
+
+
+func inspect_at(pointer: Vector2) -> bool:
+	var instance_id := _spell_at_pointer(pointer, true)
+	if instance_id.is_empty(): return false
+	var owned := _icons_by_instance_id[instance_id].owned_card as OwnedCard
+	_on_icon_inspection_requested(owned.card_data, owned)
+	return true
+
+
+func _spell_at_pointer(pointer: Vector2, use_rendered_position: bool) -> StringName:
+	if not is_visible_in_tree() or (enemy_display and not bool(get_meta("expanded", false))): return &""
 	for column_index: int in _lists.size():
+		if not _scrolls[column_index].get_global_rect().has_point(pointer): continue
+		var list_transform := _lists[column_index].get_global_transform_with_canvas()
 		for card_index: int in range(_prepared_cards.size() - 1, -1, -1):
 			var owned := _prepared_cards[card_index]
 			if owned.card_data.get_spell_preparation_column() != column_index:
 				continue
+			var icon := _icons_by_instance_id.get(owned.instance_id) as Control
+			if not is_instance_valid(icon) or not icon.is_visible_in_tree() or icon.mouse_filter == Control.MOUSE_FILTER_IGNORE: continue
 			var target_position := _target_positions.get(owned.instance_id, Vector2.ZERO) as Vector2
-			var list_transform := _lists[column_index].get_global_transform_with_canvas()
-			var icon_rect := Rect2(
-				list_transform * target_position,
-				SPELL_ICON_SCRIPT.ICON_SIZE
-			)
-			if icon_rect.has_point(pointer) and _scrolls[column_index].get_global_rect().has_point(pointer):
-				next_instance_id = owned.instance_id
-				break
-		if not next_instance_id.is_empty():
-			break
-	if next_instance_id.is_empty():
-		if not (is_instance_valid(_hover_card_popup) and _hover_card_popup.get_global_rect().has_point(pointer)):
-			clear_hover_card()
-	else:
-		_set_hovered_instance(next_instance_id)
+			var icon_rect := icon.get_global_rect() if use_rendered_position else Rect2(list_transform * target_position, SPELL_ICON_SCRIPT.ICON_SIZE)
+			if icon_rect.has_point(pointer): return owned.instance_id
+	if is_instance_valid(_hover_card_popup) and _hover_card_popup.visible and _hover_card_popup.get_global_rect().has_point(pointer):
+		return _hovered_instance_id
+	return &""
 
 
 func _animate_icon_to_position(icon: Control, target_position: Vector2) -> void:
@@ -568,7 +683,7 @@ func _animate_icon_to_position(icon: Control, target_position: Vector2) -> void:
 	if icon.position.is_equal_approx(target_position) or not icon.is_inside_tree():
 		icon.position = target_position
 		return
-	var tween := create_tween()
+	var tween := create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(icon, "position", target_position, SORT_TRANSITION_DURATION)
 	icon.set_meta("sort_tween", tween)

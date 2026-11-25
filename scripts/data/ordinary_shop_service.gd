@@ -12,6 +12,7 @@ const PREVIOUS_CARD_RULES := {
 }
 const CONFIG_PATH := "res://data/demo2/ordinary_shop_config.json"
 const CardPackRegistryScript = preload("res://scripts/data/card_pack_registry.gd")
+const BOUNTY_PRICE_FACTOR := 0.8 # 赏金猎人奖励的当次商店折扣，向下取整且最低 1 金币
 
 var sticker_packs_enabled: bool = true # 按本局冻结资格控制普通纹章包
 var config: Dictionary = {}
@@ -19,6 +20,7 @@ var rng := RandomNumberGenerator.new()
 var refresh_count: int = 0
 var offers: Array[Dictionary] = []
 var reveal_by_offer: Dictionary = {}
+var _bounty_discount := false
 
 
 func load_config() -> bool:
@@ -45,7 +47,30 @@ func initialize(seed_value: int, saved_state: Dictionary = {}) -> bool:
 		rng.state = int(String(saved_state["rng_state"]))
 	offers.assign((saved_state.get("offers", []) as Array).duplicate(true))
 	reveal_by_offer = (saved_state.get("reveals", {}) as Dictionary).duplicate(true)
+	_bounty_discount = saved_state.get("bounty_discount", false)
 	return true
+
+
+func prepare_saved_state(
+	saved_state: Dictionary,
+	card_ids: Array[String],
+	sticker_ids: Array[String],
+	card_definitions: Array[CardData],
+	active_shop_discount: Variant
+) -> Variant:
+	if saved_state.is_empty(): return saved_state
+	var prepared := saved_state.duplicate()
+	if prepared.has("bounty_discount") and not prepared.bounty_discount is bool: return null
+	if active_shop_discount is bool:
+		if prepared.get("bounty_discount", active_shop_discount) != active_shop_discount: return null
+		prepared["bounty_discount"] = active_shop_discount
+	if prepared.has("bounty_discount"):
+		return prepared if validate_saved_state(prepared, card_ids, sticker_ids, card_definitions) else null
+	# 旧档离店后会保留报价，但已清除下一次进店的折扣标记。整批报价须匹配同一种规则。
+	for discounted: bool in [false, true]:
+		prepared["bounty_discount"] = discounted
+		if validate_saved_state(prepared, card_ids, sticker_ids, card_definitions): return prepared
+	return null
 
 
 func validate_saved_state(
@@ -59,7 +84,8 @@ func validate_saved_state(
 	var count_value: Variant = saved_state.get("refresh_count", 0)
 	var offers_value: Variant = saved_state.get("offers", [])
 	var reveals_value: Variant = saved_state.get("reveals", {})
-	if not _is_nonnegative_integer(count_value) or not offers_value is Array or not reveals_value is Dictionary:
+	var discounted: Variant = saved_state.get("bounty_discount", false)
+	if not _is_nonnegative_integer(count_value) or not offers_value is Array or not reveals_value is Dictionary or not discounted is bool:
 		return false
 	if saved_state.has("rng_state") != saved_state.has("rng_seed"):
 		return false
@@ -100,7 +126,8 @@ func validate_saved_state(
 				if procurement_action >= 0 and size != "small": return false
 				var expected_count := int((config.get("card_pack_sizes", {}) as Dictionary).get(size, 0))
 				var cards: Variant = offer.get("cards", null)
-				if expected_count <= 0 or not cards is Array or cards.size() != expected_count or int(offer.get("price", -1)) != int((config.get("card_pack_prices", {}) as Dictionary).get(size, -2)):
+				var base_price := int((config.get("card_pack_prices", {}) as Dictionary).get(size, -2))
+				if expected_count <= 0 or not cards is Array or cards.size() != expected_count or int(offer.get("price", -1)) != _offer_price(base_price, discounted):
 					return false
 				for card_id_value: Variant in cards:
 					if not card_id_value is String or (not card_ids.is_empty() and not card_ids.has(String(card_id_value))):
@@ -108,7 +135,7 @@ func validate_saved_state(
 				var pack_definitions: Array[CardData] = []
 				var seen_iv: Dictionary = {}
 				for card_id_value: Variant in cards:
-					var definition := _definition_for_saved_offer(cards_by_id.get(String(card_id_value)) as CardData, offer)
+					var definition := _definition_for_saved_offer(cards_by_id.get(String(card_id_value)) as CardData, offer, discounted)
 					if definition != null:
 						if procurement_action >= 0 and not supports_action(definition, procurement_action): return false
 						if procurement_action < 0 and definition.pack_id != StringName(offer.get("pack_id", "ash_ledger")): return false
@@ -123,7 +150,7 @@ func validate_saved_state(
 				var stickers: Variant = offer.get("stickers", null)
 				var sticker_config := config.get("sticker_pack", {}) as Dictionary
 				var expected_stickers := int(sticker_config.get("sticker_count", 0))
-				if not stickers is Array or expected_stickers <= 0 or stickers.size() != expected_stickers or int(offer.get("price", -1)) != int(sticker_config.get("price", -2)):
+				if not stickers is Array or expected_stickers <= 0 or stickers.size() != expected_stickers or int(offer.get("price", -1)) != _offer_price(int(sticker_config.get("price", -2)), discounted):
 					return false
 				for sticker_value: Variant in stickers:
 					if not sticker_value is Dictionary or String((sticker_value as Dictionary).get("id", "")).is_empty() or String((sticker_value as Dictionary).get("target", "emblem")) not in ["emblem", "rune"] or (not sticker_ids.is_empty() and not sticker_ids.has(String((sticker_value as Dictionary).get("id", "")))):
@@ -137,7 +164,7 @@ func validate_saved_state(
 				if (hidden and hint not in HIDDEN_HINTS) or (not hidden and not hint.is_empty()):
 					return false
 				if not card_definitions.is_empty():
-					var definition := _definition_for_saved_offer(cards_by_id.get(card_id) as CardData, offer)
+					var definition := _definition_for_saved_offer(cards_by_id.get(card_id) as CardData, offer, discounted)
 					if definition == null:
 						return false
 					if procurement_action >= 0 and (not supports_action(definition, procurement_action) or int(offer.get("resolved_action_type", -1)) != procurement_action or (hidden and hint != "action_type")): return false
@@ -157,12 +184,12 @@ func validate_saved_state(
 						expected_price = int((config.get("hidden_card_rarity_hint_prices", {}) as Dictionary).get(_rarity_key(definition.rarity), 0)) if hint == "rarity" else int(config.get("hidden_card_other_hint_price", 0))
 					if String(offer.get("hint_value", "")) != expected_hint_value:
 						return false
-					if int(offer.get("price", -1)) != expected_price:
+					if int(offer.get("price", -1)) != _offer_price(expected_price, discounted):
 						return false
 				if not hidden and offer.has("resolved_action_type") and procurement_action < 0:
 					return false
 			"scraper":
-				if int(offer.get("price", -1)) != int((config.get("scraper", {}) as Dictionary).get("price", 2)):
+				if int(offer.get("price", -1)) != _offer_price(int((config.get("scraper", {}) as Dictionary).get("price", 2)), discounted):
 					return false
 			"tear_service":
 				if offer.has("price"):
@@ -188,7 +215,7 @@ func _is_decimal_integer(value: Variant) -> bool:
 	return (value is String and String(value).is_valid_int()) or value is int
 
 
-func _definition_for_saved_offer(definition: CardData, offer: Dictionary) -> CardData:
+func _definition_for_saved_offer(definition: CardData, offer: Dictionary, discounted: bool) -> CardData:
 	if definition == null: return null
 	var previous: Dictionary = PREVIOUS_CARD_RULES.get(definition.id, {})
 	if previous.is_empty(): return definition
@@ -202,7 +229,7 @@ func _definition_for_saved_offer(definition: CardData, offer: Dictionary) -> Car
 		var hidden := bool(offer.get("hidden", false))
 		var old_quote := int((config.get("visible_card_prices", {}) as Dictionary).get(_rarity_key(old_rarity), -1))
 		var old_rarity_hint: bool = hidden and offer.get("hint") == "rarity" and offer.get("hint_value") == _rarity_key(old_rarity)
-		if old_rarity_hint or (not hidden and int(offer.get("price", -1)) == old_quote):
+		if old_rarity_hint or (not hidden and int(offer.get("price", -1)) == _offer_price(old_quote, discounted)):
 			if result == definition: result = definition.duplicate() as CardData
 			result.rarity = old_rarity as CardData.Rarity
 	return result
@@ -219,6 +246,7 @@ func capture_state() -> Dictionary:
 		"rng_seed": str(rng.seed),
 		"rng_state": str(rng.state),
 		"refresh_count": refresh_count,
+		"bounty_discount": _bounty_discount,
 		"offers": offers.duplicate(true),
 		"reveals": reveal_by_offer.duplicate(true),
 	}
@@ -235,7 +263,11 @@ func sticker_sale_price(definition: Dictionary) -> int:
 	return int(prices.get(_rarity_key(rarity), -1))
 
 
-func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_definitions: Array[Dictionary], held_stickers: Array[Dictionary]) -> bool:
+func _offer_price(base_price: int, discounted: bool) -> int:
+	return maxi(1, floori(base_price * BOUNTY_PRICE_FACTOR)) if discounted and base_price >= 0 else base_price
+
+
+func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_definitions: Array[Dictionary], held_stickers: Array[Dictionary], discounted: bool = false) -> bool:
 	var next_rng := _copy_rng(rng)
 	var candidates := _eligible_cards(card_definitions, owned_cards)
 	var sticker_candidates := _eligible_stickers(sticker_definitions, held_stickers, [])
@@ -323,8 +355,11 @@ func refresh(card_definitions: Array[CardData], owned_cards: Array, sticker_defi
 		next_offers.append({"kind": "scraper", "price": int((config.get("scraper", {}) as Dictionary).get("price", 2)), "offer_id": "scraper"})
 	if bool((config.get("tear_service", {}) as Dictionary).get("always_available", true)):
 		next_offers.append({"kind": "tear_service", "offer_id": "tear"})
+	for offer: Dictionary in next_offers:
+		if offer.has("price"): offer.price = _offer_price(int(offer.price), discounted)
 	rng.state = next_rng.state
 	offers = next_offers
+	_bounty_discount = discounted
 	reveal_by_offer.clear()
 	return true
 

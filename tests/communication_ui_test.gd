@@ -23,6 +23,10 @@ func check(value: bool, message: String) -> void:
 func frames() -> void:
 	for index: int in 5: await process_frame
 
+func finish_teaching_open() -> void:
+	if is_instance_valid(main._view_tween) and main._view_tween.is_running(): await main._view_tween.finished
+	if main.is_page_turning(): await main._page_tween.finished
+
 func move_mouse(at: Vector2) -> void:
 	var motion := InputEventMouseMotion.new()
 	motion.position = at
@@ -100,6 +104,7 @@ func _run() -> void:
 	main._close_escape_pause_menu()
 	await frames()
 	await click(toast.title_label)
+	await finish_teaching_open()
 	check(main._escape_pause_menu.is_menu_open() and paused and main._escape_pause_menu.selected_teaching_key == key, "真实点击提示条标题区域直接打开对应教学并沿用暂停")
 	var page = main._escape_pause_menu.find_child("TutorialHelpPage", true, false)
 	var text: Label = page.find_child("TaskInfoText", true, false)
@@ -215,6 +220,7 @@ func _verify_rune_discovery() -> void:
 	check(before.success and after.success and before.checkpoint.collection == after.checkpoint.collection and after.checkpoint.profile_progress.profile.tutorial.read_hints.has(chaos_key), "即时保存教学记录，不把当前刮擦写进原来的检查点")
 	await create_timer(Toast.APPEAR_SECONDS + Toast.PEAK_HOLD_SECONDS + Toast.SETTLE_SECONDS).timeout
 	await click(toast.title_label)
+	await finish_teaching_open()
 	check(main._escape_pause_menu.selected_teaching_key == chaos_key, "混沌提示直达对应条目")
 	main._close_escape_pause_menu()
 
@@ -237,6 +243,7 @@ func _verify_rune_discovery() -> void:
 		await RenderingServer.frame_post_draw
 		root.get_texture().get_image().save_png("/private/tmp/project-card-rune-teaching-toast.png")
 	await click(toast.title_label)
+	await finish_teaching_open()
 	var page: Control = main._escape_pause_menu.find_child("TutorialHelpPage", true, false)
 	var description: Label = page.find_child("TaskInfoText", true, false)
 	var table: Control = page.find_child("TeachingElementTable", true, false)

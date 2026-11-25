@@ -6,7 +6,7 @@
 [resource]
 script = ExtResource("1_data")
 id = &"hild_allrounder"
-display_name = "“万金油”希尔德"
+display_name = "寻猎希尔德"
 pack_id = &"gilded_commission"
 effect_ids = Array[StringName]([&"hild_allrounder.effect.rush"])
 content_effect = &"hild_allrounder"

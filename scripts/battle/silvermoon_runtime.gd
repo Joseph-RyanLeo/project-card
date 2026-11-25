@@ -144,8 +144,9 @@ func knight_rush(source: BattleSquadState) -> void:
 func permanent_health(target: BattleSquadState, amount: int, source: BattleSquadState, key: StringName) -> void:
 	var owner := BattleEffectOwnerRef.for_state(target, BattleEffectDefinition.OwnerKind.ARMOR_PROVIDER_CARD)
 	if controller.record_pending_permanent_growth(owner, &"max_health", amount, key, source.runtime_id, roundi(controller.elapsed_seconds * 1000000.0)):
-		# 账本负责跨战归属；本场生命层立即可见，不改写共享定义或收藏实例。
-		controller.twisted_vein.gain_health(target, amount, key)
+		var before := target.get_max_health()
+		target.runtime_base_health_growth += amount
+		target.apply_max_health_increase(before, amount, true)
 
 func balance_growth(source: BattleSquadState) -> void:
 	for target: BattleSquadState in controller.get_all_states():

@@ -272,17 +272,22 @@ func on_defeated(defeated: BattleSquadState) -> void:
 		if c.record_pending_permanent_growth(owner, OwnedCard.STAT_MAX_HEALTH, 1.0, &"doorboard", neighbor.runtime_id, roundi(c.elapsed_seconds * 1000000.0)):
 			var before := neighbor.get_max_health()
 			owner.owned_card.apply_permanent_growth(OwnedCard.STAT_MAX_HEALTH, 1.0)
-			neighbor.current_health += neighbor.get_max_health() - before
+			if owner.owned_card == neighbor.squad_data.get_vitals_source_instance():
+				neighbor.apply_max_health_increase(before, 1.0, true)
 	if not c.twisted_vein.active(defeated, &"doorboard", false, true): return
 	var card := defeated.squad_data.get_effect_source_instance()
 	if card == null: return
-	var health := card.get_base_stat_with_permanent_growth(OwnedCard.STAT_MAX_HEALTH)
+	var health := defeated.get_display_base_stats(defeated.get_active_rune_slots()).y
+	if card != defeated.squad_data.get_vitals_source_instance():
+		var solo := SquadData.from_owned_card(card)
+		health = solo.get_display_base_health(solo.get_vitals_source(), solo.get_visible_rune_stat_bonus(OwnedCard.STAT_MAX_HEALTH))
 	if health <= DOORBOARD_THRESHOLD: return
 	var targets: Array[BattleSquadState] = c.get_death_neighbors(defeated).filter(_living)
 	if not targets.is_empty():
 		var target: BattleSquadState = targets[c._random.randi_range(0, targets.size() - 1)]
+		var before := target.get_max_health()
 		c.ironwall.add(target, BattleModifier.Stat.MAX_HEALTH, health, &"doorboard", defeated)
-		c.effect_runtime._adjust_crystallized_temporary_armor(target, health)
+		target.apply_max_health_increase(before, health)
 
 
 func fill_vacated_slots(defeated: Array[BattleSquadState]) -> void:
@@ -332,7 +337,6 @@ func release_opening_spell(spell: OwnedCard, side: int) -> bool:
 
 
 func _add_spell_growth(target: BattleSquadState, spell: OwnedCard, action: int, health: int) -> void:
-	var c = _controller.get_ref()
 	var before := target.get_max_health()
 	for stat: int in [BattleModifier.Stat.ACTION_VALUE, BattleModifier.Stat.MAX_HEALTH]:
 		var modifier := BattleModifier.new()
@@ -341,17 +345,17 @@ func _add_spell_growth(target: BattleSquadState, spell: OwnedCard, action: int, 
 		modifier.effect_id = spell.card_data.id
 		modifier.contribution_sources.append({"source_name": spell.card_data.display_name, "source_card_id": String(spell.card_data.id), "amount": modifier.value, "source_status": "resolved"})
 		target.modifiers.add_modifier(modifier)
-	c.effect_runtime._adjust_crystallized_temporary_armor(target, health)
-	target.current_health += maxf(target.get_max_health() - before, 0.0)
+	target.apply_max_health_increase(before, health)
 
 
 func _double_rune_stats(state: BattleSquadState) -> void:
 	var c = _controller.get_ref()
 	if state.rune_base_multiplier > 1: return
 	var health := state.get_max_health()
+	var health_bonus := state.get_active_rune_stat_bonus(&"max_health")
 	var armor := state.get_active_rune_stat_bonus(&"base_armor")
 	state.rune_base_multiplier = 2
-	state.current_health += state.get_max_health() - health
+	state.apply_max_health_increase(health, health_bonus, true)
 	state.current_armor += state.get_active_rune_stat_bonus(&"base_armor") - armor
 	state.refresh_cooldown_after_modifier_change()
 	c._apply_visible_fire_rune_reinforcement(state, true)
@@ -390,8 +394,7 @@ func process_due() -> void:
 			var before := ally.get_max_health()
 			c.ironwall.add(ally, BattleModifier.Stat.ACTION_VALUE, 5.0, &"mogris_old_oak", source)
 			c.ironwall.add(ally, BattleModifier.Stat.MAX_HEALTH, 10.0, &"mogris_old_oak", source)
-			c.effect_runtime._adjust_crystallized_temporary_armor(ally, 10.0)
-			ally.current_health += ally.get_max_health() - before
+			ally.apply_max_health_increase(before, 10.0)
 
 
 func _set_jam(state: BattleSquadState, amount: int) -> void:

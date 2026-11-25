@@ -211,7 +211,7 @@ func settle(
 					_restore_transaction(owned_collection, rollback_collection, reward_state, rollback_rewards)
 					return _failure("resource_card_award_apply_failed", battle_id)
 				resource_cards_awarded += amount
-	# 征兵册先生成随机随从请求，再移除源装备；即使合法奖励池为空也照常消耗。
+	# 征兵令先生成随机随从请求，再移除源装备；即使合法奖励池为空也照常消耗。
 	for entry: Dictionary in owned_change_entries:
 		if (
 			int(entry.get("side", -1)) != BattleSquadState.Side.PLAYER
@@ -536,6 +536,8 @@ func _map_growth_stat(stat: StringName) -> StringName:
 			return OwnedCard.STAT_BASE_ARMOR
 		BattlePermanentGrowthLedger.STAT_MAX_HEALTH:
 			return OwnedCard.STAT_MAX_HEALTH
+		BattlePermanentGrowthLedger.STAT_BONUS_MAX_HEALTH:
+			return OwnedCard.STAT_BONUS_MAX_HEALTH
 		_:
 			return &""
 

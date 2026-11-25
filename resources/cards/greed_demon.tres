@@ -21,4 +21,4 @@ art_offset = Vector2i(-1, 44)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
 &"overframe": Vector2i(-1, 37)
 })
-effect_text = "战斗中，任意一方每获得1金币，此卡本场数值+1。"
+effect_text = "战斗中，任意一方每次获得金币，此卡本场数值+1。"

@@ -110,7 +110,8 @@ func _test_damili_and_doorboard() -> void:
 	_kill(_fight.player_states[0])
 	_check(_fight.permanent_growth_ledger.get_amount_for_owned_card(door.instance_id, &"max_health") == 1, "门板见相邻友军死亡获得一项永久成长")
 	_kill(_fight.player_states[1])
-	_check(_fight.player_states[2].modifiers.get_additive(BattleModifier.Stat.MAX_HEALTH) == 26.0, "门板超过25生命后向相邻友军提供本场上限")
+	var recipient := _fight.player_states[2]
+	_check(recipient.modifiers.get_additive(BattleModifier.Stat.MAX_HEALTH) == 26.0 and recipient.current_health == recipient.get_max_health(), "门板超过25基础生命后向相邻友军增加等量最大与当前生命")
 
 
 func _test_dialer() -> void:

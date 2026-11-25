@@ -22,4 +22,4 @@ background_overframe_offsets = Dictionary[int, Vector2i]({
 3: Vector2i(0, 2)
 })
 art_texture = ExtResource("2_art")
-effect_text = "收获：所在方每个随从独立等概率获得本场生命+2、数值+1或热诚+1。"
+effect_text = "收获：所在方每个随从独立等概率获得本场最大生命+2、数值+1或热诚+1。"

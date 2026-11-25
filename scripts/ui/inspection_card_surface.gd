@@ -2,9 +2,12 @@ class_name InspectionCardSurface
 extends TextureRect
 
 ## 整张卡先合成后倾斜；命中点使用与着色器相同的逆投影，避免贴纸错位。
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const SHADER = preload("res://shaders/card_preview_3d.gdshader")
+const FUSION_GLOW = preload("res://shaders/gamepad_focus_glow.gdshader")
 const EffectPopup = preload("res://scripts/ui/card_effect_popup.gd")
 const PADDING := Vector2(18, 18) # 容纳卡面外角标和贴纸
+const STAT_BREAKDOWN_PADDING := Vector2(30, 18) # 左右各预留三位基础值或三位差额越过卡框的空间
 var content_padding := PADDING # 合成画布边距；翻皮演出可扩大，普通卡牌保持默认边距
 var render_scale := 1.0 # 合成纹理相对原生尺寸的分辨率倍率；贴纸包检视使用4倍精度
 const TILT := 10.0 # 检视鼠标倾斜最大角度
@@ -19,11 +22,14 @@ var sticker_help_handler: Callable
 var _sticker_popup: CanvasLayer
 var _drop_preview: TextureRect
 var _fusion_highlights: Control
-var _fusion_rects: Array[Rect2] = []
-const FUSION_HALO_MARGIN := 1.0 # 可合成目标紫光超出原纹章的原生像素边距
+var _fusion_targets: Array[Dictionary] = []
+var _gamepad_point := Vector2.INF
+const FUSION_HALO_MARGIN := 2.5 # 检视放大前的紫光边距，四倍检视时约10像素
+const FUSION_HALO_COLOR := Vector3(0.78, 0.40, 1.0) # 沿用可合成纹章的紫色
 
-func setup(value: CardView, handler: Callable, sticker_help: Callable) -> void:
+func setup(value: CardView, handler: Callable, sticker_help: Callable, padding: Vector2 = PADDING) -> void:
 	card = value
+	content_padding = padding
 	if CardView.TextDisplaySettings.is_popup_mode(): render_scale = maxf(render_scale, 4.0) # 黑体卡名用4倍合成，放大检视不放大低分辨率字形
 	if card.get_owned_card() != null and card.get_owned_card().has_special_appearance(): render_scale = 4.0
 	drop_handler = handler
@@ -54,14 +60,17 @@ func setup_art(value: Control, padding: Vector2 = PADDING, texture_scale: float 
 func refresh_text_resolution() -> void:
 	if not CardView.TextDisplaySettings.is_popup_mode() or render_scale >= 4.0: return
 	render_scale = 4.0 # 已打开的商品或检视切换为黑体时，同步提高字形采样精度
+	_sync_viewport_resolution()
+	effect.set_shader_parameter("texture_render_scale", render_scale)
+
+
+func _sync_viewport_resolution() -> void:
 	viewport.size = Vector2i((size * render_scale).round())
 	viewport.canvas_transform = Transform2D.IDENTITY.scaled(Vector2.ONE * render_scale)
-	effect.set_shader_parameter("texture_render_scale", render_scale)
 
 func _setup_content(value: Control, content_size: Vector2) -> void:
 	size = content_size + content_padding * 2.0
 	viewport = SubViewport.new()
-	viewport.size = Vector2i((size * render_scale).round())
 	viewport.transparent_bg = true
 	viewport.disable_3d = true
 	viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST # 内层放大原画仍保留硬像素；不能只设置最终纹理的采样
@@ -72,7 +81,7 @@ func _setup_content(value: Control, content_size: Vector2) -> void:
 	value.scale = Vector2.ONE
 	value.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	# 内容入树后画布才已注册；位置和命中仍用原生像素，只提高采样密度。
-	viewport.canvas_transform = Transform2D.IDENTITY.scaled(Vector2.ONE * render_scale)
+	_sync_viewport_resolution()
 	expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	texture = viewport.get_texture()
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -90,10 +99,12 @@ func _setup_content(value: Control, content_size: Vector2) -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func _process(delta: float) -> void:
-	var pointer := get_local_mouse_position()
+	var pointer := CrtProjection.local_mouse(self)
 	var target := Vector2.ZERO
 	var hover_rect := Rect2(content_padding - PADDING, size - (content_padding - PADDING) * 2.0)
-	if not tilt_locked and hover_rect.has_point(pointer):
+	if not tilt_locked and _gamepad_point.is_finite():
+		target = (_gamepad_point / gamepad_look_size() - Vector2(0.5, 0.5)) * 2.0
+	elif not tilt_locked and hover_rect.has_point(pointer):
 		target = ((pointer - hover_rect.position) / hover_rect.size - Vector2(0.5, 0.5)) * 2.0
 	update_pointer_force(target, delta)
 	if not sticker_help_handler.is_valid(): return
@@ -107,15 +118,29 @@ func _process(delta: float) -> void:
 func get_hovered_sticker_help() -> Dictionary:
 	if not sticker_help_handler.is_valid() or not is_processing() or not is_visible_in_tree() or tilt_locked or not is_instance_valid(card):
 		return {}
-	var hovered := get_viewport().gui_get_hovered_control()
-	if hovered != self: return {}
-	var overlay := get_parent() as CardInspectionOverlay
-	var local_pointer := get_local_mouse_position()
-	if overlay != null:
-		local_pointer = get_global_transform_with_canvas().affine_inverse() * overlay.pointer_position
-	var help: Dictionary = sticker_help_handler.call(card_point(local_pointer))
+	var help: Dictionary
+	if _gamepad_point.is_finite():
+		help = card.get_gamepad_inspection_help(_gamepad_point)
+	else:
+		if Input.mouse_mode == Input.MOUSE_MODE_HIDDEN or get_viewport().gui_get_hovered_control() != self: return {}
+		var overlay := get_parent() as CardInspectionOverlay
+		var local_pointer := CrtProjection.local_mouse(self)
+		if overlay != null:
+			local_pointer = get_global_transform_with_canvas().affine_inverse() * overlay.pointer_position
+		help = sticker_help_handler.call(card_point(local_pointer))
 	if not help.is_empty(): help.rect = card_canvas_rect(help.rect)
 	return help
+
+
+func gamepad_look_size() -> Vector2:
+	return card.card_size if is_instance_valid(card) else size - content_padding * 2.0
+
+
+func set_gamepad_point(point: Vector2) -> void:
+	if _gamepad_point == point: return
+	_gamepad_point = point
+	effect.set_shader_parameter("gamepad_light_on", point.is_finite() and is_instance_valid(card))
+	if point.is_finite(): effect.set_shader_parameter("gamepad_light_center", point + content_padding)
 
 func update_pointer_force(target: Vector2, delta: float) -> void:
 	# 商店从固定商品区域提供归一化坐标，检视从自身区域提供；共用同一套平滑。
@@ -189,20 +214,30 @@ func _drop_context(point: Vector2, data: Variant) -> Dictionary:
 	var adjusted_data: Dictionary = data.duplicate() if data is Dictionary else {}
 	return {"point": card_point(point), "data": adjusted_data}
 
-func set_fusion_targets(rects: Array[Rect2]) -> void:
-	if _fusion_rects == rects or not is_instance_valid(_fusion_highlights):
+func set_fusion_targets(targets: Array[Dictionary]) -> void:
+	if _fusion_targets == targets or not is_instance_valid(_fusion_highlights):
 		return
-	_fusion_rects.assign(rects)
+	_fusion_targets.assign(targets)
 	for child: Node in _fusion_highlights.get_children():
 		_fusion_highlights.remove_child(child)
 		child.queue_free()
-	for rect: Rect2 in rects:
+	var pixel := 1.0 / get_global_transform_with_canvas().get_scale().x
+	for target: Dictionary in targets:
+		var rect: Rect2 = target.rect
 		var glow := ColorRect.new()
 		glow.position = rect.position - Vector2.ONE * FUSION_HALO_MARGIN
 		glow.size = rect.size + Vector2.ONE * FUSION_HALO_MARGIN * 2.0
 		glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var shader_material := ShaderMaterial.new()
-		shader_material.shader = preload("res://shaders/emblem_fusion_glow.gdshader")
+		shader_material.shader = FUSION_GLOW
+		shader_material.set_shader_parameter("panel_size", glow.size)
+		shader_material.set_shader_parameter("spread", FUSION_HALO_MARGIN)
+		shader_material.set_shader_parameter("inner_pixel", pixel)
+		shader_material.set_shader_parameter("pulse_weight", 1.0)
+		shader_material.set_shader_parameter("glow_color", FUSION_HALO_COLOR)
+		shader_material.set_shader_parameter("use_silhouette", target.texture != null)
+		shader_material.set_shader_parameter("silhouette_texture", target.texture)
+		shader_material.set_shader_parameter("silhouette_rect", Vector4(FUSION_HALO_MARGIN, FUSION_HALO_MARGIN, rect.size.x, rect.size.y))
 		glow.material = shader_material
 		_fusion_highlights.add_child(glow)
 

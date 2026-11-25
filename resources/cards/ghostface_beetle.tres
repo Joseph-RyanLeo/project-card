@@ -22,4 +22,4 @@ art_offset = Vector2i(-4, -9)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
 &"overframe": Vector2i(-8, -5)
 })
-effect_text = "耀眼。遗愿：相邻友军+2生命。"
+effect_text = "耀眼。遗愿：相邻友军最大生命+2。"

@@ -89,6 +89,7 @@ func _run() -> void:
 	var run_id: String = main.profile_progress.run.id
 	main.run_reward_state.gold = 87
 	await escape()
+	while main._escape_pause_menu.is_transitioning(): await process_frame
 	check(paused and main._escape_pause_menu.is_menu_open() and button(main._escape_pause_menu, "ContinueGameButton").is_visible_in_tree(), "对局Esc打开精简首页并沿用暂停机制")
 	await capture("05_pause")
 	await click(button(main._escape_pause_menu, "PauseSettingsButton"))
@@ -102,8 +103,10 @@ func _run() -> void:
 	check(Rect2(Vector2.ZERO, Vector2(1280, 720)).encloses(main._escape_pause_menu._tools.get_global_rect()), "调试子页面板完整位于720p逻辑画布内")
 	await escape()
 	await click(button(main._escape_pause_menu, "ContinueGameButton"))
+	while main._escape_pause_menu.is_transitioning(): await process_frame
 	check(not paused and not main._escape_pause_menu.is_menu_open(), "继续游戏正确释放暂停")
 	await escape()
+	while main._escape_pause_menu.is_transitioning(): await process_frame
 	await click(button(main._escape_pause_menu, "ReturnToMainMenuButton"))
 	check(shell.main_screen == null and shell.slot_progress == null and not paused and shell.start_menu.visible, "对局保存返回只到主菜单，不进入局外大厅")
 	await click(button(shell.start_menu, "StartButton"))

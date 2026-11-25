@@ -5,6 +5,9 @@ const SIZE: int = 23 # 用户提供的每个品级符文覆盖素材边长
 const SCRAPE_COMPLETE_RATIO: float = 0.70 # 擦除素材实际不透明覆盖像素达到该比例后揭晓
 const SCRAPE_SAMPLE_SPACING: float = 1.0 # 鼠标路径插值的最大画布像素间距，防止快速移动漏刮
 const COVER_SHADER = preload("res://shaders/rune_reveal_cover.gdshader")
+const OVERFRAME_SHADER = preload("res://shaders/overframe_rune_multiply.gdshader")
+const OVERFRAME_COVER_SOURCE: Texture2D = preload("res://assets/card_ui/rune_covers/overframe.png")
+const OVERFRAME_COVER_ORIGIN := Vector2(3, 2) # 附件中 23×23 覆盖圆的左上角，排除透明余边
 const COVER_TEXTURE_PATHS: Array[String] = [
 	"res://assets/card_ui/rune_covers/rarity_i.png",
 	"res://assets/card_ui/rune_covers/rarity_ii.png",
@@ -18,6 +21,7 @@ static var _opaque_pixel_count: int = -1
 static var _cover_alpha_initialized: bool = false
 static var _empty_mask_texture: ImageTexture
 static var _empty_mask_materials: Dictionary = {}
+static var _overframe_cover: AtlasTexture
 static var _cover_alpha: PackedByteArray = PackedByteArray()
 
 
@@ -27,6 +31,15 @@ static func get_cover_texture(rarity: int) -> Texture2D:
 	if not _cover_textures.has(rarity):
 		_cover_textures[rarity] = load(COVER_TEXTURE_PATHS[rarity]) as Texture2D
 	return _cover_textures[rarity] as Texture2D
+
+
+static func get_overframe_cover_texture() -> Texture2D:
+	if _overframe_cover == null:
+		_overframe_cover = AtlasTexture.new()
+		_overframe_cover.atlas = OVERFRAME_COVER_SOURCE
+		_overframe_cover.region = Rect2(OVERFRAME_COVER_ORIGIN, Vector2(SIZE, SIZE))
+		_overframe_cover.filter_clip = true
+	return _overframe_cover
 
 
 static func get_opaque_pixel_count() -> int:
@@ -109,4 +122,12 @@ static func create_material(mask_texture: Texture2D, reveal_only: bool = false) 
 	material.set_shader_parameter("reveal_only", reveal_only)
 	if is_empty_mask:
 		_empty_mask_materials[reveal_only] = material
+	return material
+
+
+static func create_overframe_cover_material(mask_texture: Texture2D, pointer_force: Vector2) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = OVERFRAME_SHADER
+	material.set_shader_parameter("scrape_mask", mask_texture)
+	material.set_shader_parameter("pointer_force", pointer_force)
 	return material

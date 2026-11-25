@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
 [ext_resource type="Texture2D" path="res://assets/card_art/anvil_margaret.png" id="2_art"]
+[ext_resource type="Texture2D" path="res://assets/card_backgrounds/ash_ledger_margaret.png" id="3_background"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -17,16 +18,15 @@ max_health = 8
 armor = 14
 runes = Array[int]([1, 2, 4])
 rarity = 3
-background_style = 3
+background_texture = ExtResource("3_background")
 background_offsets = Dictionary[int, Vector2i]({
+0: Vector2i(0, 19),
 3: Vector2i(0, -20)
 })
 background_overframe_offsets = Dictionary[int, Vector2i]({
+0: Vector2i(0, 3),
 3: Vector2i(0, 1)
 })
 art_texture = ExtResource("2_art")
-art_offset = Vector2i(-2, 25)
-art_finish_offsets = Dictionary[StringName, Vector2i]({
-&"overframe": Vector2i(2, 23)
-})
+art_offset = Vector2i(-7, 24)
 effect_text = "友军获得护甲×2；有护甲时热诚-4。"

@@ -14,7 +14,7 @@ const FONTS := Settings.NAME_FONTS
 const AA_NAMES := ["关闭抗锯齿", "灰度抗锯齿", "LCD 子像素"]
 const DEFAULTS := {"font": 0, "aa": 1, "size": 9, "weight": 500, "hint": 1, "oversampling": 4, "subpixel": 1, "offset": 0, "auto_hint": false, "fit": true, "zoom": 8, "grid": false, "text": "重返战场"}
 
-var profile_path := "user://card_font_lab.cfg"
+var profile_path := Settings.FONT_LAB_SETTINGS_PATH
 var card_settings_path := Settings.SETTINGS_PATH
 var controls: Dictionary = {}
 var comparisons: Array[Dictionary] = []

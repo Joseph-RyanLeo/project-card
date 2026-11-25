@@ -19,12 +19,19 @@ func _run() -> void:
 	await create_timer(0.65).timeout
 	main.set_world_view(main.WorldView.COLLECTION, false)
 	var definition := load("res://resources/cards/militia.tres") as CardData
+	var margaret := load("res://resources/cards/anvil_margaret.tres") as CardData
 	var cards: Array[OwnedCard] = []
 	for art: int in Appearance.Art.size():
 		for face: int in Appearance.Surface.size():
-			var owned: OwnedCard = main.owned_card_collection.create_card(definition, main.ordinary_shop_service.rng)
+			var owned: OwnedCard = main.owned_card_collection.create_card(margaret if art == Appearance.Art.OVERFRAME else definition, main.ordinary_shop_service.rng)
 			owned.surface_finish = face as Appearance.Surface
 			owned.art_finish = art as Appearance.Art
+			if face % 2 == 0:
+				owned.resolved_runes.assign([CardData.ElementType.WATER, CardData.ElementType.WOOD, CardData.ElementType.WOOD])
+				owned.rune_revealed.fill(true)
+			else:
+				owned.resolved_runes.assign([CardData.ElementType.FIRE, CardData.ElementType.DARK, CardData.ElementType.WATER])
+				owned.rune_revealed.assign([true, true, false])
 			cards.append(owned)
 	var rng: int = main.ordinary_shop_service.rng.state
 	var total: int = main.owned_card_collection.size()
@@ -33,6 +40,9 @@ func _run() -> void:
 		var view := _show_owned(owned)
 		await process_frame
 		var resting := view.position
+		var resting_stats := view.get_displayed_stat_texts()
+		if owned.card_data == margaret and owned.surface_finish == Appearance.Surface.PLAIN:
+			check(resting_stats == ["6", "10", "20", "7.0"], "超框玛格丽特计入一枚水符文和两枚木符文")
 		var original_parent := view.get_parent()
 		await hover(view, Vector2(0.75, 0.3))
 		var surface = view._collection_hover_surface
@@ -40,6 +50,7 @@ func _run() -> void:
 		if not is_instance_valid(surface): quit(1); return
 		check(view.position == resting and view.get_parent() == original_parent and view._external_lift == 0 and view.rotation == 0, "原卡保持原位置与原父节点，不再跳起或平面轻晃")
 		check(surface.card.get_owned_card() == owned and surface.mouse_filter == Control.MOUSE_FILTER_IGNORE and surface.card.is_snapshot_mode() and view.modulate.a == 0, "显示副本引用同一实例，固定原卡接收输入")
+		check(surface.card.get_displayed_stat_texts() == resting_stats, "复用悬停副本时保留当前卡四项数值及生效的符文加成")
 		check(surface.force.x > 0.2 and surface.force.y < -0.1 and surface.card._finish_controller._art_material.get_shader_parameter("pointer_force") == surface.force, "鼠标位置同时驱动透视与内层罕贵度光照")
 		var uses_flash := owned.surface_finish in [Appearance.Surface.SILVER, Appearance.Surface.GOLD, Appearance.Surface.RAINBOW, Appearance.Surface.EMBOSSED, Appearance.Surface.FRACTURED]
 		check(bool(surface.effect.get_shader_parameter("use_flash")) == uses_flash and bool(surface.effect.get_shader_parameter("use_fractured")) == (owned.surface_finish == Appearance.Surface.FRACTURED), "实际卡面工艺在收藏悬停中生效")

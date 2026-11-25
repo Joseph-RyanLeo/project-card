@@ -11,6 +11,7 @@ const INITIAL_FAILURE_PROTECTION: int = 2 # 前两次普通失败可继续，第
 
 var route_days: int = DAYS # 本局路线终点；教程4天，第一层8天
 var daily_pack_rewards: bool = true # 仅兼容Demo2固定日期礼包，新D3局按任务开放
+var skip_first_day_shop := false
 var day: int = 1
 var round_index: int = 0
 var step: Step = Step.DAY_START
@@ -22,7 +23,8 @@ var claimed_pack_days: Array[int] = []
 var rng := RandomNumberGenerator.new()
 
 
-func initialize(seed_value: int) -> void:
+func initialize(seed_value: int, skip_initial_shop: bool = false) -> void:
+	skip_first_day_shop = skip_initial_shop
 	day = 1
 	round_index = 0
 	step = Step.DAY_START
@@ -118,6 +120,9 @@ func complete_event() -> bool:
 	if daily_pack_rewards and round_index == 0 and day in [2, 3] and day not in claimed_pack_days:
 		return false
 	round_index += 1
+	if skip_first_day_shop and day == 1 and get_round_kind() == "shop":
+		# 保留原轮次编号，新路线只跳过第一天的商店。
+		round_index += 1
 	selected_path.clear()
 	step = Step.CHOOSING
 	return true
@@ -173,6 +178,7 @@ func capture_state() -> Dictionary:
 		"state_version": 2,
 		"route_days": route_days,
 		"daily_pack_rewards": daily_pack_rewards,
+		"skip_first_day_shop": skip_first_day_shop,
 		"day": day,
 		"round_index": round_index,
 		# 战斗中存档与读档都回到本场准备，保留已选敌人和随机流。
@@ -200,6 +206,7 @@ func restore_state(snapshot: Dictionary) -> bool:
 		return false
 	route_days = int(snapshot.get("route_days", DAYS))
 	daily_pack_rewards = snapshot.get("daily_pack_rewards", true)
+	skip_first_day_shop = snapshot.get("skip_first_day_shop", false)
 	day = int(snapshot.day)
 	round_index = int(snapshot.round_index)
 	step = int(snapshot.step) as Step
@@ -222,6 +229,8 @@ func _valid_snapshot(snapshot: Dictionary) -> bool:
 	var saved_day := int(snapshot.day)
 	var saved_round := int(snapshot.round_index)
 	var saved_step := int(snapshot.step)
+	if not snapshot.get("skip_first_day_shop", false) is bool: return false
+	if snapshot.get("skip_first_day_shop", false) and saved_day == 1 and saved_round == 2: return false
 	if int(snapshot.state_version) != 2 or saved_day < 1 or saved_day > int(saved_limit) or saved_round < 0 or saved_round > 3:
 		return false
 	if saved_step < Step.DAY_START or saved_step > Step.ENDED or saved_step == Step.BATTLE_ACTIVE:

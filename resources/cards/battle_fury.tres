@@ -2,6 +2,11 @@
 
 [ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
 [ext_resource type="Texture2D" path="res://assets/card_art/spells/battle_fury.png" id="2_art"]
+[ext_resource type="Texture2D" path="res://assets/card_backgrounds/ash_ledger_battle_fury.png" id="3_background"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/layers/battle_fury_back_fire.png" id="layer_back_fire"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/layers/battle_fury_front_fire.png" id="layer_front_fire"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/layers/battle_fury_helmet.png" id="layer_helmet"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/layers/battle_fury_middle_fire.png" id="layer_middle_fire"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -14,22 +19,20 @@ card_type = 2
 rarity = 3
 spell_type = 3
 spell_trigger_kind = 2
-background_style = 3
+background_texture = ExtResource("3_background")
 background_offsets = Dictionary[int, Vector2i]({
 3: Vector2i(0, -20)
 })
 background_overframe_offsets = Dictionary[int, Vector2i]({
+0: Vector2i(1, -2),
 3: Vector2i(0, 1)
 })
 art_texture = ExtResource("2_art")
-art_offset = Vector2i(0, 14)
-art_finish_offsets = Dictionary[StringName, Vector2i]({
-&"embossed": Vector2i(0, 3),
-&"fingerprint": Vector2i(0, 3),
-&"foil": Vector2i(0, 3),
-&"fractured": Vector2i(0, 3),
-&"frosted": Vector2i(0, 3),
-&"holographic": Vector2i(0, 3),
-&"overframe": Vector2i(1, 14)
+inspection_art_layers = Array[Texture2D]([ExtResource("layer_back_fire"), ExtResource("layer_helmet"), ExtResource("layer_middle_fire"), ExtResource("layer_front_fire")])
+inspection_art_layer_names = PackedStringArray("背景火焰", "头盔", "次前景火焰", "最前景火焰")
+inspection_art_depths = Dictionary[StringName, float]({
+&"background": 2.68,
+&"res://assets/card_art/spells/layers/battle_fury_back_fire.png": 2.03
 })
+art_offset = Vector2i(1, 14)
 effect_text = "触发：友方即将被消灭。友军5秒内生命最低为1。"

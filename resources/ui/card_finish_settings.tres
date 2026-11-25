@@ -9,3 +9,6 @@ flash_offset = -0.79
 stripe_width = 2.0
 fractured_strength = 0.4
 fractured_density = 8.0
+frosted_strength = 1.0
+frosted_density = 240.0
+frosted_shadow_visibility = 0.0

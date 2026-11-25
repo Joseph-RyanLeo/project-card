@@ -42,28 +42,25 @@ func _run() -> void:
 		if "small" in stack.name: small_stack = stack
 		else: large_stack = stack
 	check(small_stack._offers.size() == 2 and large_stack._offers.size() == 2, "每堆保留两件独立商品而非合并购买")
-	var all_still := true
+	var all_level := true
 	for tile: ShopOfferView in main.ordinary_shop_offer_list.find_children("ShopOffer_*", "Control", true, false):
-		all_still = all_still and not tile.is_processing() and is_zero_approx(tile._visual.rotation)
-	check(all_still, "开店后所有未悬停商品静止，包括卡包、单卡与刮刀")
+		all_level = all_level and is_zero_approx(tile._visual.position.y) and is_zero_approx(tile._visual.rotation)
+	check(all_level, "开店后所有未悬停商品保持陈列高度")
 	await capture("stack-normal-2k" if is_2k else "stack-normal-720p")
 	var back := small_stack._offers[0]
 	var front := small_stack._offers[1]
 	var point := back.get_global_rect().position + Vector2(6, 65)
+	var front_origin := front.position
 	await move(point)
 	await create_timer(0.2).timeout
-	check(small_stack._hover_offer == back and back.z_index > front.z_index and back._visual.position.y < -4, "指向后层露出的包使其抬起并置顶")
+	check(small_stack._hover_offer == back and back.z_index < front.z_index and not back.get_global_rect().intersects(front.get_global_rect()), "指向后层露出的包时使右包横移")
 	for step: int in 10:
 		await move(point + Vector2(step % 2, 0))
-	check(small_stack._hover_offer == back, "提层后的固定选择区不会反复切换卡包")
-	var only_target_moves := true
-	for tile: ShopOfferView in main.ordinary_shop_offer_list.find_children("ShopOffer_*", "Control", true, false):
-		only_target_moves = only_target_moves and (tile.is_processing() == (tile == back))
-	check(only_target_moves, "只有目标包晃动，其他商品保持静止")
+	check(small_stack._hover_offer == back, "让位后的固定目标包不会反复切换")
 	await capture("stack-hover-2k" if is_2k else "stack-hover-720p")
 	await move(Vector2(40, 650))
 	await create_timer(0.2).timeout
-	check(small_stack._hover_offer == null and back.z_index == 0 and front.z_index == 1 and back._visual.position.is_equal_approx(Vector2.ZERO) and is_zero_approx(back._visual.rotation), "移开后恢复原层级和位置")
+	check(small_stack._hover_offer == null and front.position.is_equal_approx(front_origin), "移开后右包复位")
 	var index := int(back.get_meta("shop_offer_index"))
 	var sibling_index := int(front.get_meta("shop_offer_index"))
 	var count_before: int = main.owned_card_collection.get_cards().size()

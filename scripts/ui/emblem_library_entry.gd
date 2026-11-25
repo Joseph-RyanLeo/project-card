@@ -10,6 +10,7 @@ signal native_drag_finished(committed: bool, release_center: Vector2)
 const StatusIndicatorStyle = preload("res://scripts/ui/status_indicator_style.gd")
 const CardSlotLayout = preload("res://scripts/data/card_slot_layout.gd")
 const InspectionItemDrag = preload("res://scripts/ui/inspection_item_drag.gd")
+const EffectPopup = preload("res://scripts/ui/card_effect_popup.gd")
 const EMBLEM_ICON_SIZE := Vector2(14.0, 14.0) # 普通纹章按一个可见格显示
 const ELEMENT_STICKER_ICON_SIZE := Vector2(27.0, 27.0) # 元素贴纸原图居中显示，四边各留2像素
 const WOUND_ICON_SIZE := Vector2(14.0, 14.0) # 伤势目录保持卡面原始状态图标尺寸
@@ -19,9 +20,11 @@ const DROP_LIFTED_SHADOW_OFFSET := Vector2(1.5, 2.5) # 临时贴纸轻微离开�
 var definition: Dictionary = {}
 var drag_enabled: bool = false
 var keep_carry_ghost: bool = true # 工具箱拖起后立即留原位虚影；出售槽关闭此项以保持槽内空白
+var free_placement := false
 var drop_target: Control
 var _icon: TextureRect
 var _missing_label: Label
+var _effect_help_text := ""
 var _left_pressed := false
 var _press_position := Vector2.ZERO
 var _native_drag_started := false
@@ -37,9 +40,9 @@ func configure(value: Dictionary, enabled: bool) -> void:
 	definition = value.duplicate(true)
 	drag_enabled = enabled
 	var is_wound: bool = String(definition.get("status_kind", "emblem")) == "wound"
-	tooltip_text = EmblemLibraryData.get_wound_tooltip(StringName(definition.get("id", ""))) if is_wound else EmblemLibraryData.get_tooltip(StringName(definition.get("id", "")))
-	if definition.has("returned_state"):
-		tooltip_text = ("临时掉落 · " if EmblemStickerInventory.is_dropped(definition.returned_state) else "工具箱 · ") + tooltip_text
+	_effect_help_text = EmblemLibraryData.get_wound_tooltip(StringName(definition.get("id", ""))) if is_wound else EmblemLibraryData.get_tooltip(StringName(definition.get("id", "")))
+	if not free_placement and EmblemStickerInventory.is_dropped(definition.get("returned_state", {})):
+		_effect_help_text = "临时掉落 · " + _effect_help_text
 	if not is_node_ready():
 		return
 	_refresh_visual()
@@ -86,17 +89,18 @@ func update_layout_visuals() -> void:
 func _ready() -> void:
 	set_drag_enabled(drag_enabled)
 	_refresh_visual()
-	if EmblemStickerInventory.is_dropped(definition.get("returned_state", {})):
-		_shadow = _icon.duplicate() as TextureRect
-		_shadow.modulate = EquipmentIndicatorStyle.SHADOW_COLOR
-		_shadow.position += EquipmentIndicatorStyle.SHADOW_OFFSET
-		_shadow.z_index = -1
-		add_child(_shadow)
+	mouse_entered.connect(_show_mouse_effect_help)
+	mouse_exited.connect(_hide_mouse_effect_help)
+	if _uses_drop_feedback():
+		_shadow = _add_shadow(self, _icon, _icon.position + EquipmentIndicatorStyle.SHADOW_OFFSET)
 		mouse_entered.connect(_lift.bind(true))
 		mouse_exited.connect(_lift.bind(false))
 
 
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_show_mouse_effect_help()
+		return
 	if not drag_enabled: return
 	if not event is InputEventMouseButton:
 		return
@@ -116,6 +120,22 @@ func _gui_input(event: InputEvent) -> void:
 				get_global_transform_with_canvas() * mouse.position
 			)
 	accept_event()
+
+
+func _show_mouse_effect_help() -> void:
+	if Input.mouse_mode == Input.MOUSE_MODE_HIDDEN or get_hovered_sticker_help().is_empty(): return
+	EffectPopup.shared(get_tree()).show_sticker(self)
+
+
+func _hide_mouse_effect_help() -> void:
+	var popup := get_tree().get_first_node_in_group(&"card_effect_popup")
+	if popup != null: popup.hide_card(self, &"sticker")
+
+
+func get_hovered_sticker_help() -> Dictionary:
+	if _effect_help_text.is_empty() or _left_pressed or mouse_filter == MOUSE_FILTER_IGNORE or modulate.a <= 0.0 or not is_instance_valid(_icon):
+		return {}
+	return {"text": _effect_help_text, "rect": _icon.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, _icon.size)}
 
 
 func _refresh_visual() -> void:
@@ -151,6 +171,9 @@ func _refresh_visual() -> void:
 		_icon.size = ELEMENT_STICKER_ICON_SIZE
 	else:
 		_icon.size = EMBLEM_ICON_SIZE
+	if is_instance_valid(_shadow):
+		_shadow.texture = _icon.texture
+		_shadow.size = _icon.size
 	update_layout_visuals()
 	_icon.visible = _icon.texture != null
 	_missing_label.visible = not _icon.visible
@@ -167,23 +190,15 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictionary:
 	_finish_return_feedback()
 	_request_front()
-	var preview := TextureRect.new()
+	var preview := InspectionItemDrag.StickerPreview.new()
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.texture = _icon.texture
 	preview.stretch_mode = TextureRect.STRETCH_SCALE
 	preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	preview.size = _icon.size
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if EmblemStickerInventory.is_dropped(definition.get("returned_state", {})):
-		var shadow := TextureRect.new()
-		shadow.texture = preview.texture
-		shadow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		shadow.size = preview.size
-		shadow.position = DROP_LIFTED_SHADOW_OFFSET
-		shadow.modulate = EquipmentIndicatorStyle.SHADOW_COLOR
-		shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		shadow.z_index = -1
-		preview.add_child(shadow)
+	if _uses_drop_feedback():
+		_add_shadow(preview, preview, DROP_LIFTED_SHADOW_OFFSET)
 	if preview.texture == null:
 		var preview_label := Label.new()
 		preview_label.text = "?"
@@ -214,6 +229,26 @@ func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictiona
 	_last_preview_center = Vector2.INF
 	preview.tree_exiting.connect(func(): _last_preview_center = preview.get_global_transform_with_canvas() * (preview.size * 0.5))
 	return drag
+
+
+func _uses_drop_feedback() -> bool:
+	return free_placement or EmblemStickerInventory.is_dropped(definition.get("returned_state", {}))
+
+
+static func _add_shadow(host: Control, visual: TextureRect, offset: Vector2) -> TextureRect:
+	var shadow := TextureRect.new()
+	shadow.texture = visual.texture
+	shadow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shadow.stretch_mode = TextureRect.STRETCH_SCALE
+	shadow.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	shadow.size = visual.size
+	shadow.position = offset
+	shadow.modulate = EquipmentIndicatorStyle.SHADOW_COLOR
+	shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# 阴影只排在自己的图标后面，仍能盖住较早绘制的其他贴纸。
+	shadow.show_behind_parent = true
+	host.add_child(shadow)
+	return shadow
 
 
 func _request_front() -> void:

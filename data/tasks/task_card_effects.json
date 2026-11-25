@@ -132,7 +132,7 @@
           "parameters": {
             "content_effect": "task_lantern"
           },
-          "reading": "耀眼。遗愿：左右相邻友军永久+2生命。触发4次后转换为炽烈青灯。",
+          "reading": "耀眼。遗愿：左右相邻友军永久最大生命+2。触发4次后转换为炽烈青灯。",
           "questions": []
         },
         {
@@ -174,7 +174,7 @@
           "parameters": {
             "content_effect": "task_lantern"
           },
-          "reading": "耀眼。遗愿：左右相邻友军永久+2生命。触发4次后转换为炽烈青灯。",
+          "reading": "耀眼。遗愿：左右相邻友军永久最大生命+2。触发4次后转换为炽烈青灯。",
           "questions": []
         }
       ]

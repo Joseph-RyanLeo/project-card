@@ -4,6 +4,12 @@ extends "res://tests/militia_keyword_tutorial_test.gd"
 const LAYOUT_DIR := "/private/tmp/project-card-tutorial-smith-layout-test"
 
 
+func capture_pack(label: String) -> void:
+	await frames()
+	await RenderingServer.frame_post_draw
+	root.get_texture().get_image().save_png(LAYOUT_DIR.path_join(label + ".png"))
+
+
 func check_bottom_left(hint: Control, message: String) -> void:
 	check(is_equal_approx(hint.panel.position.x, 12) and absf(hint.panel.get_rect().end.y - 708) <= 1, message + "固定在左下角")
 	check(hint._surface.get_children().all(func(child: Node): return not child is ColorRect), message + "不添加暗幕")
@@ -133,10 +139,9 @@ func _run() -> void:
 	check(main._gameplay_teaching_toast.current_key == "tutorial:step:wounds" and main._gameplay_teaching_toast.progress > 0, "战斗暂停时仍能弹出伤势玩法教学")
 	await capture_pack("30_battle_wounds_inspection")
 	await click_control(main._gameplay_teaching_toast.title_label)
-	check(main._escape_pause_menu.selected_teaching_key == "tutorial:step:wounds", "伤势提示可直达Esc详细条目")
+	check(main._escape_pause_menu.is_teaching_book_open() and main._escape_pause_menu.selected_teaching_key == "tutorial:step:wounds", "伤势提示直达独立教程书的对应条目")
 	await key_escape()
-	await key_escape()
-	check(is_instance_valid(main._inspection_overlay), "从伤势条目返回后保留卡牌检视")
+	check(not main._escape_pause_menu.is_teaching_book_open() and is_instance_valid(main._inspection_overlay), "首次Esc关闭教程并保留卡牌检视")
 	await key_escape()
 	hint = await expected_hint("battle_protection")
 	check(paused and hint.focus_rect == maze._status.life_track_rect(), "退出检视后高亮失败保护与生命值")
@@ -226,10 +231,10 @@ func _verify_toolbox() -> void:
 	var effect_box: PanelContainer = main._inspection_overlay.get_node("InspectionEffectSideBox")
 	var visible_card := Rect2(main._inspection_surface.position + main._inspection_surface.content_padding * main._inspection_surface.scale, main._inspection_card_view.card_size * main._inspection_surface.scale)
 	print("LAYOUT: card=", visible_card, " effect=", effect_box.get_rect(), " hint=", hint.panel.get_rect())
-	check(not effect_box.get_rect().intersects(visible_card) and Rect2(0, 0, 1280, 720).encloses(effect_box.get_rect()), "展开工具箱时说明移到卡下且完整可见")
+	check(not effect_box.get_rect().intersects(visible_card) and effect_box.position.x >= main._inspection_overlay.size.x, "展开工具箱时原说明滑出画面右侧")
 	var scraper_rect: Rect2 = main.maze_controller._hint_control_rect(main.emblem_library._scraper)
 	check(not hint.panel.get_rect().intersects(scraper_rect), "左上提示不遮挡展开工具箱中的刮刀")
-	await capture_pack("23_toolbox_hint_and_card_footer")
+	await capture_pack("23_toolbox_hint_and_card")
 	await click_control(main.emblem_library._scraper)
 	check(main._rune_scraper_mode and (not is_instance_valid(hint) or hint._teaching_done), "实际点击刮刀后教学自动淡出，无需确认按钮")
 

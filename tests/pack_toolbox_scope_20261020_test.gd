@@ -15,7 +15,9 @@ func _run() -> void:
 	shell.apply_display_mode(DisplayScript.DisplayMode.WINDOW_2K)
 	await create_timer(0.7).timeout
 	main.run_reward_state.gold = 1000
+	CardView.TextDisplaySettings.set_mode(self, CardView.TextDisplaySettings.Mode.POPUP, false)
 	var owned: OwnedCard = main.owned_card_collection.find_first_by_definition(load("res://resources/cards/musketeer.tres"))
+	var effect_box_seen := false
 	for remembered: bool in [true, false, false]:
 		main._open_card_inspection(owned.card_data, owned)
 		await create_timer(0.35).timeout
@@ -39,12 +41,23 @@ func _run() -> void:
 		check(not main._inspection_library_expanded and main.emblem_library.position.is_equal_approx(main._inspection_library_position(false)), "新卡包默认收起工具箱，不沿用普通检视记忆")
 		check(main._last_minion_inspection_library_expanded == remembered, "开包没有覆盖普通检视记忆")
 		await capture("pack-toolbox-closed")
+		var effect_box := main._inspection_overlay.get_node_or_null("InspectionEffectSideBox") as Control
+		var original_x := effect_box.position.x if effect_box != null else 0.0
 		await click(main._inspection_library_toggle.get_global_rect().get_center())
 		await create_timer(0.3).timeout
 		check(main._inspection_library_expanded, "开包期间仍可临时展开工具箱")
+		if effect_box != null:
+			effect_box_seen = true
+			check(effect_box.position.x >= main._inspection_overlay.size.x, "开包检视原说明同样滑出右侧")
 		if remembered:
+			var inspected: OwnedCard = main._inspection_owned_card
+			main._open_gameplay_teaching("tutorial:step:wounds")
+			check(main._escape_pause_menu.is_teaching_book_open(), "开包检视也可打开独立教程书")
+			main._on_escape_pause_menu_requested()
+			check(main._card_pack_opening == sequence and main._inspection_owned_card == inspected and main._inspection_library_expanded, "关闭教程后保留开包进度、原卡和工具箱")
 			await click(main._inspection_library_toggle.get_global_rect().get_center())
 			await create_timer(0.3).timeout
+			if effect_box != null: check(is_equal_approx(effect_box.position.x, original_x), "开包检视收回时原说明滑回")
 			await _finish_cards(sequence)
 		else:
 			main._close_card_inspection(true)
@@ -54,6 +67,7 @@ func _run() -> void:
 		await create_timer(0.35).timeout
 		check(main._inspection_library_expanded == remembered, "回到普通检视恢复之前的记忆")
 		main._close_card_inspection(true)
+	check(effect_box_seen, "真实开包遇到带侧边特效说明的卡")
 	DirAccess.remove_absolute(main.run_save_path)
 	shell.queue_free()
 	await process_frame

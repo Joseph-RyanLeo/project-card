@@ -192,7 +192,12 @@ func _run() -> void:
 	if not check(await shell.start_new_slot_run(), "开启M2真实新局"): quit(1); return
 	main = shell.main_screen
 	await process_frame
-	check(main.owned_card_collection.size() == 6 and main.front_row.get_squad_count() == 1, "后勤机器人同一实例加入收藏并部署")
+	check(main.owned_card_collection.size() == 5 and main.front_row.get_squad_count() == 0, "补给先行的天赋选择前尚无后勤机器人")
+	pick_talents()
+	var supply_wait := create_timer(16.0)
+	while supply_wait.time_left > 0.0 and (not main.maze_controller._initial_pack_prompt.visible or main.maze_controller._initial_pack_button.disabled):
+		await process_frame
+	check(main.owned_card_collection.size() == 6 and main.front_row.get_squad_count() == 1, "选择天赋后同一后勤机器人加入收藏并部署")
 	check(main.run_pack_enabled("emblem_pack") and not main.profile_progress.profile.unlocks.packs.has("emblem_pack"), "试用普通纹章包不提前永久开放")
 	check(await open_supply() and main.emblem_library.get_inventory_state().size() == 5, "M2开局纹章包按既有规格抽取5枚")
 	# 此处验证终点任务奖励和存档。加强现有参战实例，避免随机事件和商店经济决定能否走到终点。

@@ -10,4 +10,4 @@ pack_id = &"event_relics"
 card_type = 1
 equipment_type = 1
 rarity = 4
-effect_text = "突击：装备者永久失去3点生命值。荣耀：该装备永久获得+2/+5（每场战斗1次）。"
+effect_text = "突击：装备者永久基础生命−3（最低1）。荣耀：该装备永久获得+2/+5（每场战斗1次）。"

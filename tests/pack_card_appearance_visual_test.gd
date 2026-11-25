@@ -1,8 +1,9 @@
 extends SceneTree
 
-## 用正式CardView和开包检视表面在GPU上验证六种卡面×三种卡图。
+## 用正式CardView和开包检视表面在GPU上验证七种卡面×三种卡图。
 const Appearance = preload("res://scripts/data/card_appearance.gd")
 const CARD := preload("res://scenes/ui/CardView.tscn")
+const PACK_SURFACES := Appearance.Surface.FROSTED + 1
 const TILE := Rect2i(20, 0, 470, 640) # 每个组合截取同一大小的实际画面
 var failures := 0
 var assertions := 0
@@ -43,10 +44,10 @@ func _run() -> void:
 	root.add_child(caption)
 	var source := load("res://resources/cards/militia.tres") as CardData
 	var original_bytes := FileAccess.get_file_as_bytes(source.resource_path)
-	var grid := Image.create(TILE.size.x * 6, TILE.size.y * 3, false, Image.FORMAT_RGBA8)
+	var grid := Image.create(TILE.size.x * PACK_SURFACES, TILE.size.y * Appearance.ART_KEYS.size(), false, Image.FORMAT_RGBA8)
 	for art: int in Appearance.ART_KEYS.size():
 		var reference: Image
-		for face: int in Appearance.SURFACE_KEYS.size():
+		for face: int in PACK_SURFACES:
 			var owned := OwnedCard.new()
 			owned.initialize(source, StringName("visual_%d_%d" % [face, art]), 0)
 			owned.surface_finish = face as Appearance.Surface
@@ -72,6 +73,8 @@ func _run() -> void:
 			if foil: check(int(surface.effect.get_shader_parameter("flash_type")) == (0 if face in [Appearance.Surface.FRACTURED, Appearance.Surface.EMBOSSED] else face - Appearance.Surface.SILVER), "银金彩闪颜色正确，碎闪与法线闪使用白色闪纹")
 			check(bool(surface.effect.get_shader_parameter("use_fractured")) == (face == Appearance.Surface.FRACTURED), "碎闪可与卡图组合")
 			check(bool(renderer._art_material.get_shader_parameter("embossed")) == (face == Appearance.Surface.EMBOSSED), "法线可与卡图组合")
+			if face == Appearance.Surface.FROSTED:
+				check(int(renderer._background_material.get_shader_parameter("film_kind")) == 1 and surface.render_scale == 4, "正式开包检视以原磨砂材质合成")
 			var overframe := art == Appearance.Art.OVERFRAME
 			check((card.art_panel.position == Vector2.ONE and card.art_panel.size == Vector2(97, 134)) == overframe, "扩展裁切由卡图维度控制")
 			check(card.art_texture.visible and card.card_name_frame.visible != overframe and card.name_label.visible != overframe and card.race_icon.visible != overframe, "超框随从隐藏卡名与种族，保留立绘")
@@ -90,7 +93,7 @@ func _run() -> void:
 			check(owned.surface_finish == face and owned.art_finish == art, "展示不会重新抽外观")
 			surface.queue_free()
 			await process_frame
-	check(grid.save_png("/private/tmp/project-card-pack-appearance-18.png") == OK, "输出18种组合实拍")
+	check(grid.save_png("/private/tmp/project-card-pack-appearance-21.png") == OK, "输出21种组合实拍")
 	check(FileAccess.get_file_as_bytes(source.resource_path) == original_bytes, "外观组合与取景不修改共享资源")
 	print("开包罕贵度GPU验收：%d项，%d失败" % [assertions, failures])
 	quit(1 if failures else 0)

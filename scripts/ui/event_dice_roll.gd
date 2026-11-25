@@ -18,10 +18,13 @@ const IMPACT_TILT: float = 0.22 # 首次触桌时剩余的翻滚角度，单位�
 const DIE_SIZE: float = DiceModel.DESIGN_RADIUS # 骰体从中心到最远顶点的大小
 const SPINS: float = 1.5 # 一次投掷的翻滚圈数
 const CAPTION_FONT_SIZE: int = 15 # 投掷说明与结果字号
-const TABLE_Y: float = 110.0 # 骰子落桌的屏幕纵坐标，为下方结果留出间距
+const CAPTION_BASELINE_OFFSET := 15.0 # 骰身区域下缘到结果文字基线的距离
+const TABLE_Y := 114.0 # 区域内的落桌高度，放大骰身时保持固定
 const TABLE_UP := Vector3(0, -0.6, 0.8) # 桌面法线，控制从上方看骰子的角度
 const LANDING_TURN: float = -16.0 # 落定时骰面相对于桌面的转角
 const TUMBLE_AXIS := Vector3(0.56, 0.8, 0.22) # 主翻滚轴，改变骰面切换方向
+const SHADOW_COLOR := Color(0.19, 0.09, 0.10, 0.30) # 骰子贴桌时的阴影色及深度
+const SHADOW_AIR_ALPHA := 0.52 # 抛到最高处时保留的阴影透明度比例
 
 var _sides: int
 var _result: int
@@ -30,14 +33,14 @@ var _model := DiceModel.new()
 var _landing_basis := Basis.IDENTITY
 var _animation: Tween
 var show_caption := true
-var presentation_scale := 1.0 # 按目标大小绘制几何和字号，避免查看器放大已栅格化的文字
+var presentation_scale := 1.0 # 直接按倍率绘制骰体和点数
+var motion_scale := 1.0 # 单独调整投掷的位移和弧线高度
 
 
 func _ready() -> void:
 	name = "EventDiceRoll"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	custom_minimum_size.y = 164.0 # 事件详情中留给骰子和结果的高度
 
 
 func prepare(sides: int, result: int) -> void:
@@ -53,12 +56,12 @@ func play(sides: int, result: int) -> void:
 	play_prepared()
 
 
-func play_prepared(rest_x: Variant = null) -> void:
+func play_prepared(rest_position := Vector2.INF) -> void:
 	_animation = create_tween()
 	_animation.tween_method(_update_flight, 0.0, 1.0, ROLL_SECONDS)
 	_animation.tween_interval(RESULT_SECONDS)
-	if rest_x != null:
-		_animation.tween_property(self, "position:x", float(rest_x), SLIDE_SECONDS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	if rest_position.is_finite():
+		_animation.tween_property(self, "position", rest_position, SLIDE_SECONDS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_animation.tween_callback(finished.emit)
 
 
@@ -95,26 +98,22 @@ func get_landing_center() -> Vector2:
 
 
 func _landing_contact() -> Vector2:
-	return Vector2(size.x * 0.5, TABLE_Y * presentation_scale)
+	return Vector2(size.x * 0.5, TABLE_Y)
 
 
 func _draw() -> void:
 	if _sides <= 0: return
 	var pose := _sample_motion(_flight * ROLL_SECONDS)
-	var contact := _landing_contact() - Vector2(pose.x * presentation_scale, 0)
-	draw_set_transform(contact, 0.0, Vector2(1.0, 0.19)) # 把地面阴影压成扁椭圆
-	draw_circle(Vector2.ZERO, DIE_SIZE * presentation_scale * (0.84 - pose.y * 0.006), Color(0.07, 0.04, 0.08, 0.65))
-	draw_set_transform(Vector2.ZERO)
-	var lifted_contact := contact - Vector2(0, pose.y * presentation_scale)
+	var contact := _landing_contact() - Vector2(pose.x * motion_scale, 0)
 	if _model.vertices.is_empty():
-		_draw_generic_roll(lifted_contact)
+		_draw_generic_roll(contact - Vector2(0, pose.y * motion_scale))
 	else:
-		_draw_die(lifted_contact, pose.z)
+		_draw_die(contact, pose.y, pose.z)
 
 	if show_caption:
 		var caption := "1d%d · 投掷中" % _sides
 		if _flight >= 1.0: caption = "1d%d · 投掷结果 %d" % [_sides, _result]
-		_draw_centered(caption, Vector2(size.x * 0.5, 157), CAPTION_FONT_SIZE, DiceModel.INK)
+		_draw_centered(caption, Vector2(size.x * 0.5, size.y + CAPTION_BASELINE_OFFSET), CAPTION_FONT_SIZE, DiceModel.INK)
 
 
 func _sample_motion(seconds: float) -> Vector3:
@@ -130,9 +129,17 @@ func _sample_motion(seconds: float) -> Vector3:
 	return Vector3(BOUNCE_DISTANCE * remaining, BOUNCE_HEIGHT * 4.0 * rebound * (1.0 - rebound), -IMPACT_TILT * remaining)
 
 
-func _draw_die(contact: Vector2, turn: float) -> void:
+func _draw_die(contact: Vector2, height: float, turn: float) -> void:
 	var rotation := Basis(TUMBLE_AXIS.normalized(), turn) * Basis(Vector3.RIGHT, turn * 0.44) * _landing_basis
-	_model.draw_on(self, _supported_center(contact, rotation), rotation, DIE_SIZE * presentation_scale, _result if _flight >= 1.0 else 0)
+	var radius := DIE_SIZE * presentation_scale
+	var lift := height * motion_scale
+	var shadow := _model.shadow_outline(rotation, TABLE_UP, radius, lift)
+	for index: int in shadow.size():
+		shadow[index] += contact
+	var alpha := SHADOW_COLOR.a * lerpf(1.0, SHADOW_AIR_ALPHA, height / THROW_HEIGHT)
+	draw_colored_polygon(shadow, Color(SHADOW_COLOR, alpha))
+	var center := _supported_center(contact - Vector2(0, lift), rotation)
+	_model.draw_on(self, center, rotation, radius, _result if _flight >= 1.0 else 0)
 
 
 func _supported_center(contact: Vector2, rotation: Basis) -> Vector2:

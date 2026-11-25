@@ -9,7 +9,7 @@ const SLOTS_PER_KIND := 3 # 每种卡固定的收藏位置数
 const Save = preload("res://scripts/data/run_save_service.gd")
 
 var profile: Dictionary = {
-	"created_at": 0, "legacy": false, "points": 0, "discoveries": {"cards": {}, "stickers": {}, "resources": {}},
+	"created_at": 0, "legacy": false, "points": 0, "discoveries": {"cards": {}, "stickers": {}, "resources": {}, "event_outcomes": {}},
 	"tasks": {"tutorial": {"purchased": true, "completed": false}}, "unlocks": {"heroes": [INITIAL_HERO], "packs": ["ash_ledger"], "items": [], "routes": [], "growth": []},
 	"collection": {}, "receipts": {}, "pack_choices_by_hero": {},
 	"tutorial": {"actually_completed": false, "skipped": false, "reward_claimed": false, "skip_eligible_at_creation": false, "records_version": 2, "read_hints": [], "hint_texts": {}},
@@ -40,6 +40,7 @@ func restore_state(value: Dictionary) -> bool:
 	if not r.has("enabled_unlocks"): r["enabled_unlocks"] = {}
 	if not _migrate_hint_records(p, r): return false
 	if not _valid_profile(p) or not _valid_run(r): return false
+	if not p.discoveries.has("event_outcomes"): p.discoveries["event_outcomes"] = {}
 	if not r.summary.is_empty():
 		var receipt := "run_end:" + String(r.id)
 		if not _valid_summary(r.summary) or p.receipts.get(receipt, -1) != r.summary.total: return false
@@ -118,6 +119,10 @@ func commit_discoveries() -> void:
 	for category: String in run.pending_discoveries:
 		profile.discoveries[category].merge(run.pending_discoveries[category], true)
 		run.pending_discoveries[category].clear()
+
+
+func record_event_outcome(key: String) -> void:
+	profile.discoveries.event_outcomes[key] = true
 
 
 func credit_once(receipt: String, amount: int) -> bool:
@@ -326,6 +331,10 @@ func _valid_profile(p: Dictionary) -> bool:
 	for key: String in ["tasks", "unlocks", "collection", "receipts", "pack_choices_by_hero", "tutorial"]:
 		if not p.get(key) is Dictionary: return false
 	if not _discovery_set(p.get("discoveries")): return false
+	var event_outcomes: Variant = p.discoveries.get("event_outcomes", {})
+	if not event_outcomes is Dictionary: return false
+	for key: Variant in event_outcomes:
+		if not key is String or key.is_empty() or event_outcomes[key] != true: return false
 	if p.has("twisted_camp"):
 		var camp: Variant = p.twisted_camp
 		if not camp is Dictionary or camp.get("route") not in ["self", "friends"]: return false

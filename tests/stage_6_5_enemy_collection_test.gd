@@ -349,66 +349,26 @@ func _test_collection_pages_filters_and_transactions() -> void:
 		main.queue_free()
 		await process_frame
 		return
-	var forward_page := forward_overlay.get_node("MovingPage") as Control
-	var forward_old_fixed := forward_overlay.get_node("StaticOldPage") as Control
-	var forward_target_fixed := forward_overlay.get_node("StaticTargetPage") as Control
-	var forward_target_card := (
-		(forward_target_fixed.get_node("CardLayer") as Control)
-		.get_child(0)
-		.get_child(0) as CardView
-	)
-	var forward_shadow := forward_overlay.get_node("PageTurnShadow") as ColorRect
-	var forward_old_number := forward_old_fixed.get_node("PageNumberLabel") as Label
-	var forward_target_number := forward_target_fixed.get_node("PageNumberLabel") as Label
-	var forward_moving_number := forward_page.get_node("PageNumberLabel") as Label
+	var forward_page := forward_overlay.get_node("MovingPage") as CollectionPageCurl
+	var forward_old := forward_overlay.get_node("StaticOldPage/PageNumberLabel") as Label
+	var forward_target := forward_overlay.get_node("StaticTargetPage/PageNumberLabel") as Label
+	var forward_front := forward_page.get_node("PageFaces/FrontFace/PageNumberLabel") as Label
+	var forward_back := forward_page.get_node("PageFaces/BackFace/PageNumberLabel") as Label
 	_expect(
 		main.is_page_turning()
 		and int(forward_overlay.get_meta("direction")) == 1
-		and int(forward_old_fixed.get_meta("physical_page")) == 1
-		and int(forward_target_fixed.get_meta("physical_page")) == 4
-		and int(forward_page.get_meta("physical_page")) == 2
-		and (forward_target_fixed.get_node("CardLayer") as Control).get_child_count() == 6
-		and forward_page.z_index
-		> (forward_target_card.get_node("StatsRow") as Control).z_index
-		and forward_shadow.z_index
-		> (forward_target_card.get_node("StatsRow") as Control).z_index
-		and forward_old_number.text == "1"
-		and forward_target_number.text == "4"
-		and forward_moving_number.text == "2"
-		and forward_moving_number.get_theme_font("font") == main.PAGE_NUMBER_FONT
-		and forward_moving_number.vertical_alignment
-		== main.right_page_number_label.vertical_alignment
-		and is_equal_approx(
-			forward_moving_number.global_position.y,
-			main.right_page_number_label.global_position.y
-		)
+		and forward_old.text == "1" and forward_target.text == "4"
+		and forward_front.text == "2" and forward_back.text == "3"
+		and forward_front.get_theme_font("font") == main.PAGE_NUMBER_FONT
+		and forward_front.vertical_alignment == main.right_page_number_label.vertical_alignment
+		and forward_page.position == main.COLLECTION_RIGHT_PAGE_POSITION
 		and not main.collection_card_row.visible,
-		"活动页码随纸张收起，且字体、垂直对齐与正常页码完全一致"
+		"前翻固定页码 1、4，活动页正反面携带 2、3 并以书脊为轴"
 	)
-	_expect(
-		not main.turn_collection_page(0, &"edge"),
-		"单页动画进行中禁止再次切页"
-	)
-	await create_timer(main.PAGE_TURN_HALF_DURATION + 0.03).timeout
-	_expect(
-		forward_page.position == main.COLLECTION_LEFT_PAGE_POSITION
-		and is_equal_approx(forward_page.pivot_offset.x, main.COLLECTION_PAGE_SIZE.x)
-		and int(forward_page.get_meta("physical_page")) == 3
-		and (forward_page.get_node("CardLayer") as Control).get_child_count() == 6
-		and (forward_page.get_node("PageNumberLabel") as Label).text == "3"
-		and forward_page.z_index > forward_old_fixed.z_index
-		and forward_page.z_index
-		> (
-			(
-				(forward_old_fixed.get_node("CardLayer") as Control)
-				.get_child(0)
-				.get_child(0) as CardView
-			).get_node("StatsRow") as Control
-		).z_index
-		and forward_page.has_node("PageFreeEdge"),
-		"活动页中点切为第 3 页，页码 3 随纸张展开并遮住第 1 页"
-	)
-	await create_timer(main.PAGE_TURN_HALF_DURATION + 0.10).timeout
+	_expect(not main.turn_collection_page(0, &"edge"), "单页动画进行中禁止再次切页")
+	await create_timer(main.PAGE_TURN_DURATION * 0.5 + 0.03).timeout
+	_expect(forward_page.progress > 0.5, "前翻经过书脊后继续向左铺开")
+	await create_timer(main.PAGE_TURN_DURATION * 0.5 + 0.10).timeout
 	_expect(
 		main._get_collection_card_slots().size() == 12
 		and main.collection_card_row.visible
@@ -418,32 +378,21 @@ func _test_collection_pages_filters_and_transactions() -> void:
 	)
 	main.turn_collection_page(0, &"edge")
 	var backward_overlay := main._page_turn_overlay as Control
-	var backward_page := backward_overlay.get_node("MovingPage") as Control
-	var backward_old_fixed := backward_overlay.get_node("StaticOldPage") as Control
-	var backward_target_fixed := backward_overlay.get_node("StaticTargetPage") as Control
+	var backward_page := backward_overlay.get_node("MovingPage") as CollectionPageCurl
+	var backward_old := backward_overlay.get_node("StaticOldPage/PageNumberLabel") as Label
+	var backward_target := backward_overlay.get_node("StaticTargetPage/PageNumberLabel") as Label
+	var backward_front := backward_page.get_node("PageFaces/FrontFace/PageNumberLabel") as Label
+	var backward_back := backward_page.get_node("PageFaces/BackFace/PageNumberLabel") as Label
 	_expect(
 		int(backward_overlay.get_meta("direction")) == -1
-		and int(backward_old_fixed.get_meta("physical_page")) == 4
-		and int(backward_target_fixed.get_meta("physical_page")) == 1
-		and int(backward_page.get_meta("physical_page")) == 3
-		and (backward_old_fixed.get_node("PageNumberLabel") as Label).text == "4"
-		and (backward_target_fixed.get_node("PageNumberLabel") as Label).text == "1"
-		and (backward_page.get_node("PageNumberLabel") as Label).text == "3"
-		and (backward_target_fixed.get_node("CardLayer") as Control).get_child_count() == 6,
-		"向前翻页固定页码 1、4，唯一活动页码从第 3 页开始"
+		and backward_old.text == "4" and backward_target.text == "1"
+		and backward_front.text == "3" and backward_back.text == "2"
+		and backward_page.position == main.COLLECTION_RIGHT_PAGE_POSITION,
+		"后翻固定页码 1、4，活动页反向翻动并携带页码 3、2"
 	)
-	await create_timer(main.PAGE_TURN_HALF_DURATION + 0.03).timeout
-	_expect(
-		backward_page.position == main.COLLECTION_RIGHT_PAGE_POSITION
-		and is_zero_approx(backward_page.pivot_offset.x)
-		and int(backward_page.get_meta("physical_page")) == 2
-		and (backward_page.get_node("PageNumberLabel") as Label).text == "2"
-		and (backward_page.get_node("CardLayer") as Control).get_child_count() == 6
-		and backward_page.z_index > backward_old_fixed.z_index
-		and backward_page.has_node("PageFreeEdge"),
-		"活动页中点切为第 2 页，并在第 4 页上方从书脊向右覆盖"
-	)
-	await create_timer(main.PAGE_TURN_HALF_DURATION + 0.05).timeout
+	await create_timer(main.PAGE_TURN_DURATION * 0.5 + 0.03).timeout
+	_expect(backward_page.progress > 0.5, "后翻经过书脊后继续向右铺开")
+	await create_timer(main.PAGE_TURN_DURATION * 0.5 + 0.05).timeout
 	main.turn_collection_page(1, &"direct")
 	_expect(main._get_collection_card_slots().size() == 12, "第二页保持 12 张真实收藏卡可用于翻页调试")
 	_expect(
@@ -728,32 +677,26 @@ func _test_collection_pages_filters_and_transactions() -> void:
 		"同一张卡再次放回时移到最前且不重复"
 	)
 	await create_timer(main.RECENT_BOOKMARK_SHAKE_STEP_DURATION * 4.0 + 0.05).timeout
-	main.current_collection_page = 1
-	var bookmark_click := InputEventMouseButton.new()
-	bookmark_click.button_index = MOUSE_BUTTON_LEFT
-	bookmark_click.position = main.recent_bookmark_button.get_global_rect().get_center()
-	bookmark_click.pressed = true
-	main.get_viewport().push_input(bookmark_click)
-	await process_frame
-	bookmark_click.pressed = false
-	main.get_viewport().push_input(bookmark_click)
-	await process_frame
+	main.set_world_view(main.WorldView.COLLECTION, false)
+	var regular_page := mini(1, main.get_collection_spread_count() - 1)
+	main.current_collection_page = regular_page
+	main.toggle_recent_bookmark()
 	_expect(
 		main.collection_bookmark_active
-		and main.is_recent_bookmark_transitioning()
+		and main.is_page_turning()
 		and main.current_collection_page == 0
 		and main._get_collection_card_slots().size() == 12
 		and main.recent_left_page_art.visible
 		and not main.regular_pages_art.visible
 		and main.left_page_number_label.text == "最近 1"
 		and main.right_page_number_label.text == "最近 2",
-		"点击书签切到两页最近使用并显示独立页码"
+		"切换书签会翻到两页最近使用并显示独立页码"
 	)
-	await create_timer(main.ACTION_TAB_TWEEN_DURATION + 0.05).timeout
+	while main.is_page_turning(): await process_frame
 	var bookmark_rest_position: Vector2 = book_panel.position + main.RECENT_BOOKMARK_POSITION
 	_expect(
-		main.recent_bookmark_button.position == bookmark_rest_position + main.RECENT_BOOKMARK_SELECTED_OFFSET,
-		"最近使用书签抽出后回弹到选中位置"
+		main.recent_bookmark_button.position == bookmark_rest_position,
+		"切到最近使用页后书签保持原来的位置"
 	)
 	_expect(
 		main.recent_bookmark_button.z_index > main.recent_left_page_art.z_index,
@@ -761,10 +704,10 @@ func _test_collection_pages_filters_and_transactions() -> void:
 	)
 	_expect(not main.turn_collection_page(1, &"edge"), "最近使用书签页不参与普通收藏分页")
 	main.toggle_recent_bookmark()
-	await create_timer(main.ACTION_TAB_TWEEN_DURATION + 0.05).timeout
+	while main.is_page_turning(): await process_frame
 	_expect(
 		not main.collection_bookmark_active
-		and main.current_collection_page == 1
+		and main.current_collection_page == regular_page
 		and main.regular_pages_art.visible
 		and main.recent_bookmark_button.position == bookmark_rest_position
 		and main.recent_bookmark_button.z_index < main.regular_pages_art.z_index,

@@ -5,6 +5,7 @@ extends Control
 signal purchase_requested
 signal inspection_requested
 
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const TILE_SIZE := Vector2(112, 212) # 单行商品仅预留图片与独立价格的高度
 const REFLOW_SECONDS: float = 0.24 # 售出商品后剩余图片和价格横向补位的秒数
 const ART_HEIGHT: float = 188.0 # 锦缎从棋盘y79至y267，商品在此固定高度内上下居中
@@ -13,12 +14,17 @@ const IDLE_FORCE_LIMIT: float = 0.22 # 闲置透视倾斜强度，为检视最�
 const IDLE_SECONDS_MIN: float = 1.8 # 一次随机倾斜变化的最短秒数
 const IDLE_SECONDS_MAX: float = 3.4 # 一次随机倾斜变化的最长秒数
 const PACK_RENDER_SCALE: float = 2.0 # 商店卡包凹凸和贴纸封皮按2倍精度计算光影，适配2K窗口
+const SCRAPER_HOP_HEIGHT := 10.0 # 刮刀指向时图面弹起的像素数
+const SCRAPER_HOP_UP := 0.11 # 刮刀弹起的秒数
+const SCRAPER_HOP_DOWN := 0.17 # 刮刀落回原货位的秒数
 const PackArt = preload("res://scripts/ui/pack_tear_art.gd")
 
 var _reflow_tween: Tween
+var _scraper_hop: Tween
 var _reflow_offset := 0.0
 var _visual: Control
 var _hovered := false
+var _gamepad_look := Vector2.INF
 var _left_pressed := false
 var _hover_surface: InspectionCardSurface
 var _idle_rng := RandomNumberGenerator.new()
@@ -101,6 +107,8 @@ func _ready() -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion and _hover_surface != null and get_viewport().gui_get_hovered_control() == self:
+		set_pointer_hover(true)
 	if not event is InputEventMouseButton:
 		return
 	var mouse := event as InputEventMouseButton
@@ -121,12 +129,33 @@ func _gui_input(event: InputEvent) -> void:
 
 
 func set_pointer_hover(entered: bool) -> void:
+	if _gamepad_look.is_finite() or (entered and Input.mouse_mode == Input.MOUSE_MODE_HIDDEN): return
+	_set_hovered(entered)
+
+
+func set_gamepad_hover(entered: bool) -> void:
+	_gamepad_look = Vector2.ZERO if entered else Vector2.INF
+	if entered and _hovered and _hover_surface != null and is_instance_valid(_hover_surface.card):
+		_hover_surface.card.hide_effect_popup()
+	_set_hovered(entered)
+
+
+func set_gamepad_look(look: Vector2) -> void:
+	_gamepad_look = look
+
+
+func _set_hovered(entered: bool) -> void:
 	if _hovered == entered:
 		return
 	_hovered = entered
 	_left_pressed = false
+	if entered and get_meta("offer", {}).get("kind") == "scraper":
+		if is_instance_valid(_scraper_hop): _scraper_hop.kill()
+		_scraper_hop = create_tween().set_trans(Tween.TRANS_QUAD)
+		_scraper_hop.tween_property(_visual, "position:y", -SCRAPER_HOP_HEIGHT, SCRAPER_HOP_UP).set_ease(Tween.EASE_OUT)
+		_scraper_hop.tween_property(_visual, "position:y", 0.0, SCRAPER_HOP_DOWN).set_ease(Tween.EASE_IN)
 	if _hover_surface != null and is_instance_valid(_hover_surface.card):
-		if entered: _hover_surface.card.show_effect_popup(self)
+		if entered and not _gamepad_look.is_finite(): _hover_surface.card.show_effect_popup(self)
 		else: _hover_surface.card.hide_effect_popup()
 	if not entered and _hover_surface != null:
 		_next_idle_tilt()
@@ -140,17 +169,19 @@ func _next_idle_tilt() -> void:
 
 
 func _process(delta: float) -> void:
-	var target := Vector2.ZERO
-	if _hovered:
-		# 从固定商品区域取鼠标坐标，视觉倾斜不能反过来移动命中区域。
-		var pointer := get_local_mouse_position() - Vector2(_visual.position.x, 0.0) - _hover_surface.position - _hover_surface.content_padding
-		var art_size := _hover_surface.size - _hover_surface.content_padding * 2.0
-		target = ((pointer / art_size - Vector2.ONE * 0.5) * 2.0).clamp(-Vector2.ONE, Vector2.ONE)
-	else:
+	var target := _gamepad_look
+	if not target.is_finite() and _hovered and Input.mouse_mode == Input.MOUSE_MODE_HIDDEN:
+		_set_hovered(false)
+	if not _hovered:
 		_idle_elapsed = minf(_idle_elapsed + delta, _idle_duration)
 		target = _idle_from.lerp(_idle_target, smoothstep(0.0, _idle_duration, _idle_elapsed))
 		if _idle_elapsed >= _idle_duration:
 			_next_idle_tilt()
+	elif not target.is_finite():
+		# 从固定商品区域取鼠标坐标，视觉倾斜不能反过来移动命中区域。
+		var pointer := CrtProjection.local_mouse(self) - Vector2(_visual.position.x, 0.0) - _hover_surface.position - _hover_surface.content_padding
+		var art_size := _hover_surface.size - _hover_surface.content_padding * 2.0
+		target = ((pointer / art_size - Vector2.ONE * 0.5) * 2.0).clamp(-Vector2.ONE, Vector2.ONE)
 	_hover_surface.update_pointer_force(target, delta)
 
 

@@ -15,7 +15,7 @@ func _run() -> void:
 	main.run_save_path = "/private/tmp/project-card-fire-friendly-test-save.json"
 	main.set_world_view(main.WorldView.BATTLEFIELDS, false)
 	main.set_process(false)
-	main.set_battle_speed(1)
+	main.set_battle_speed(0) # 一倍速下验证通用受击动画的完整时长
 	for mode: int in [CardData.ActionType.MELEE, CardData.ActionType.HEAL, CardData.ActionType.DEFENSE]:
 		await _test_mode(mode)
 	main.set_process(true)
@@ -65,26 +65,38 @@ func _test_mode(mode: int) -> void:
 	controller.advance_time(float(status.next_time) - controller.elapsed_seconds)
 	main._sync_fire_burn_visuals()
 	var slot: BoardSlot = main._battle_state_slots[target]
+	var is_damage := mode == CardData.ActionType.MELEE
+	var flash: Node2D = slot._battle_hit_flash if is_damage else visual.white_flash
+	var peak: float = slot.BATTLE_HIT_FLASH_ALPHA if is_damage else 1.0
 	check(events.size() == 1 and events[0].effective_amount > 0.0, "%s：第一跳真实改变伤害／治疗／护甲数值" % mode)
-	check(visual.white_flash.visible and visual.white_flash.get_child_count() == slot.squad_data.get_card_count() and is_equal_approx(visual.white_flash.modulate.a, 1.0), "%s：同一跳立即使每张目标卡面瞬白" % mode)
+	if is_damage:
+		check(not visual.white_flash.visible and is_instance_valid(flash), "灼烧扣血使用统一受击闪白，火焰不再重复叠闪")
+		if not is_instance_valid(flash): return
+		slot._battle_hit_tween.pause()
+	check(flash.visible and flash.get_child_count() == slot.squad_data.get_card_count() and is_equal_approx(flash.modulate.a, peak), "%s：同一跳立即使每张目标卡面瞬白" % mode)
 	var point := Vector2i(slot.get_global_rect().get_center())
 	await process_frame
 	RenderingServer.force_draw(false)
 	var white := main.get_viewport().get_texture().get_image()
 	white.save_png("/private/tmp/project-card-fire-white-%d.png" % mode)
 	var pixel := white.get_pixelv(point)
-	check(minf(minf(pixel.r, pixel.g), pixel.b) > 0.95, "%s：原生画面中目标卡面中心实际变白" % mode)
-	var before := visual.white_flash.modulate.a
+	check(minf(minf(pixel.r, pixel.g), pixel.b) > peak - 0.05, "%s：原生画面中目标卡面中心实际变白" % mode)
+	var before := flash.modulate.a
 	await create_timer(0.08).timeout
 	main._sync_fire_burn_visuals()
-	check(visual.white_flash.modulate.a == before, "%s：战斗时钟停止时瞬白保持冻结" % mode)
-	controller.set_battle_speed_multiplier(3.0)
-	controller._process(0.02)
-	main._sync_fire_burn_visuals()
-	check(visual.white_flash.visible and absf(visual.white_flash.modulate.a - 0.25) < 0.001, "%s：三倍速推进0.06战斗秒，瞬白同步衰减" % mode)
-	controller.advance_time(0.07)
-	main._sync_fire_burn_visuals()
-	check(not visual.white_flash.visible, "%s：0.12战斗秒后恢复卡面" % mode)
+	check(flash.modulate.a == before, "%s：暂停瞬白的驱动时保持冻结" % mode)
+	if is_damage:
+		slot._battle_hit_tween.custom_step(slot.BATTLE_HIT_SECONDS * 0.5)
+		check(flash.visible and is_equal_approx(flash.modulate.a, peak * 0.25), "统一受击闪白在动画中点衰减")
+		slot._battle_hit_tween.custom_step(slot.BATTLE_HIT_SECONDS)
+	else:
+		controller.set_battle_speed_multiplier(3.0)
+		controller._process(0.02)
+		main._sync_fire_burn_visuals()
+		check(flash.visible and absf(flash.modulate.a - 0.25) < 0.001, "%s：三倍速推进0.06战斗秒，瞬白同步衰减" % mode)
+		controller.advance_time(0.07)
+		main._sync_fire_burn_visuals()
+	check(not flash.visible, "%s：动画完成后恢复卡面" % mode)
 	await process_frame
 	RenderingServer.force_draw(false)
 	var restored := main.get_viewport().get_texture().get_image().get_pixelv(point)
@@ -94,7 +106,7 @@ func _test_mode(mode: int) -> void:
 		var next: Dictionary = controller.active_continuous_effects[0]
 		controller.advance_time(float(next.next_time) - controller.elapsed_seconds)
 		main._sync_fire_burn_visuals()
-		check(visual.white_flash.visible and is_equal_approx(visual.white_flash.modulate.a, 1.0), "%s：第%d跳重新触发瞬白" % [mode, index + 2])
+		check(flash.visible and is_equal_approx(flash.modulate.a, peak), "%s：第%d跳重新触发瞬白" % [mode, index + 2])
 	controller.advance_time(0.3)
 	main._sync_fire_burn_visuals()
 	check(main._fire_burn_visuals.is_empty(), "%s：状态结束后火焰与瞬白一起清理" % mode)

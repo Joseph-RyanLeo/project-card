@@ -14,4 +14,4 @@ equipment_type = 4
 equipment_armor_delta = -1
 equipment_action_delta = 2
 effect_ids = Array[StringName]([&"gravekeepers_notes.effect.last_wish"])
-effect_text = "基础护甲-1（最低0）。跨战记录双方不同种类的阵亡随从（不含佩戴者）。遗愿：每种已记录随从逐次对随机敌军造成1点固定无属性伤害。"
+effect_text = "最大护甲-1（最低0）。跨战记录双方不同种类的阵亡随从（不含佩戴者）。遗愿：每种已记录随从逐次对随机敌军造成1点固定无属性伤害。"

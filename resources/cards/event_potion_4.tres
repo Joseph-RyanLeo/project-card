@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" format=3]
+
+[ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_data"]
+
+[resource]
+script = ExtResource("1_data")
+id = &"event_potion_4"
+display_name = "迅捷药剂"
+pack_id = &"event_potions"
+content_effect = &"event_potion_4"
+card_type = 1
+equipment_type = 5
+rarity = 0
+effect_text = "突击：消耗并使装备者获得属性"

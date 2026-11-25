@@ -5,6 +5,7 @@ extends Control
 ## 自动发现卡牌、筛选卡包与类型、编辑基础资料及立绘的辅助工具。
 ## 所有交互先修改预览副本；只有显式点击保存才会写回 .tres 资源。
 
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const MAIN_SCENE_PATH := "res://scenes/Main.tscn"
 const CARD_PREVIEW_SHADER: Shader = preload(
 	"res://shaders/card_preview_3d.gdshader"
@@ -16,6 +17,9 @@ const PREVIEW_MAX_TILT_DEGREES: float = 10.0 # 4× 预览跟随鼠标时的最�
 const PREVIEW_FOV_DEGREES: float = 72.0 # 整卡与全息层共用的相机视野角，越大近大远小越明显
 const PREVIEW_PROJECTION_INSET: float = 0.0 # 透视补偿内缩量；0 保持开关 3D 前后的卡面尺寸一致
 const FINISH_RENDER_SCALE := 4.0 # 内层动态压纹按4倍采样计算，源图仍使用最近邻保持像素边缘
+const DEPTH_STEP := 0.01 # 每次微调的图层景深倍率
+const DEPTH_NAME_WIDTH := 140.0 # 图层名称栏宽，滑杆占用中间剩余空间
+const DEPTH_FIELD_WIDTH := 92.0 # 景深数字输入框的宽度
 const CARD_RESOURCE_DIRECTORY := "res://resources/cards"
 const ALL_PACK_ID: StringName = &"__all_packs__"
 const ALL_CARD_TYPES: int = -2 # 全部种类的选项ID；避开OptionButton把-1解释为自动编号
@@ -42,6 +46,7 @@ var _active_pack_id: StringName = ALL_PACK_ID
 			if not _drafts.has(key):
 				var draft := value.duplicate() as CardData
 				draft.art_finish_offsets = value.art_finish_offsets.duplicate()
+				draft.inspection_art_depths = value.inspection_art_depths.duplicate()
 				draft.background_offsets = value.background_offsets.duplicate()
 				draft.background_overframe_offsets = value.background_overframe_offsets.duplicate()
 				_drafts[key] = draft
@@ -84,6 +89,7 @@ var _finish_preview: CardFinishPreview
 @onready var preview_card: CardView = %PreviewCard
 @onready var preview_viewport: SubViewport = %PreviewViewport
 @onready var preview_display: TextureRect = %PreviewDisplay
+@onready var preview_caption: Label = %PreviewCaption
 @onready var status_label: Label = %StatusLabel
 @onready var card_type_selector: OptionButton = %CardTypeSelector
 @onready var card_selector: ItemList = %CardSelector
@@ -117,6 +123,11 @@ var _finish_preview: CardFinishPreview
 @onready var use_flash_check: CheckButton = %UseFlashCheck
 @onready var flash_type_selector: OptionButton = %FlashTypeSelector
 @onready var finish_selector: OptionButton = %FinishSelector
+@onready var edit_tabs: TabBar = %CardEditTabs
+@onready var card_field_page: Control = %CardFieldPage
+@onready var depth_page: Control = %DepthPage
+@onready var depth_rows: VBoxContainer = %DepthRows
+@onready var reset_layer_depths_button: Button = %ResetLayerDepths
 
 
 func _ready() -> void:
@@ -125,6 +136,8 @@ func _ready() -> void:
 	# 最后整卡统一透视，保证边框、立绘和文字不会分别倾斜。
 	preview_card.pivot_offset = Vector2.ZERO
 	_setup_effect_preview()
+	edit_tabs.add_tab("资料与取景")
+	edit_tabs.add_tab("图层景深")
 	_reload_catalog()
 	_populate_card_type_selector()
 	_populate_pack_selector()
@@ -142,7 +155,7 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(_preview_effect_material):
 		return
 	var target_force := Vector2.ZERO
-	var local_pointer := preview_display.get_local_mouse_position()
+	var local_pointer := CrtProjection.local_mouse(preview_display)
 	if Rect2(Vector2.ZERO, preview_display.size).has_point(local_pointer):
 		target_force = Vector2(
 			(local_pointer.x / preview_display.size.x - 0.5) * 2.0,
@@ -161,7 +174,7 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	# 运行调整器时方向键与四个 1px 按钮共用同一事务入口；
 	# @tool 编辑器预览不截获编辑器自身的方向键。
-	if Engine.is_editor_hint() or not (event is InputEventKey):
+	if Engine.is_editor_hint() or depth_page.visible or not (event is InputEventKey):
 		return
 	var focus := get_viewport().gui_get_focus_owner()
 	if focus is LineEdit or focus is TextEdit or focus is SpinBox or focus is ItemList or focus is OptionButton:
@@ -344,7 +357,11 @@ func _has_unsaved_changes(source: CardData) -> bool:
 		if draft.get(field) != source.get(field): return true
 	for finish_key: StringName in CardData.ART_FINISH_KEYS:
 		if draft.get_art_offset_for_finish(finish_key) != source.get_art_offset_for_finish(finish_key): return true
-	return draft.background_offsets != source.background_offsets or draft.background_overframe_offsets != source.background_overframe_offsets
+	return (
+		draft.background_offsets != source.background_offsets
+		or draft.background_overframe_offsets != source.background_overframe_offsets
+		or draft.inspection_art_depths != source.inspection_art_depths
+	)
 
 
 func _selected_finish_key() -> StringName:
@@ -399,6 +416,8 @@ func _connect_runtime_controls() -> void:
 	use_flash_check.toggled.connect(_on_use_flash_toggled)
 	flash_type_selector.item_selected.connect(_on_flash_type_selected)
 	finish_selector.item_selected.connect(func(_index: int) -> void: _on_finish_controls_changed())
+	edit_tabs.tab_changed.connect(_on_edit_tab_changed)
+	reset_layer_depths_button.pressed.connect(_reset_layer_depths)
 
 
 func _sync_runtime_controls() -> void:
@@ -408,6 +427,79 @@ func _sync_runtime_controls() -> void:
 	_sync_offset_controls()
 	_sync_background_controls()
 	_sync_card_fields()
+	_sync_layer_depth_controls()
+
+
+func _on_edit_tab_changed(index: int) -> void:
+	var editing_depth := index == 1
+	depth_page.visible = editing_depth
+	card_field_page.visible = not editing_depth
+	preview_caption.text = "4× 全息景深预览" if editing_depth else "4× 像素预览"
+	for control: Control in [use_3d_check, use_flash_check, finish_selector, flash_type_selector]:
+		control.visible = not editing_depth
+	reset_button.visible = not editing_depth
+	save_all_finishes_button.visible = not editing_depth
+	if editing_depth:
+		finish_selector.select(CardFinishPreview.Finish.HOLOGRAPHIC)
+		use_3d_check.set_pressed_no_signal(true)
+		use_flash_check.set_pressed_no_signal(true)
+		_preview_effect_material.set_shader_parameter("use_3d", true)
+		_finish_preview.enabled = true
+		_on_finish_controls_changed()
+
+
+func _sync_layer_depth_controls() -> void:
+	var has_layers := _preview_data != null and not _preview_data.inspection_art_layers.is_empty()
+	if not has_layers and edit_tabs.current_tab == 1: edit_tabs.current_tab = 0
+	edit_tabs.set_tab_disabled(1, not has_layers)
+	for row: Node in depth_rows.get_children():
+		depth_rows.remove_child(row)
+		row.queue_free()
+	if not has_layers: return
+	for index: int in _preview_data.inspection_art_layers.size() + 1:
+		var row := HBoxContainer.new()
+		row.name = "LayerDepth%d" % index
+		depth_rows.add_child(row)
+		var label := Label.new()
+		label.custom_minimum_size.x = DEPTH_NAME_WIDTH
+		if index == 0:
+			label.text = "背景"
+		elif index <= _preview_data.inspection_art_layer_names.size():
+			label.text = _preview_data.inspection_art_layer_names[index - 1]
+		else:
+			label.text = "立绘层 %d" % index
+		row.add_child(label)
+		var slider := HSlider.new()
+		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(slider)
+		var spin := SpinBox.new()
+		spin.name = "DepthValue"
+		spin.custom_minimum_size.x = DEPTH_FIELD_WIDTH
+		spin.min_value = 0.0
+		spin.max_value = CardData.INSPECTION_MAX_DEPTH
+		spin.step = DEPTH_STEP
+		spin.suffix = "×"
+		spin.value = _preview_data.get_inspection_layer_depth(index)
+		row.add_child(spin)
+		spin.share(slider)
+		spin.value_changed.connect(_on_layer_depth_changed.bind(index))
+
+
+func _on_layer_depth_changed(value: float, index: int) -> void:
+	var key := _preview_data.get_inspection_layer_key(index)
+	if is_equal_approx(value, _preview_data.get_default_inspection_layer_depth(index)):
+		_preview_data.inspection_art_depths.erase(key)
+	else:
+		_preview_data.inspection_art_depths[key] = value
+	_queue_preview_refresh()
+
+
+func _reset_layer_depths() -> void:
+	for index: int in _preview_data.inspection_art_layers.size() + 1:
+		_preview_data.inspection_art_depths.erase(_preview_data.get_inspection_layer_key(index))
+	_sync_layer_depth_controls()
+	_queue_preview_refresh()
 
 
 func _sync_card_selector() -> void:
@@ -702,6 +794,13 @@ func _save_card_to_resource(all_finishes: bool = false) -> void:
 		var offset: Vector2i = _preview_data.background_overframe_offsets[style]
 		if card_data.background_overframe_offsets.get(style) != offset:
 			saved.background_overframe_offsets[style] = offset
+	if not _preview_data.inspection_art_layers.is_empty():
+		for index: int in _preview_data.inspection_art_layers.size() + 1:
+			var key := _preview_data.get_inspection_layer_key(index)
+			var depth: Variant = _preview_data.inspection_art_depths.get(key)
+			if depth == card_data.inspection_art_depths.get(key): continue
+			if depth == null: saved.inspection_art_depths.erase(key)
+			else: saved.inspection_art_depths[key] = depth
 	if all_finishes:
 		saved.set_art_offset_for_all_finishes(preview_art_offset)
 	else:

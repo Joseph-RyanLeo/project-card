@@ -2,6 +2,10 @@
 
 [ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
 [ext_resource type="Texture2D" path="res://assets/card_art/spells/side_by_side.png" id="2_art"]
+[ext_resource type="Texture2D" path="res://assets/card_backgrounds/ash_ledger_side_by_side.png" id="3_background"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/layers/side_by_side_back_light.png" id="layer_back_light"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/layers/side_by_side_figures.png" id="layer_figures"]
+[ext_resource type="Texture2D" path="res://assets/card_art/spells/layers/side_by_side_front_light.png" id="layer_front_light"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -13,22 +17,16 @@ keywords = Array[StringName]([&"乡邻", &"固定减伤"])
 card_type = 2
 rarity = 2
 spell_trigger_kind = 1
-background_style = 3
+background_texture = ExtResource("3_background")
 background_offsets = Dictionary[int, Vector2i]({
 3: Vector2i(0, -20)
 })
 background_overframe_offsets = Dictionary[int, Vector2i]({
+0: Vector2i(3, -1),
 3: Vector2i(0, 1)
 })
 art_texture = ExtResource("2_art")
-art_offset = Vector2i(-1, 21)
-art_finish_offsets = Dictionary[StringName, Vector2i]({
-&"embossed": Vector2i(-1, 14),
-&"fingerprint": Vector2i(-1, 14),
-&"foil": Vector2i(-1, 14),
-&"fractured": Vector2i(-1, 14),
-&"frosted": Vector2i(-1, 14),
-&"holographic": Vector2i(-1, 14),
-&"overframe": Vector2i(-1, 22)
-})
+inspection_art_layers = Array[Texture2D]([ExtResource("layer_back_light"), ExtResource("layer_figures"), ExtResource("layer_front_light")])
+inspection_art_layer_names = PackedStringArray("后景光效", "人物", "前景光效")
+art_offset = Vector2i(3, 15)
 effect_text = "所有友军获得乡邻：受到的所有攻击伤害-1。"

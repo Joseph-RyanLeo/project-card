@@ -72,7 +72,13 @@ static func teaching_hint(key: String) -> Dictionary:
 		hint["title"] = "符文牌型：" + result.get_pattern_name()
 		return hint
 	if key == "supply_first:emblems":
-		return {"title": "纹章的使用", "dialogue": [], "instruction": "纹章已收入工具箱。右键检视随从，展开工具箱后，把纹章拖到可用的纹章槽上。", "anchor": "toolbox"}
+		return {"title": "纹章的使用", "dialogue": [], "instruction": "右键检视随从，展开工具箱后，把纹章拖到可用的纹章槽上。", "anchor": "none", "placement": "top_left", "panel_width": 300}
+	if key == "supply_first:opening":
+		var hint := story_hint("后勤机器人：“哔……哔……铁壁关的先行补给已送达，后续的增员已经在路上。”\n伊奥恩：“铁壁关那帮人总算没全忘了这儿。”")
+		hint.lock_dialogue = true
+		return hint
+	if key == "supply_first:open_pack":
+		return {"title": "纹章包", "dialogue": [], "instruction": "点击桌上的纹章包，领取试用纹章。", "anchor": "initial_pack", "highlight_only": true}
 	return {}
 
 

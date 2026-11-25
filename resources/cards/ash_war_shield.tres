@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
 [ext_resource type="Texture2D" path="res://assets/card_art/equipment/ash_war_shield.png" id="2_art"]
+[ext_resource type="Texture2D" path="res://assets/card_backgrounds/radiant_alliance_equipment.png" id="3_background"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -16,16 +17,14 @@ rarity = 1
 equipment_type = 2
 equipment_zeal_delta = -1
 equipment_armor_delta = 4
-background_style = 3
+background_texture = ExtResource("3_background")
 background_offsets = Dictionary[int, Vector2i]({
 3: Vector2i(0, -20)
 })
 background_overframe_offsets = Dictionary[int, Vector2i]({
+0: Vector2i(3, 1),
 3: Vector2i(0, 1)
 })
 art_texture = ExtResource("2_art")
-art_offset = Vector2i(0, 8)
-art_finish_offsets = Dictionary[StringName, Vector2i]({
-&"overframe": Vector2i(1, 15)
-})
+art_offset = Vector2i(0, 14)
 effect_text = "受击后，对来源造成当前护甲20%的伤害（最多4）。"

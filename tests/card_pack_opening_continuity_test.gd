@@ -28,10 +28,17 @@ func _run() -> void:
 	var sequence = main._card_pack_opening
 	sequence.card_requested.connect(func(_owned: OwnedCard):
 		var stack_ready := true
+		var front: InspectionCardSurface = sequence.surface
+		var front_card_origin := front.position + front.content_padding * front.scale
 		for back_index: int in sequence._background_cards.size():
 			var back: InspectionCardSurface = sequence._background_cards[back_index]
-			stack_ready = stack_ready and back.position.is_equal_approx(sequence.surface.position - sequence._stack_force * Vector2(sequence.effects.stack_parallax_x, sequence.effects.stack_parallax_y) * (back_index + 1)) and back.scale == sequence.surface.scale
-		check(stack_ready, "第%d张揭晓回调已完成后层定位和缩放，不等待下一帧" % (sequence.current_index + 1))
+			var parallax: Vector2 = sequence._stack_force * Vector2(sequence.effects.stack_parallax_x, sequence.effects.stack_parallax_y) * (back_index + 1)
+			var back_card_origin := back.position + back.content_padding * back.scale
+			stack_ready = (
+				stack_ready and back_card_origin.is_equal_approx(front_card_origin - parallax)
+				and back.size == front.size and back.scale == front.scale
+			)
+		check(stack_ready, "第%d张揭晓时前后层实际卡框对齐，只保留倾斜视差" % (sequence.current_index + 1))
 		if OS.get_cmdline_user_args().has("frames"):
 			await capture("pack-immediate-%d" % sequence.current_index)
 	)
@@ -61,6 +68,7 @@ func _run() -> void:
 			await click(main._inspection_library_toggle.get_global_rect().get_center())
 			await create_timer(0.3).timeout
 		check(main._inspection_owned_card == expected[index], "第%d张轮换保持原实例" % (index + 1))
+		check(main._inspection_card_view._show_inspection_stat_breakdown == is_minion, "第%d张的检视数字模式跟随当前卡种类" % (index + 1))
 		check(main._inspection_card_view.action_icon.texture.get_image().get_data() == expected_icons[index], "第%d张前层身份图标正确" % (index + 1))
 		check(main._inspection_card_view.action_icon.get_rect() == expected_icon_rects[index], "第%d张前层身份图标位置和尺寸正确" % (index + 1))
 		for back_index: int in sequence._background_cards.size():

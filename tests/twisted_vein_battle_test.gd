@@ -76,6 +76,8 @@ func _run() -> void:
 	test_spells()
 	test_last_unit_death_projectiles()
 	test_death_chains()
+	test_exclusive_first_death_wounds()
+	test_exclusive_wound_settlement()
 	test_passive_boundaries()
 	test_fatigue_boundaries()
 	test_npc_mining_commit()
@@ -87,6 +89,93 @@ func _run() -> void:
 		current.free()
 	print("扭曲矿脉：%d条断言，%d失败" % [assertions, failures])
 	quit(1 if failures > 0 else 0)
+
+func test_exclusive_first_death_wounds() -> void:
+	var exclusive_seed := _seed_for_first_death_rolls(true, true)
+	var ordinary_seed := _seed_for_first_death_rolls(true, false)
+	var missed_seed := _seed_for_first_death_rolls(false, true)
+	for killer_id: String in ["greed_demon", "miser", "crystal_shell_broodmother", "crystal_skin_sentry", "crystal_shard_beetle", "crystal_shell_beetle"]:
+		var victim := owned("musketeer")
+		var c := battle([victim], [owned(killer_id)])
+		c._random.seed = exclusive_seed
+		hit(c, c.enemy_states[0], c.player_states[0], 500.0)
+		var expected := &"贪婪" if killer_id in ["greed_demon", "miser"] else &"晶体化"
+		check(victim.wound_slots.any(func(slot: Dictionary) -> bool: return slot.get("wound_id") == expected), "实际击杀者 %s 可在两次50%%判定通过后施加%s" % [killer_id, expected])
+		var ledger := c.owned_card_change_ledger.get_entries()
+		check(ledger.any(func(entry: Dictionary) -> bool: return entry.effect_id == &"first_death_wound" and entry.owned_card_instance_id == victim.instance_id), "专属伤势写入原单卡结算账本")
+
+	var victim := owned("musketeer")
+	var c := battle([victim], [owned("miser")])
+	var target := c.player_states[0]
+	var killer := c.enemy_states[0]
+	c._random.seed = missed_seed
+	hit(c, killer, target, 500.0)
+	check(victim.wound_slots.all(func(slot: Dictionary) -> bool: return slot.is_empty()), "第一次50%未通过时不获得伤势")
+	check(c.revive_state_at_original_position(target, 5.0), "失去伤势机会的小队可以复活")
+	c._random.seed = exclusive_seed
+	hit(c, killer, target, 500.0)
+	check(victim.wound_slots.all(func(slot: Dictionary) -> bool: return slot.is_empty()), "复活再亡不重新判定")
+
+	for branch: String in ["ordinary", "unmapped", "environment", "spell", "friendly"]:
+		victim = owned("musketeer")
+		c = battle([victim, owned("miser")], [owned("guard_remains" if branch == "unmapped" else "miser")])
+		c._random.seed = ordinary_seed if branch == "ordinary" else exclusive_seed
+		killer = c.player_states[1] if branch == "friendly" else c.enemy_states[0]
+		var event := c.twisted_vein.make_event(killer, c.player_states[0], 500.0, CardData.ActionType.MELEE, false, "伤势来源")
+		event.is_environment_damage = branch == "environment"
+		if branch == "spell":
+			event.source_owned_card_instance_id = &"test_spell_instance"
+		c._apply_effect_event(event)
+		c._finalize_batch()
+		var wounds := victim.wound_slots.filter(func(slot: Dictionary) -> bool: return not slot.is_empty())
+		check(wounds.size() == 1 and wounds[0].wound_id not in [&"贪婪", &"晶体化", &"结晶"], "%s 只从普通池获得伤势" % branch)
+
+	victim = owned("musketeer")
+	for index: int in victim.wound_slots.size():
+		var wound_id := &"中毒Ⅰ" if index == 0 else &"贪婪"
+		victim.set_wound_slot(index, {"wound_id": wound_id, "level": 1})
+	c = battle([victim], [owned("miser")])
+	c._random.seed = exclusive_seed
+	hit(c, c.enemy_states[0], c.player_states[0], 500.0)
+	check(victim.wound_slots[0].wound_id == &"中毒Ⅱ" and victim.wound_slots[1].wound_id == &"贪婪", "专属选中但槽满时沿用普通伤势升级，原专属槽保留")
+
+
+func _seed_for_first_death_rolls(first_pass: bool, second_pass: bool) -> int:
+	var probe := RandomNumberGenerator.new()
+	for seed_value: int in 100:
+		probe.seed = seed_value
+		var first := probe.randf() < 0.5
+		var second := probe.randf() < 0.5
+		if first == first_pass and second == second_pass:
+			return seed_value
+	return -1
+
+
+func test_exclusive_wound_settlement() -> void:
+	var collection := OwnedCardCollection.new()
+	var card: CardData = load("res://resources/cards/musketeer.tres")
+	var victims: Array[OwnedCard] = [collection.create_card(card), collection.create_card(card)]
+	var c := battle(victims, [owned("miser"), owned("crystal_shell_broodmother")])
+	var snapshot := BattlePreparationSnapshot.new()
+	var squads: Array[SquadData] = [SquadData.from_owned_card(victims[0]), SquadData.from_owned_card(victims[1])]
+	check(snapshot.initialize(c.battle_instance_id, 7, collection, {&"player_front": squads}, []), "保存专属伤势判定前的原始阵容")
+	for index: int in victims.size():
+		c._random.seed = _seed_for_first_death_rolls(true, true)
+		hit(c, c.enemy_states[index], c.player_states[index], 500.0)
+	var registry := {card.id: card}
+	var service := BattleSettlementService.new()
+	var result := service.settle(snapshot, c.permanent_growth_ledger.get_entries(), c.run_reward_ledger.get_entries(), collection, RunRewardState.new(), RunSettlementJournal.new(), c.get_owned_card_change_entries_for_settlement(), registry)
+	check(bool(result.get("success", false)), "贪婪与晶体化按原实例提交战后账本：" + String(result.get("reason", "")))
+	var save := RunSaveService.new()
+	var payload: Dictionary = JSON.parse_string(JSON.stringify(save._encode_collection_state(collection.capture_state())))
+	var restored := OwnedCardCollection.new()
+	var decoded := save._decode_collection_state(payload, registry)
+	check(decoded.get("success", false) and restored.restore_state(decoded.state), "含两种专属伤势的已结算收藏可重新解码")
+	for index: int in victims.size():
+		var owner := restored.get_by_instance_id(victims[index].instance_id)
+		var expected := &"贪婪" if index == 0 else &"晶体化"
+		check(owner != null and owner.wound_slots.any(func(slot: Dictionary) -> bool: return slot.get("wound_id") == expected and slot.get("source") == "first_death"), "读回后原实例保留首次阵亡获得的" + String(expected))
+
 
 func test_mining() -> void:
 	var c := battle([owned("gold_sprite"), owned("crystal_shell_broodmother"), owned("guard_remains")], [owned("guard_remains")], [owned("fire_element_shard"), owned("wood_element_shard")], [], {"mining_totals": [3, 4]}, true)
@@ -128,12 +217,14 @@ func test_economy() -> void:
 	c.effect_resolved.connect(func(e: BattleEffectEvent):
 		if e.effect_kind == BattleEffectEvent.EffectKind.HEALING: healing_events.append(e))
 	var before := c.player_states[0].get_display_action_value()
+	var enemy_before := c.enemy_states[1].get_display_action_value()
 	c.record_pending_run_reward(BattleEffectOwnerRef.for_state(collector, BattleEffectDefinition.OwnerKind.OWNING_PLAYER), BattleRunRewardLedger.KIND_GOLD, 7, &"gold_batch", collector.runtime_id, 0)
 	check(c.twisted_vein.wallets == [5, 22], "NPC初始15，金币归实际赚取方")
-	check(c.player_states[0].get_display_action_value() == before + 7 and c.enemy_states[1].get_display_action_value() == 13, "双方贪魔按每枚金币增加本场数值")
+	check(c.player_states[0].get_display_action_value() == before + 1 and c.enemy_states[1].get_display_action_value() == enemy_before + 1, "敌方一次获得7金币，双方贪魔各加1数值")
 	check(healing_events.size() == 1 and healing_events[0].target == collector and collector.current_health > 1.0, "休眠信徒一批金币治疗敌方赚取者一次")
 	echo(c, collector)
 	check(c.twisted_vein.wallets[0] == 3 and c.twisted_vein.stolen_from_player == 2, "NPC偷2金币计玩家损失")
+	check(c.player_states[0].get_display_action_value() == before + 2 and c.enemy_states[1].get_display_action_value() == enemy_before + 2, "另一笔偷取收入再次令双方贪魔各加1")
 	c.twisted_vein.wallets[0] = 1
 	echo(c, collector)
 	check(c.twisted_vein.wallets[0] == 1 and c.twisted_vein.stolen_from_player == 2, "不足2金币整次偷取失败")
@@ -215,10 +306,16 @@ func test_damage_and_sleep() -> void:
 	check(not c.enemy_states[0].alive, "哨兵穿甲即死")
 	c = battle([owned("rusted_pickhand")], [owned("guard_remains")])
 	hit(c, c.player_states[0], c.enemy_states[0], 0.1)
-	check(c.enemy_states[0].squad_data.get_vitals_source_instance().get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_ARMOR) == 2 and is_equal_approx(c.enemy_states[0].current_armor, 1.9), "镐手命中永久基础减甲并即时扣当前甲")
+	check(c.enemy_states[0].squad_data.get_vitals_source_instance().get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_ARMOR) == 2 and is_equal_approx(c.enemy_states[0].current_armor, 2.9), "镐手命中永久基础减甲，当前护甲只扣命中伤害")
 	c = battle([owned("guard_remains"), owned("ghostface_beetle"), owned("guard_remains")], [owned("guard_remains")])
+	var beneficiary: BattleSquadState = c.player_states[0]
+	var beneficiary_card := beneficiary.squad_data.get_vitals_source_instance()
+	beneficiary_card.set_wound_slot(0, {"wound_id": &"暗蚀", "level": 1})
+	beneficiary._load_owned_card_injuries()
+	beneficiary.current_health = 1.0
 	hit(c, c.enemy_states[0], c.player_states[1], 100.0)
 	check(c.player_states[0].get_max_health() == 4 and c.player_states[2].get_max_health() == 4, "鬼面虫遗愿为左右邻居加生命")
+	check(beneficiary.current_health == 3.0 and beneficiary.get_display_base_stats(beneficiary.get_active_rune_slots()).y == 2, "最大生命直接加当前，绕过暗蚀而保留原有缺血")
 	c = battle([owned("mine_wailer"), owned("guard_remains")], [owned("guard_remains")])
 	hit(c, c.enemy_states[0], c.player_states[0], 100.0)
 	check(c.enemy_states[0].get_buff_stacks(BattleRules.FATIGUE_BUFF_ID) == 2, "哀嚎者疲劳归最终击杀者")
@@ -275,9 +372,14 @@ func test_spells() -> void:
 	check(resource.revive(), "同一矿物资源正式复生")
 	c.execute_effect_mining(c.player_states[0], 1)
 	check(c.twisted_vein.mineral_events == 2 and c.player_states[1].current_armor == armor, "同资源复生再采计第二事件触发固定2坍塌伤害")
-	check(c._processed_spell_event_ids.size() == 2, "锻造和坍塌各单场释放一次")
+	check(c._spell_activations_by_instance.size() == 2, "锻造和坍塌各单场释放一次")
+	check(c.get_spell_display_states(BattleSquadState.Side.PLAYER).all(func(entry: Dictionary) -> bool: return entry.spent), "释放过的条件法术从分类标识的待释放数量扣除")
 	c.execute_effect_mining(c.player_states[0], 1)
-	check(c._processed_spell_event_ids.size() == 2, "后续开采不重复释放条件法术")
+	check(
+		c._spell_activations_by_instance.size() == 2
+		and c._spell_activations_by_instance.values().all(func(indices: Dictionary) -> bool: return indices.size() == 1),
+		"后续开采不重复释放条件法术"
+	)
 	c = battle([owned("guard_remains")], [owned("guard_remains")], [], [owned("giant_boulder")], {}, true)
 	c.advance_time(8.8)
 	check(c._elapsed_spell_attempted.size() == 1 and c.get_all_states().any(func(s: BattleSquadState): return not s.alive), "8秒落石通过真实弹道造成20×1.2魔法伤害")
@@ -326,6 +428,8 @@ func test_settlement() -> void:
 func test_death_chains() -> void:
 	var c := battle([owned("guard_remains"), owned("frenzied_gold_panner"), owned("guard_remains")], [owned("guard_remains")])
 	var panner := c.player_states[1]
+	# 这条断言只核对遗愿快照，排除随机伤势对伤害的倍率修正。
+	c._death_wound_checked[panner.runtime_id] = true
 	c.twisted_vein.add_modifier(panner, BattleModifier.Stat.REINFORCEMENT, 4, &"test_pending_reinforcement")
 	var expected := panner.get_display_action_value()
 	var wishes: Array[BattleEffectEvent] = []
@@ -447,7 +551,7 @@ func test_passive_boundaries() -> void:
 	target.apply_armor_exact(5)
 	var armor_before := target.current_armor
 	hit(c, c.player_states[0], target, 0.1)
-	check(target.squad_data.get_vitals_source_instance().get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_ARMOR) == 0 and is_equal_approx(target.current_armor, armor_before - 1.1), "镐手在基础甲0时仍扣当前甲1且永久甲不为负")
+	check(target.squad_data.get_vitals_source_instance().get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_ARMOR) == 0 and is_equal_approx(target.current_armor, armor_before - 0.1), "镐手在基础护甲0时只结算本次命中伤害")
 	c = battle([owned("guard_remains"), owned("guard_remains"), owned("guard_remains")], [owned("guard_remains")])
 	var holder := c.player_states[0]
 	holder.squad_data.equip_item(owned("portable_mine_lamp"))
@@ -470,7 +574,7 @@ func test_passive_boundaries() -> void:
 	check(e.effective_amount == 1.5 and not c.enemy_states[0].permanently_destroyed, "哨兵沉默后不应用伤害上限或销毁效果")
 
 func test_economy_settlement_boundaries() -> void:
-	var c := battle([owned("guard_remains"), owned("greedy_acolyte")], [owned("guard_remains")], [], [], {"player_gold": 1})
+	var c := battle([owned("guard_remains"), owned("greedy_acolyte"), owned("greed_demon")], [owned("guard_remains")], [], [], {"player_gold": 1})
 	var collector := c.player_states[0]
 	var owner := BattleEffectOwnerRef.for_state(collector, BattleEffectDefinition.OwnerKind.OWNING_PLAYER)
 	c.record_pending_run_reward(owner, BattleRunRewardLedger.KIND_GOLD_DELTA, 2, &"loss_to_zero", collector.runtime_id, 0, {"gold_delta": -2})
@@ -478,17 +582,38 @@ func test_economy_settlement_boundaries() -> void:
 	var before_entries := c.run_reward_ledger.get_entries().size()
 	c.record_pending_run_reward(owner, BattleRunRewardLedger.KIND_GOLD_DELTA, 2, &"no_loss_at_zero", collector.runtime_id, 1, {"gold_delta": -2})
 	check(c.twisted_vein.wallets[0] == 0 and c.run_reward_ledger.get_entries().size() == before_entries, "余额0时无额外扣款或赚金币事件")
-	var found_highest := false
-	for index: int in 500:
+	var ore := load("res://resources/cards/rainbow_gold_ore.tres") as CardData
+	var demon := c.player_states[2]
+	var healing_events: Array[BattleEffectEvent] = []
+	c.effect_resolved.connect(func(e: BattleEffectEvent):
+		if e.effect_kind == BattleEffectEvent.EffectKind.HEALING: healing_events.append(e))
+	var expected_payouts := [1, 6, 11, 21]
+	var observed_payouts := {}
+	var observed_seventeen := false
+	for _attempt: int in 500:
 		var start := c.run_reward_ledger.get_entries().size()
 		var wallet_before := c.twisted_vein.wallets[0]
-		c.resolve_direct_shard_harvest(collector, load("res://resources/cards/rainbow_gold_ore.tres"))
+		var growth_before := demon.modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)
+		collector.current_health = 1.0
+		healing_events.clear()
+		c.resolve_direct_shard_harvest(collector, ore)
 		var entries := c.run_reward_ledger.get_entries().slice(start)
-		if entries.size() == 2 and int(entries[-1].parameters.get("roll_total", 0)) == 20:
-			check(entries[0].amount == 1 and entries[-1].amount == 20 and c.twisted_vein.wallets[0] == wallet_before + 21, "彩金矿2d10实际20仅基础1加最高20，不叠加5或10")
-			found_highest = true
+		if entries.size() != 1 or entries[0].kind != BattleRunRewardLedger.KIND_GOLD:
+			check(false, "每次彩金矿收获仅记录一笔金币")
 			break
-	check(found_highest, "固定真实随机流覆盖彩金最高档")
+		var receipt: Dictionary = entries[0]
+		var rolled := int(receipt.parameters.roll_total)
+		var payout: int = expected_payouts[0 if rolled <= 15 else (1 if rolled <= 18 else (2 if rolled == 19 else 3))]
+		var correct: bool = int(receipt.amount) == payout and c.twisted_vein.wallets[0] == wallet_before + payout
+		correct = correct and demon.modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE) == growth_before + 1.0
+		correct = correct and healing_events.size() == 1 and healing_events[0].target == collector
+		if not correct or not observed_payouts.has(payout) or (rolled == 17 and not observed_seventeen):
+			check(correct, "彩金矿掷出%d点，单笔入账%d金币，贪魔和信徒各触发一次" % [rolled, payout])
+		if not correct: break
+		observed_payouts[payout] = true
+		observed_seventeen = observed_seventeen or rolled == 17
+		if observed_payouts.size() == expected_payouts.size() and observed_seventeen: break
+	check(observed_payouts.size() == expected_payouts.size() and observed_seventeen, "固定随机流覆盖四档彩金奖励及诊断中的17点")
 	for outcome: int in [BattleController.Result.PLAYER_VICTORY, BattleController.Result.PLAYER_DEFEAT]:
 		var collection := OwnedCardCollection.new()
 		var player := collection.create_card(load("res://resources/cards/guard_remains.tres"))

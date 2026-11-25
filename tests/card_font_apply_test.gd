@@ -22,10 +22,10 @@ func _run() -> void:
 	var names := {}
 	for view: Node in get_nodes_in_group(&"card_views"):
 		if view.card_data != null: names[view.get_instance_id()] = view.card_data.display_name
-	await key_escape()
-	await _click(main._escape_pause_menu.find_child("CardFontLabButton", true, false))
-	await create_timer(0.7).timeout
+	await open_font_lab_from_pause()
 	var lab: Control = shell._card_font_lab
+	check(is_instance_valid(lab), "进入实际卡名字体调试器")
+	if not is_instance_valid(lab): quit(1); return
 	lab.profile_path = LAB_PREFS
 	lab.card_settings_path = CARD_PREFS
 	var profile: Dictionary = lab.DEFAULTS.duplicate()

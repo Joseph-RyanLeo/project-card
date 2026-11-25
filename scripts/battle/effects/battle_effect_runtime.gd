@@ -482,20 +482,23 @@ func _apply_definition(
 		_trace(event, definition, source, target, &"stack", &"refreshed", "刷新持续时间，不增加层数")
 		return
 	if definition.stacking.kind == BattleEffectStacking.Kind.CAPPED_ADDITIVE and existing != null:
+		var previous_value := existing.applied_value
+		var previous_maximum := target.get_max_health() if _changes_maximum_health(existing) else 0
 		existing.applied_value = minf(existing.applied_value + value, definition.stacking.cap)
 		target.modifiers.update_source_instance_value(existing.instance_id, existing.applied_value)
 		target.refresh_cooldown_after_modifier_change()
+		_refresh_maximum_health_modifier(existing, previous_value, previous_maximum)
 		_schedule_expiry(existing, event)
 		_trace(event, definition, source, target, &"stack", &"capped", "本效果贡献=%.2f" % existing.applied_value)
 		return
 	if definition.trigger == BattleEffectDefinition.Trigger.CONTINUOUS and existing != null:
 		if not is_equal_approx(existing.applied_value, value):
 			var previous_value := existing.applied_value
+			var previous_maximum := target.get_max_health() if _changes_maximum_health(existing) else 0
 			existing.applied_value = value
 			target.modifiers.update_source_instance_value(existing.instance_id, value)
 			target.refresh_cooldown_after_modifier_change()
-			_adjust_current_health_for_maximum_modifier(existing, value - previous_value)
-			_adjust_crystallized_temporary_armor(target, value - previous_value)
+			_refresh_maximum_health_modifier(existing, previous_value, previous_maximum)
 			_trace(event, definition, source, target, &"stack", &"recalculated", "持续效果实时重算为%.2f" % value)
 		else:
 			_trace(event, definition, source, target, &"stack", &"already_active", "持续检查不重复发放")
@@ -562,9 +565,9 @@ func _apply_operation(instance: BattleEffectInstance, event: BattleRuntimeEvent)
 			if stat_name == "max_health": stat = BattleModifier.Stat.MAX_HEALTH
 			elif stat_name == "base_armor": stat = BattleModifier.Stat.BASE_ARMOR
 			elif stat_name == "healing_received": stat = BattleModifier.Stat.HEALING_RECEIVED
+			var previous_maximum := target.get_max_health() if stat == BattleModifier.Stat.MAX_HEALTH else 0
 			_add_modifier(instance, stat, BattleModifier.Mode.ADD, instance.applied_value)
-			if stat == BattleModifier.Stat.MAX_HEALTH and bool(definition.parameters.get("increase_current_health", false)):
-				target.current_health = minf(target.current_health + instance.applied_value, float(target.get_max_health()))
+			_refresh_maximum_health_modifier(instance, 0.0, previous_maximum)
 			if stat == BattleModifier.Stat.BASE_ARMOR:
 				target.apply_armor_exact(instance.applied_value, instance.source.state)
 		BattleEffectDefinition.Operation.ADD_ACTION_MULTIPLIER:
@@ -782,8 +785,6 @@ func _add_modifier(
 	modifier.contribution_sources.assign(instance.contribution_sources.duplicate(true))
 	instance.target.modifiers.add_modifier(modifier)
 	instance.target.refresh_cooldown_after_modifier_change()
-	if stat == BattleModifier.Stat.MAX_HEALTH and mode == BattleModifier.Mode.ADD:
-		_adjust_crystallized_temporary_armor(instance.target, value)
 
 
 func _snapshot_contribution_source(
@@ -946,10 +947,11 @@ func _end_instance(
 	var removed_crystallized_health := 0.0
 	for modifier: BattleModifier in instance.target.modifiers.modifiers:
 		if modifier.source_instance_id == instance.instance_id and modifier.active and modifier.stat == BattleModifier.Stat.MAX_HEALTH and modifier.mode == BattleModifier.Mode.ADD:
-			removed_crystallized_health += modifier.value
+			removed_crystallized_health += maxf(modifier.value, 0.0)
 	instance.target.modifiers.remove_source_instance(instance.instance_id)
 	instance.target.refresh_cooldown_after_modifier_change()
-	_adjust_crystallized_temporary_armor(instance.target, -removed_crystallized_health)
+	if removed_crystallized_health > 0.0 and instance.target.converts_life_bonus():
+		instance.target.adjust_converted_armor(-removed_crystallized_health)
 	if instance.definition.operation == BattleEffectDefinition.Operation.SET_ACTION_TYPE:
 		instance.target.clear_runtime_action_type()
 		instance.target.runtime_base_action_multiplier = 1.0
@@ -968,20 +970,9 @@ func _end_instance(
 	if instance.definition.operation == BattleEffectDefinition.Operation.MASK_INJURY:
 		for injury_id: StringName in instance.payload.get("masked_injury_ids", []):
 			instance.target.unmask_injury(injury_id, instance.instance_id)
-	_adjust_current_health_for_maximum_modifier(instance, -instance.applied_value)
 	_trace(event, instance.definition, instance.source, instance.target, &"end", StringName(BattleEffectInstance.EndReason.keys()[reason].to_lower()), detail)
 	if instance.definition.stacking.kind == BattleEffectStacking.Kind.SAME_NAME_NONSTACKING:
 		_recompute_same_name_group(instance.stack_key(), event)
-
-
-func _adjust_crystallized_temporary_armor(state: BattleSquadState, health_delta: float) -> void:
-	if state == null or not state.has_unmasked_wound(&"晶体化") or is_zero_approx(health_delta):
-		return
-	var converted_delta := maxf(health_delta, 0.0)
-	if converted_delta > 0.0:
-		state.current_armor += converted_delta
-	else:
-		state.current_armor = maxf(state.current_armor + health_delta, 0.0)
 
 
 func _recompute_same_name_group(stack_key: String, event: BattleRuntimeEvent) -> void:
@@ -1398,25 +1389,18 @@ func _trigger_display_name(trigger: BattleEffectDefinition.Trigger) -> String:
 	return "条件触发"
 
 
-func _adjust_current_health_for_maximum_modifier(instance: BattleEffectInstance, modifier_delta: float = 0.0) -> void:
-	if (
-		instance == null
-		or instance.target == null
-		or instance.definition == null
-		or instance.definition.operation != BattleEffectDefinition.Operation.ADD_ATTRIBUTE
-		or String(instance.definition.parameters.get("stat", "")) != "max_health"
-	):
-		return
-	# 增加生命上限的效果可按定义同时补当前生命；但上限回落时
-	# 不再反向扣除当前生命。这会允许当前生命暂时高于新上限。
-	if bool(instance.definition.parameters.get("increase_current_health", false)) and modifier_delta > 0.0:
-		instance.target.current_health = minf(
-			float(instance.target.current_health) + modifier_delta,
-			float(instance.target.get_max_health())
-		)
-	else:
-		# 重新走一次 setter，让卡面立即同步未被扣除的当前生命。
-		instance.target.current_health = instance.target.current_health
+func _changes_maximum_health(instance: BattleEffectInstance) -> bool:
+	return instance.definition.operation == BattleEffectDefinition.Operation.ADD_ATTRIBUTE and instance.definition.parameters.get("stat") == "max_health"
+
+
+func _refresh_maximum_health_modifier(instance: BattleEffectInstance, previous_value: float, previous_maximum: int) -> void:
+	if not _changes_maximum_health(instance): return
+	# 只撤回旧的正向转化量。负向生命修正从未换取护甲。
+	if instance.target.converts_life_bonus():
+		var delta := maxf(instance.applied_value, 0.0) - maxf(previous_value, 0.0)
+		if not is_zero_approx(delta): instance.target.adjust_converted_armor(delta)
+	elif bool(instance.definition.parameters.get("increase_current_health", false)):
+		instance.target.apply_max_health_increase(previous_maximum, instance.applied_value - previous_value)
 
 
 func _is_state_before(left: BattleSquadState, right: BattleSquadState) -> bool:

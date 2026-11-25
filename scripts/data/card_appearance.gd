@@ -1,15 +1,27 @@
 class_name CardAppearance
 extends RefCounted
 
-## 卡面工艺与卡图表现分别抽取，独立于I～V品级和战斗数值。
+## 卡面按已抽出的品级选权重，卡图独立抽取。外观不参与品级或战斗数值的结算。
 enum Surface { PLAIN, SILVER, GOLD, RAINBOW, EMBOSSED, FRACTURED, FROSTED, FINGERPRINT }
 enum Art { PLAIN, HOLOGRAPHIC, OVERFRAME }
-const SURFACE_WEIGHTS: Array[int] = [40, 25, 15, 10, 5, 5, 0, 0] # 普通、银闪、金闪、彩闪、法线闪、碎闪的百分比；两种实验闪卡暂不加入随机池
+# 以下每行依次为普通、银闪、金闪、彩闪、法线闪、碎闪、磨砂闪、指纹闪。
+const SURFACE_WEIGHTS_I: Array[int] = [75, 10, 5, 4, 2, 2, 2, 0] # Ⅰ级卡面概率（%）
+const SURFACE_WEIGHTS_II: Array[int] = [62, 15, 8, 6, 3, 3, 3, 0] # Ⅱ级卡面概率（%）
+const SURFACE_WEIGHTS_III: Array[int] = [50, 20, 10, 8, 4, 4, 4, 0] # Ⅲ级卡面概率（%）
+const SURFACE_WEIGHTS_IV_V: Array[int] = [40, 20, 15, 10, 5, 5, 5, 0] # Ⅳ／Ⅴ级共用卡面概率（%）
 const ART_WEIGHTS: Array[int] = [90, 5, 5] # 普通、全息、超框的百分比
 const SURFACE_KEYS := ["plain", "silver", "gold", "rainbow", "embossed", "fractured", "frosted", "fingerprint"]
 const ART_KEYS := ["plain", "holographic", "overframe"]
 const SURFACE_LABELS := ["普通", "银闪", "金闪", "彩闪", "法线闪", "碎闪", "磨砂闪", "指纹闪"]
 const ART_LABELS := ["普通", "全息", "超框"]
+
+
+static func get_surface_weights(rarity: CardData.Rarity) -> Array[int]:
+	match rarity:
+		CardData.Rarity.I: return SURFACE_WEIGHTS_I
+		CardData.Rarity.II: return SURFACE_WEIGHTS_II
+		CardData.Rarity.III: return SURFACE_WEIGHTS_III
+		_: return SURFACE_WEIGHTS_IV_V
 
 
 static func pick_ticket(weights: Array[int], ticket: int) -> int:

@@ -44,29 +44,38 @@ func mouse_button(pressed: bool) -> void:
 	root.push_input(event, true)
 	await process_frame
 
-func escape_key() -> void:
-	var event := InputEventKey.new()
-	event.keycode = KEY_ESCAPE
-	event.pressed = true
-	root.push_input(event, true)
-	await process_frame
-	var release := InputEventKey.new()
-	release.keycode = KEY_ESCAPE
-	root.push_input(release, true)
-	await process_frame
+func tap_key(keycode: Key) -> void:
+	for pressed: bool in [true, false]:
+		var event := InputEventKey.new()
+		event.keycode = keycode
+		event.pressed = pressed
+		root.push_input(event, true)
+		await process_frame
 
 func _run() -> void:
+	if DisplayServer.get_name() == "headless":
+		print("SKIP: 原生资源拖放需要实际窗口的鼠标命中，请以720p或2K窗口运行。")
+		quit()
+		return
+	create_timer(20).timeout.connect(func():
+		push_error("资源板原生鼠标输入测试超时")
+		quit(1))
 	var args := OS.get_cmdline_user_args()
 	var is_2k := args.has("2k")
 	root.size = Vector2i(2560, 1440) if is_2k else Vector2i(1280, 720)
 	var shell := DISPLAY_SCENE.instantiate()
+	var fixture_directory := "/private/tmp/project-card-resource-input-%d" % OS.get_process_id()
+	DirAccess.make_dir_recursive_absolute(fixture_directory)
+	shell.run_slots.directory = fixture_directory
+	var main: Control = shell.get_node("RenderContainer/InternalViewport/DesignCanvas/Main")
+	main.run_save_path = fixture_directory.path_join("run.json")
+	main.initialize_maze_run_on_ready = false
 	root.add_child(shell)
 	shell.apply_display_mode(GameDisplayScript.DisplayMode.WINDOW_2K if is_2k else GameDisplayScript.DisplayMode.WINDOW_720P)
 	for _frame: int in 90:
 		await process_frame
 		var expected_window := Vector2i(2560, 1440) if is_2k else Vector2i(1280, 720)
 		if shell.get_window().size == expected_window: break
-	var main = shell.main_screen
 	viewport = shell.internal_viewport
 	viewport.notify_mouse_entered()
 	transform = shell.render_container.get_global_transform_with_canvas()
@@ -74,17 +83,34 @@ func _run() -> void:
 		transform.get_scale().is_equal_approx(Vector2(2, 2) if is_2k else Vector2.ONE),
 		"%s运行真实显示壳且内部720p画布缩放倍率正确" % ("2K" if is_2k else "720p")
 	)
+	var maze: ShortMazeController = main.maze_controller
+	maze.new_run(47007)
+	var talent_selected := maze.choose_talent("sentry_guard")
+	# 跳过当天的事件测试数据，经正式路线入口进入战前准备。
+	maze.run.round_index = ShortMazeRunState.ROUND_KINDS.find("battle")
+	maze.run.paths.clear()
+	maze._generate_paths()
+	var battle_selected := not maze.run.paths.is_empty() and maze.select_path(String(maze.run.paths[0].path_id))
+	check(talent_selected and battle_selected and maze.can_start_battle(), "通过正式遭遇入口进入可操作的战前准备")
+	if not battle_selected or not maze.can_start_battle():
+		quit(1)
+		return
+	await tap_key(KEY_TAB)
+	await create_timer(main.VIEW_TWEEN_DURATION + main.VIEW_SETTLE_DURATION).timeout
+	check(main.current_world_view == main.WorldView.COLLECTION, "按Tab从战场切换到普通收藏视角")
+	var fixture_rng := RandomNumberGenerator.new()
+	fixture_rng.seed = 60730
 	var resource_data := load("res://resources/cards/rainbow_gold_ore.tres") as CardData
-	var resource: OwnedCard = main.owned_card_collection.create_card(resource_data)
+	var resource: OwnedCard = main.owned_card_collection.create_card(resource_data, fixture_rng)
 	var blocker_data := load("res://resources/cards/fire_element_shard.tres") as CardData
-	var blocker: OwnedCard = main.owned_card_collection.create_card(blocker_data)
+	var blocker: OwnedCard = main.owned_card_collection.create_card(blocker_data, fixture_rng)
 	var enemy_resource: OwnedCard = OwnedCard.new()
-	enemy_resource.initialize(load("res://resources/cards/wood_element_shard.tres") as CardData, &"ui_enemy_resource", 99)
+	enemy_resource.initialize(load("res://resources/cards/wood_element_shard.tres") as CardData, &"ui_enemy_resource", 99, fixture_rng)
 
 	var player_disabled := _disabled_cells(main.resource_board_state.disabled_by_side.player)
 	if main.resource_board_state.get_level_resource_cards("player").is_empty():
 		var auto_resource := OwnedCard.new()
-		auto_resource.initialize(load("res://resources/cards/wood_element_shard.tres") as CardData, &"ui_auto_resource_fixture", 999)
+		auto_resource.initialize(load("res://resources/cards/wood_element_shard.tres") as CardData, &"ui_auto_resource_fixture", 999, fixture_rng)
 		var auto_anchor := _find_anchor(auto_resource.resource_shape, _occupied_cells(main.resource_board_state, "player"), Vector2i(-99, -99), player_disabled)
 		check(main.resource_board_state.deploy_level_resource("player", auto_resource, auto_anchor), "为真实输入验收补一个固定的关卡资源夹具")
 	main._refresh_resource_preparation_trays()
@@ -93,7 +119,7 @@ func _run() -> void:
 		main.resource_board_state.try_deploy("player", String(blocker.instance_id), blocker.resource_shape, blocker_anchor, blocker.resource_shape[0]),
 		"测试先在资源板建立占格阻挡与敌方资源"
 	)
-	var rarity_one_resource: OwnedCard = main.owned_card_collection.create_card(load("res://resources/cards/stone_of_greed.tres") as CardData)
+	var rarity_one_resource: OwnedCard = main.owned_card_collection.create_card(load("res://resources/cards/stone_of_greed.tres") as CardData, fixture_rng)
 	var rarity_one_anchor := _find_anchor(
 		rarity_one_resource.resource_shape,
 		_occupied_cells(main.resource_board_state, "player"),
@@ -149,6 +175,7 @@ func _run() -> void:
 	var target_anchor := _find_anchor(resource.resource_shape, _occupied_cells(main.resource_board_state, "player"), Vector2i(-99, -99), player_disabled)
 	var source_rect := source_view.get_global_rect()
 	var source_point := source_rect.position + Vector2(source_rect.size.x - 8.0, 8.0)
+	check(viewport.get_visible_rect().has_point(source_point), "拖拽起点在收藏视口内")
 	await mouse_move(source_point)
 	await mouse_button(true)
 	await mouse_move(source_point + Vector2(24, 4), true)
@@ -182,8 +209,10 @@ func _run() -> void:
 			root.get_texture().get_image().save_png("/private/tmp/project-card-resource-drag-%s.png" % ("2k" if is_2k else "720p"))
 		await mouse_button(false)
 	check(
-		main.resource_board_state.deployments.player.has(String(resource.instance_id)),
-		"收藏到资源板的真实鼠标拖放完成部署"
+		viewport.gui_is_drag_successful() and actual_drop_resolutions.size() == 1
+		and actual_drop_resolutions[0].anchor == target_anchor
+		and main.resource_board_state.deployments.player.has(String(resource.instance_id)),
+		"收藏到资源板的原生松手只提交一次，并部署到目标格"
 	)
 	if not main.resource_board_state.deployments.player.has(String(resource.instance_id)):
 		shell.queue_free()
@@ -247,7 +276,7 @@ func _run() -> void:
 			click_icon_center.distance_to(pointer) <= 1.0,
 			"点击携带模式下抓取格种类图标随鼠标锚定"
 		)
-		await escape_key()
+		await tap_key(KEY_ESCAPE)
 		check(main._click_carry_data.is_empty() and main.resource_board_state.deployments.player.has(String(resource.instance_id)), "ESC取消拾起并恢复原位")
 		# 通过原生拖拽把资源退回收藏格。
 		var return_source_point: Vector2 = click_point
@@ -346,13 +375,13 @@ func _run() -> void:
 	for control: Control in [main.start_battle_button, main.phase_label, main.battle_seed_panel]:
 		if is_instance_valid(control) and control.visible and hover_rect.intersects(control.get_global_rect()): overlap_with_controls = true
 	check(not overlap_with_controls, "悬停卡面不覆盖开战、阶段或种子控制条")
-	var escape_rect: Rect2 = main._escape_pause_menu.get_node("EscapeMenuButton").get_global_rect()
+	var bookmark_rect: Rect2 = main.menu_bookmark_button.get_global_rect()
 	var mode_rect: Rect2 = shell.display_mode_option.get_parent().get_global_rect()
 	var physical_hover := Rect2(transform * hover_rect.position, hover_rect.size * transform.get_scale())
 	check(
-		not escape_rect.intersects(tray_rect) and not escape_rect.intersects(hover_rect)
+		not bookmark_rect.intersects(tray_rect) and not bookmark_rect.intersects(hover_rect)
 		and not mode_rect.intersects(physical_hover),
-		"Esc与显示模式入口在真实窗口中避开资源板和悬停卡"
+		"收藏菜单书签与显示模式入口在真实窗口中避开资源板和悬停卡"
 	)
 	if args.has("capture"):
 		await RenderingServer.frame_post_draw

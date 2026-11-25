@@ -156,6 +156,10 @@ func _finish_cards(sequence: CardPackOpening) -> void:
 			check(sequence.glow.rare, "IV卡有独立揭晓光环")
 			await capture("pack-iv-card")
 		await click(_pointer_for_card_point(main._inspection_surface, Vector2(48, 65)))
+		if index == expected.size() - 1:
+			check(is_instance_valid(main._card_acquisition), "最后一张点击后衔接入藏演出")
+			if is_instance_valid(main._card_acquisition): await main._card_acquisition.finished
+			break
 		check(sequence.current_index == index + 1, "每次点击立即推进一张，后续点击不再被收卡等待吞掉")
 		await create_timer(1.05).timeout
 	check(not is_instance_valid(main._inspection_overlay) and not is_instance_valid(main._card_pack_opening) and main.ordinary_shop_open, "最后一张收起后直接返回商店并归还工具包")

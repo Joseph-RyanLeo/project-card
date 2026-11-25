@@ -5,12 +5,33 @@ uniform float film_density = 140.0; // 颗粒或刻纹的重复密度
 uniform float film_detail = 0.65; // 颗粒起伏或曲纹弯曲程度
 uniform float film_iridescence = 0.55; // 指纹闪的彩色反射比例
 uniform float film_angle = 0.0; // 固定刻纹方向的整体旋转角度
+uniform float frosted_shadow_visibility = 0.20; // 磨砂闪在未受光处保留的颗粒强度比例
 
-float film_noise(vec2 point) {
+float frosted_grain_mask(vec2 point) {
+	float footprint = max(length(dFdx(point)), length(dFdy(point)));
+	if (footprint >= 1.05) { return 0.0; }
+	const float SITE_JITTER = 0.65; // 颗粒中心的最大偏移跨度，打散边界而不露出方格
+	const float GRAIN_CUTOFF = 0.60; // 亮颗粒约占四成，相邻亮区自然连片
 	vec2 cell = floor(point);
-	vec2 weight = smoothstep(vec2(0.0), vec2(1.0), fract(point));
-	return mix(mix(finish_hash(cell), finish_hash(cell + vec2(1.0, 0.0)), weight.x),
-		mix(finish_hash(cell + vec2(0.0, 1.0)), finish_hash(cell + vec2(1.0)), weight.x), weight.y);
+	vec2 local = fract(point);
+	vec2 winner = cell;
+	float nearest = 8.0;
+	for (int row = -1; row <= 1; row++) {
+		for (int column = -1; column <= 1; column++) {
+			vec2 step_cell = vec2(float(column), float(row));
+			vec2 candidate = cell + step_cell;
+			vec2 site = step_cell + vec2(0.5) + SITE_JITTER *
+				(vec2(finish_hash(candidate + vec2(17.0, 0.0)), finish_hash(candidate + vec2(0.0, 41.0))) - vec2(0.5));
+			vec2 delta = local - site;
+			float distance_squared = dot(delta, delta);
+			if (distance_squared < nearest) {
+				nearest = distance_squared;
+				winner = candidate;
+			}
+		}
+	}
+	float resolved = 1.0 - smoothstep(0.50, 1.05, footprint);
+	return step(GRAIN_CUTOFF, finish_hash(winner)) * resolved;
 }
 
 // 抗锯齿细纹：缩回收藏中的小卡时，逐渐取平均，避免细线变成闪烁摩尔纹。
@@ -39,13 +60,12 @@ vec3 card_film_finish(vec3 base, vec2 uv, vec2 region_uv, vec2 force, int layer)
 	float relief;
 	float reflection;
 	if (film_kind == 1) {
-		// 细颗粒只调制膜层反光，不把旧版灰色噪点铺到人物原图上。
-		float grain = film_noise(p * film_density);
-		float fleck = pow(grain, 6.0) * 3.0;
-		float resolution = 1.0 - smoothstep(0.6, 1.6, length(fwidth(p * film_density)));
-		float micro = mix(1.0, 0.48 + grain * 0.7 + fleck, film_detail * resolution);
+		const float GRAIN_REFLECTION = 0.16; // 分辨得出的亮颗粒使用同一白色反射强度
+		float illumination = smoothstep(0.20, 0.70, max(beam, glare * 0.65));
+		float grain_visibility = mix(frosted_shadow_visibility, 1.0, illumination);
+		float grain = frosted_grain_mask(p * film_density) * GRAIN_REFLECTION * film_detail * grain_visibility;
 		relief = 1.0;
-		reflection = (beam * 0.3 + glare * 0.18 + 0.02) * micro;
+		reflection = beam * 0.3 + glare * 0.18 + 0.02 + grain;
 
 	} else {
 		float grooves;

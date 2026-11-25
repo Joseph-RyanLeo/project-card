@@ -101,7 +101,8 @@
     ],
     "instruction": "",
     "anchor": "collection",
-    "dim": false
+    "dim": false,
+    "lock_dialogue": true
   },
   "scraper_inspection": {
     "title": "刮开符文",
@@ -206,20 +207,56 @@
     "dim": false
   },
   "squad_sources": {
-    "title": "叠放与小队属性",
+    "title": "先叠成一支小队",
     "dialogue": [
       {
         "speaker": "伊奥恩",
         "text": "一路上招募了这么多伙计，该好好整理一下队伍了。"
       }
     ],
-    "instruction": "现在可以叠卡了。将随从拖到另一张允许组合的随从上，组成最多3张卡的小队。\n\n最左卡：提供攻击等行动数值、行动方式、冷却及基础受击优先级。\n最上层卡：提供卡牌特效。\n最右卡：提供生命与护甲。\n各张卡的原生属性不会全部相加。\n\n符文按叠放后实际显现的顺序，从左到右计算，最多5枚。被遮挡、覆盖或尚未揭晓的底层符文不提供收益；未揭晓槽仍是连续组合的断点。\n\n试着组成小队，或右键检视已有小队，查看成员与显现的符文。",
+    "instruction": "把一张随从拖到另一张可以组合的随从上，先叠成一支小队。最多可以叠三张。",
     "anchor": "formation",
     "placement": "bottom_left",
     "panel_width": 410,
     "instruction_font_size": 16,
     "dim": false,
     "nonblocking": true
+  },
+  "squad_action": {
+    "title": "最左卡 · 行动",
+    "dialogue": [],
+    "instruction": "最左卡提供普通数值、行动方式、冷却和基础受击优先级。\n\n点击左键继续。",
+    "anchor": "squad_action",
+    "placement": "bottom_left",
+    "panel_width": 355,
+    "instruction_font_size": 16
+  },
+  "squad_effect": {
+    "title": "最上层卡 · 特效",
+    "dialogue": [],
+    "instruction": "最上层卡提供小队的卡牌特效。\n\n点击左键继续。",
+    "anchor": "squad_effect",
+    "placement": "bottom_left",
+    "panel_width": 355,
+    "instruction_font_size": 16
+  },
+  "squad_vitals": {
+    "title": "最右卡 · 耐久",
+    "dialogue": [],
+    "instruction": "最右卡提供小队的生命与护甲。各成员的原生属性不会全部相加。\n\n点击左键继续。",
+    "anchor": "squad_vitals",
+    "placement": "bottom_left",
+    "panel_width": 355,
+    "instruction_font_size": 16
+  },
+  "squad_runes": {
+    "title": "显现的符文 · 牌型",
+    "dialogue": [],
+    "instruction": "实际显现且已揭晓的符文从左到右组成牌型，最多计入五枚。被遮挡的符文不计入，未揭晓的空位会打断连续牌型。\n\n点击左键继续。",
+    "anchor": "squad_runes",
+    "placement": "bottom_left",
+    "panel_width": 355,
+    "instruction_font_size": 16
   },
   "battle_retreat": {
     "title": "退场与伤势",

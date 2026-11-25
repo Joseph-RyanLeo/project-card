@@ -2,7 +2,10 @@ class_name ShortMazeController
 extends Node
 
 ## 一局迷宫的协调器：复用Main的收藏、商店、资源板与战斗，不复制这些系统。
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const EncounterBuilder = preload("res://scripts/flow/enemy_encounter_builder.gd")
+const LineupCatalog = preload("res://scripts/flow/enemy_lineup_catalog.gd")
+var _named_lineup_levels: Dictionary = {}
 const RunState = preload("res://scripts/data/short_maze_run_state.gd")
 const Progress = preload("res://scripts/data/hero_progress_state.gd")
 const Rewards = preload("res://scripts/data/maze_reward_service.gd")
@@ -13,12 +16,30 @@ const EventTable = preload("res://scripts/ui/event_card_table.gd")
 const Arrival = preload("res://scripts/ui/pack_arrival_animation.gd")
 const ArrivalSettings = preload("res://scripts/ui/pack_opening_effect_settings.gd")
 const StoryEvents = preload("res://scripts/data/maze_story_event_service.gd")
+const StoryOptionButton = preload("res://scripts/ui/story_option_button.gd")
+const EventItemDelivery = preload("res://scripts/ui/event_item_delivery.gd")
+const FOOD_DELIVERY_COUNT := 3 # 独行德鲁伊交付食物的份数
+const FOOD_DELIVERY_RESERVATION := &"event_food_delivery"
+const CardReferenceText = preload("res://scripts/ui/event_card_reference_text.gd")
 const PotionRules = preload("res://scripts/data/event_potion_rules.gd")
 const MiningEvents = preload("res://scripts/flow/twisted_vein_event_runtime.gd")
 const DiceRoll = preload("res://scripts/ui/event_dice_roll.gd")
 const EventRewards = preload("res://scripts/ui/event_reward_presentation.gd")
+const EventCoins = preload("res://scripts/ui/event_coin_presentation.gd")
+const EventGoldAmount = preload("res://scripts/ui/event_gold_amount.gd")
+const EVENT_NAMED_MINIONS := {
+	"silvermoon_guide": [&"silvermoon_priest"],
+	"demon_apprentices": [&"militia", &"baggage_muleteer"],
+	"quest_vending_machine": [&"recycling_robot", &"mobilization_machine", &"logistics_robot", &"walking_fighter"],
+	"unclaimed_relic": [&"maze_ghost"],
+	"magical_mine_lamp": [&"mine_lamp_wisp"],
+	"high_risk_mining": [&"doorboard"],
+}
+static var _gold_reward_line := RegEx.create_from_string("(?:随机)?获得\\s*[0-9]+(?:\\s*[-–—~～至]\\s*[0-9]+)?\\s*枚?金币")
 const BATTLE_INTRO_STEPS := ["battle_intro", "battle_retreat", "battle_wounds", "battle_protection", "battle_playback"]
+const SQUAD_TEACHING_STEPS := ["squad_action", "squad_effect", "squad_vitals", "squad_runes"]
 const CardServiceSlot = preload("res://scripts/ui/card_service_slot.gd")
+const CardLanding = preload("res://scripts/ui/card_landing.gd")
 static var TEXT_FONT: Font = preload("res://scripts/ui/ui_typography.gd").font()
 const SentryStyle = preload("res://scripts/ui/sentry_indicator_style.gd")
 const SENTRY_MOVE_SECONDS: float = 0.30 # 哨位从鼠标落点移动到区域角落的时长
@@ -28,6 +49,17 @@ const BATTLE_BOARD_EXIT_SECONDS := 0.34 # 上半视角的战斗准备板滑出�
 const INITIAL_PACK_HINT_DELAY: float = 3.0 # 卡包落稳后空闲多久开始摇摆跳动
 const INITIAL_PACK_NUDGE_SECONDS: float = 0.4 # 单次摇摆跳动的时长
 const INITIAL_PACK_NUDGE_HEIGHT: float = 18.0 # 卡包提示跳起的逻辑像素高度
+const INITIAL_PACK_HOVER_SECONDS := 0.16 # 指向卡包后上升或回落的时长
+const TRIAL_PACK_FALLBACK := Vector2(755, 450) # 源随从暂不可见时纹章包使用的可点击桌面位置
+const TRIAL_PACK_HAND := Vector2(0.75, 0.36) # 抛出点在机器人卡图上手持补给的位置比例
+const TRIAL_PACK_SIDE_GAP := 28.0 # 纹章包停在机器人旁边时与卡边的距离
+const TRIAL_PACK_FLIGHT_SECONDS := 0.50 # 从机器人抛出到首次落桌的时长
+const TRIAL_PACK_ARC := 62.0 # 横向抛投的向上弧度
+const TRIAL_PACK_START_SCALE := 0.28 # 纹章包离手第一帧相对正常包装的尺寸
+const TRIAL_PACK_RELEASE_ANGLE := 21.0 # 包装离手时向抛出方向旋转的角度
+const TRIAL_PACK_CONTACT_ANGLE := -4.0 # 包装落桌的反向倾角
+const TRIAL_PACK_SETTLE_SECONDS := 0.13 # 纹章包落到桌面后小幅弹回的时长
+const TRIAL_PACK_SETTLE_LIFT := 7.0 # 纹章包落桌后回弹的最高点
 const INITIAL_PACK_NUDGE_ANGLE: float = 8.0 # 卡包提示左右摇摆的最大角度
 const INITIAL_PACK_SHADOW_RATIO := Vector2(0.84, 0.08) # 跳动时地面投影相对包装显示尺寸的宽高
 const INITIAL_PACK_SHADOW_ALPHA: float = 0.20 # 跳动地面投影的最大透明度
@@ -68,9 +100,15 @@ var _sentry_views: Dictionary = {}
 var _initial_pack_prompt: Control
 var _initial_pack_button: TextureButton
 var _initial_pack_shadow: Panel
+var _trial_pack_art: Control
 var _initial_pack_opening: CardPackOpening
 var _initial_pack_idle_seconds := 0.0
 var _initial_pack_drop: Tween
+var _initial_pack_hovered := false
+var _initial_pack_pointer := Vector2.INF
+var _trial_robot_landing := false
+var _fly_trial_supply := false
+var _tutorial_stacked_slot: BoardSlot
 var _initial_pack_presenting := false
 var _queued_tutorial_stories: Array[String] = []
 var _scraper_handoff: Control
@@ -79,18 +117,28 @@ var _story_roll: Control
 var _event_reward_previews: Dictionary = {}
 var _event_reward_in_flight: Array[Dictionary] = []
 var _event_reward_flight: Control
+var _event_gold_flight: EventCoins
+var _event_gold_label: EventGoldAmount
+var _event_gold_remaining := 0
+var _event_board_slide: Tween
 var _battle_board_exit: Tween
-var _battle_board_input_blocker: Control
-var _story_food_picker: ItemList
+var _board_input_blocker: Control
+var _event_item_delivery: EventItemDelivery
+var _event_delivery_actions: Array[Callable] = []
+var _story_food_ids: Array[StringName] = []
+var _event_food_positions: Dictionary = {}
 var _camp_donation_picker: OptionButton
 var _story_material_pickers: Dictionary = {}
+var show_event_debug_details := false
 
 
 func _process(delta: float) -> void:
 	if not is_instance_valid(_main) or not _main.is_visible_in_tree() or _main.profile_progress.run.stage != "active": return
-	if _initial_pack_presenting and not is_instance_valid(_main._inspection_overlay):
+	if _initial_pack_presenting and not is_instance_valid(_main._inspection_overlay) and not is_instance_valid(_main._card_acquisition):
 		_initial_pack_presenting = false
 		refresh()
+		show_task_hint.call_deferred()
+	if is_instance_valid(_main._card_acquisition): return
 	if _main._escape_menu_pause_requested: return
 	# 真正揭晓的信号先等待松手，再收好刮刀讲解，不中断当前笔画。
 	if _rune_lesson_waiting_for_release and not _main._rune_scrape_button_held:
@@ -103,7 +151,14 @@ func _process(delta: float) -> void:
 		return
 	var hint := _main.get_node_or_null("TaskHint")
 	if is_instance_valid(hint):
-		if _teaching_action_completed(String(hint.get_meta("hint_key", "")), hint): hint.complete_teaching()
+		var key := String(hint.get_meta("hint_key", ""))
+		var step := key.trim_prefix("tutorial:step:")
+		if (step == "squad_sources" or step in SQUAD_TEACHING_STEPS) and run.step != RunState.Step.BATTLE_PREPARE:
+			if not hint.tree_exited.is_connected(show_task_hint): hint.tree_exited.connect(show_task_hint, CONNECT_ONE_SHOT)
+			hint.dismiss()
+			return
+		if key == "supply_first:emblems" and not hint._closing: _update_trial_emblem_hint(hint)
+		if _teaching_action_completed(key, hint): hint.complete_teaching()
 		if TaskCatalog.selected(_main.profile_progress, "main") == "tutorial":
 			var next_id := _tutorial_hint_id()
 			var next_key := "tutorial:step:" + next_id
@@ -113,6 +168,10 @@ func _process(delta: float) -> void:
 	var display := get_tree().get_first_node_in_group(&"game_display_shell")
 	if display != null and is_instance_valid(display.screen_transition) and display.screen_transition.busy: return
 	if not is_instance_valid(_initial_pack_prompt) or not _initial_pack_prompt.visible or _initial_pack_button.disabled:
+		_initial_pack_idle_seconds = 0.0
+		return
+	if not _main.is_smith_tutorial(): return
+	if _update_initial_pack_hover():
 		_initial_pack_idle_seconds = 0.0
 		return
 	_initial_pack_idle_seconds += delta
@@ -125,14 +184,11 @@ func initialize(main: Control) -> bool:
 	_main = main
 	if not rewards.load_config() or not story_events.load_config():
 		return false
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/demo2/short_maze_content.json"))
-	if not parsed is Dictionary:
-		return false
-	content = parsed
-	var tutorial: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/tasks/tutorial_enemies.json"))
-	content.enemies.append_array(tutorial.enemies)
-	var floor_two: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/tasks/second_floor_enemies.json"))
-	content.enemies.append_array(floor_two.enemies)
+	content = LineupCatalog.load_base_content()
+	if content.is_empty(): return false
+	var published := LineupCatalog.read_document(LineupCatalog.FORMAL_PATH)
+	if published.get("version") == 1 and published.get("levels") is Dictionary:
+		_named_lineup_levels = published.levels
 	for event: Dictionary in story_events.config.events:
 		var pool: Array = content.free_events if event.kind == "free_event" else content.paid_events
 		pool.append(event.duplicate(true))
@@ -155,16 +211,25 @@ func initialize(main: Control) -> bool:
 	if not hero.initialize(thresholds, rewards.config.talent_choices):
 		return false
 	_build_ui()
+	_main.emblem_library.inventory_changed.connect(_refresh_event_delivery)
+	_main.emblem_library.sticker_drop_committed.connect(_return_event_food_to_toolbox)
 	return true
 
 
 func new_run(seed_value: int) -> void:
 	if _main.profile_progress.run.stage in ["selection", "preview"]: return
+	_clear_event_food_selection()
 	_cancel_event_presentations()
+	var old_hint := _main.get_node_or_null("TaskHint")
+	if is_instance_valid(old_hint): old_hint.dismiss()
 	if is_instance_valid(_scraper_handoff): _scraper_handoff.free()
 	_rune_lesson_waiting_for_release = false
 	_queued_tutorial_stories.clear()
 	_initial_pack_idle_seconds = 0.0
+	_initial_pack_hovered = false
+	_trial_robot_landing = false
+	_fly_trial_supply = false
+	_tutorial_stacked_slot = null
 	_initial_pack_presenting = false
 	if is_instance_valid(_initial_pack_drop): _initial_pack_drop.kill()
 	_initial_pack_prompt.visible = false
@@ -175,7 +240,7 @@ func new_run(seed_value: int) -> void:
 	_main._close_shop_card_services()
 	_main._return_service_cards()
 	_enhancement_card_id = &""
-	run.initialize(seed_value)
+	run.initialize(seed_value, not _main.is_smith_tutorial())
 	run.route_days = 4 if TaskCatalog.selected(_main.profile_progress, "main") == "tutorial" or not _main.profile_progress.enabled("routes", "eight_days") else (16 if _main.profile_progress.enabled("routes", "second_floor") else 8)
 	if TaskCatalog.selected(_main.profile_progress, "main") == "deep_survey": run.route_days = 8
 	run.daily_pack_rewards = false
@@ -277,10 +342,9 @@ func _generate_paths() -> void:
 	match run.get_round_kind():
 		"shop": candidates.assign(content.shops.duplicate(true))
 		"battle":
-			for enemy: Dictionary in content.enemies:
-				if bool(enemy.get("tutorial", false)) != (TaskCatalog.selected(_main.profile_progress, "main") == "tutorial"): continue
-				if run.day >= int(enemy.first_day) and run.day <= int(enemy.last_day):
-					candidates.append(enemy.duplicate(true))
+			var tutorial := TaskCatalog.selected(_main.profile_progress, "main") == "tutorial"
+			candidates = _named_battle_choices(run.day, tutorial)
+			if candidates.is_empty(): candidates = LineupCatalog.base_paths(content, run.day, tutorial)
 		_:
 			var pool: Array = content.free_events if run.get_round_kind() == "free_event" else content.paid_events
 			if _main.is_smith_tutorial():
@@ -297,10 +361,48 @@ func _generate_paths() -> void:
 	var shuffled: Array[Dictionary] = []
 	while not candidates.is_empty():
 		shuffled.append(candidates.pop_at(run.rng.randi_range(0, candidates.size() - 1)))
+	if run.get_round_kind() == "battle" and shuffled.size() > LineupCatalog.ENCOUNTER_CHOICES:
+		shuffled.resize(LineupCatalog.ENCOUNTER_CHOICES)
 	for path: Dictionary in shuffled:
-		if path.kind == "battle":
+		if path.kind == "battle" and not path.has("battle_seed"):
 			path["battle_seed"] = run.rng.randi_range(0, _main.BATTLE_SEED_MAX)
 	run.set_paths(shuffled)
+
+
+func _named_battle_choices(day: int, tutorial: bool) -> Array[Dictionary]:
+	var candidates: Array[Dictionary] = []
+	var lineups: Variant = _named_lineup_levels.get(LineupCatalog.level_key(day, tutorial), [])
+	if not lineups is Array or lineups.size() < LineupCatalog.ENCOUNTER_CHOICES or lineups.size() > LineupCatalog.MAX_LINEUPS: return candidates
+	var registry: Dictionary = _main._build_card_definition_registry()
+	var board_state: Dictionary = _main.resource_board_state.capture_state()
+	var original_rng_state: int = run.rng.state
+	var names := {}
+	var ids := {}
+	for value: Variant in lineups:
+		if not value is Dictionary or not LineupCatalog.lineup_error(value, registry).is_empty():
+			run.rng.state = original_rng_state
+			return []
+		var path := LineupCatalog.path_for(value, day, tutorial)
+		if ids.has(path.lineup_id) or names.has(path.lineup_name):
+			run.rng.state = original_rng_state
+			return []
+		ids[path.lineup_id] = true
+		names[path.lineup_name] = true
+		path["battle_seed"] = run.rng.randi_range(0, _main.BATTLE_SEED_MAX)
+		if _can_build_named_battle(path, day, tutorial, registry, board_state): candidates.append(path)
+	if candidates.size() < LineupCatalog.ENCOUNTER_CHOICES:
+		run.rng.state = original_rng_state
+		candidates.clear()
+	return candidates
+
+
+func _can_build_named_battle(path: Dictionary, day: int, tutorial: bool, registry: Dictionary, board_state: Dictionary = {}) -> bool:
+	var board := ResourceBoardState.new()
+	if not board_state.is_empty() and not board.restore_state(board_state, registry): return false
+	return (
+		not EncounterBuilder.new().build(path, registry, LineupCatalog.rune_reveals(content, day, tutorial), LineupCatalog.emblem_count(content, day, tutorial)).is_empty()
+		and (tutorial or EncounterBuilder.place_level_resources(path, registry, board))
+	)
 
 
 func _fixed_story_path(pool: Array) -> Dictionary:
@@ -365,6 +467,84 @@ func _prepare_story_path(path: Dictionary) -> void:
 			path.story_targets.append(String(target.instance_id))
 
 
+func developer_event_catalog() -> Array[Dictionary]:
+	var options: Array[Dictionary] = []
+	for definition: Dictionary in content.free_events + content.paid_events:
+		if definition.get("tutorial", false):
+			if not _main.is_smith_tutorial() or int(definition.first_day) != run.day or run.round_index != 0: continue
+			if not String(definition.path_id).ends_with("_0"): continue
+		options.append(definition)
+	return options
+
+
+func developer_event_details(event: Dictionary) -> String:
+	var description := String(event.get("description", event.get("hint", "")))
+	var sections: Array[String] = [String(event.get("name", event.path_id))]
+	if not description.is_empty(): sections.append(description)
+	match String(event.get("reward", "")):
+		"story":
+			for index: int in event.options.size():
+				var option := story_events.runtime_option(event, index)
+				var lines: Array[String] = ["%d. %s" % [index + 1, option.label]]
+				var condition := String(option.get("condition", "")).strip_edges()
+				if not condition.is_empty() and condition != "-": lines.append("条件：%s" % condition)
+				var unavailable := String(option.get("unavailable_reason", "")).strip_edges()
+				if not unavailable.is_empty(): lines.append("未开放：%s" % unavailable)
+				var probabilities := _story_outcome_probabilities(option)
+				for outcome_index: int in option.outcomes.size():
+					lines.append("• %s：%s" % [_format_event_probability(probabilities[outcome_index]), _story_outcome_summary(option.outcomes[outcome_index])])
+				sections.append("\n".join(lines))
+		"enhance_card":
+			var choices: Array[String] = ["选择一张随从，获得一次本局永久强化："]
+			for option: Dictionary in event.options:
+				choices.append("• " + _enhancement_option_text(option))
+			sections.append("\n".join(choices))
+		_:
+			var reward := _event_reward_description(event)
+			if not reward.is_empty():
+				var cost := int(event.get("cost", 0))
+				sections.append("花费%d金币：%s" % [cost, reward] if cost > 0 else reward)
+	return "\n\n".join(sections)
+
+
+func _event_reward_description(event: Dictionary) -> String:
+	return String({
+		"gold": "获得%d金币",
+		"emblem": "获得%d枚随机I级纹章",
+		"minion": "获得%d张随机灰烬证册I级随从",
+		"pack": "获得%d个灰烬证册小卡包（立即打开）",
+		"wound": "随机拥有且有空槽的随从新增%d处I级伤势；无目标不执行",
+		"tutorial_smith": "玛格丽特已加入出战队伍，本局可无限使用刮刀。",
+	}.get(event.get("reward"), "")).replace("%d", str(int(event.get("amount", 1))))
+
+
+func developer_event_test_blocker(definition: Dictionary) -> String:
+	if _main.current_phase != _main.GamePhase.PREPARE or run.round_index >= 2 or run.step not in [RunState.Step.CHOOSING, RunState.Step.EVENT]:
+		return "请在当天的事件轮打开测试。"
+	if not _main.profile_progress.run.get("supplies", []).is_empty() or not hero.pending_talent_levels.is_empty():
+		return "请先处理开局补给或天赋选择。"
+	if _event_presentation_busy() or is_instance_valid(_main._inspection_overlay) or is_instance_valid(_main._toolbox_overlay) or _main._is_collection_drag_active():
+		return "请先结束当前交互或动画。"
+	if definition.path_id == "bounty_hunter" and _story_minions().is_empty(): return "赏金猎人需要至少一名随从。"
+	if definition.path_id == "spoils_dispute" and _story_deployed().size() < 2: return "分赃不均需要先部署两名随从。"
+	return ""
+
+
+func deal_developer_event(definition: Dictionary) -> bool:
+	var path := definition.duplicate(true)
+	path.kind = run.get_round_kind()
+	_prepare_story_path(path)
+	_clear_event_food_selection()
+	run.step = RunState.Step.CHOOSING
+	run.selected_path.clear()
+	run.paths.clear()
+	if not run.set_paths([path, path, path]): return false
+	_last_dealt_key = ""
+	_main.set_world_view(_main.WorldView.BATTLEFIELDS, false)
+	refresh()
+	return true
+
+
 func choose_talent(id: String) -> bool:
 	if _main.is_smith_tutorial(): return false
 	if id == "firmament_blessing": return false
@@ -380,7 +560,22 @@ func choose_talent(id: String) -> bool:
 			state.items.append({"instance_id": "hero_three_marks_%d" % kind, "kind": kind, "star_transfer_count": 0})
 		_main.celestial_indicators.restore_state(state)
 	_begin_day()
-	return _commit_transaction(previous)
+	var robot: BoardSlot
+	if _trial_sticker_pack_pending() and hero.pending_talent_levels.is_empty() and _story_owned("logistics_robot").is_empty():
+		var reserved: Array[CardData] = []
+		var owned: OwnedCard = _main.owned_card_collection.create_card(load("res://resources/cards/logistics_robot.tres"), run.rng, reserved, false, {"kind": "task", "name": "补给先行"})
+		var row: BattlefieldRow = _main.front_row if _main.front_row.has_capacity_for_single_card() else _main.back_row
+		robot = row.add_squad(SquadData.from_owned_card(owned), 0) if owned != null and row.has_capacity_for_single_card() else null
+		if not is_instance_valid(robot):
+			_rollback_transaction(previous)
+			return false
+		_trial_robot_landing = true
+	if not _commit_transaction(previous):
+		_trial_robot_landing = false
+		return false
+	if is_instance_valid(robot):
+		_land_trial_robot.call_deferred(robot)
+	return true
 
 
 func select_path(id: String, index: int = -1) -> bool:
@@ -422,6 +617,7 @@ func select_path(id: String, index: int = -1) -> bool:
 			seen_events.append(id)
 	if not _commit_transaction(previous):
 		return false
+	_main._developer_event_test.capture_retry_point()
 	if run.get_round_kind() == "shop":
 		enter_selected_shop()
 	return true
@@ -447,8 +643,6 @@ func _prepare_task_supplies(registry: Dictionary) -> void:
 	if task_id == "tutorial":
 		_main.profile_progress.run.supplies.append({"kind": "card_pack", "name": "灰烬证册 · 初始包", "pack_id": "ash_ledger", "size": "large", "cards": rewards.config.initial_card_ids.duplicate()})
 	elif task_id == "supply_first":
-		var robot: OwnedCard = _main.owned_card_collection.create_card(registry[&"logistics_robot"], run.rng, no_reserved, false, {"kind": "task", "name": "补给先行"})
-		_main.front_row.add_squad(SquadData.from_owned_card(robot), 0)
 		var service := OrdinaryShopService.new()
 		service.load_config()
 		service.config.sticker_unlocks = _main.ordinary_shop_service.config.sticker_unlocks.duplicate(true)
@@ -465,7 +659,8 @@ func _prepare_task_supplies(registry: Dictionary) -> void:
 	if task_id in ["ironwall_support", "temple_boon"]:
 		if task_id == "temple_boon":
 			var il: OwnedCard = _main.owned_card_collection.create_card(registry[&"il_ancient_speaker"], run.rng, no_reserved, false, {"kind": "task", "name": "神殿增益"})
-			_main.front_row.add_squad(SquadData.from_owned_card(il), 0)
+			var row: BattlefieldRow = _main.front_row
+			_main.play_board_landing.call_deferred(row.add_squad(SquadData.from_owned_card(il), 0))
 		_queue_task_packs("ironwall_inscription" if task_id == "ironwall_support" else "silvermoon_chapter", 1)
 	if TaskCatalog.selected(_main.profile_progress, "side") == "witch_cauldron":
 		var states: Array[Dictionary] = []
@@ -507,6 +702,9 @@ func _queue_task_packs(pack_id: String, count: int) -> bool:
 
 func open_task_supply() -> bool:
 	if _main.current_phase != _main.GamePhase.PREPARE or _main.profile_progress.run.get("supplies", []).is_empty() or is_instance_valid(_main._inspection_overlay): return false
+	var trial := _trial_sticker_pack_pending()
+	if trial and (not _initial_pack_prompt.visible or _initial_pack_button.disabled or not _main.profile_progress.run.read_story_nodes.has("supply_first:opening")):
+		return false
 	var previous := _capture_transaction()
 	var supply: Dictionary = _main.profile_progress.run.supplies[0]
 	var mission_owners: Array[OwnedCard] = _main.owned_card_collection.get_cards()
@@ -536,11 +734,12 @@ func open_task_supply() -> bool:
 	if supply.kind == "card_pack": _main.record_secret_mission_progress(OwnedCard.MissionGoal.PACKS, mission_owners)
 	var initial: bool = TaskCatalog.selected(_main.profile_progress, "main") == "tutorial"
 	_main.profile_progress.run.supplies.pop_front()
-	_initial_pack_presenting = initial
+	_initial_pack_presenting = initial or trial
 	if not _commit_transaction(previous, true):
 		_initial_pack_presenting = false
 		return false
-	_main._open_shop_pack_inspection(supply, _initial_pack_button if initial else null, true, cards, -1, sticker_ids)
+	var additional_cards: Array[Dictionary] = _main._new_card_acquisition_entries(mission_owners, cards)
+	_main._open_shop_pack_inspection(supply, _initial_pack_button if initial or trial else null, true, cards, -1, sticker_ids, additional_cards)
 	if initial:
 		_initial_pack_idle_seconds = 0.0
 		_initial_pack_opening = _main._card_pack_opening
@@ -558,12 +757,123 @@ func _grant_tutorial_smith() -> bool:
 	if not row.has_capacity_for_single_card(): return false
 	var no_reserved: Array[CardData] = []
 	var margaret: OwnedCard = _main.owned_card_collection.create_card(load("res://resources/cards/anvil_margaret.tres"), run.rng, no_reserved, false, {"kind": "task", "name": "营救铁匠"})
-	if margaret == null or row.add_squad(SquadData.from_owned_card(margaret), 0) == null: return false
+	if margaret == null: return false
+	var slot := row.add_squad(SquadData.from_owned_card(margaret), 0)
+	if slot == null: return false
+	_main.play_board_landing.call_deferred(slot)
 	progress["smith_received"] = true
 	_main.scraper_count = maxi(_main.scraper_count, 1)
 	_main.emblem_library.set_scraper_count(_main.scraper_count)
 	_main.apply_run_unlocks()
 	return true
+
+
+func _trial_sticker_pack_pending() -> bool:
+	return TaskCatalog.selected(_main.profile_progress, "main") == "supply_first" and run.day == 1 and not _main.profile_progress.run.get("supplies", []).is_empty()
+
+
+func _land_trial_robot(slot: BoardSlot) -> void:
+	await get_tree().process_frame
+	if not is_instance_valid(slot):
+		_trial_robot_landing = false
+		return
+	var card := slot.get_card_view(slot.get_squad_data().get_effect_source())
+	if is_instance_valid(card):
+		await CardLanding.play(card).finished
+	_trial_robot_landing = false
+	show_task_hint()
+
+
+func _show_trial_sticker_pack(supply: Dictionary) -> void:
+	var button := _initial_pack_button
+	_initial_pack_prompt.show()
+	button.show()
+	_initial_pack_prompt.get_node("ArrivalDim").hide()
+	button.texture_normal = _main._ordinary_shop_offer_icon(supply)
+	button.size = button.texture_normal.get_size()
+	if not is_instance_valid(_trial_pack_art):
+		_trial_pack_art = _main._create_shop_sticker_pack_art()
+		button.add_child(_trial_pack_art)
+	_trial_pack_art.show()
+	button.material = null
+	button.scale = Vector2.ONE
+	button.rotation = 0.0
+	button.pivot_offset = button.size * 0.5
+	var robot := _find_tutorial_card_view(&"logistics_robot")
+	var canvas_to_prompt := _initial_pack_prompt.get_global_transform_with_canvas().affine_inverse()
+	var landing := TRIAL_PACK_FALLBACK
+	var origin := TRIAL_PACK_FALLBACK
+	if is_instance_valid(robot):
+		var robot_to_prompt := canvas_to_prompt * robot.get_global_transform_with_canvas()
+		var card := robot_to_prompt * Rect2(Vector2.ZERO, robot.size)
+		origin = robot_to_prompt * (robot.size * TRIAL_PACK_HAND)
+		landing = Vector2(card.end.x + button.pivot_offset.x + TRIAL_PACK_SIDE_GAP, card.end.y - button.pivot_offset.y)
+		if landing.x + button.pivot_offset.x + TRIAL_PACK_SIDE_GAP > _initial_pack_prompt.size.x:
+			landing.x = card.position.x - button.pivot_offset.x - TRIAL_PACK_SIDE_GAP
+		landing = landing.clamp(button.pivot_offset, _initial_pack_prompt.size - button.pivot_offset)
+	button.position = landing - button.pivot_offset
+	button.disabled = false
+	var play_flight := _fly_trial_supply
+	_fly_trial_supply = false
+	if not play_flight or not is_instance_valid(robot): return
+	var direction := signf(landing.x - origin.x)
+	button.disabled = true
+	button.position = origin - button.pivot_offset
+	button.scale = Vector2.ONE * TRIAL_PACK_START_SCALE
+	button.rotation_degrees = TRIAL_PACK_RELEASE_ANGLE * direction
+	_initial_pack_drop = button.create_tween()
+	_initial_pack_drop.tween_method(func(t: float):
+		button.position = Arrival.flight_point(origin, landing, t, TRIAL_PACK_ARC) - button.pivot_offset
+		button.scale = Vector2.ONE * lerpf(TRIAL_PACK_START_SCALE, 1.0, t)
+		button.rotation_degrees = lerpf(TRIAL_PACK_RELEASE_ANGLE, TRIAL_PACK_CONTACT_ANGLE, t) * direction,
+		0.0, 1.0, TRIAL_PACK_FLIGHT_SECONDS)
+	_initial_pack_drop.tween_method(func(t: float):
+		button.position.y = landing.y - button.pivot_offset.y - sin(PI * t) * TRIAL_PACK_SETTLE_LIFT
+		button.rotation_degrees = lerpf(TRIAL_PACK_CONTACT_ANGLE, 0.0, t) * direction,
+		0.0, 1.0, TRIAL_PACK_SETTLE_SECONDS)
+	_initial_pack_drop.tween_callback(func(): button.disabled = false)
+
+
+func _trial_pack_item(id: StringName) -> bool:
+	return String(id).begins_with("task_supply:%s:" % _main.profile_progress.run.id)
+
+
+func _trial_emblem_applied() -> bool:
+	for card: OwnedCard in _main.owned_card_collection.get_cards():
+		for emblem: Dictionary in card.emblem_slots:
+			if _trial_pack_item(StringName(emblem.get("instance_id", ""))): return true
+	return false
+
+
+func _update_trial_emblem_hint(hint: Control) -> void:
+	var text := ""
+	var targets: Array[Rect2] = []
+	hint.action_rect = Rect2()
+	hint.silhouette_target = null
+	var owner: OwnedCard = _main._inspection_owned_card
+	var surface: Control = _main._inspection_surface
+	if owner == null or not is_instance_valid(surface) or _main._inspection_read_only:
+		var robot := _find_tutorial_card_view(&"logistics_robot")
+		text = "右键检视后勤机器人，查看它的纹章槽。"
+		if is_instance_valid(robot):
+			hint.silhouette_target = robot.card_frame
+			targets.append(_hint_control_rect(robot.card_frame))
+	elif _main._inspection_library_expanded:
+		text = "把纹章包开出的纹章拖到高亮的空槽上。"
+		for item: Dictionary in _main.emblem_library.get_inventory_state():
+			var id := StringName(item.instance_id)
+			if _trial_pack_item(id): targets.append(_main.emblem_library.get_item_canvas_rect(id))
+		for slot: int in owner.emblem_slots.size():
+			if owner.emblem_slots[slot].is_empty():
+				targets.append(surface.card_canvas_rect(_main._get_emblem_slot_rect(slot)))
+		if not owner.emblem_slots.any(func(slot: Dictionary) -> bool: return slot.is_empty()):
+			text = "这张随从没有空纹章槽。收起检视，换一张随从。"
+	else:
+		text = "展开检视卡旁的工具箱。"
+		if is_instance_valid(_main._inspection_library_toggle):
+			hint.action_rect = _hint_control_rect(_main._inspection_library_toggle)
+			targets.append(hint.action_rect)
+	hint.set_live_instruction(text, targets)
 
 
 func _smith_handoff_pending() -> bool:
@@ -615,9 +925,14 @@ func _find_tutorial_card_view(id: StringName) -> CardView:
 
 func show_task_hint() -> void:
 	if _event_presentation_busy(): return
+	if _trial_robot_landing or (_initial_pack_presenting and not _main.is_smith_tutorial()): return
 	if is_instance_valid(_scraper_handoff) or _smith_handoff_pending(): return
 	if not is_instance_valid(_main) or not _main.is_inside_tree(): return
-	if _main.profile_progress.run.stage != "active" or is_instance_valid(_main.get_node_or_null("TaskHint")) or _main._escape_menu_pause_requested or _main._rune_scraper_mode or _main._inspection_closing: return
+	if _main.profile_progress.run.stage != "active" or is_instance_valid(_main.get_node_or_null("TaskHint")) or _main._escape_pause_menu.blocks_gameplay() or _main._rune_scraper_mode or _main._inspection_closing: return
+	if is_instance_valid(_event_table) and is_instance_valid(_event_table._deck_arrival):
+		if not _event_table._deck_arrival.finished.is_connected(show_task_hint):
+			_event_table._deck_arrival.finished.connect(show_task_hint, CONNECT_ONE_SHOT)
+		return
 	for animation: Tween in [_main._shop_open_tween, _main._view_tween, _main._inspection_tween]:
 		if is_instance_valid(animation) and animation.is_running():
 			if not animation.finished.is_connected(show_task_hint): animation.finished.connect(show_task_hint, CONNECT_ONE_SHOT)
@@ -659,6 +974,19 @@ func show_task_hint() -> void:
 			presentation = hint
 			title = hint.title
 			break
+		if selected == "supply_first":
+			if run.day != 1 or run.round_index != 0 or not hero.pending_talent_levels.is_empty(): continue
+			key = "supply_first:emblems"
+			if _trial_sticker_pack_pending():
+				if not _main.profile_progress.run.read_story_nodes.has("supply_first:opening"):
+					key = "supply_first:opening"
+				else:
+					if not _initial_pack_prompt.visible: _show_trial_sticker_pack(_main.profile_progress.run.supplies[0])
+					key = "supply_first:open_pack"
+			presentation = TaskCatalog.teaching_hint(key)
+			if not _main.profile_progress.hint_pending(key, presentation).values().has(true): presentation = {}
+			title = String(presentation.get("title", title))
+			continue
 		if is_instance_valid(_main._inspection_overlay): continue
 		var chapter := "supplies" if not _main.profile_progress.run.get("supplies", []).is_empty() else "day"
 		if selected == "deep_survey":
@@ -669,7 +997,7 @@ func show_task_hint() -> void:
 		var candidate_text := _hint_text(selected)
 		if candidate_text.is_empty(): continue
 		key = candidate_key
-		presentation = TaskCatalog.teaching_hint(candidate_key) if candidate_key == "supply_first:emblems" else TaskCatalog.story_hint(candidate_text)
+		presentation = TaskCatalog.story_hint(candidate_text)
 		var pending: Dictionary = _main.profile_progress.hint_pending(key, presentation)
 		if not pending.story and not pending.teaching:
 			presentation = {}
@@ -697,7 +1025,12 @@ func show_task_hint() -> void:
 	dialog.speaker = _main.player_avatar_button
 	dialog.speaker_resolver = _tutorial_speaker
 	dialog.portrait_resolver = _main.character_portrait
-	dialog.complete_on_click = battle_intro_step in ["battle_intro", "battle_protection"]
+	var tutorial_step := key.trim_prefix("tutorial:step:")
+	dialog.complete_on_click = battle_intro_step in ["battle_intro", "battle_protection"] or tutorial_step in SQUAD_TEACHING_STEPS
+	if tutorial_step in SQUAD_TEACHING_STEPS:
+		dialog.resolve_focus = _squad_teaching_focus.bind(tutorial_step)
+		if tutorial_step == "squad_effect":
+			dialog.resolve_silhouette = _squad_effect_frame
 	if presentation.get("anchor", "") == "militia": dialog.follow_target = _find_tutorial_card_view(&"militia")
 	if shown.get("anchor", "") in ["hero", "collection"] and dialog.focus_rect == _hint_control_rect(_main.player_avatar_button):
 		dialog.follow_target = _main.player_avatar_button
@@ -707,12 +1040,22 @@ func show_task_hint() -> void:
 	dialog.set_meta("start_round", run.round_index)
 	dialog.set_meta("formation", _formation_signature())
 	dialog.set_meta("inspection", _main._inspection_owned_card)
-	if key == "supply_first:emblems": dialog.set_meta("emblem_inventory", _main.emblem_library.get_inventory_state().duplicate(true))
+	if key == "supply_first:open_pack":
+		dialog.follow_target = _initial_pack_button
+		dialog.silhouette_target = _initial_pack_button
+		dialog.activate_follow_target = true
+		dialog.target_activated.connect(func(_event: InputEventMouseButton): open_task_supply())
+	elif key == "supply_first:emblems":
+		dialog.target_activated.connect(func(_event: InputEventMouseButton): _main.set_inspection_library_expanded(true))
 	_main._hero_speech.dismiss()
+	if shown.get("lock_dialogue", false) and not shown.dialogue.is_empty():
+		_main._cancel_click_carry()
+		if _main.get_viewport().gui_is_dragging(): _main.get_viewport().gui_cancel_drag()
 	# 开包检视会在_input中先消费鼠标；提示期间交给上层按钮，关闭后再恢复。
 	if dialog.action_rect.has_area() and is_instance_valid(_main._inspection_overlay): _main._inspection_overlay.set_process_input(false)
 	dialog.inspection_dim = _main._inspection_dim
 	_main.add_child(dialog)
+	if key == "supply_first:emblems": _update_trial_emblem_hint(dialog)
 	if battle_intro_step == "battle_wounds" and not waiting_for_inspection:
 		_main.show_gameplay_teaching("tutorial:step:wounds", _main.GameplayTeachingToast.DEFAULT_SECONDS, true)
 	if key == "tutorial:step:squad_sources" and run.day == 2 and run.step == RunState.Step.BATTLE_PREPARE:
@@ -741,7 +1084,9 @@ func show_task_hint() -> void:
 			dialog.show_save_failure()
 			return false
 		if read_parts.teaching: parts.teaching = false
-		if read_parts.story: parts.story = false
+		if read_parts.story:
+			parts.story = false
+			if key == "supply_first:opening": _fly_trial_supply = true
 		dialog.save_recovered()
 		if not parts.story and not parts.teaching:
 			dialog.tree_exited.connect(show_task_hint, CONNECT_ONE_SHOT)
@@ -854,8 +1199,9 @@ func _formation_signature() -> Array:
 
 func _teaching_action_completed(key: String, hint: Control) -> bool:
 	if hint._teaching_done or hint._closing: return false
+	if key == "supply_first:open_pack": return not _trial_sticker_pack_pending()
 	if key == "supply_first:emblems":
-		return _main.emblem_library.get_inventory_state() != hint.get_meta("emblem_inventory")
+		return not _main._inspection_placement_in_progress and _trial_emblem_applied()
 	var previous_inspection: OwnedCard = hint.get_meta("inspection") if hint.has_meta("inspection") else null
 	var id := key.trim_prefix("tutorial:step:")
 	var advanced: bool = run.day != hint.get_meta("start_day") or run.round_index != hint.get_meta("start_round")
@@ -876,12 +1222,24 @@ func _teaching_action_completed(key: String, hint: Control) -> bool:
 		"rune_basics": return not is_instance_valid(_main._inspection_overlay) or _main._rune_scraper_mode or _main._inspection_owned_card != previous_inspection
 		"formation": return run.step != RunState.Step.BATTLE_PREPARE or _formation_signature() != hint.get_meta("formation")
 		"squad_sources":
-			return advanced or (_has_stacked_squad() and (is_instance_valid(_main._inspection_overlay) or _formation_signature() != hint.get_meta("formation")))
+			if not _has_stacked_squad() or _formation_signature() == hint.get_meta("formation"): return false
+			var previous: Array = hint.get_meta("formation")
+			for index: int in 2:
+				var row: BattlefieldRow = [_main.front_row, _main.back_row][index]
+				for slot: BoardSlot in row.get_squads():
+					var data := slot.get_squad_data()
+					if data.get_card_count() < 2: continue
+					var signature := [data.horizontal_cards.map(func(card: CardData): return card.get_instance_id()), data.layer_cards.map(func(card: CardData): return card.get_instance_id()), data.two_card_layout]
+					if not previous[index].has(signature):
+						_tutorial_stacked_slot = slot
+						return true
+			return false
 
 	return false
 
 
 func _hint_focus(anchor: String) -> Rect2:
+	if anchor in SQUAD_TEACHING_STEPS: return Rect2()
 	var target: Control = _panel
 	match anchor:
 		"initial_pack": target = _initial_pack_button
@@ -921,6 +1279,44 @@ func _hint_focus(anchor: String) -> Rect2:
 
 func _hint_control_rect(target: Control) -> Rect2:
 	return target.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, target.size)
+
+
+func _squad_teaching_focus(step: String) -> Array[Rect2]:
+	if not is_instance_valid(_tutorial_stacked_slot) or _tutorial_stacked_slot.get_squad_data().get_card_count() < 2:
+		_tutorial_stacked_slot = null
+		for row: BattlefieldRow in [_main.front_row, _main.back_row]:
+			for slot: BoardSlot in row.get_squads():
+				if slot.get_squad_data().get_card_count() > 1:
+					_tutorial_stacked_slot = slot
+					break
+			if _tutorial_stacked_slot != null: break
+	if _tutorial_stacked_slot == null: return []
+	var data := _tutorial_stacked_slot.get_squad_data()
+	match step:
+		"squad_action":
+			var view := _tutorial_stacked_slot.get_card_view(data.get_action_source())
+			return [_hint_control_rect(view.action_icon).merge(_hint_control_rect(view.value_label)), _hint_control_rect(view.cooldown_icon).merge(_hint_control_rect(view.cooldown_label))]
+		"squad_effect":
+			var frame := _squad_effect_frame()
+			var regions: Array[Rect2] = []
+			if is_instance_valid(frame): regions.append(_hint_control_rect(frame))
+			return regions
+		"squad_vitals":
+			var view := _tutorial_stacked_slot.get_card_view(data.get_vitals_source())
+			return [_hint_control_rect(view.health_icon).merge(_hint_control_rect(view.health_label)), _hint_control_rect(view.armor_icon).merge(_hint_control_rect(view.armor_label))]
+	var visible_runes: Array[Rect2] = []
+	for rune: Dictionary in data.get_visible_rune_slots():
+		if rune.hidden: continue
+		var view := _tutorial_stacked_slot.get_card_view(rune.card)
+		var rect := _hint_control_rect(view.rune_row.get_child(rune.rune_index) as Control)
+		visible_runes.append(rect)
+	return visible_runes
+
+
+func _squad_effect_frame() -> TextureRect:
+	if not is_instance_valid(_tutorial_stacked_slot): return null
+	var view := _tutorial_stacked_slot.get_card_view(_tutorial_stacked_slot.get_squad_data().get_effect_source())
+	return view.card_frame if is_instance_valid(view) else null
 
 
 func note_tutorial_action(action: String) -> void:
@@ -980,6 +1376,9 @@ func _tutorial_hint_id() -> String:
 		2:
 			if run.step == RunState.Step.BATTLE_PREPARE:
 				if _tutorial_node_pending("squad_sources"): return "squad_sources"
+				if _has_stacked_squad():
+					for step: String in SQUAD_TEACHING_STEPS:
+						if _tutorial_node_pending(step): return step
 				return "formation"
 			if progress.get("smith_received", false):
 				if _tutorial_node_pending("smith"): return "smith"
@@ -988,8 +1387,11 @@ func _tutorial_hint_id() -> String:
 				if actions.get("rune_revealed", false) and _tutorial_node_pending("rune_basics"): return "rune_basics"
 				if is_instance_valid(_main._inspection_overlay) and not _main._inspection_read_only and _main._inspection_owned_card != null and _main._inspection_owned_card.card_data.card_type == CardData.CardType.MINION: return "scraper_inspection"
 		3:
-			if run.step not in [RunState.Step.BATTLE_ACTIVE, RunState.Step.BATTLE_RESULT] and _tutorial_node_pending("squad_sources"):
-				if _has_stacked_squad() or run.round_index == 0: return "squad_sources"
+			if run.step == RunState.Step.BATTLE_PREPARE:
+				if _tutorial_node_pending("squad_sources"): return "squad_sources"
+				if _has_stacked_squad():
+					for step: String in SQUAD_TEACHING_STEPS:
+						if _tutorial_node_pending(step): return step
 		4:
 			if run.step == RunState.Step.BATTLE_ACTIVE and actions.get("attack_observed", false): return "attack_observed"
 	return ""
@@ -1014,10 +1416,6 @@ func _hint_text(task_id: String) -> String:
 			var chapters := source.split("任务完成：")[0].split("2-0")
 			return chapters[0].replace("1-0", "").strip_edges() if run.day == 1 else chapters[1].strip_edges()
 		return ""
-	if task_id == "supply_first":
-		if run.day == 1 and run.round_index == 0:
-			if _main.profile_progress.run.get("supplies", []).is_empty(): return "纹章已收入工具箱。右键检视随从，展开工具箱后，把纹章拖到可用的纹章槽上。"
-			return "后勤机器人：“哔……哔……铁壁关的先行补给已送达，后续的增员已经在路上。”\n伊奥恩：“铁壁关那帮人总算没全忘了这儿。”\n\n后勤机器人已加入收藏并上场，打开补给中的纹章包领取试用纹章。"
 		return ""
 	return ""
 
@@ -1042,6 +1440,7 @@ func _grant_emblem(id: String, receipt: String) -> bool:
 
 
 func complete_event(take_reward: bool = true, discard_confirmed: bool = false, source_button: BaseButton = null) -> bool:
+	if is_instance_valid(_event_table) and _event_table.finish_result_reveal(): return false
 	if _event_presentation_busy(): return false
 	if run.step != RunState.Step.EVENT or run.get_round_kind() == "shop" or run.selected_path.has("mining_progress") or (take_reward and run.selected_path.get("reward") in ["enhance_card", "story"] and not run.selected_path.has("story_result") and not run.selected_path.has("enhancement_result")):
 		return false
@@ -1058,21 +1457,27 @@ func complete_event(take_reward: bool = true, discard_confirmed: bool = false, s
 	_main._close_toolbox_inspection(false)
 	if not show_overflow: _main.emblem_library.discard_dropped_stickers()
 	var cost := int(event.get("cost", 0))
+	var gold_awarded := 0
 	if take_reward and not bool(event.get("reward_claimed", false)):
 		if _main.run_reward_state.gold < cost:
 			_rollback_transaction(previous)
 			return false
 		_main.run_reward_state.gold -= cost
 		var receipt := "maze_event:%d:%s" % [run.day, event.path_id]
+		var applied: bool = event.reward == "gold"
 		match String(event.reward):
-			"gold": _main.run_reward_state.add_gold(int(event.amount))
+			"gold":
+				gold_awarded = int(event.amount)
+				_main.run_reward_state.add_gold(gold_awarded)
 			"emblem":
 				var pool := EmblemLibraryData.get_basic_emblem_ids()
 				_grant_emblem(String(pool[run.rng.randi_range(0, pool.size() - 1)]), receipt)
 			"wound":
-				if not bool(rewards.apply_random_event_wound(receipt, _main.owned_card_collection.get_cards(), run.rng).get("success", false)):
+				var injury := rewards.apply_random_event_wound(receipt, _main.owned_card_collection.get_cards(), run.rng)
+				if not injury.get("success", false):
 					_rollback_transaction(previous)
 					return false
+				applied = injury.get("applied", false)
 			"pack":
 				if not _grant_pack(false):
 					_rollback_transaction(previous)
@@ -1087,6 +1492,15 @@ func complete_event(take_reward: bool = true, discard_confirmed: bool = false, s
 		if run.day == 1 and run.get_round_kind() == "free_event" and event.reward in ["gold", "pack", "minion", "emblem"]:
 			note_tutorial_action("event_reward")
 		var awarded := EventRewards.collect(_main, previous)
+		if applied or not awarded.is_empty():
+			_main.profile_progress.record_event_outcome(story_events.outcome_discovery_key(event, 0, 0))
+		if from_button and gold_awarded > 0:
+			event["reward_claimed"] = true
+			if not _commit_transaction(previous, false, false): return false
+			_event_gold_remaining = gold_awarded
+			refresh()
+			_play_event_gold()
+			return true
 		if not awarded.is_empty():
 			event["reward_claimed"] = true
 			event["reward_items"] = awarded
@@ -1102,9 +1516,14 @@ func complete_event(take_reward: bool = true, discard_confirmed: bool = false, s
 		return false
 	else:
 		_generate_paths()
+	var animate_board := (
+		from_button and not animate_awards and is_instance_valid(_event_table)
+		and _event_table.is_visible_in_tree() and _event_table.get_global_rect().intersects(_main.get_viewport_rect())
+	)
 	if animate_awards: _event_reward_in_flight.assign(awards)
-	if not _commit_transaction(previous, not show_overflow, not animate_awards): return false
+	if not _commit_transaction(previous, not show_overflow, not (animate_awards or animate_board)): return false
 	if animate_awards: _play_event_reward_flight(origins, show_overflow)
+	elif animate_board: _retract_event_board()
 	return true
 
 
@@ -1117,15 +1536,32 @@ func choose_story_option(index: int) -> bool:
 	var target: OwnedCard = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id)
 	if not _story_blocked_reason(option, target).is_empty():
 		return false
+	var close_food_toolbox := is_instance_valid(_event_item_delivery) and is_instance_valid(_main._toolbox_overlay)
 	var previous := _capture_transaction()
-	var result := {"outcome_index": 0, "roll": 4, "guaranteed": true} if option.get("mine_prayer", false) and not _story_owned("ember_empty_bottle").is_empty() else story_events.draw_outcome(option, run.rng, 0 if _story_owned("nyx_dice").is_empty() else 2)
+	var forced_roll: int = _main._developer_event_test.roll_for(event.path_id, index)
+	var result: Dictionary
+	if forced_roll == 0 and _has_guaranteed_story_roll(option):
+		result = {"outcome_index": 0, "roll": 4, "guaranteed": true}
+	else:
+		result = story_events.draw_outcome(option, run.rng, _story_dice_bonus(), forced_roll)
 	if result.is_empty():
 		_rollback_transaction(previous)
 		return false
 	result["option_index"] = index
 	var outcome: Dictionary = option.outcomes[int(result.outcome_index)]
+	if target != null and option.has("target"):
+		_record_story_card_reference(result, target, ["*选择的随从*", "*选定的随从*"])
+	if event.path_id == "bounty_hunter":
+		var wanted := _story_locked_target(0)
+		if wanted != null: _record_story_card_reference(result, wanted)
+	if option.has("sculptors"):
+		var sculptors := _story_sculptors(option)
+		var chosen: OwnedCard = sculptors[run.rng.randi_range(0, sculptors.size() - 1)]
+		result["sculptor"] = String(chosen.card_data.id)
+		result["sculptor_instance_id"] = String(chosen.instance_id)
+		result["text"] = String(outcome.text).replace("{sculptor}", chosen.card_data.display_name)
 	_main.run_reward_state.gold -= int(outcome.get("cost", _story_option_cost(option)))
-	_main.run_reward_state.add_gold(int(outcome.get("gold", 0)))
+	_award_story_gold(result, int(outcome.get("gold", 0)))
 	var gilded_cards: Array[OwnedCard] = []
 	if not _apply_story_effects(event, option, outcome, target, result, gilded_cards):
 		_rollback_transaction(previous)
@@ -1149,14 +1585,21 @@ func choose_story_option(index: int) -> bool:
 	if not result.get("mining_continues", false):
 		run.selected_path["story_result"] = result
 		run.selected_path["reward_claimed"] = true
+		_main.profile_progress.record_event_outcome(story_events.outcome_discovery_key(event, index, int(result.outcome_index)))
 		var awarded := EventRewards.collect(_main, previous, gilded_cards)
 		if not awarded.is_empty(): event["reward_items"] = awarded
 	var animate_roll: bool = result.has("roll") and not result.get("guaranteed", false) and is_instance_valid(_event_table)
-	if not _commit_transaction(previous, false, not animate_roll):
+	var gold_awarded := int(result.get("gold_awarded", 0))
+	if not _commit_transaction(previous, false, not animate_roll and gold_awarded == 0):
 		return false
+	if close_food_toolbox: _main._close_toolbox_inspection()
+	_event_gold_remaining = gold_awarded
 	var show_reward_pack := _present_story_gilded_pack.bind(gilded_cards) if not gilded_cards.is_empty() else Callable()
 	if animate_roll:
-		_play_story_roll(int(option.roll_sides), int(result.roll), show_reward_pack)
+		_play_story_roll(int(option.roll_sides), int(result.roll), _play_event_gold.bind(show_reward_pack))
+	elif gold_awarded > 0:
+		refresh()
+		_play_event_gold(show_reward_pack)
 	elif show_reward_pack.is_valid():
 		show_reward_pack.call()
 	return true
@@ -1167,22 +1610,43 @@ func _present_story_gilded_pack(cards: Array[OwnedCard]) -> void:
 	_main._open_shop_pack_inspection({"kind": "card_pack", "pack_id": "gilded_commission", "size": "small"}, null, true, cards)
 
 
-func _story_blocked_reason(option: Dictionary, target: OwnedCard, ignore_gold: bool = false) -> String:
-	var blocked := story_events.blocked_reason(option, 2147483647 if ignore_gold else int(_main.run_reward_state.gold))
+func _story_dice_bonus() -> int:
+	return 0 if _story_owned("nyx_dice").is_empty() else 2
+
+
+func _has_guaranteed_story_roll(option: Dictionary) -> bool:
+	return option.get("mine_prayer", false) and not _story_owned("ember_empty_bottle").is_empty()
+
+
+func _story_sculptors(option: Dictionary) -> Array[OwnedCard]:
+	var sculptors: Array[OwnedCard] = []
+	for id: String in option.sculptors:
+		sculptors.append_array(_story_owned(id))
+	return sculptors
+
+
+func _story_blocked_reason(option: Dictionary, target: OwnedCard, before_selection: bool = false) -> String:
+	var blocked := story_events.blocked_reason(option, int(_main.run_reward_state.gold))
 	if not blocked.is_empty(): return blocked
-	blocked = MiningEvents.blocked_reason(self, option)
+	blocked = MiningEvents.blocked_reason(self, option, before_selection)
 	if not blocked.is_empty(): return blocked
 	if option.has("bounty_target"):
 		if _story_locked_target(0) == null: return "悬赏目标已离开收藏"
 		if _main.run_reward_state.gold < _story_option_cost(option): return "金币不足，需要%d金币" % _story_option_cost(option)
 	if option.has("dispute_targets") and (_story_locked_target(0) == null or _story_locked_target(1) == null):
 		return "参与争执的随从已离开收藏"
-	if option.has("target") and not _matches_story_target(option, target): return "请把符合条件的随从拖入右侧卡槽"
+	if option.has("target"):
+		if before_selection:
+			if not _story_minions().any(func(card: OwnedCard) -> bool: return _matches_story_target(option, card)): return "缺少符合条件的随从"
+		elif not _matches_story_target(option, target): return "请把符合条件的随从拖入右侧卡槽"
 	if option.has("requires_hero") and option.requires_hero != _main.profile_progress.run.hero: return "需要使用伊奥恩"
 	if option.get("requires_faction") == "hansa" and _main.profile_progress.run.hero == ProfileProgress.INITIAL_HERO: return "需要汉萨联邦英雄"
 	if option.has("requires_card") and _story_owned(String(option.requires_card)).is_empty(): return "缺少指定卡牌"
+	if option.has("sculptors") and _story_sculptors(option).is_empty(): return "需要持有一位能雕刻神像的随从"
 	if option.has("requires_race") and not _story_minions().any(func(card: OwnedCard) -> bool: return int(card.card_data.race_type) == int(option.requires_race)): return "需要拥有符合种族的随从"
-	if option.has("food_choices") and _selected_story_food(option).size() != 3: return "请选择三枚未装备的食物纹章"
+	if option.has("food_choices"):
+		if not before_selection and _selected_story_food(option).size() != FOOD_DELIVERY_COUNT:
+			return "请从工具箱拖入三枚食物纹章"
 	for key: String in ["sticker_cost", "requires_sticker"]:
 		if option.has(key) and _story_stickers(String(option[key])).is_empty(): return "需要纹章「%s」" % option[key]
 	for outcome: Dictionary in option.outcomes:
@@ -1191,6 +1655,8 @@ func _story_blocked_reason(option: Dictionary, target: OwnedCard, ignore_gold: b
 				if not _can_draw_story_pack(pack): return "当前无法发放普通卡包"
 		for effect: Dictionary in outcome.get("effects", []):
 			match String(effect.kind):
+				"consume_sticker":
+					if _story_stickers(String(effect.sticker)).is_empty(): return "需要纹章「%s」" % effect.sticker
 				"card", "wounded_card":
 					if _story_card(String(effect.card), String(effect.get("unlocked_by", ""))) == null: return "指定卡牌当前不可获得"
 				"random_cards":
@@ -1217,7 +1683,8 @@ func _story_blocked_reason(option: Dictionary, target: OwnedCard, ignore_gold: b
 				"random_pack":
 					if not _can_draw_story_pack(String(effect.size)): return "当前无法发放普通卡包"
 				"trade_potion":
-					if _selected_story_materials(effect.rarities).size() != effect.rarities.size(): return "请选择各品级的随从材料"
+					if before_selection and not _has_story_materials(effect.rarities): return "缺少指定品级的随从材料"
+					if not before_selection and _selected_story_materials(effect.rarities).size() != effect.rarities.size(): return "请选择各品级的随从材料"
 					for variant: int in 3:
 						if _story_card("event_forbidden_%s_%d" % [effect.tier, variant], "event") == null: return "有候选禁药已持有或不可获得"
 	return ""
@@ -1291,12 +1758,21 @@ func _consume_story_sticker(id: String) -> bool:
 
 func _selected_story_food(option: Dictionary) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	if not is_instance_valid(_story_food_picker): return result
-	for index: int in _story_food_picker.get_selected_items():
-		var id := StringName(_story_food_picker.get_item_metadata(index))
+	for id: StringName in _story_food_ids:
 		var current: Dictionary = _main.emblem_library.get_inventory_item(id)
-		if String(current.get("emblem_id", "")) in option.food_choices: result.append(current)
+		if _is_story_food(current, option): result.append(current)
+		if result.size() == FOOD_DELIVERY_COUNT: break
 	return result
+
+
+func _is_story_food(item: Dictionary, option: Dictionary) -> bool:
+	return item.get("kind", "emblem") == "emblem" and String(item.get("emblem_id", "")) in option.food_choices
+
+
+func _has_story_materials(rarities: Array) -> bool:
+	var owned := _story_minions()
+	return rarities.all(func(rarity: Variant) -> bool:
+		return owned.any(func(card: OwnedCard) -> bool: return int(card.card_data.rarity) == int(rarity)))
 
 
 func _selected_story_materials(rarities: Array) -> Array[OwnedCard]:
@@ -1385,13 +1861,20 @@ func _story_targets(effect: Dictionary, target: OwnedCard) -> Array[OwnedCard]:
 	return cards
 
 
+func _award_story_gold(result: Dictionary, amount: int) -> void:
+	if _main.run_reward_state.add_gold(amount):
+		result["gold_awarded"] = int(result.get("gold_awarded", 0)) + amount
+
+
 func _apply_story_effects(event: Dictionary, option: Dictionary, outcome: Dictionary, target: OwnedCard, result: Dictionary, gilded_cards: Array[OwnedCard]) -> bool:
 	var receipt := "story:%d:%s:%d" % [run.day, event.path_id, run.round_index]
 	var source := {"kind": "event", "event_id": event.path_id, "name": event.name}
 	var no_reserved: Array[CardData] = []
 	if option.has("sticker_cost") and not _consume_story_sticker(String(option.sticker_cost)): return false
 	if option.has("food_choices"):
-		for food: Dictionary in _selected_story_food(option):
+		var food_items := _selected_story_food(option)
+		if food_items.size() != FOOD_DELIVERY_COUNT: return false
+		for food: Dictionary in food_items:
 			if not _main.emblem_library.consume_returned(food): return false
 	for index: int in outcome.get("effects", []).size():
 		var effect: Dictionary = outcome.effects[index]
@@ -1401,9 +1884,9 @@ func _apply_story_effects(event: Dictionary, option: Dictionary, outcome: Dictio
 				if effect.get("caught", false):
 					var balance: int = _main.run_reward_state.gold
 					_main.run_reward_state.gold -= floori(float(balance) * 2.0 / 3.0)
-				else: _main.run_reward_state.add_gold(60)
+				else: _award_story_gold(result, 60)
 			"gold":
-				_main.run_reward_state.add_gold(int(effect.amount))
+				_award_story_gold(result, int(effect.amount))
 			"random_pack":
 				if not _grant_pack(effect.size == "large", true): return false
 			"gilded_pack":
@@ -1422,6 +1905,8 @@ func _apply_story_effects(event: Dictionary, option: Dictionary, outcome: Dictio
 				var reward := _story_card("event_forbidden_%s_%d" % [effect.tier, run.rng.randi_range(0, 2)], "event")
 				if reward == null: return false
 				for material: OwnedCard in materials:
+					if material.card_data.rarity == CardData.Rarity.IV:
+						_record_story_card_reference(result, material, ["*选择的4级随从*"])
 					_main._remove_owned_instance_from_rows(material.instance_id)
 					if _main.owned_card_collection.remove_by_instance_id(material.instance_id) == null: return false
 				if _main.owned_card_collection.create_card(reward, run.rng, no_reserved, false, source) == null: return false
@@ -1443,7 +1928,7 @@ func _apply_story_effects(event: Dictionary, option: Dictionary, outcome: Dictio
 				var count := mini(int(effect.get("count", cards.size())), cards.size())
 				for _index: int in count:
 					var card: OwnedCard = cards.pop_at(run.rng.randi_range(0, cards.size() - 1)) if effect.has("count") else cards.pop_front()
-					for stat: StringName in [OwnedCard.STAT_BASE_VALUE, OwnedCard.STAT_MAX_HEALTH, OwnedCard.STAT_BASE_ARMOR]:
+					for stat: StringName in [OwnedCard.STAT_BASE_VALUE, OwnedCard.STAT_MAX_HEALTH, OwnedCard.STAT_BASE_ARMOR, OwnedCard.STAT_BONUS_VALUE, OwnedCard.STAT_BONUS_MAX_HEALTH]:
 						var amount := int(effect.get(String(stat), 0))
 						if stat == OwnedCard.STAT_MAX_HEALTH and amount < 0:
 							amount = maxi(amount, 1 - int(card.get_base_stat_with_permanent_growth(stat)))
@@ -1480,14 +1965,21 @@ func _apply_story_effects(event: Dictionary, option: Dictionary, outcome: Dictio
 					if chosen != null: targets.append(chosen)
 					_apply_story_wounds({"kind": "wound", "wound": "业火"}, targets, effect_receipt)
 					if chosen != null and chosen.wound_slots.any(func(wound: Dictionary) -> bool: return wound.get("instance_id") == effect_receipt):
+						_record_story_card_reference(result, chosen)
 						result["effect_text"] = "%s获得业火伤势。" % chosen.card_data.display_name
 			"small_potion":
 				var mask := 1 << run.rng.randi_range(0, 3)
+				result["potion_id"] = "event_potion_%d" % mask
+				var potion := _story_card(result.potion_id, "event")
+				if potion != null:
+					result["text"] = "%s喝下了%s。" % [target.card_data.display_name, potion.display_name]
+					result["effect_text"] = "效果已永久应用。"
 				var growth := PotionRules.growth(mask, target)
 				for stat: StringName in growth:
 					target.apply_permanent_growth(stat, growth[stat])
-				if mask & PotionRules.SWIFT:
-					target.progress_by_source[PotionRules.PERMANENT_ZEAL] = int(target.progress_by_source.get(PotionRules.PERMANENT_ZEAL, 0)) + 1
+				var zeal := PotionRules.attribute_deltas(mask).w
+				if zeal != 0:
+					target.progress_by_source[PotionRules.PERMANENT_ZEAL] = int(target.progress_by_source.get(PotionRules.PERMANENT_ZEAL, 0)) + zeal
 			"small_forbidden_potion":
 				PotionRules.add_locked_wound(target, rewards.config.wound_event.wound_ids, run.rng, effect_receipt)
 				match int(effect.variant):
@@ -1506,10 +1998,11 @@ func _apply_story_effects(event: Dictionary, option: Dictionary, outcome: Dictio
 						return card.card_data.card_type == CardData.CardType.MINION and card not in deployed_cards)
 				if not candidates.is_empty():
 					var removed := candidates[run.rng.randi_range(0, candidates.size() - 1)]
+					if effect.kind == "send_muleteer": _record_story_card_reference(result, removed)
 					_main._remove_owned_instance_from_rows(removed.instance_id)
 					_main.owned_card_collection.remove_by_instance_id(removed.instance_id)
 					if effect.kind == "send_muleteer": story_score += 1000
-					if effect.kind == "sell_slave": _main.run_reward_state.add_gold(3 * (int(removed.card_data.rarity) + 1))
+					if effect.kind == "sell_slave": _award_story_gold(result, 3 * (int(removed.card_data.rarity) + 1))
 			"consume_sticker":
 				if not _consume_story_sticker(String(effect.sticker)): return false
 			"stickers", "emblem_pack":
@@ -1517,7 +2010,7 @@ func _apply_story_effects(event: Dictionary, option: Dictionary, outcome: Dictio
 			"scrapers":
 				_main.scraper_count += int(effect.count)
 				_main.emblem_library.set_scraper_count(_main.scraper_count)
-			"random_gold": _main.run_reward_state.add_gold(run.rng.randi_range(int(effect.low), int(effect.high)))
+			"random_gold": _award_story_gold(result, run.rng.randi_range(int(effect.low), int(effect.high)))
 			"random_cards", "slave_card":
 				for _draw: int in int(effect.get("count", 1)):
 					var pool := _story_card_pool(effect)
@@ -1534,6 +2027,8 @@ func _apply_story_effects(event: Dictionary, option: Dictionary, outcome: Dictio
 			"card", "wounded_card":
 				var owned: OwnedCard = _main.owned_card_collection.create_card(_story_card(String(effect.card), String(effect.get("unlocked_by", ""))), run.rng, no_reserved, false, source)
 				if owned == null: return false
+				if owned.card_data.card_type == CardData.CardType.MINION:
+					_record_story_card_reference(result, owned)
 				if effect.kind == "wounded_card":
 					for wound_index: int in int(effect.count):
 						var targets: Array[OwnedCard] = [owned]
@@ -1621,15 +2116,11 @@ func leave_shop(discard_confirmed: bool = false) -> bool:
 
 
 func _enemy_revealed_count() -> int:
-	if TaskCatalog.selected(_main.profile_progress, "main") == "tutorial": return 0
-	var floor_key := str(floor_number())
-	return clampi(int(content.get("enemy_rune_reveals_by_floor", {}).get(floor_key, 1)), 0, 3)
+	return LineupCatalog.rune_reveals(content, run.day, TaskCatalog.selected(_main.profile_progress, "main") == "tutorial")
 
 
 func _enemy_emblem_count() -> int:
-	if TaskCatalog.selected(_main.profile_progress, "main") == "tutorial": return 0
-	var counts: Array = content.get("enemy_emblems_by_day", [])
-	return maxi(int(counts[clampi(run.day - 1, 0, counts.size() - 1)]), 0) if not counts.is_empty() else 0
+	return LineupCatalog.emblem_count(content, run.day, TaskCatalog.selected(_main.profile_progress, "main") == "tutorial")
 
 
 func _build_enemy() -> bool:
@@ -1639,19 +2130,7 @@ func _build_enemy() -> bool:
 	if not path.has("encounter_state"):
 		var generated := builder.build(path, registry, _enemy_revealed_count(), _enemy_emblem_count())
 		if generated.is_empty(): return false
-		var rng := RandomNumberGenerator.new()
-		rng.seed = int(path.battle_seed) ^ 0x5EED
-		for id: String in ([] if _main.is_smith_tutorial() else path.get("resources", [])):
-			var definition: CardData = registry.get(StringName(id))
-			if definition == null or definition.card_type != CardData.CardType.RESOURCE: return false
-			var owned := OwnedCard.new()
-			owned.initialize(definition, StringName("encounter_resource_%04d" % (_main.resource_board_state.level_resource_cards.enemy.size() + 1)), 0, rng)
-			var placed := false
-			for anchor: Vector2i in ResourceHexLayout.valid_cells():
-				if _main.resource_board_state.deploy_level_resource("enemy", owned, anchor):
-					placed = true
-					break
-			if not placed: return false
+		if not _main.is_smith_tutorial() and not EncounterBuilder.place_level_resources(path, registry, _main.resource_board_state): return false
 		path["encounter_state"] = generated
 	var encounter := builder.restore(path.encounter_state, registry)
 	if encounter.is_empty(): return false
@@ -1719,13 +2198,7 @@ func slide_battle_board(start: Callable) -> void:
 	if _main.current_world_view != _main.WorldView.BATTLEFIELDS or not _panel.is_visible_in_tree() or not _panel.get_global_rect().intersects(_main.get_viewport_rect()):
 		start.call()
 		return
-	_main._cancel_click_carry()
-	_battle_board_input_blocker = Control.new()
-	_battle_board_input_blocker.name = "BattleBoardTransitionInput"
-	_battle_board_input_blocker.mouse_filter = Control.MOUSE_FILTER_STOP
-	_battle_board_input_blocker.z_index = 3900 # 阻挡重复部署和点击，Esc菜单在独立上层
-	_main.add_child(_battle_board_input_blocker)
-	_battle_board_input_blocker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_block_board_input()
 	_battle_board_exit = _panel.create_tween()
 	_battle_board_exit.tween_property(_panel, "position:y", _panel.position.y - _panel.get_global_rect().end.y, BATTLE_BOARD_EXIT_SECONDS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	_battle_board_exit.tween_callback(func():
@@ -1738,10 +2211,24 @@ func _clear_battle_board_exit() -> void:
 	_battle_board_exit.kill()
 	_battle_board_exit = null
 	if is_instance_valid(_panel): _panel.position = PANEL_POSITION
-	if is_instance_valid(_battle_board_input_blocker):
-		_battle_board_input_blocker.hide()
-		_battle_board_input_blocker.queue_free()
-		_battle_board_input_blocker = null
+	_unblock_board_input()
+
+
+func _block_board_input() -> void:
+	_main._cancel_click_carry()
+	_board_input_blocker = Control.new()
+	_board_input_blocker.name = "BoardTransitionInput"
+	_board_input_blocker.mouse_filter = Control.MOUSE_FILTER_STOP
+	_board_input_blocker.z_index = 3900 # 阻挡重复部署和点击，Esc菜单在独立上层
+	_main.add_child(_board_input_blocker)
+	_board_input_blocker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
+
+func _unblock_board_input() -> void:
+	if not is_instance_valid(_board_input_blocker): return
+	_board_input_blocker.hide()
+	_board_input_blocker.queue_free()
+	_board_input_blocker = null
 
 
 func begin_battle() -> bool:
@@ -2087,6 +2574,9 @@ func validate_state(snapshot: Dictionary) -> bool:
 		paths.append(snapshot.run.selected_path)
 	var all_paths: Array = content.shops + content.free_events + content.paid_events + content.enemies
 	for path: Dictionary in paths:
+		if String(path.path_id).begins_with(LineupCatalog.PATH_PREFIX):
+			if not _valid_saved_named_battle(path, int(snapshot.run.day), int(snapshot.run.round_index), snapshot.run.selected_path == path): return false
+			continue
 		if path.path_id in ["bounty_hunter", "spoils_dispute"]:
 			var ids_value: Variant = path.get("story_targets")
 			if not ids_value is Array or ids_value.size() != (1 if path.path_id == "bounty_hunter" else 2): return false
@@ -2101,6 +2591,9 @@ func validate_state(snapshot: Dictionary) -> bool:
 			for key: String in definition:
 				if path.kind == "battle" and key in ["front", "back", "previous_formations", "hint", "spells", "resources"]: continue
 				if key == "kind" and not definition.get("tutorial", false) and path.kind in ["free_event", "paid_event"] and definition.kind in ["free_event", "paid_event"]: continue
+				if key == "options" and path.get("reward") == "story":
+					if not story_events.matches_saved_options(definition, path.get(key)): return false
+					continue
 				if path.get(key) != definition[key]:
 					return false
 			if path.kind == "battle":
@@ -2125,6 +2618,23 @@ func validate_state(snapshot: Dictionary) -> bool:
 	return true
 
 
+func _valid_saved_named_battle(path: Dictionary, day: int, round_index: int, selected: bool) -> bool:
+	if round_index != 3 or path.kind != "battle" or path.get("lineup_day") != day or not path.get("tutorial") is bool: return false
+	if not run._whole_number(path.get("battle_seed")) or int(path.battle_seed) < 0 or int(path.battle_seed) > _main.BATTLE_SEED_MAX: return false
+	for key: String in path:
+		if key not in ["kind", "path_id", "lineup_id", "lineup_name", "lineup_day", "tutorial", "hint", "front", "back", "spells", "resources", "battle_seed", "encounter_state", "visual"]: return false
+	for key: String in ["lineup_id", "lineup_name", "hint"]:
+		if not path.get(key) is String: return false
+	for key: String in ["front", "back", "spells", "resources"]:
+		if not path.get(key) is Array: return false
+	var registry: Dictionary = _main._build_card_definition_registry()
+	var lineup := LineupCatalog.lineup_from_path(path, "")
+	if not LineupCatalog.lineup_error(lineup, registry).is_empty() or LineupCatalog.path_for(lineup, day, path.tutorial).path_id != path.path_id: return false
+	if path.has("encounter_state"):
+		return selected and path.encounter_state is Dictionary and not EncounterBuilder.new().restore(path.encounter_state, registry).is_empty()
+	return not selected and _can_build_named_battle(path, day, path.tutorial, registry)
+
+
 func _valid_event_battle(path: Dictionary, day_number: int) -> bool:
 	if not path.get("story_result") is Dictionary or not path.event_battle is Dictionary: return false
 	if path.get("reward") != "story" or not path.get("options") is Array or not story_events.valid_result(path, path.story_result): return false
@@ -2145,12 +2655,19 @@ func _valid_event_battle(path: Dictionary, day_number: int) -> bool:
 func restore_state(snapshot: Dictionary) -> bool:
 	if not validate_state(snapshot):
 		return false
+	_clear_event_food_selection()
 	_cancel_event_presentations()
 	if is_instance_valid(_scraper_handoff): _scraper_handoff.free()
 	_rune_lesson_waiting_for_release = false
 	_queued_tutorial_stories.clear()
 	run.restore_state(snapshot.run)
 	_enhancement_card_id = StringName(run.selected_path.get("enhancement_result", {}).get("instance_id", ""))
+	var discovered: Variant = run.selected_path.get("story_result", run.selected_path.get("enhancement_result", {}))
+	if discovered is Dictionary and discovered.has("option_index"):
+		_main.profile_progress.record_event_outcome(story_events.outcome_discovery_key(
+			run.selected_path, int(discovered.option_index), int(discovered.get("outcome_index", 0))))
+	elif run.selected_path.get("reward_claimed", false) and run.selected_path.get("reward") in ["gold", "emblem", "pack", "minion", "wound"]:
+		_main.profile_progress.record_event_outcome(story_events.outcome_discovery_key(run.selected_path, 0, 0))
 	# 路径内还有一份固定遭遇快照；同步迁移并保存它，避免下次部署恢复旧槽数。
 	var saved_paths: Array = run.paths.duplicate()
 	if not run.selected_path.is_empty(): saved_paths.append(run.selected_path)
@@ -2186,6 +2703,9 @@ func restore_state(snapshot: Dictionary) -> bool:
 
 
 func restore_ui() -> void:
+	_trial_robot_landing = false
+	_fly_trial_supply = false
+	_tutorial_stacked_slot = null
 	if run.step == RunState.Step.BATTLE_RESULT:
 		_main.current_phase = _main.GamePhase.RESULT
 		_main._last_battle_settlement_result = {"success": true}
@@ -2224,7 +2744,7 @@ func reward_summary() -> String:
 
 
 func _capture_transaction() -> Dictionary:
-	return {"profile": _main.profile_progress.capture_state(), "maze": capture_state(), "cards": _main.owned_card_collection.capture_state(), "reward": _main.run_reward_state.capture_state(), "inventory": _main.emblem_library.get_inventory_state(), "shop": _main.ordinary_shop_service.capture_state(), "resources": _main.resource_board_state.capture_state(), "rows": _main._current_rows_for_save(), "phase": _main.current_phase, "chaos_day": _main._last_chaos_reroll_day_token, "journal": _main.settlement_journal.capture_state(), "celestial": _main.celestial_indicators.capture_state(), "scrapers": _main.scraper_count, "battle_sequence": _main._next_battle_instance_sequence, "settlement": _main._last_battle_settlement_result.duplicate(true), "battle_snapshot": _main._battle_snapshot, "prepared_spells": _main.prepared_spell_instance_ids.duplicate()}
+	return {"profile": _main.profile_progress.capture_state(), "maze": capture_state(), "cards": _main.owned_card_collection.capture_state(), "reward": _main.run_reward_state.capture_state(), "inventory": _main.emblem_library.get_inventory_state(), "shop": _main.ordinary_shop_service.capture_state(), "resources": _main.resource_board_state.capture_state(), "rows": _main._current_rows_for_save(), "phase": _main.current_phase, "chaos_day": _main._last_chaos_reroll_day_token, "journal": _main.settlement_journal.capture_state(), "celestial": _main.celestial_indicators.capture_state(), "scrapers": _main.scraper_count, "battle_sequence": _main._next_battle_instance_sequence, "settlement": _main._last_battle_settlement_result.duplicate(true), "battle_snapshot": _main._battle_snapshot, "prepared_spells": _main.prepared_spell_instance_ids.duplicate(), "food_delivery": _story_food_ids.duplicate(), "food_positions": _event_food_positions.duplicate(), "delivery_card": _enhancement_card_id if is_instance_valid(_event_item_delivery) else &""}
 
 
 func _rollback_transaction(previous: Dictionary) -> void:
@@ -2234,6 +2754,9 @@ func _rollback_transaction(previous: Dictionary) -> void:
 	_main.owned_card_collection.restore_state(previous.cards)
 	_main.run_reward_state.restore_state(previous.reward)
 	_main.emblem_library.restore_inventory_state(previous.inventory)
+	_story_food_ids.assign(previous.food_delivery)
+	_event_food_positions.assign(previous.food_positions)
+	if not String(previous.delivery_card).is_empty(): _enhancement_card_id = previous.delivery_card
 	_main.ordinary_shop_service.initialize(0, previous.shop)
 	_main.resource_board_state.restore_state(previous.resources, _main._build_card_definition_registry())
 	for pair: Array in [[_main.front_row, &"player_front"], [_main.back_row, &"player_back"], [_main.enemy_front_row, &"enemy_front"], [_main.enemy_back_row, &"enemy_back"]]:
@@ -2251,6 +2774,7 @@ func _rollback_transaction(previous: Dictionary) -> void:
 	_main.battle_result_panel.visible = _main.current_phase == _main.GamePhase.RESULT
 	_refresh_collection()
 	refresh()
+	if is_instance_valid(_event_item_delivery): _event_table.show_detail_immediately()
 
 
 func _commit_transaction(previous: Dictionary, commit_discoveries: bool = false, refresh_interface: bool = true) -> bool:
@@ -2313,6 +2837,7 @@ func _build_ui() -> void:
 	_initial_pack_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	_initial_pack_button.pressed.connect(open_task_supply)
 	_initial_pack_prompt.add_child(_initial_pack_button)
+	get_window().mouse_exited.connect(func(): _initial_pack_pointer = Vector2.INF)
 	var panel_host := Control.new()
 	panel_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(panel_host)
@@ -2346,7 +2871,7 @@ func _clear_children(parent: Node) -> void:
 		child.queue_free()
 
 
-func _label(text: String) -> void:
+func _label(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
 	label.add_theme_font_size_override("font_size", 16) # 事件纸面正文使用清晰的黑体字号
@@ -2354,10 +2879,83 @@ func _label(text: String) -> void:
 	label.add_theme_color_override("font_color", Color("513124"))
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	(_detail_body if is_instance_valid(_detail_body) else _body).add_child(label)
+	return label
 
 
-func _button(text: String, callback: Callable, parent: Node = null) -> Button:
-	var button := Button.new()
+func _record_story_card_reference(result: Dictionary, card: OwnedCard, aliases: Array[String] = []) -> void:
+	var saved: Dictionary = result.get_or_add("card_mentions", {})
+	var reference := {"card_id": String(card.card_data.id), "instance_id": String(card.instance_id)}
+	var markers := aliases.duplicate()
+	markers.append(card.card_data.display_name)
+	for marker: String in markers:
+		var entries: Array = saved.get_or_add(marker, [])
+		if not entries.has(reference): entries.append(reference)
+
+
+func _story_card_references(event: Dictionary) -> Dictionary:
+	var references := {}
+	var result: Dictionary = event.get("story_result", {})
+	var metadata: Variant = result.get("card_mentions")
+	var recorded: Dictionary = metadata if metadata is Dictionary else {}
+	var named: Array = EVENT_NAMED_MINIONS.get(event.path_id, [])
+	var registry: Dictionary = {}
+	if not named.is_empty() or not recorded.is_empty() or result.has("sculptor"):
+		registry = _main._build_card_definition_registry()
+	for id: StringName in named:
+		var definition := registry.get(id) as CardData
+		if definition != null:
+			references[definition.display_name] = [_story_reference(definition)]
+	for option: Dictionary in event.options:
+		var required := String(option.get("requires_card", ""))
+		if required.is_empty(): continue
+		var available := _story_owned(required)
+		if available.size() == 1 and references.has(available[0].card_data.display_name):
+			var card := available[0]
+			references[card.card_data.display_name] = [_story_reference(card.card_data, card)]
+	for marker: Variant in recorded:
+		if not marker is String or marker.is_empty() or not recorded[marker] is Array: continue
+		var entries: Array[Dictionary] = []
+		for item: Variant in recorded[marker]:
+			if not item is Dictionary or not item.get("instance_id") is String or not item.get("card_id") is String: continue
+			var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(StringName(item.instance_id))
+			var definition := registry.get(StringName(item.card_id)) as CardData
+			if owned != null: definition = owned.card_data
+			if definition != null: entries.append(_story_reference(definition, owned))
+		if not entries.is_empty(): references[marker] = entries
+	if result.has("sculptor"):
+		var sculptor: OwnedCard = _main.owned_card_collection.get_by_instance_id(StringName(result.sculptor_instance_id))
+		var definition := registry.get(StringName(result.sculptor)) as CardData
+		if definition != null:
+			var entry := _story_reference(definition, sculptor)
+			references["{sculptor}"] = [entry]
+			references[entry.text] = [entry]
+	if event.path_id == "spoils_dispute":
+		for index: int in 2:
+			var card := _story_locked_target(index)
+			var letter := "A" if index == 0 else "B"
+			var entry := _story_reference(card.card_data, card) if card != null else {"text": "已离开收藏的随从"}
+			for marker: String in ["*随机上场的随从%s*", "*随从%s*", "随从%s"]:
+				references[marker % letter] = [entry]
+			references[letter + "随从"] = [entry]
+	return references
+
+
+func _story_reference(definition: CardData, owned: OwnedCard = null) -> Dictionary:
+	return {"text": definition.display_name, "card": definition, "owned": owned}
+
+
+func _story_label(text: String, references: Dictionary) -> Control:
+	var parts := CardReferenceText.split_references(text, references)
+	if not parts.any(func(part: Dictionary) -> bool: return part.has("card")):
+		return _label(CardReferenceText.plain_text(parts))
+	var label := CardReferenceText.new()
+	label.configure(parts, 16, Color("513124"), false, _event_table)
+	_detail_body.add_child(label)
+	return label
+
+
+func _button(text: String, callback: Callable, parent: Node = null, button: Button = null) -> Button:
+	if button == null: button = Button.new()
 	button.text = text
 	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	button.add_theme_font_size_override("font_size", 15) # 纸面选项字号，长句在可用宽度内换行
@@ -2367,8 +2965,8 @@ func _button(text: String, callback: Callable, parent: Node = null) -> Button:
 	return button
 
 
-func _exit_button(text: String, callback: Callable, parent: Node = null) -> Button:
-	var button := _button(text, Callable(), parent)
+func _exit_button(text: String, callback: Callable, parent: Node = null, provided_button: Button = null) -> Button:
+	var button := _button(text, Callable(), parent, provided_button)
 	button.set_meta("exit_action", callback)
 	# 连续bind会反向追加参数；显式保留原动作参数，再附加确认状态与原按钮。
 	var arguments := callback.get_bound_arguments()
@@ -2384,8 +2982,19 @@ func _find_exit_button(action: Callable) -> BaseButton:
 
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouse and is_instance_valid(_initial_pack_prompt) and _initial_pack_prompt.visible:
+		_initial_pack_pointer = _initial_pack_prompt.get_global_transform_with_canvas().affine_inverse() * event.position
+		if (
+			event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT
+			and _main.is_smith_tutorial() and not _initial_pack_button.disabled
+			and not _main._escape_pause_menu.blocks_gameplay() and not _main._developer_console.visible
+			and _initial_pack_hit_area().has_point(_initial_pack_pointer)
+		):
+			get_viewport().set_input_as_handled()
+			open_task_supply()
+			return
 	# 天赋确认后立即换成路径按钮；双击的第二次按压不能误选下一屏。
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.double_click and is_instance_valid(_panel) and _panel.is_visible_in_tree():
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and event.double_click and is_instance_valid(_panel) and _panel.is_visible_in_tree() and not is_instance_valid(_main._toolbox_overlay):
 		var local: Vector2 = _panel.get_global_transform_with_canvas().affine_inverse() * event.position
 		if Rect2(Vector2.ZERO, _panel.size).has_point(local):
 			get_viewport().set_input_as_handled()
@@ -2430,19 +3039,28 @@ func refresh() -> void:
 	_main.restart_battle_button.visible = false
 	if is_instance_valid(_enhancement_slot): _enhancement_slot.return_card(false)
 	_enhancement_slot = null
+	if is_instance_valid(_event_item_delivery):
+		_event_item_delivery.hide()
+		_event_item_delivery.queue_free()
+	_event_item_delivery = null
+	_event_delivery_actions.clear()
+	if run.step != RunState.Step.EVENT or run.selected_path.has("story_result") or not run.selected_path.get("options", []).any(func(option: Dictionary) -> bool: return option.has("food_choices")):
+		_clear_event_food_selection()
 	_clear_children(_body)
 	_body.position = Vector2.ZERO
 	_body.size = PANEL_SIZE
 	_detail_body = null
 	_event_table = null
+	_event_gold_label = null
 	_event_reward_previews.clear()
 	var show_panel := false
 	var initial_pack_was_visible := _initial_pack_prompt.visible
 	_initial_pack_prompt.visible = false
-	if not _main.profile_progress.run.get("supplies", []).is_empty():
+	if not _main.profile_progress.run.get("supplies", []).is_empty() and not (_trial_sticker_pack_pending() and choosing_talent):
 		var supply: Dictionary = _main.profile_progress.run.supplies[0]
 		if TaskCatalog.selected(_main.profile_progress, "main") == "tutorial":
 			_initial_pack_prompt.visible = true
+			_initial_pack_prompt.get_node("ArrivalDim").show()
 			_initial_pack_button.texture_normal = _main._ordinary_shop_offer_icon(supply)
 			_initial_pack_button.size = _initial_pack_button.texture_normal.get_size()
 			_initial_pack_button.material = CardPackOpening.TearArt.create_relief(_initial_pack_button.size, _initial_pack_button.texture_normal) if supply.kind == "card_pack" and supply.get("size") == "small" else null
@@ -2450,10 +3068,14 @@ func refresh() -> void:
 			var arrival := ArrivalSettings.get_values()
 			_initial_pack_prompt.get_node("ArrivalDim").color.a = arrival.arrival_dim
 			if not initial_pack_was_visible: _drop_initial_pack()
-			elif not is_instance_valid(_initial_pack_drop) or not _initial_pack_drop.is_valid():
+			elif not _initial_pack_hovered and (not is_instance_valid(_initial_pack_drop) or not _initial_pack_drop.is_valid()):
 				_initial_pack_button.position = Arrival.point(arrival, "end") - _initial_pack_button.size * 0.5
 				_initial_pack_button.scale = Vector2.ONE * arrival.arrival_end_scale
 				_initial_pack_button.rotation = 0.0
+		elif _trial_sticker_pack_pending():
+			if _main.profile_progress.run.read_story_nodes.has("supply_first:opening"):
+				if initial_pack_was_visible: _initial_pack_prompt.show()
+				else: _show_trial_sticker_pack(supply)
 		else:
 			show_panel = true
 			_build_plain_event_board()
@@ -2506,27 +3128,53 @@ func _nudge_initial_pack() -> void:
 	if is_instance_valid(_initial_pack_drop) and _initial_pack_drop.is_running(): return
 	var button := _initial_pack_button
 	var origin := Arrival.point(ArrivalSettings.get_values(), "end") - button.size * 0.5
-	var footprint := button.size * button.scale * INITIAL_PACK_SHADOW_RATIO
-	var shadow_center := Arrival.point(ArrivalSettings.get_values(), "end") + Vector2(0, button.size.y * button.scale.y * INITIAL_PACK_SHADOW_Y_RATIO)
-	_initial_pack_shadow.visible = true
-	_initial_pack_shadow.modulate.a = 0.0
 	_initial_pack_drop = button.create_tween()
 	_initial_pack_drop.tween_method(func(t: float):
-		var lift := sin(PI * t)
-		button.position = origin - Vector2(0, lift * INITIAL_PACK_NUDGE_HEIGHT)
+		_apply_initial_pack_lift(sin(PI * t), origin)
 		button.rotation_degrees = -sin(TAU * t) * sin(PI * t) * INITIAL_PACK_NUDGE_ANGLE, 0.0, 1.0, INITIAL_PACK_NUDGE_SECONDS)
-	_initial_pack_drop.parallel().tween_method(func(t: float):
-		var lift := sin(PI * t)
-		_initial_pack_shadow.size = footprint * Vector2(1.0 + lift * INITIAL_PACK_SHADOW_SPREAD, 1.0)
-		_initial_pack_shadow.position = shadow_center - _initial_pack_shadow.size * 0.5
-		_initial_pack_shadow.modulate.a = lift * INITIAL_PACK_SHADOW_ALPHA, 0.0, 1.0, INITIAL_PACK_NUDGE_SECONDS)
 	_initial_pack_drop.tween_callback(func():
-		button.position = origin
+		_apply_initial_pack_lift(0.0, origin)
+		button.rotation = 0.0)
+
+
+func _apply_initial_pack_lift(lift: float, origin: Vector2) -> void:
+	var button := _initial_pack_button
+	button.position = origin - Vector2(0, lift * INITIAL_PACK_NUDGE_HEIGHT)
+	var footprint := button.size * button.scale * INITIAL_PACK_SHADOW_RATIO
+	var shadow_center := origin + button.size * 0.5 + Vector2(0, button.size.y * button.scale.y * INITIAL_PACK_SHADOW_Y_RATIO)
+	_initial_pack_shadow.size = footprint * (1.0 + lift * INITIAL_PACK_SHADOW_SPREAD)
+	_initial_pack_shadow.position = shadow_center - _initial_pack_shadow.size * 0.5
+	_initial_pack_shadow.modulate.a = lift * INITIAL_PACK_SHADOW_ALPHA
+	_initial_pack_shadow.visible = lift > 0.0
+
+
+func _update_initial_pack_hover() -> bool:
+	var button := _initial_pack_button
+	var center := Arrival.point(ArrivalSettings.get_values(), "end")
+	var origin := center - button.size * 0.5
+	var hovered := _initial_pack_hit_area().has_point(_initial_pack_pointer)
+	if hovered != _initial_pack_hovered:
+		_initial_pack_hovered = hovered
+		if is_instance_valid(_initial_pack_drop) and _initial_pack_drop.is_running(): _initial_pack_drop.kill()
 		button.rotation = 0.0
-		_initial_pack_shadow.hide())
+		var lift := clampf((origin.y - button.position.y) / INITIAL_PACK_NUDGE_HEIGHT, 0.0, 1.0)
+		_initial_pack_drop = button.create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		_initial_pack_drop.tween_method(_apply_initial_pack_lift.bind(origin), lift, 1.0 if hovered else 0.0, INITIAL_PACK_HOVER_SECONDS)
+	return hovered
+
+
+func _initial_pack_hit_area() -> Rect2:
+	var center := Arrival.point(ArrivalSettings.get_values(), "end")
+	var half := _initial_pack_button.size * _initial_pack_button.scale * 0.5
+	var rest := Rect2(center - half, half * 2.0)
+	return rest.merge(Rect2(rest.position - Vector2(0, INITIAL_PACK_NUDGE_HEIGHT), rest.size))
 
 
 func _drop_initial_pack() -> void:
+	_initial_pack_hovered = false
+	_initial_pack_pointer = CrtProjection.local_mouse(_initial_pack_prompt)
+	_initial_pack_button.show()
+	if is_instance_valid(_trial_pack_art): _trial_pack_art.hide()
 	if is_instance_valid(_initial_pack_drop): _initial_pack_drop.kill()
 	_initial_pack_shadow.hide()
 	_initial_pack_drop = Arrival.play(_initial_pack_button, _initial_pack_prompt, ArrivalSettings.get_values())
@@ -2601,9 +3249,10 @@ func _build_selected_event() -> void:
 	if run.is_event_battle():
 		var result: Dictionary = event.story_result
 		var text := String(event.options[int(result.option_index)].outcomes[int(result.outcome_index)].text)
-		_label(text)
+		_story_label(String(result.get("text", text)), _story_card_references(event))
 		_label("额外战斗 · 敌方先完成突击" if run.battle_path().enemy_first else "额外战斗")
 		_label("调整阵容后，点击右下方开始战斗。")
+		_event_table.result_lines.assign(_detail_body.get_children())
 		return
 	match run.get_round_kind():
 		"battle":
@@ -2615,49 +3264,84 @@ func _build_selected_event() -> void:
 			elif event.get("reward") == "story":
 				_build_story_choices(event)
 			else:
-				_label(String(event.name))
-				var reward_text: String = {"gold": "获得3金币", "emblem": "获得1枚随机I级纹章", "minion": "获得1张随机灰烬证册I级随从", "pack": "获得1个灰烬证册小卡包（立即打开）", "wound": "随机拥有且有空槽的随从新增1处I级伤势；无目标不执行", "tutorial_smith": "玛格丽特已加入出战队伍，本局可无限使用刮刀。"}[event.reward]
-				_label(reward_text)
-				_show_event_reward_previews(event)
-				var cost := int(event.cost)
-				var claim_label := "领取奖励" if event.reward in ["emblem", "pack", "minion"] else "领取并继续"
-				var take := _exit_button("继续旅程" if bool(event.get("reward_claimed", false)) else ("花费%d金币" % cost if cost > 0 else claim_label), complete_event.bind(true))
-				take.disabled = not bool(event.get("reward_claimed", false)) and _main.run_reward_state.gold < cost
-				if cost > 0 and not bool(event.get("reward_claimed", false)):
-					_exit_button("放弃，不花金币", complete_event.bind(false))
+				_build_simple_event(event)
+
+
+func _build_simple_event(event: Dictionary) -> void:
+	_label(String(event.name))
+	var summary := _event_reward_description(event)
+	if event.get("reward_claimed", false):
+		if event.reward == "gold": _show_event_gold_result(int(event.amount))
+		else: _label(summary)
+		_show_event_reward_previews(event)
+		_exit_button("继续旅程", complete_event.bind(true))
+		return
+	var cost := int(event.cost)
+	var unaffordable: bool = _main.run_reward_state.gold < cost
+	if not unaffordable or show_event_debug_details:
+		var claim_label := "领取奖励" if event.reward in ["gold", "emblem", "pack", "minion"] else "领取并继续"
+		var button := StoryOptionButton.new()
+		_exit_button("花费%d金币" % cost if cost > 0 else claim_label, complete_event.bind(true), null, button)
+		button.disabled = unaffordable
+		var key := story_events.outcome_discovery_key(event, 0, 0)
+		var known: bool = _main.profile_progress.profile.discoveries.event_outcomes.has(key)
+		var lines: Array[Dictionary] = [_story_outcome_line(1.0, summary, known)]
+		if show_event_debug_details and unaffordable:
+			lines.push_front({"prefix": "当前不可选 · ", "text": "金币不足"})
+		button.set_outcome_lines(lines)
+	if cost > 0:
+		_exit_button("放弃，不花金币", complete_event.bind(false))
 
 
 func _build_story_choices(event: Dictionary) -> void:
 	_story_material_pickers.clear()
 	_camp_donation_picker = null
 	_label(String(event.name))
+	var references := _story_card_references(event)
 	if event.has("story_result"):
 		var result: Dictionary = event.story_result
 		var outcome: Dictionary = event.options[int(result.option_index)].outcomes[int(result.outcome_index)]
-		_label(String(result.get("text", outcome.text)))
+		_story_label(String(result.get("text", outcome.text)), references)
 		var reward_text := String(result.get("effect_text", outcome.effect_text))
+		var gold_awarded := int(result.get("gold_awarded", 0))
+		if event.path_id == "spoils_dispute":
+			reward_text = reward_text.replace("两个随从", "*随从A*和*随从B*")
 		if result.has("skipped_packs"):
 			reward_text += "\n未发放：%s（当前没有可抽取的卡包）" % "、".join(result.skipped_packs)
-		_label(reward_text)
+		if gold_awarded > 0: _show_event_gold_result(gold_awarded, reward_text, references)
+		elif not reward_text.is_empty(): _story_label(reward_text, references)
+		_event_table.result_lines.assign(_detail_body.get_children().slice(1))
 		_show_event_reward_previews(event)
 		_exit_button("继续旅程", complete_event.bind(true))
 		return
 	if event.has("mining_progress"):
 		var progress: Dictionary = event.mining_progress
 		var previous: Dictionary = event.options[int(progress.stage) - 1].outcomes[0]
-		_label("%s\n已暂存 %d 张矿物卡" % [previous.text, progress.cards.size()])
+		_event_table.result_lines.append(_label("%s\n已暂存 %d 张矿物卡" % [previous.text, progress.cards.size()]))
 	else:
-		_label(String(event.description))
-	if event.path_id == "strange_alchemist": _build_story_material_pickers()
+		_story_label(String(event.description), references)
+	var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id)
+	var options := {}
+	for index: int in event.options.size():
+		var option := story_events.runtime_option(event, index)
+		if show_event_debug_details or _story_blocked_reason(option, owned, true).is_empty():
+			options[index] = option
+	if event.path_id == "strange_alchemist" and (options.has(1) or options.has(2)):
+		_build_story_material_pickers()
 	if event.path_id == "bounty_hunter":
 		var wanted := _story_locked_target(0)
-		_label("悬赏目标：%s" % (wanted.card_data.display_name if wanted != null else "已离开收藏"))
-	if event.path_id == "spoils_dispute":
-		for index: int in 2:
-			var participant := _story_locked_target(index)
-			_label("随从%s：%s" % ["A" if index == 0 else "B", participant.card_data.display_name if participant != null else "已离开收藏"])
-	var has_target: bool = event.options.any(func(option: Dictionary) -> bool: return option.has("target") and not option.has("unavailable_reason"))
-	if has_target:
+		if wanted != null:
+			references[wanted.card_data.display_name] = [_story_reference(wanted.card_data, wanted)]
+		_story_label("悬赏目标：%s" % (wanted.card_data.display_name if wanted != null else "已离开收藏"), references)
+	var has_target: bool = options.values().any(func(option: Dictionary) -> bool: return option.has("target"))
+	var food_options: Array = options.values().filter(func(option: Dictionary) -> bool: return option.has("food_choices"))
+	_enhancement_options = null
+	if not food_options.is_empty():
+		_build_story_food_delivery(food_options, has_target)
+		if has_target:
+			_enhancement_options = _detail_body
+			_build_event_service_slot(_event_item_delivery, false)
+	elif has_target:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 24) # 事件选项和随从槽之间的间隔
 		_detail_body.add_child(row)
@@ -2665,13 +3349,9 @@ func _build_story_choices(event: Dictionary) -> void:
 		_enhancement_options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(_enhancement_options)
 		_build_event_service_slot(row, false)
-	var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id)
 	var can_leave := false
-	for index: int in event.options.size():
-		var option := story_events.runtime_option(event, index)
-		if not story_events.option_is_visible(event, option) or not MiningEvents.option_is_visible(event, option): continue
-		if event.path_id == "strange_casino" and index in [2, 3] and not _story_blocked_reason(option, owned, true).is_empty(): continue
-		if option.has("food_choices"): _build_story_food_picker(option)
+	for index: int in options:
+		var option: Dictionary = options[index]
 		if option.get("camp_donation", false):
 			_camp_donation_picker = OptionButton.new()
 			_camp_donation_picker.add_item("选择要捐赠的纹章")
@@ -2679,41 +3359,174 @@ func _build_story_choices(event: Dictionary) -> void:
 				_camp_donation_picker.add_item(String(item.emblem_id))
 				_camp_donation_picker.set_item_metadata(_camp_donation_picker.item_count - 1, String(item.instance_id))
 			_detail_body.add_child(_camp_donation_picker)
-		var blocked := _story_blocked_reason(option, owned)
-		var button := _button(String(option.label), choose_story_option.bind(index), _enhancement_options if has_target else null)
+		var button := StoryOptionButton.new()
+		var caption := CardReferenceText.split_references(String(option.label), references)
+		_button(CardReferenceText.plain_text(caption), choose_story_option.bind(index), _enhancement_options, button)
+		if caption.any(func(part: Dictionary) -> bool: return part.has("card")):
+			var label := CardReferenceText.new()
+			label.configure(caption, 15, button.get_theme_color("font_color"), true, _event_table)
+			button.set_reference_caption(label)
+		button.set_meta("story_option", index)
+		var update := _update_story_option_button.bind(button, event, index, option, references)
 		if option.get("camp_donation", false):
-			_camp_donation_picker.item_selected.connect(func(_item: int): button.disabled = not _story_blocked_reason(option, null).is_empty())
+			_camp_donation_picker.item_selected.connect(func(_item: int): update.call())
 		if option.has("food_choices"):
-			_story_food_picker.multi_selected.connect(func(_item: int, _selected: bool):
-				button.disabled = not _story_blocked_reason(option, null).is_empty())
+			_event_delivery_actions.append(update)
 		if event.path_id == "strange_alchemist" and index in [1, 2]:
 			for picker: OptionButton in _story_material_pickers.values():
-				picker.item_selected.connect(func(_item: int): button.disabled = not _story_blocked_reason(option, null).is_empty())
-		if has_target: button.set_meta("story_option", index)
-		can_leave = can_leave or (int(option.cost) == 0 and not option.has("target") and blocked.is_empty())
-		button.text = String(option.label)
-		button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		button.disabled = not blocked.is_empty()
-		var explanation := "条件：%s" % String(option.condition)
-		for outcome: Dictionary in option.outcomes:
-			explanation += "\n%s：%s" % [str(outcome.source_probability), String(outcome.effect_text)]
-		button.tooltip_text = explanation + ("\n" + blocked if not blocked.is_empty() else "")
-		if not blocked.is_empty() and not option.has("target"):
-			_label(blocked)
+				picker.item_selected.connect(func(_item: int): update.call())
+		update.call()
+		can_leave = can_leave or (int(option.cost) == 0 and not option.has("target") and not button.disabled)
 	if not can_leave:
 		_exit_button("直接离开", complete_event.bind(false), _enhancement_options if has_target else null)
+	if is_instance_valid(_event_item_delivery): set_event_delivery_toolbox(_main._toolbox_overlay)
 
 
-func _build_story_food_picker(option: Dictionary) -> void:
-	_story_food_picker = ItemList.new()
-	_story_food_picker.select_mode = ItemList.SELECT_MULTI
-	_story_food_picker.custom_minimum_size.y = 84 # 食物选择区显示约三行，更多项目在区内滚动
-	_story_food_picker.tooltip_text = "选择三枚未装备的食物纹章"
-	for item: Dictionary in _main.emblem_library.get_inventory_state():
-		if String(item.get("emblem_id", "")) in option.food_choices:
-			var index := _story_food_picker.add_item(String(item.emblem_id))
-			_story_food_picker.set_item_metadata(index, String(item.instance_id))
-	_detail_body.add_child(_story_food_picker)
+func _story_outcome_probabilities(option: Dictionary) -> Array[float]:
+	return story_events.outcome_probabilities(option, _story_dice_bonus(), _has_guaranteed_story_roll(option))
+
+
+func _format_event_probability(probability: float) -> String:
+	return ("%.6f" % (probability * 100.0)).rstrip("0").rstrip(".") + "%"
+
+
+func _story_outcome_summary(outcome: Dictionary) -> String:
+	var summary := String(outcome.get("effect_text", "")).strip_edges()
+	return String(outcome.get("text", "")).strip_edges() if summary in ["", "-"] else summary
+
+
+func _update_story_option_button(button: Button, event: Dictionary, index: int, option: Dictionary, references: Dictionary) -> void:
+	var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id)
+	var blocked := _story_blocked_reason(option, owned)
+	button.disabled = not blocked.is_empty()
+	var lines: Array[Dictionary] = []
+	if show_event_debug_details:
+		var condition := String(option.get("condition", "")).strip_edges()
+		if condition not in ["", "-"]: lines.append({"prefix": "条件 · ", "text": condition})
+		if not blocked.is_empty(): lines.append({"prefix": "当前不可选 · ", "text": blocked})
+	var discoveries: Dictionary = _main.profile_progress.profile.discoveries.event_outcomes
+	var probabilities := _story_outcome_probabilities(option)
+	for outcome_index: int in option.outcomes.size():
+		var probability := probabilities[outcome_index]
+		var known := discoveries.has(story_events.outcome_discovery_key(event, index, outcome_index))
+		var summary := CardReferenceText.plain_text(CardReferenceText.split_references(_story_outcome_summary(option.outcomes[outcome_index]), references))
+		lines.append(_story_outcome_line(probability, summary, known))
+	button.set_outcome_lines(lines)
+
+
+func _story_outcome_line(probability: float, summary: String, known: bool) -> Dictionary:
+	var prefix := story_events.probability_tier(probability)
+	if show_event_debug_details: prefix += "（%s）" % _format_event_probability(probability)
+	var unknown := not show_event_debug_details and not known
+	return {"prefix": prefix + " · ", "text": "？" if unknown else summary, "unknown": unknown}
+
+
+func set_event_debug_details(show_details: bool) -> void:
+	if show_details == show_event_debug_details: return
+	show_event_debug_details = show_details
+	if run.step == RunState.Step.EVENT and run.get_round_kind() != "shop":
+		refresh()
+
+
+func _build_story_food_delivery(options: Array, has_target: bool) -> void:
+	_event_item_delivery = EventItemDelivery.new()
+	_event_item_delivery.accepts_item = _can_stage_event_food.bind(options)
+	_event_item_delivery.place_item = _stage_event_food
+	var paper: ScrollContainer = _event_table._paper
+	var area := Rect2(paper.position + Vector2(paper.size.x - EventItemDelivery.WIDTH, 0), Vector2(EventItemDelivery.WIDTH, paper.size.y))
+	paper.size.x -= EventItemDelivery.WIDTH + EventItemDelivery.COLUMN_GAP
+	_event_item_delivery.setup(_event_table, area, "拖入食物纹章或随从" if has_target else "拖入食物纹章", _main)
+	var open := _button("打开工具箱", _open_food_delivery_toolbox, _event_table)
+	open.name = "OpenDeliveryToolbox"
+	_event_item_delivery.set_open_button(open)
+
+
+func _open_food_delivery_toolbox() -> void:
+	if _main.current_world_view == _main.WorldView.COLLECTION:
+		_main._open_toolbox_inspection()
+		return
+	_main.set_world_view(_main.WorldView.COLLECTION)
+	var delivery := _event_item_delivery
+	var open := func():
+		if is_instance_valid(delivery) and delivery == _event_item_delivery:
+			_main._open_toolbox_inspection()
+	if is_instance_valid(_main._view_tween):
+		_main._view_tween.finished.connect(open, CONNECT_ONE_SHOT)
+	else:
+		open.call()
+
+
+func set_event_delivery_toolbox(overlay: Control = null) -> void:
+	if not is_instance_valid(_event_item_delivery): return
+	var host := overlay if _main.current_world_view == _main.WorldView.COLLECTION else null
+	if host != null and _main._tabletop_panels_parked: _main._resume_tabletop_follow()
+	_event_item_delivery.set_toolbox_host(host)
+	_refresh_event_delivery()
+
+
+func _event_delivery_accepts_input() -> bool:
+	return (
+		is_instance_valid(_event_item_delivery) and is_instance_valid(_main._toolbox_overlay)
+		and _event_item_delivery.get_parent() == _main._toolbox_overlay and not _main._toolbox_closing
+		and not is_instance_valid(_main._toolbox_tween) and not _event_presentation_busy()
+	)
+
+
+func _can_stage_event_food(data: Dictionary, options: Array) -> bool:
+	if not _event_delivery_accepts_input() or data.get("kind") != &"emblem_library": return false
+	var entry := data.get("source_entry") as EmblemLibraryEntry
+	if not is_instance_valid(entry) or not entry.drag_enabled: return false
+	var id := _event_food_drag_id(data)
+	if id.is_empty(): return false
+	if id in _story_food_ids: return entry == _event_item_delivery.item_entry(id)
+	var current: Dictionary = _main.emblem_library.get_inventory_item(id)
+	return options.any(func(option: Dictionary) -> bool: return _is_story_food(current, option))
+
+
+func _event_food_drag_id(data: Dictionary) -> StringName:
+	return StringName(String(data.get("definition", {}).get("returned_state", {}).get("instance_id", "")))
+
+
+func _stage_event_food(data: Dictionary, position: Vector2) -> void:
+	var id := _event_food_drag_id(data)
+	if not _enhancement_card_id.is_empty() and is_instance_valid(_enhancement_slot):
+		_enhancement_card_id = &""
+		_refresh_enhancement_card()
+	if id not in _story_food_ids: _story_food_ids.append(id)
+	_event_food_positions[id] = position
+	_refresh_event_delivery()
+
+
+func _return_event_food_to_toolbox(id: StringName, entry: Control) -> void:
+	if not is_instance_valid(_event_item_delivery): return
+	if entry != _event_item_delivery.item_entry(id) or id not in _story_food_ids: return
+	_story_food_ids.erase(id)
+	_event_food_positions.erase(id)
+	_refresh_event_delivery()
+
+
+func _refresh_event_delivery() -> void:
+	if not is_instance_valid(_event_item_delivery): return
+	var reserved: Array[StringName] = []
+	var items: Array[Dictionary] = []
+	for id: StringName in _story_food_ids:
+		var item: Dictionary = _main.emblem_library.get_inventory_item(id)
+		if item.is_empty():
+			_event_food_positions.erase(id)
+			continue
+		reserved.append(id)
+		items.append(_main.emblem_library.get_item_display_definition(item))
+	_story_food_ids.assign(reserved)
+	_event_item_delivery.sync_items(items, _event_food_positions, _event_delivery_accepts_input())
+	_main.emblem_library.set_reserved_item_ids(reserved, FOOD_DELIVERY_RESERVATION)
+	for update: Callable in _event_delivery_actions:
+		if update.is_valid(): update.call()
+
+
+func _clear_event_food_selection() -> void:
+	_story_food_ids.clear()
+	_event_food_positions.clear()
+	_main.emblem_library.set_reserved_item_ids([], FOOD_DELIVERY_RESERVATION)
 
 
 func _build_story_material_pickers() -> void:
@@ -2731,15 +3544,106 @@ func _build_story_material_pickers() -> void:
 
 
 func _event_presentation_busy() -> bool:
-	return is_instance_valid(_story_roll) or is_instance_valid(_event_reward_flight) or is_instance_valid(_battle_board_exit)
+	return is_instance_valid(_main._card_acquisition) or is_instance_valid(_story_roll) or is_instance_valid(_event_reward_flight) or is_instance_valid(_event_gold_flight) or is_instance_valid(_event_board_slide) or is_instance_valid(_battle_board_exit) or (is_instance_valid(_event_table) and _event_table.revealing_result)
 
 
 func _cancel_event_presentations() -> void:
 	_clear_battle_board_exit()
+	if is_instance_valid(_event_board_slide): _clear_event_board_slide()
+	if is_instance_valid(_event_table): _event_table.cancel_result_reveal()
 	_story_roll = null
 	if is_instance_valid(_event_reward_flight): _event_reward_flight.free()
+	if is_instance_valid(_event_gold_flight): _event_gold_flight.free()
+	_event_gold_flight = null
+	_event_gold_remaining = 0
 	_event_reward_flight = null
 	_event_reward_in_flight.clear()
+
+
+func displayed_event_gold() -> int:
+	return maxi(0, _main.run_reward_state.gold - _event_gold_remaining)
+
+
+func _show_event_gold_result(amount: int, detail: String = "", references: Dictionary = {}) -> void:
+	var receipt := _gold_reward_line.search(detail)
+	if receipt != null:
+		var before := detail.left(receipt.get_start()).strip_edges().rstrip("，、； ")
+		if not before.is_empty(): _story_label(before, references)
+		detail = detail.substr(receipt.get_end()).strip_edges().lstrip("，、；。 ")
+	_event_gold_label = EventGoldAmount.new()
+	_event_gold_label.set_amount(amount, TEXT_FONT)
+	_detail_body.add_child(_event_gold_label)
+	if not detail.is_empty(): _story_label(detail, references)
+
+
+func _play_event_gold(after: Callable = Callable()) -> void:
+	if _event_gold_remaining <= 0 or not is_instance_valid(_event_gold_label) or not _event_gold_label.is_visible_in_tree():
+		_event_gold_remaining = 0
+		if is_instance_valid(_status): _status.set_displayed_gold(displayed_event_gold())
+		if after.is_valid(): after.call()
+		return
+	var flight := EventCoins.new()
+	flight.name = "EventCoinPresentation"
+	flight.top_level = true
+	flight.z_index = 2750 # 金币在事件板上方，仍由Esc设置菜单盖住
+	_main.add_child(flight)
+	_event_gold_flight = flight
+	flight.coin_landed.connect(func(remaining: int):
+		_event_gold_remaining = remaining
+		_status.set_displayed_gold(displayed_event_gold()))
+	flight.coin_landed.connect(_event_table.bump_gold_icon.unbind(1))
+	flight.finished.connect(func():
+		_event_gold_flight = null
+		if after.is_valid(): after.call()
+		show_task_hint.call_deferred(), CONNECT_ONE_SHOT)
+	# 等纸面 VBox 排完版后，按实际金币文字的位置起飞。
+	await get_tree().process_frame
+	if not is_instance_valid(flight) or _event_gold_flight != flight: return
+	var origin := _event_gold_label.amount_canvas_origin()
+	var paper: ScrollContainer = _event_table._paper
+	if not paper.get_global_rect().has_point(origin):
+		paper.ensure_control_visible(_event_gold_label)
+		await get_tree().process_frame
+		if not is_instance_valid(flight) or _event_gold_flight != flight: return
+		origin = _event_gold_label.amount_canvas_origin()
+	flight.play(_event_gold_remaining, origin, _event_table.gold_target)
+
+
+func _retract_event_board() -> void:
+	_block_board_input()
+	_event_table.busy = true
+	# 木板、事件牌、正文与骰子都在 _body 内，移动同一个父节点保留相对坐标。
+	var offscreen_y: float = _body.position.y - _body.get_global_rect().end.y - EventTable.BOARD_EXIT_MARGIN
+	_event_board_slide = _body.create_tween()
+	_event_board_slide.tween_property(_body, "position:y", offscreen_y, EventTable.BOARD_SECONDS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	_event_board_slide.finished.connect(_arrive_next_event_board, CONNECT_ONE_SHOT)
+
+
+func _arrive_next_event_board() -> void:
+	# 旧板完全离开后再刷新。新板在下一帧绘制前就移到屏外，避免闪现。
+	_event_board_slide = null
+	refresh()
+	if _panel.is_visible_in_tree():
+		_body.position.y -= _body.get_global_rect().end.y + EventTable.BOARD_EXIT_MARGIN
+		if is_instance_valid(_event_table): _event_table.busy = true
+		_event_board_slide = _body.create_tween()
+		_event_board_slide.tween_property(_body, "position:y", 0.0, EventTable.BOARD_SECONDS).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_event_board_slide.finished.connect(_finish_event_board_slide, CONNECT_ONE_SHOT)
+	else:
+		_finish_event_board_slide()
+
+
+func _finish_event_board_slide() -> void:
+	_clear_event_board_slide()
+	show_task_hint.call_deferred()
+
+
+func _clear_event_board_slide() -> void:
+	if is_instance_valid(_event_board_slide): _event_board_slide.kill()
+	_event_board_slide = null
+	_body.position.y = 0.0
+	if is_instance_valid(_event_table): _event_table.busy = false
+	_unblock_board_input()
 
 
 func event_reward_ids(kind: String) -> Array[StringName]:
@@ -2756,12 +3660,17 @@ func _sync_event_reward_visibility() -> void:
 
 func _show_event_reward_previews(event: Dictionary) -> void:
 	var rewards_to_show: Array = event.get("reward_items", [])
-	if rewards_to_show.is_empty(): return
+	var cards: Array[Control] = []
+	var potion_id := String(event.get("story_result", {}).get("potion_id", ""))
+	if not potion_id.is_empty():
+		var definition := _story_card(potion_id, "event")
+		if definition != null:
+			cards.append(EventRewards.make_card_tile(_main, definition))
+	if rewards_to_show.is_empty() and cards.is_empty(): return
 	_event_table.show_detail_immediately()
 	var tiles := HFlowContainer.new()
 	tiles.name = "EventRewardPreviews"
 	tiles.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var cards: Array[Control] = []
 	for item: Dictionary in rewards_to_show:
 		var tile := EventRewards.make_tile(_main, item)
 		if tile == null: continue
@@ -2784,34 +3693,44 @@ func _event_reward_origins(awards: Array[Dictionary], button: BaseButton) -> Dic
 
 
 func _play_event_reward_flight(origins: Dictionary, show_overflow: bool) -> void:
+	var cards: Array[Dictionary] = []
+	var other_items: Array[Dictionary] = []
+	for item: Dictionary in _event_reward_in_flight:
+		if item.kind == "card":
+			var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(StringName(item.id))
+			if owned != null:
+				cards.append({"owned": owned, "origin": Transform2D(0.0, origins[String(item.id)])})
+		else:
+			other_items.append(item)
+	var previous_view: int = _main.current_world_view
+	_main._cancel_click_carry()
+	_panel.hide()
+	var finish := func():
+		_event_reward_in_flight.clear()
+		if cards.is_empty() and not show_overflow: _main.set_world_view(previous_view)
+		refresh()
+		if show_overflow: _main._open_toolbox_inspection()
+		show_task_hint.call_deferred()
+	var play_cards := func():
+		_event_reward_in_flight.clear()
+		if not _main._play_card_acquisitions(cards, finish): finish.call()
+	if other_items.is_empty():
+		play_cards.call()
+		return
 	var flight := EventRewards.new()
 	flight.name = "EventRewardFlight"
 	flight.main = _main
 	_event_reward_flight = flight
 	_main.add_child(flight)
-	var previous_view: int = _main.current_world_view
-	_main._cancel_click_carry()
-	_panel.hide()
 	_main.set_world_view(_main.WorldView.COLLECTION)
 	flight.landed.connect(func(item: Dictionary):
 		_event_reward_in_flight.erase(item)
-		_sync_event_reward_visibility()
-		if item.kind == "card": _reveal_event_reward_card(StringName(item.id)))
+		_sync_event_reward_visibility())
 	flight.finished.connect(func():
-		for id: StringName in event_reward_ids("card"): _reveal_event_reward_card(id)
-		_event_reward_in_flight.clear()
 		_event_reward_flight = null
 		flight.queue_free()
-		if not show_overflow: _main.set_world_view(previous_view)
-		refresh()
-		if show_overflow: _main._open_toolbox_inspection()
-		show_task_hint.call_deferred())
-	flight.play(_event_reward_in_flight.duplicate(), origins)
-
-
-func _reveal_event_reward_card(id: StringName) -> void:
-	var slot: Control = _main._find_collection_slot_for_owned_card(_main.owned_card_collection.get_by_instance_id(id))
-	if is_instance_valid(slot): slot.show()
+		play_cards.call())
+	flight.play(other_items, origins)
 
 
 func _play_story_roll(sides: int, result: int, after_roll: Callable = Callable()) -> void:
@@ -2821,8 +3740,12 @@ func _play_story_roll(sides: int, result: int, after_roll: Callable = Callable()
 	roll.finished.connect(func():
 		_story_roll = null
 		refresh()
-		if after_roll.is_valid(): after_roll.call()
-		show_task_hint.call_deferred(), CONNECT_ONE_SHOT)
+		if is_instance_valid(_event_table):
+			_event_table.result_text_finished.connect(show_task_hint.call_deferred, CONNECT_ONE_SHOT)
+			_event_table.play_result_text(after_roll, _event_gold_label)
+		else:
+			if after_roll.is_valid(): after_roll.call()
+			show_task_hint.call_deferred(), CONNECT_ONE_SHOT)
 	_event_table.play_story_roll(roll, sides, result)
 
 
@@ -2977,6 +3900,15 @@ func select_enhancement_card(data: Dictionary) -> bool:
 	if not can_select_enhancement_card(data):
 		return false
 	var entry_position := CardServiceSlot.get_entry_position(data)
+	if is_instance_valid(_event_item_delivery):
+		var return_positions := {}
+		for id: StringName in _story_food_ids:
+			var entry := _event_item_delivery.item_entry(id)
+			if is_instance_valid(entry): return_positions[id] = entry.get_global_rect().get_center()
+		_clear_event_food_selection()
+		_refresh_event_delivery()
+		for id: StringName in return_positions:
+			_main.emblem_library.animate_sticker_return(id, return_positions[id])
 	_enhancement_card_id = (data.owned_card as OwnedCard).instance_id
 	_refresh_enhancement_card()
 	_enhancement_slot.animate_entry_from_global_position(entry_position)
@@ -2984,6 +3916,8 @@ func select_enhancement_card(data: Dictionary) -> bool:
 
 
 func is_enhancement_drop_at(pointer: Vector2) -> bool:
+	if is_instance_valid(_event_item_delivery) and is_instance_valid(_event_item_delivery.card_slot):
+		return _event_item_delivery.contains(pointer)
 	return is_instance_valid(_enhancement_slot) and _enhancement_slot.is_visible_in_tree() and _enhancement_slot.get_global_rect().has_point(pointer)
 
 func _on_enhancement_card_returned() -> void:
@@ -2991,11 +3925,11 @@ func _on_enhancement_card_returned() -> void:
 	_refresh_enhancement_card.call_deferred()
 
 
-func _enhancement_option_text(option: Dictionary) -> String:
+func _enhancement_option_text(option: Dictionary, show_amount: bool = true) -> String:
 	var values: Array[String] = []
 	for pair: Array in [["max_health", "生命"], ["base_armor", "护甲"], ["base_value", "数值"]]:
 		if option.has(pair[0]):
-			values.append("+%d%s" % [int(option[pair[0]]), pair[1]])
+			values.append("+%d%s" % [int(option[pair[0]]), pair[1]] if show_amount else pair[1])
 	return "%s：%s" % ["免费" if int(option.cost) == 0 else "%d金币" % int(option.cost), "、".join(values)]
 
 
@@ -3003,13 +3937,16 @@ func _refresh_enhancement_card() -> void:
 	if not is_instance_valid(_enhancement_slot): return
 	var owned: OwnedCard = _main.owned_card_collection.get_by_instance_id(_enhancement_card_id)
 	_enhancement_slot.show_card(owned)
+	if is_instance_valid(_event_item_delivery): _event_item_delivery.set_card_visible(owned != null)
 	if is_instance_valid(_enhancement_options):
+		var references := _story_card_references(run.selected_path) if run.selected_path.get("reward") == "story" else {}
 		for button: Node in _enhancement_options.find_children("*", "Button", true, false):
 			if button is Button and button.has_meta("enhancement_option"):
 				var option: Dictionary = run.selected_path.options[int(button.get_meta("enhancement_option"))]
 				button.disabled = owned == null or _main.run_reward_state.gold < int(option.cost)
 			elif button is Button and button.has_meta("story_option"):
-				button.disabled = not _story_blocked_reason(run.selected_path.options[int(button.get_meta("story_option"))], owned).is_empty()
+				var index := int(button.get_meta("story_option"))
+				_update_story_option_button(button, run.selected_path, index, story_events.runtime_option(run.selected_path, index), references)
 	_main._refresh_drag_availability()
 
 
@@ -3031,13 +3968,22 @@ func _build_enhancement_interface() -> void:
 	else:
 		for index: int in run.selected_path.options.size():
 			var option: Dictionary = run.selected_path.options[index]
-			var button := _exit_button(_enhancement_option_text(option), apply_card_enhancement.bind(index), _enhancement_options)
+			var unaffordable: bool = _main.run_reward_state.gold < int(option.cost)
+			if not show_event_debug_details and (unaffordable or _story_minions().is_empty()): continue
+			var button := StoryOptionButton.new()
+			_exit_button(_enhancement_option_text(option, false), apply_card_enhancement.bind(index), _enhancement_options, button)
 			button.set_meta("enhancement_option", index)
+			var key := story_events.outcome_discovery_key(run.selected_path, index, 0)
+			var known: bool = _main.profile_progress.profile.discoveries.event_outcomes.has(key)
+			var lines: Array[Dictionary] = [_story_outcome_line(1.0, _enhancement_option_text(option), known)]
+			if show_event_debug_details and unaffordable:
+				lines.push_front({"prefix": "当前不可选 · ", "text": "金币不足"})
+			button.set_outcome_lines(lines)
 		_exit_button("放弃强化并继续", complete_event.bind(false), _enhancement_options)
 	_build_event_service_slot(row, finished)
 
 
-func _build_event_service_slot(row: HBoxContainer, finished: bool) -> void:
+func _build_event_service_slot(host: Control, finished: bool) -> void:
 	var slot := CardServiceSlot.new()
 	slot.allow_deployment = finished
 	slot.accepts_card = can_select_enhancement_card
@@ -3047,7 +3993,12 @@ func _build_event_service_slot(row: HBoxContainer, finished: bool) -> void:
 	slot.card_returned.connect(_on_enhancement_card_returned)
 	slot.name = "EnhancementCardSlot"
 	slot.custom_minimum_size = Vector2(130, 155) # 右侧强化卡槽尺寸
-	row.add_child(slot)
+	host.add_child(slot)
+	if host == _event_item_delivery:
+		slot.use_board_art = true
+		slot.position = ((host.size - CardServiceSlot.SLOT_SIZE) * 0.5).round()
+		slot.size = CardServiceSlot.SLOT_SIZE
+		_event_item_delivery.card_slot = slot
 	_enhancement_slot = slot
 	_refresh_enhancement_card()
 
@@ -3070,4 +4021,5 @@ func apply_card_enhancement(option_index: int, discard_confirmed: bool = false, 
 			owned.apply_permanent_growth(stat, float(option[String(stat)]))
 	run.selected_path["enhancement_result"] = {"instance_id": String(owned.instance_id), "option_index": option_index}
 	run.selected_path["reward_claimed"] = true
+	_main.profile_progress.record_event_outcome(story_events.outcome_discovery_key(run.selected_path, option_index, 0))
 	return _commit_transaction(previous)

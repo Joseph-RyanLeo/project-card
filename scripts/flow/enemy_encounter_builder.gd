@@ -3,8 +3,95 @@ extends RefCounted
 ## 遭遇配置只描述内容；生成的NPC实例和阵容用现有存档编码保存。
 const SaveService = preload("res://scripts/data/run_save_service.gd")
 const ROW_CAPACITY: int = 21 # 每排沿用正式战场的21单元容量
+const RUNE_MARKERS := {"火贴纸": 0, "水贴纸": 1, "木贴纸": 2, "光贴纸": 3, "暗贴纸": 4, "混沌贴纸": -1}
+
+static func load_card_definitions() -> Dictionary:
+	var registry: Dictionary = {}
+	var filenames := ResourceLoader.list_directory("res://resources/cards")
+	filenames.sort()
+	for filename: String in filenames:
+		if filename.get_extension() != "tres": continue
+		var card := ResourceLoader.load("res://resources/cards/" + filename) as CardData
+		if card != null and not card.id.is_empty(): registry[card.id] = card
+	return registry
+
+
+static func deploy_resources(path: Dictionary, registry: Dictionary, board: ResourceBoardState) -> Array[OwnedCard]:
+	var deployed: Array[OwnedCard] = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(path.battle_seed) ^ 0x5EED
+	for id: String in path.get("resources", []):
+		var definition := registry.get(StringName(id)) as CardData
+		if definition == null or definition.card_type != CardData.CardType.RESOURCE: return []
+		var owned := OwnedCard.new()
+		owned.initialize(definition, StringName("encounter_resource_%04d" % (board.level_resource_cards.enemy.size() + 1)), 0, rng)
+		var placed := false
+		for anchor: Vector2i in ResourceHexLayout.valid_cells():
+			if board.deploy_level_resource("enemy", owned, anchor):
+				placed = true
+				break
+		if not placed: return []
+		deployed.append(owned)
+	return deployed
+
+
+static func place_level_resources(path: Dictionary, registry: Dictionary, board: ResourceBoardState) -> bool:
+	if path.has("visual"): return _deploy_authored_resources(path, registry, board)
+	return deploy_resources(path, registry, board).size() == path.get("resources", []).size()
+
+
+static func _deploy_authored_resources(path: Dictionary, registry: Dictionary, board: ResourceBoardState) -> bool:
+	# 先在独立板上安放手摆的拼图，再用剩余格子安置已有的自动资源。
+	var draft := ResourceBoardState.new()
+	var blocked: Array[Vector2i] = []
+	if not _decode_cells(path.visual.blocked, blocked): return false
+	for cell: Vector2i in blocked:
+		if not ResourceHexLayout.is_valid_cell(cell): return false
+	draft.disabled_by_side.enemy.assign(blocked)
+	for index: int in path.visual.resources.size():
+		var entry: Variant = path.visual.resources[index]
+		if not entry is Dictionary or not entry.get("card_id") is String: return false
+		var def := registry.get(StringName(entry.card_id)) as CardData
+		var anchor: Array[Vector2i] = []
+		var shape: Array[Vector2i] = []
+		if def == null or def.card_type != CardData.CardType.RESOURCE or not _decode_cells([entry.get("anchor")], anchor) or not _decode_cells(entry.get("shape"), shape): return false
+		if shape.size() != int(def.rarity) + 1 or not ResourceHexLayout.is_connected_shape(shape): return false
+		var owned := OwnedCard.new()
+		owned.initialize(def, StringName("authored_resource_%04d" % index), index)
+		owned.resource_shape.assign(shape)
+		if not draft.deploy_level_resource("enemy", owned, anchor[0]): return false
+	var reserved := {}
+	for placement: Dictionary in draft.deployments.enemy.values():
+		for cell: Array in placement.shape: reserved[Vector2i(placement.anchor[0] + cell[0], placement.anchor[1] + cell[1])] = true
+	for cell: Vector2i in board.disabled_by_side.enemy:
+		if not reserved.has(cell) and cell not in draft.disabled_by_side.enemy: draft.disabled_by_side.enemy.append(cell)
+	for automated: OwnedCard in board.get_level_resource_cards("enemy"):
+		var old: Dictionary = board.deployments.enemy.get(String(automated.instance_id), {})
+		if not old.is_empty() and draft.deploy_level_resource("enemy", automated, Vector2i(old.anchor[0], old.anchor[1])): continue
+		for anchor: Vector2i in ResourceHexLayout.valid_cells():
+			if draft.deploy_level_resource("enemy", automated, anchor): break
+	board.disabled_by_side.enemy = draft.disabled_by_side.enemy
+	board.level_resource_cards.enemy = draft.level_resource_cards.enemy
+	board.deployments.enemy = draft.deployments.enemy
+	board.authored_enemy_layout = true
+	board.resources_generated = true
+	return true
+
+
+static func _decode_cells(value: Variant, cells: Array[Vector2i]) -> bool:
+	if not value is Array: return false
+	for pair: Variant in value:
+		if not pair is Array or pair.size() != 2: return false
+		for axis: Variant in pair:
+			if not (axis is float or axis is int) or not is_finite(float(axis)) or absf(float(axis)) > 32 or int(axis) != axis: return false
+		var cell := Vector2i(pair[0], pair[1])
+		if cell in cells: return false
+		cells.append(cell)
+	return true
+
 
 func build(path: Dictionary, registry: Dictionary, revealed_count: int, emblem_count: int = 0) -> Dictionary:
+	if path.has("visual"): return _build_authored(path, registry)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(path.battle_seed)
 	var collection := OwnedCardCollection.new()
@@ -67,6 +154,36 @@ func build(path: Dictionary, registry: Dictionary, revealed_count: int, emblem_c
 	var service := SaveService.new()
 	return {"status_slot_migration_version": SaveService.STATUS_SLOT_MIGRATION_VERSION, "collection": service._encode_collection_state(collection.capture_state()), "rows": service._encode_rows(rows), "spell_ids": spell_ids}
 
+
+func _build_authored(path: Dictionary, registry: Dictionary) -> Dictionary:
+	var checked := restore(path.visual.encounter, registry)
+	if checked.is_empty() or checked.spells.size() > 10: return {}
+	if not checked.rows[&"player_front"].is_empty() or not checked.rows[&"player_back"].is_empty(): return {}
+	var count := 0
+	for key: StringName in [&"enemy_front", &"enemy_back"]:
+		var used := 0
+		for squad: SquadData in checked.rows[key]:
+			used += squad.get_unit_count()
+			count += 1
+		if used > ROW_CAPACITY: return {}
+	if count == 0: return {}
+	var data: Dictionary = checked.snapshot
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(path.battle_seed)
+	for card: Dictionary in data.collection.cards:
+		var definition := registry.get(StringName(card.card_id)) as CardData
+		if definition == null or definition.card_type != CardData.CardType.MINION: continue
+		var fresh := OwnedCard.new()
+		fresh.initialize(definition, StringName(card.instance_id), int(card.acquisition_order), rng)
+		for index: int in fresh.resolved_runes.size():
+			var marker: Dictionary = card.rune_stickers[index]
+			var name := String(marker.get("emblem_id", ""))
+			card.rune_revealed[index] = RUNE_MARKERS.has(name)
+			card.resolved_runes[index] = int(RUNE_MARKERS[name]) if RUNE_MARKERS.has(name) and int(RUNE_MARKERS[name]) >= 0 else fresh.resolved_runes[index]
+			card.rune_stickers[index] = {}
+			card.rune_scrape_masks[index] = ""
+	return data
+
 func restore(snapshot: Dictionary, registry: Dictionary) -> Dictionary:
 	var service := SaveService.new()
 	var migrate_slots := int(snapshot.get("status_slot_migration_version", 0)) < SaveService.STATUS_SLOT_MIGRATION_VERSION
@@ -86,7 +203,7 @@ func restore(snapshot: Dictionary, registry: Dictionary) -> Dictionary:
 	var normalized_snapshot := snapshot.duplicate(true)
 	normalized_snapshot["status_slot_migration_version"] = SaveService.STATUS_SLOT_MIGRATION_VERSION
 	normalized_snapshot["collection"] = service._encode_collection_state(collection.capture_state())
-	return {"rows": rows.rows, "spells": spells, "snapshot": normalized_snapshot}
+	return {"rows": rows.rows, "spells": spells, "snapshot": normalized_snapshot, "owned": collection.get_cards()}
 
 func _create_card(id: String, type: int, collection: OwnedCardCollection, registry: Dictionary, rng: RandomNumberGenerator) -> OwnedCard:
 	var definition: CardData = registry.get(StringName(id))

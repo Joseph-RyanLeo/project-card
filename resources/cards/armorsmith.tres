@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/data/card_data.gd" id="1_card_data"]
 [ext_resource type="Texture2D" path="res://assets/card_art/armorsmith.png" id="2_art"]
+[ext_resource type="Texture2D" path="res://assets/card_backgrounds/ash_ledger_common.png" id="3_background"]
 
 [resource]
 script = ExtResource("1_card_data")
@@ -17,16 +18,15 @@ max_health = 3
 armor = 3
 runes = Array[int]([4, 0, 2])
 race_type = 2
-background_style = 3
+background_texture = ExtResource("3_background")
 background_offsets = Dictionary[int, Vector2i]({
+0: Vector2i(0, 16),
 3: Vector2i(0, -20)
 })
 background_overframe_offsets = Dictionary[int, Vector2i]({
+0: Vector2i(0, 0),
 3: Vector2i(0, 1)
 })
 art_texture = ExtResource("2_art")
-art_offset = Vector2i(-12, 11)
-art_finish_offsets = Dictionary[StringName, Vector2i]({
-&"overframe": Vector2i(-14, 12)
-})
+art_offset = Vector2i(4, 4)
 effect_text = "相邻友军每进行一次开采，前排友军获得1点护甲。"

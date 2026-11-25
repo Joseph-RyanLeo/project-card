@@ -46,7 +46,10 @@ func _run() -> void:
 	root.size = Vector2i(1280,720)
 	await new_main()
 	await key(KEY_F2)
-	check(main._developer_console.visible and main._developer_console._command_input.has_focus(), "F2真实输入打开并聚焦控制台")
+	check(main._developer_console.visible and main._developer_console._event_query.has_focus(), "F2打开开发面板并聚焦事件搜索")
+	main._developer_console._tabs.current_tab = 2
+	await process_frame
+	check(main._developer_console._command_input.has_focus(), "切换命令页后聚焦旧命令输入框")
 	var before: int = main.owned_card_collection.size()
 	for ch: String in "card add crystal_shell_beetle 3": await key(KEY_NONE, ch.unicode_at(0))
 	await key(KEY_ENTER)
@@ -78,6 +81,7 @@ func _run() -> void:
 	var elements: Dictionary = {}
 	var stacks := 0
 	for definition: Dictionary in content.enemies:
+		if definition.get("tutorial", false) or int(definition.first_day) > ShortMazeRunState.DAYS: continue
 		var path := definition.duplicate(true)
 		path["battle_seed"] = 47007
 		var snapshot := Builder.new().build(path, registry, 1)

@@ -33,6 +33,8 @@ var back_tilt := Vector2.ZERO:
 const HOVER_LIFT := 7.0 # 三选一悬停抬升的原生像素数，与备战随从相同
 const HOVER_SECONDS := 0.14 # 悬停抬起与落回的时长
 var _choice_hover_enabled := false
+var _choice_gamepad_hovered := false
+var _choice_hovered := false
 var _choice_lift := 0.0
 var _choice_hover_tween: Tween
 
@@ -44,8 +46,8 @@ func _ready() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
 		add_theme_stylebox_override(state, StyleBoxEmpty.new())
-	mouse_entered.connect(_set_choice_hover.bind(true))
-	mouse_exited.connect(_set_choice_hover.bind(false))
+	mouse_entered.connect(_update_choice_hover.bind(true))
+	mouse_exited.connect(_update_choice_hover.bind(false))
 	artwork = load(_art_path()) as Texture2D
 	back_artwork = load(String(definition.back_art)) as Texture2D if definition.has("back_art") else BACK
 	queue_redraw()
@@ -98,14 +100,27 @@ func transfer_back_projection_to(target: EventCardView) -> void:
 func set_choice_hover_enabled(value: bool) -> void:
 	_choice_hover_enabled = value
 	if value:
-		if is_hovered(): _set_choice_hover(true)
+		_update_choice_hover(is_hovered())
 	else:
+		_choice_gamepad_hovered = false
+		_choice_hovered = false
 		if is_instance_valid(_choice_hover_tween): _choice_hover_tween.kill()
 		_set_choice_lift(0.0)
 
 
-func _set_choice_hover(hovered: bool) -> void:
-	if not _choice_hover_enabled or disabled: return
+func set_gamepad_hover(hovered: bool) -> void:
+	_choice_gamepad_hovered = hovered and _choice_hover_enabled and not disabled
+	_update_choice_hover(is_hovered())
+
+
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion: _update_choice_hover(true)
+
+
+func _update_choice_hover(mouse_hovered: bool) -> void:
+	var hovered := _choice_gamepad_hovered or (mouse_hovered and Input.mouse_mode != Input.MOUSE_MODE_HIDDEN)
+	if not _choice_hover_enabled or disabled or hovered == _choice_hovered: return
+	_choice_hovered = hovered
 	if is_instance_valid(_choice_hover_tween): _choice_hover_tween.kill()
 	_choice_hover_tween = create_tween()
 	_choice_hover_tween.tween_method(_set_choice_lift, _choice_lift, HOVER_LIFT if hovered else 0.0, HOVER_SECONDS).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
@@ -114,6 +129,10 @@ func _set_choice_hover(hovered: bool) -> void:
 func _set_choice_lift(value: float) -> void:
 	_choice_lift = value
 	queue_redraw()
+
+
+func choice_visual_rect() -> Rect2:
+	return Rect2(Vector2(0.0, -_choice_lift), size)
 
 
 func _has_point(point: Vector2) -> bool:

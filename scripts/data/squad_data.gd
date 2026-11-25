@@ -239,12 +239,14 @@ func has_equipped_item(item: OwnedCard) -> bool:
 	return item != null and item in [_equipped_item, _helmet]
 
 
-func get_equipment_stat_bonus(stat: StringName) -> float:
+func get_equipment_stat_bonus(stat: StringName, positive_only: bool = false) -> float:
 	var total := 0.0
 	for item: OwnedCard in get_equipped_items():
 		match stat:
 			&"base_value": total += item.card_data.equipment_action_delta + item.get_permanent_growth(stat)
-			&"max_health": total += item.card_data.equipment_health_delta + item.get_permanent_growth(stat)
+			&"max_health":
+				var amount := item.card_data.equipment_health_delta + item.get_permanent_growth(stat)
+				total += maxf(amount, 0.0) if positive_only else amount
 			&"base_armor": total += item.card_data.equipment_armor_delta
 			&"zeal": total += item.card_data.equipment_zeal_delta + int(item.progress_by_source.get(OwnedCard.MISSION_ZEAL, 0))
 	return total
@@ -261,7 +263,8 @@ func get_emblem_zeal_delta() -> int:
 func get_visible_status_static_modifier(
 	stat: StringName,
 	active_wound_ids: Array[StringName] = [],
-	filter_wounds_by_active_ids: bool = false
+	filter_wounds_by_active_ids: bool = false,
+	positive_only: bool = false
 ) -> int:
 	# 纹章和伤势修正归小队；基础卡面值及永久成长仍由原属性来源卡提供。
 	var total := 0
@@ -274,7 +277,9 @@ func get_visible_status_static_modifier(
 			total += int(owned_card.progress_by_source.get(&"event_potion_zeal", 0))
 		total += owned_card.get_emblem_static_modifier(
 			stat,
-			get_visible_emblem_slot_indices(card_data, true)
+			get_visible_emblem_slot_indices(card_data, true),
+			false,
+			positive_only
 		)
 		for wound_slot: Dictionary in visible_wounds:
 			if wound_slot.get("card") != card_data:
@@ -285,15 +290,22 @@ func get_visible_status_static_modifier(
 			var injury_id := StringName("%s:wound:%d" % [owned_card.instance_id, slot_index])
 			if filter_wounds_by_active_ids and not active_wound_ids.has(injury_id):
 				continue
-			total += owned_card.get_wound_static_modifier(stat, [slot_index])
+			var amount := owned_card.get_wound_static_modifier(stat, [slot_index])
+			total += maxi(amount, 0) if positive_only else amount
 	return total
 
 
 func get_visible_rune_stat_bonus(stat: StringName) -> int:
 	# 未揭晓槽返回 -1 断点，不提供属性；元素贴纸仍直接读取其自身元素。
+	return sum_rune_stat_bonus(get_visible_rune_slots(), stat)
+
+
+static func sum_rune_stat_bonus(slots: Array[Dictionary], stat: StringName) -> int:
 	var total := 0
-	for slot: Dictionary in get_visible_rune_slots():
+	for slot: Dictionary in slots:
 		match int(slot.get("element", -1)):
+			CardData.ElementType.FIRE:
+				if stat == &"reinforcement": total += 2
 			CardData.ElementType.WATER:
 				if stat == &"max_health": total += 2
 			CardData.ElementType.WOOD:
@@ -304,6 +316,62 @@ func get_visible_rune_stat_bonus(stat: StringName) -> int:
 				if stat == &"zeal": total += 1
 				elif stat == &"target_priority": total -= 1
 	return total
+
+
+func get_card_native_stat(member: CardData, stat: StringName) -> float:
+	var owner := get_owned_card(member)
+	if owner != null:
+		return owner.get_base_stat_with_permanent_growth(stat)
+	if member != null:
+		match stat:
+			OwnedCard.STAT_BASE_VALUE: return member.base_value
+			OwnedCard.STAT_MAX_HEALTH: return member.max_health
+			OwnedCard.STAT_BASE_ARMOR: return member.armor
+	return 0.0
+
+
+func _get_visible_base_emblem_bonus(stat: StringName) -> int:
+	var bonus := 0
+	for card: CardData in horizontal_cards:
+		var owner := get_owned_card(card)
+		if owner != null:
+			bonus += owner.get_emblem_static_modifier(stat, get_visible_emblem_slot_indices(card, true), true)
+	return bonus
+
+
+func get_display_base_action(member: CardData, growth: float = 0.0, multiplier: float = 1.0, masked_base_emblem_bonus: int = 0) -> int:
+	var base := (get_card_native_stat(member, OwnedCard.STAT_BASE_VALUE) + growth) * multiplier
+	if member == get_action_source():
+		base += _get_visible_base_emblem_bonus(OwnedCard.STAT_BASE_VALUE) - masked_base_emblem_bonus
+	return clampi(roundi(base), 0, CardData.MAXIMUM_BASE_VALUE)
+
+
+func get_display_base_health(member: CardData, rune_bonus: int) -> int:
+	if member == get_vitals_source() and _has_visible_wound(&"结晶"): return 1
+	return get_unconverted_base_health(member, rune_bonus)
+
+
+func get_unconverted_base_health(member: CardData, rune_bonus: int, growth: float = 0.0) -> int:
+	return clampi(roundi(get_card_native_stat(member, OwnedCard.STAT_MAX_HEALTH) + rune_bonus + growth), 0, CardData.MAXIMUM_HEALTH)
+
+
+func get_display_base_armor(member: CardData, rune_bonus: int, growth: float = 0.0, masked_base_emblem_bonus: int = 0) -> int:
+	var base := get_card_native_stat(member, OwnedCard.STAT_BASE_ARMOR) + rune_bonus + growth
+	if member == get_vitals_source():
+		base += _get_visible_base_emblem_bonus(OwnedCard.STAT_BASE_ARMOR) - masked_base_emblem_bonus
+		if _helmet != null: base += _helmet.card_data.equipment_armor_delta
+	return clampi(roundi(base), 0, CardData.MAXIMUM_ARMOR)
+
+
+func get_preview_action_value() -> int:
+	return get_effective_action_base_value() + get_visible_rune_stat_bonus(&"reinforcement")
+
+
+func get_preview_action_interval() -> float:
+	var action_source := get_action_source()
+	if action_source == null:
+		return -1.0
+	return BattleRules.get_action_interval(action_source.cooldown_seconds, get_equipment_zeal_delta() + get_emblem_zeal_delta() + get_visible_rune_stat_bonus(&"zeal"))
 
 
 func get_equipment_indicator_position(item: OwnedCard = null) -> Vector2:
@@ -379,13 +447,7 @@ func get_effective_action_base_value(
 	base_multiplier: float = 1.0,
 	runtime_permanent_growth: float = 0.0
 ) -> int:
-	var owned_card := get_action_source_instance()
-	var source := get_action_source()
-	var base: float = (
-		owned_card.get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_VALUE)
-		if owned_card != null
-		else (source.base_value if source != null else 0)
-	)
+	var base := get_card_native_stat(get_action_source(), OwnedCard.STAT_BASE_VALUE)
 	var visible_greed := false
 	for wound_slot: Dictionary in get_visible_wound_slots(true):
 		var wound_card := wound_slot.get("card") as CardData
@@ -401,9 +463,11 @@ func get_effective_action_base_value(
 			break
 	if visible_greed and include_visible_greed:
 		return 1
+	var owner := get_action_source_instance()
 	return clampi(
 		roundi(
 			(base + runtime_permanent_growth) * base_multiplier
+			+ (owner.get_permanent_growth(OwnedCard.STAT_BONUS_VALUE) if owner != null else 0.0)
 			+ get_visible_status_static_modifier(
 				&"base_value",
 				active_wound_ids,
@@ -428,39 +492,33 @@ func _get_star_action_value() -> int:
 
 
 func get_effective_max_health() -> int:
-	var owned_card := get_vitals_source_instance()
-	var source := get_vitals_source()
-	var base: float = (
-		owned_card.get_base_stat_with_permanent_growth(OwnedCard.STAT_MAX_HEALTH)
-		if owned_card != null
-		else (source.max_health if source != null else 0)
-	)
-	var added_health: float = (
-		get_visible_status_static_modifier(&"max_health")
-		+ get_equipment_stat_bonus(&"max_health")
+	if _has_visible_wound(&"结晶"): return 1
+	var health := get_unconverted_max_health()
+	if _has_visible_wound(&"晶体化"):
+		health = maxf(health - get_max_health_bonus(true), 1.0)
+	if _has_visible_wound(&"业火"): health *= 0.5
+	return clampi(roundi(health), 0, CardData.MAXIMUM_HEALTH)
+
+
+func get_unconverted_max_health() -> float:
+	var base := get_card_native_stat(get_vitals_source(), OwnedCard.STAT_MAX_HEALTH)
+	return base + get_visible_rune_stat_bonus(&"max_health") + get_max_health_bonus()
+
+
+func get_max_health_bonus(positive_only: bool = false) -> float:
+	var owner := get_vitals_source_instance()
+	var growth := owner.get_permanent_growth(OwnedCard.STAT_BONUS_MAX_HEALTH) if owner != null else 0.0
+	return (
+		get_ironwall_squad_bonus(&"max_health")
+		+ get_visible_status_static_modifier(&"max_health", [], false, positive_only)
+		+ get_equipment_stat_bonus(&"max_health", positive_only)
+		+ (maxf(growth, 0.0) if positive_only else growth)
 		+ (CelestialIndicator.SUN_HEALTH if has_indicator(CelestialIndicator.Kind.SUN) else 0)
-	)
-	if _has_visible_crystallization():
-		return _get_crystallization_base_health()
-	return clampi(
-		 roundi(
-			base + get_visible_rune_stat_bonus(&"max_health")
-			+ get_ironwall_squad_bonus(&"max_health")
-			+ added_health
-		),
-		0,
-		CardData.MAXIMUM_HEALTH
 	)
 
 
 func get_effective_base_armor() -> int:
-	var owned_card := get_vitals_source_instance()
-	var source := get_vitals_source()
-	var base: float = (
-		owned_card.get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_ARMOR)
-		if owned_card != null
-		else (source.armor if source != null else 0)
-	)
+	var base := get_card_native_stat(get_vitals_source(), OwnedCard.STAT_BASE_ARMOR)
 	var crystallized_health := get_crystallization_extra_health()
 	return clampi(
 		roundi(
@@ -476,47 +534,22 @@ func get_effective_base_armor() -> int:
 
 
 func get_crystallization_extra_health() -> int:
-	if not _has_visible_crystallization():
-		return 0
-	var owned_card := get_vitals_source_instance()
-	var source := get_vitals_source()
-	var base := (
-		owned_card.get_base_stat_with_permanent_growth(OwnedCard.STAT_MAX_HEALTH)
-		if owned_card != null
-		else float(source.max_health if source != null else 0)
-	)
-	var extras: float = (
-		get_visible_status_static_modifier(&"max_health")
-		+ get_equipment_stat_bonus(&"max_health")
-		+ (CelestialIndicator.SUN_HEALTH if has_indicator(CelestialIndicator.Kind.SUN) else 0)
-	)
-	var base_health := _get_crystallization_base_health()
-	var full_health := maxi(roundi(base + get_visible_rune_stat_bonus(&"max_health") + extras), base_health)
-	return full_health - base_health
+	if _has_visible_wound(&"结晶"):
+		var base := get_unconverted_base_health(get_vitals_source(), get_visible_rune_stat_bonus(&"max_health"))
+		return maxi(base - 1, 0) + roundi(get_max_health_bonus(true))
+	if _has_visible_wound(&"晶体化"):
+		return roundi(get_max_health_bonus(true))
+	return 0
 
 
-func _get_crystallization_base_health() -> int:
-	var owned_card := get_vitals_source_instance()
-	var source := get_vitals_source()
-	var base := (
-		owned_card.get_base_stat_with_permanent_growth(OwnedCard.STAT_MAX_HEALTH)
-		if owned_card != null
-		else float(source.max_health if source != null else 0)
-	)
-	if owned_card != null:
-		# 正向永久生命成长也是额外生命，要转成护甲；负成长仍降低基础生命。
-		base -= maxf(owned_card.get_permanent_growth(OwnedCard.STAT_MAX_HEALTH), 0.0)
-	return clampi(maxi(roundi(base + get_visible_rune_stat_bonus(&"max_health")), 1), 0, CardData.MAXIMUM_HEALTH)
-
-
-func _has_visible_crystallization() -> bool:
+func _has_visible_wound(wound_id: StringName) -> bool:
 	for slot: Dictionary in get_visible_wound_slots(true):
 		var card := slot.get("card") as CardData
 		var owner := get_owned_card(card)
 		var slot_index := int(slot.get("slot_index", -1))
 		if owner == null or slot_index < 0 or slot_index >= owner.wound_slots.size():
 			continue
-		if StringName(String(owner.wound_slots[slot_index].get("wound_id", ""))) == &"晶体化":
+		if StringName(String(owner.wound_slots[slot_index].get("wound_id", ""))) == wound_id:
 			return true
 	return false
 

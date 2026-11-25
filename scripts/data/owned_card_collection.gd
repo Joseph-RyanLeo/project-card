@@ -21,8 +21,8 @@ var _cards: Array[OwnedCard] = []
 var _next_instance_sequence: int = 1
 
 
-func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null, reserved_cards: Array[CardData] = [], pack_appearance: bool = false, source: Dictionary = {}) -> OwnedCard:
-	if card_data == null or (exclude_resource_related_cards and card_data.references_resource_rules()):
+func create_card(card_data: CardData, instance_rng: RandomNumberGenerator = null, reserved_cards: Array[CardData] = [], pack_appearance: bool = false, source: Dictionary = {}, allow_resource_debug: bool = false) -> OwnedCard:
+	if card_data == null or (exclude_resource_related_cards and not allow_resource_debug and card_data.references_resource_rules()):
 		return null
 	var owned_card := OwnedCard.new()
 	owned_card.initialize(

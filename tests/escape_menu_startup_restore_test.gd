@@ -92,6 +92,9 @@ func _run() -> void:
 			"可在真实战斗运行中打开还原菜单"
 		)
 		main._on_escape_pause_menu_requested()
+		if is_instance_valid(main._view_tween) and main._view_tween.is_running(): await main._view_tween.finished
+		if main.is_page_turning(): await main._page_tween.finished
+		var blue_position: Vector2 = main.recent_bookmark_button.get_global_transform_with_canvas().origin
 		var restore_button := _find_button(main._escape_pause_menu, "还原")
 		if restore_button != null:
 			restore_button.pressed.emit()
@@ -112,6 +115,8 @@ func _run() -> void:
 			and not main._last_minion_inspection_library_expanded,
 			"还原后继续停留在暂停菜单并恢复启动阶段"
 		)
+		_check(main.recent_bookmark_button.get_global_transform_with_canvas().origin.is_equal_approx(blue_position),
+			"从暂停菜单还原时蓝色书签留在原处")
 		_check(
 			int(main.battle_seed_spin.value) == startup_seed
 			and main.battle_speed_index == startup_speed
@@ -139,6 +144,7 @@ func _run() -> void:
 	var return_button := _find_button(main._escape_pause_menu, "继续游戏")
 	if return_button != null:
 		return_button.pressed.emit()
+	while main._escape_pause_menu.is_transitioning(): await process_frame
 	_check(not main.get_tree().paused, "返回只释放 Esc 菜单持有的暂停")
 
 	main.queue_free()

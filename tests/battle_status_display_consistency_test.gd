@@ -107,6 +107,12 @@ func _run() -> void:
 	check_emblems(scout_state, "侦察兵升级")
 	check_emblems(golem_state, "魔像移除")
 	var inspected := await inspect(tree_state)
+	var battle_baselines := tree_state.get_display_base_stats(tree_state.get_active_rune_slots())
+	check(inspected._battle_stat_baselines == battle_baselines, "战斗检视使用当前有效的基础属性作为比较基准")
+	check(inspected._inspection_stat_tween == null, "战斗检视没有数字拆解时间轴")
+	for label: RuneNumberDisplay in [inspected.value_label, inspected.health_label, inspected.armor_label, inspected.cooldown_label]:
+		check(not label.has_stat_breakdown(), "战斗检视仅显示当前值：" + str(label.name))
+	check(inspected.get_displayed_stat_texts() == [str(tree_state.get_display_action_value()), str(tree_state.displayed_health), str(tree_state.displayed_armor), CardView.format_cooldown_seconds(tree_state.remaining_cooldown)], "战斗检视按运行时状态读取四组数字")
 	check(inspected._status_slot_signature[3] == view_for(tree_state)._status_slot_signature[3], "检视与小卡纹章内容一致")
 	await close_inspection()
 	check(spirit_state.runtime_rune_overrides.size() == 2, "余火实际将两个符文临时转火")

@@ -54,10 +54,15 @@ func run() -> void:
 	check(main.owned_card_collection.size() == before + 2 and main.run_reward_state.pending_random_card_requests.is_empty(), "销毁两本征兵册并自动加入四张卡，没有商店待领取奖励")
 	check(ledger_ids.all(func(id: StringName): return main.owned_card_collection.get_by_instance_id(id) == null), "征兵册只在正常胜利结算消耗")
 	check(main.ordinary_shop_service.rng.state != rng_before and main.battle_result_summary_label.text.contains("已加入收藏"), "发卡使用持久随机流并在结算显示卡名")
+	var presentation: Control = main._card_acquisition
+	var awards: Dictionary = main._last_battle_settlement_result.random_card_awards
+	check(is_instance_valid(presentation) and awards.values().all(func(ids: Array) -> bool:
+		return ids.all(func(id: StringName) -> bool:
+			return presentation.holds(main.owned_card_collection.get_by_instance_id(id)))), "战斗结算把所有真实奖励实例交给逐张入藏演出")
 	var after: int = main.owned_card_collection.size()
 	var after_rng: int = main.ordinary_shop_service.rng.state
 	check(main.settle_current_battle().status == BattleSettlementService.STATUS_ALREADY_COMMITTED and main.owned_card_collection.size() == after and main.ordinary_shop_service.rng.state == after_rng, "重复结算不再次发卡或消耗随机数")
-	check(main.load_run_from_path(main.run_save_path) and main.owned_card_collection.size() == after and main.run_reward_state.pending_random_card_requests.is_empty(), "磁盘读回保持已到账卡牌且不重复领取")
+	check(main.load_run_from_path(main.run_save_path) and main.owned_card_collection.size() == after and main.run_reward_state.pending_random_card_requests.is_empty() and not is_instance_valid(main._card_acquisition), "演出中读取磁盘存档，保留到账卡牌且清理演出")
 	# 原奖励筛选失败必须保持集合与随机流。
 	main.run_reward_state.pending_next_level_from_id = &""
 	check(main.run_reward_state.enqueue_random_card_request({"entry_id": &"missing_candidate_request", "battle_instance_id": &"no_candidate", "event_id": 51, "side": BattleSquadState.Side.PLAYER, "kind": BattleRunRewardLedger.KIND_RANDOM_CARD_REQUEST, "amount": 1, "parameters": {"pack_id": "missing_pack", "card_type": "minion"}}), "登记真实无候选请求")

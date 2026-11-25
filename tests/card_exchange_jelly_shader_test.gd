@@ -28,6 +28,8 @@ func run() -> void:
 	if not is_instance_valid(animation): quit(1); return
 	var count_committed: int = main.owned_card_collection.size()
 	var rng_committed: int = main.ordinary_shop_service.rng.state
+	var awarded: OwnedCard = main.owned_card_collection.get_cards().back()
+	main._on_search_text_changed("本次置换产物不可见")
 	check(count_committed == count_before - 2 and FileAccess.file_exists(main.run_save_path), "果冻演出之前已完成三换一及保存")
 	await _wait_stage(animation, &"arranged")
 	check(animation._materials.all(func(view: Control): return is_zero_approx(_parameter(animation._effect(view), &"jelly_amount"))), "并排与蓄力阶段卡牌不提前挤压")
@@ -42,8 +44,12 @@ func run() -> void:
 	await capture("jelly-rebound")
 	await _wait_stage(animation, &"display")
 	check(is_equal_approx(float(animation._effect(animation._reward).get_shader_parameter("jelly_progress")), 1.0) and is_zero_approx(float(animation._effect(animation._reward).get_shader_parameter("white_amount"))) and animation._reward.scale == Vector2(4, 4), "展示阶段完全复原，恢复原色4倍卡面")
+	await _wait_stage(animation, &"fly")
+	var slot: Control = main._find_collection_slot_for_owned_card(awarded)
+	check(main.current_world_view == main.WorldView.COLLECTION and is_instance_valid(slot) and not slot.visible, "置换产物与普通奖卡共用收藏定位，飞入前隐藏对应卡位")
 	await animation.finished
 	await process_frame
+	check(is_instance_valid(slot) and slot.visible, "置换产物飞入后显示目标卡位")
 	check(main._shop_exchange_animation == null and main.owned_card_collection.size() == count_committed and main.ordinary_shop_service.rng.state == rng_committed and main.run_reward_state.gold == 200, "回弹及飞回不重复结算，也不消耗金币或业务随机数")
 	# 重新播放，通过真实连续点击验证回弹沿用整场加速和取消清理。
 	main._open_shop_card_services()

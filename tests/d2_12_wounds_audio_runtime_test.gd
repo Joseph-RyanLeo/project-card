@@ -21,6 +21,7 @@ func _check(value: bool, message: String) -> void:
 func _run() -> void:
 	root.size = Vector2i(1280, 720)
 	var main = load("res://scenes/Main.tscn").instantiate()
+	main.run_save_path = "/private/tmp/project-card-menu-audio-test.json"
 	root.add_child(main)
 	await process_frame
 	await process_frame
@@ -34,6 +35,19 @@ func _run() -> void:
 	_check(not AudioServer.is_bus_mute(master_bus) and is_equal_approx(AudioServer.get_bus_volume_db(master_bus), linear_to_db(0.5)), "非零百分比按线性音量映射到分贝")
 	audio.set_master_volume_percent(100.0)
 	_check(is_zero_approx(AudioServer.get_bus_volume_db(master_bus)), "音量100对应主总线0 dB")
+	var music: AudioStreamPlayer = audio._bgm_player
+	var track := music.stream
+	var music_bus_name := music.bus
+	var music_bus := AudioServer.get_bus_index(music_bus_name)
+	var previous_position := music.get_playback_position()
+	main._show_collection_menu()
+	await create_timer(audio.BGM_FILTER_FADE + 0.12).timeout
+	_check(paused and music.playing and not music.stream_paused and music.get_playback_position() > previous_position and music.stream == track, "设置暂停游戏时音乐从原位置继续播放")
+	_check(AudioServer.get_bus_send(music_bus) == &"Master" and AudioServer.is_bus_effect_enabled(music_bus, 0) and is_equal_approx(audio._bgm_filter.cutoff_hz, audio.BGM_MENU_CUTOFF), "独立音乐总线淡入低通滤波")
+	while main._escape_pause_menu.is_transitioning(): await process_frame
+	main._close_escape_pause_menu()
+	await create_timer(audio.BGM_FILTER_FADE + 0.12).timeout
+	_check(not paused and music.playing and music.stream == track and not AudioServer.is_bus_effect_enabled(music_bus, 0), "退出设置时同一首音乐渐回原清晰度")
 	var battle_random_a := RandomNumberGenerator.new()
 	var battle_random_b := RandomNumberGenerator.new()
 	battle_random_a.seed = 9341
@@ -73,5 +87,6 @@ func _run() -> void:
 	views[1].set_battle_result_statistics_suppressed(false)
 	main.queue_free()
 	await process_frame
+	_check(AudioServer.get_bus_index(music_bus_name) == -1, "退出对局后释放该局独立音乐总线")
 	print("D2-12 wound audio runtime failures: ", failures)
 	quit(1 if failures else 0)

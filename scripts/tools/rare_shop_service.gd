@@ -19,7 +19,7 @@ func _eligible_cards(definitions: Array[CardData], _owned_cards: Array, addition
 	# 测试收藏可重复获得IV，保证反复刷新后仍能测试传奇包；此服务只在实验室实例中使用。
 	return super._eligible_cards(definitions, [], additionally_used, exclusive_pack)
 
-func refresh(card_definitions: Array[CardData], owned_cards: Array, _sticker_definitions: Array[Dictionary], _held_stickers: Array[Dictionary]) -> bool:
+func refresh(card_definitions: Array[CardData], owned_cards: Array, _sticker_definitions: Array[Dictionary], _held_stickers: Array[Dictionary], _discounted: bool = false) -> bool:
 	var next_rng := _copy_rng(rng)
 	var candidates := _eligible_cards(card_definitions, owned_cards)
 	var next_offers: Array[Dictionary] = []

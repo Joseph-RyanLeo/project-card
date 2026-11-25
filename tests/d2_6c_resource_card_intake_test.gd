@@ -8,7 +8,7 @@ const EXPECTED_RESOURCES := {
 	&"dark_element_shard": {"name": "暗元素碎晶", "rarity": CardData.Rarity.II, "health": 2, "type": CardData.ResourceType.MINERAL, "text": "收获：永久治疗一处伤势。"},
 	&"water_element_shard": {"name": "水元素碎晶", "rarity": CardData.Rarity.II, "health": 2, "type": CardData.ResourceType.MINERAL, "text": "收获：生命永久+2。"},
 	&"wood_element_shard": {"name": "木元素碎晶", "rarity": CardData.Rarity.II, "health": 2, "type": CardData.ResourceType.MINERAL, "text": "收获：护甲永久+1。"},
-	&"rainbow_gold_ore": {"name": "彩金矿", "rarity": CardData.Rarity.III, "health": 7, "type": CardData.ResourceType.MINERAL, "text": "收获：1金币，并投2d10；>15额外5金币，>18额外10金币，=20额外20金币。额外奖励不叠加，最高档生效。"},
+	&"rainbow_gold_ore": {"name": "彩金矿", "rarity": CardData.Rarity.III, "health": 7, "type": CardData.ResourceType.MINERAL, "text": "收获：基础1金币。掷2d10，按最高档追加：16–18加5金币，19加10金币，20加20金币。合并入账。"},
 	&"crystallized_remains": {"name": "晶化残躯", "rarity": CardData.Rarity.II, "health": 6, "type": CardData.ResourceType.MINERAL, "text": "收获：1d10<9获一张元素碎晶，>8获一个纹章。"},
 	&"stone_of_greed": {"name": "贪欲之石", "rarity": CardData.Rarity.I, "health": 3, "type": CardData.ResourceType.MINERAL, "text": "收获：1d10<6失去2金币，>5获得3金币，=10获得10金币。"},
 	&"abandoned_toolbox": {"name": "废弃工具箱", "rarity": CardData.Rarity.I, "health": 2, "type": CardData.ResourceType.RELIC, "text": "收获：随机一件I级装备。"},

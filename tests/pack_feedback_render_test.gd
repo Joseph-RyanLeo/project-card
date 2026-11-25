@@ -26,10 +26,19 @@ func _run() -> void:
 	var maze = main.maze_controller
 	while shell.screen_transition.busy: await process_frame
 	if maze._initial_pack_drop.is_running(): await maze._initial_pack_drop.finished
-	var origin: Vector2 = maze._initial_pack_button.position
+	var pack: TextureButton = maze._initial_pack_button
+	var gamepad := InputEventJoypadButton.new()
+	gamepad.button_index = JOY_BUTTON_DPAD_RIGHT
+	gamepad.pressed = true
+	root.push_input(gamepad, true)
+	await create_timer(0.2).timeout
+	var glow := pack.get_node_or_null("InitialPackGamepadFocus") as ColorRect
+	check(is_instance_valid(glow) and glow.is_visible_in_tree(), "手柄选中开场卡包，柔光挂在包装下")
+	var origin := pack.position
 	maze._initial_pack_idle_seconds = 0.0
 	maze._nudge_initial_pack()
 	var directions: Array[int] = []
+	var glow_follows_pack := true
 	var shadow_visible := false
 	var shadow_widest := 0.0
 	var shadow_center := Vector2.INF
@@ -51,8 +60,15 @@ func _run() -> void:
 		if absf(angle) > 0.1:
 			var direction := int(signf(angle))
 			if directions.is_empty() or directions.back() != direction: directions.append(direction)
+			if glow != null:
+				var pack_transform := pack.get_global_transform_with_canvas()
+				var glow_transform := glow.get_global_transform_with_canvas()
+				var glow_center := glow_transform * (glow.size * 0.5)
+				glow_follows_pack = glow_follows_pack and glow_transform.x.is_equal_approx(pack_transform.x) \
+					and glow_transform.y.is_equal_approx(pack_transform.y) and glow_center.is_equal_approx(pack_transform * (pack.size * 0.5))
 		await process_frame
 	check(directions == [-1, 1] and maze._initial_pack_button.position.is_equal_approx(origin) and is_zero_approx(maze._initial_pack_button.rotation), "每次提醒只向左、向右各摆一次，并回到原位")
+	check(glow != null and glow_follows_pack and not directions.is_empty(), "左右两次倾斜期间，柔光和卡包中心、旋转与缩放逐帧一致")
 	check(shadow_visible and shadow_drift < 0.1, "跳动投影固定在地面，不随卡包上移")
 	check(shadow_visible and shadow_widest > maze._initial_pack_button.size.x * maze._initial_pack_button.scale.x * maze.INITIAL_PACK_SHADOW_RATIO.x, "跳起时淡入柔和影子，并随高度略微变宽")
 	check(not maze._initial_pack_shadow.visible and maze._initial_pack_shadow.mouse_filter == Control.MOUSE_FILTER_IGNORE, "落地后收起影子，且影子不拦截点击")
@@ -61,6 +77,7 @@ func _run() -> void:
 	await create_timer(0.8).timeout
 	var opening: CardPackOpening = main._card_pack_opening
 	check(is_instance_valid(opening), "真实点击卡包进入开包界面")
+	check(glow != null and not glow.is_visible_in_tree(), "进入开包后桌面柔光收起")
 	if not is_instance_valid(opening):
 		print("CLICK_DIAGNOSTIC: ", maze._initial_pack_button.get_global_rect(), " disabled=", maze._initial_pack_button.disabled, " idle=", maze._initial_pack_idle_seconds, " hint=", main.get_node_or_null("TaskHint"), " message=", main.play_area_label.text)
 		shell.free()
@@ -127,6 +144,9 @@ func _run() -> void:
 	check(opening.tear_art.seal_hint_seconds < 0.0, "开始撕包后立即停止扫光")
 	main._close_card_inspection(true)
 	await frames()
+	var owned: OwnedCard = main.owned_card_collection.get_cards().filter(func(card: OwnedCard) -> bool: return card.card_data.card_type == CardData.CardType.MINION).front()
+	check(owned != null, "开场包提供真实随从供工具箱检视")
+	if owned != null: await _check_toolbox_effect_popup(main, owned)
 	var table = preload("res://scripts/ui/event_card_table.gd").new()
 	table.main = main
 	main.add_child(table)
@@ -145,3 +165,50 @@ func _run() -> void:
 	shell.free()
 	print("Pack feedback render: %d checks, %d failures" % [checks, failures])
 	quit(1 if failures else 0)
+
+
+func _check_toolbox_effect_popup(main: Control, owned: OwnedCard) -> void:
+	var previous: Array[Dictionary] = main.emblem_library.get_inventory_state()
+	check(main.emblem_library.restore_inventory_state([
+		{"instance_id": &"hover_torch", "emblem_id": &"火把"},
+		{"instance_id": &"hover_sword", "emblem_id": &"长剑"},
+	]), "工具箱载入两枚真实纹章实例")
+	main._open_card_inspection(owned.card_data, owned)
+	await create_timer(0.35).timeout
+	var lt := InputEventJoypadMotion.new()
+	lt.axis = JOY_AXIS_TRIGGER_LEFT
+	lt.axis_value = 0.95
+	Input.parse_input_event(lt)
+	await create_timer(0.4).timeout
+	var torch: Control = main.emblem_library._entries[0]
+	var sword: Control = main.emblem_library._entries[1]
+	var popup := get_first_node_in_group(&"card_effect_popup")
+	check(main._inspection_library_expanded and popup != null and popup.source == torch and popup.panel.visible and popup.title.text.contains("火把") and popup.body.get_parsed_text().contains("耀眼"), "按住 LT 展开工具箱后，手柄高亮显示火把的真实效果")
+	var right := InputEventJoypadButton.new()
+	right.button_index = JOY_BUTTON_DPAD_RIGHT
+	right.pressed = true
+	root.push_input(right, true)
+	await create_timer(0.1).timeout
+	check(popup != null and popup.source == sword and popup.title.text.contains("长剑"), "手柄移动焦点时效果框切换到新纹章")
+	lt = lt.duplicate() as InputEventJoypadMotion
+	lt.axis_value = 0.0
+	Input.parse_input_event(lt)
+	await create_timer(0.1).timeout
+	check(not main._inspection_library_expanded and popup != null and not popup.panel.visible, "松开 LT 收起工具箱并关闭效果框")
+	await click_control(main._inspection_library_toggle)
+	await create_timer(0.35).timeout
+	await _move_hover_mouse(torch.get_global_rect().get_center())
+	check(popup != null and popup.source == torch and popup.panel.visible and popup.body.get_parsed_text().contains("耀眼"), "鼠标指向工具箱纹章也显示相同效果框")
+	await _move_hover_mouse(Vector2(20, 700))
+	check(popup != null and not popup.panel.visible, "鼠标移出纹章后效果框关闭")
+	main._close_card_inspection(true)
+	main.emblem_library.restore_inventory_state(previous)
+
+
+func _move_hover_mouse(internal_position: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = shell.render_container.get_global_transform_with_canvas() * internal_position
+	event.global_position = event.position
+	event.relative = event.position - root.get_mouse_position()
+	root.push_input(event, true)
+	await process_frame

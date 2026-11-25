@@ -3,16 +3,33 @@ extends Control
 const FULL: Texture2D = preload("res://assets/ui/board_revision_20261019/battle_time_bar.png")
 const EMPTY: Texture2D = preload("res://assets/ui/board_revision_20261019/battle_time_empty.png")
 const EYE: Texture2D = preload("res://assets/ui/board_revision_20261019/battle_time_eye.png")
+const RETURN_ICON: Texture2D = preload("res://assets/ui/board_revision_20261019/battle_time_return.png")
 const BLUE_LEFT := Rect2(37, 5, 383, 6) # 左侧完整槽内范围，右端固定在中央装饰旁
 const BLUE_RIGHT := Rect2(478, 5, 383, 6) # 右侧完整槽内范围，左端固定在中央装饰旁
 const BLUE_SAMPLE := Rect2(67, 7, 1, 1) # 从原图纯蓝区域取色，铺满槽位而非沿用原图未满示例
+const CENTER_ICON_POSITION := Vector2(441, 3) # 中线眼睛在底板上的原生像素位置
+const RETURN_HIT_SIZE := Vector2(42, 20) # 图标周围也能点按，命中区留在中央金色底座
 var remaining_ratio: float = 1.0
+var return_button: Button
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	size = FULL.get_size()
+	return_button = Button.new()
+	return_button.name = "ReturnToResultButton"
+	return_button.flat = true
+	return_button.icon = RETURN_ICON
+	return_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return_button.tooltip_text = "返回结算"
+	return_button.accessibility_name = "返回结算"
+	return_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	return_button.position = CENTER_ICON_POSITION + (EYE.get_size() - RETURN_HIT_SIZE) * 0.5
+	return_button.size = RETURN_HIT_SIZE
+	return_button.hide()
+	return_button.visibility_changed.connect(queue_redraw)
+	add_child(return_button)
 
 
 func update_time(elapsed: float, fatigue_start: float) -> void:
@@ -34,4 +51,5 @@ func _draw() -> void:
 			var right := Rect2(BLUE_RIGHT.position + Vector2(0, row), Vector2(row_width, 1))
 			draw_texture_rect_region(FULL, left, BLUE_SAMPLE)
 			draw_texture_rect_region(FULL, right, BLUE_SAMPLE)
-	draw_texture(EYE, Vector2(441, 3)) # 中线眼睛按原稿位置显示，不随剩余时间消失
+	if not return_button.visible:
+		draw_texture(EYE, CENTER_ICON_POSITION)

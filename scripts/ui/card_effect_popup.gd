@@ -85,8 +85,12 @@ func show_card(value: Control, anchor_control: Control = null, paused_battle: bo
 	_show(value, anchor_control if anchor_control != null else value, &"paused_battle" if paused_battle else &"card")
 
 
-func show_sticker(surface: Control) -> void:
-	_show(surface, surface, &"sticker")
+func show_sticker(surface: Control, gamepad: bool = false) -> void:
+	_show(surface, surface, &"gamepad_sticker" if gamepad else &"sticker")
+
+
+func show_gamepad_card(value: Control, anchor_control: Control) -> void:
+	if value.can_show_effect_popup(): _show(value, anchor_control, &"gamepad")
 
 
 func _show(value: Control, anchor_control: Control, context: StringName) -> void:
@@ -114,6 +118,10 @@ func hide_card(value: Control = null, context: StringName = &"") -> void:
 	set_process(false)
 
 
+func hide_gamepad() -> void:
+	if _context in [&"gamepad", &"gamepad_sticker"]: hide_card()
+
+
 func _process(_delta: float) -> void:
 	if not is_instance_valid(source) or not is_instance_valid(anchor):
 		hide_card()
@@ -132,7 +140,7 @@ func _process(_delta: float) -> void:
 
 func _menu_open() -> bool:
 	for menu: Node in get_tree().get_nodes_in_group(&"escape_pause_menus"):
-		if menu.is_menu_open(): return true
+		if menu.blocks_gameplay(): return true
 	return false
 
 
@@ -145,7 +153,7 @@ func _update_popup() -> void:
 	var bounds: Rect2
 	var name_text: String
 	var effect: String
-	var keep_lines := _context == &"sticker"
+	var keep_lines := _context in [&"sticker", &"gamepad_sticker"]
 	if keep_lines:
 		var help: Dictionary = source.get_hovered_sticker_help()
 		if help.is_empty():
@@ -335,6 +343,7 @@ class InspectionPanel extends PanelContainer:
 	var build_style: Callable
 	var _display: Control
 	var _visual: PanelContainer
+	var _visual_clip: Control
 	var _content: VBoxContainer
 	var _display_scale := 0.0
 	var _logical_width := 0.0
@@ -350,10 +359,14 @@ class InspectionPanel extends PanelContainer:
 			window_layer.layer = 28 # 高于游戏合成画布，低于英雄对白和换场黑幕
 			window_layer.custom_viewport = get_tree().root
 			add_child(window_layer)
+			_visual_clip = Control.new()
+			_visual_clip.clip_contents = true
+			_visual_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			window_layer.add_child(_visual_clip)
 			_visual = PanelContainer.new()
 			_visual.name = "InspectionEffectWindowVisual"
 			_visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			window_layer.add_child(_visual)
+			_visual_clip.add_child(_visual)
 		else:
 			_visual = self
 		_process(0.0)
@@ -361,16 +374,19 @@ class InspectionPanel extends PanelContainer:
 	func _process(_delta: float) -> void:
 		var window_transform := get_global_transform_with_canvas()
 		if _visual != self:
-			window_transform = _display.render_container.get_global_transform_with_canvas() * window_transform
+			var display_transform: Transform2D = _display.render_container.get_global_transform_with_canvas()
+			window_transform = display_transform * window_transform
+			_visual_clip.position = display_transform.origin.round()
+			_visual_clip.size = _display.render_container.size * display_transform.get_scale()
 		var display_scale := window_transform.get_scale().x
 		if not is_equal_approx(display_scale, _display_scale):
 			_display_scale = display_scale
 			_rebuild_text()
 		if _visual == self: return
-		_visual.position = window_transform.origin.round()
+		_visual.position = window_transform.origin.round() - _visual_clip.position
 		_visual.modulate.a = modulate.a
 		var menu := get_tree().get_first_node_in_group(&"escape_pause_menus")
-		_visual.visible = is_visible_in_tree() and not (menu != null and menu.is_menu_open()) and not _display.screen_transition.busy
+		_visual.visible = is_visible_in_tree() and not (menu != null and menu.blocks_gameplay()) and not _display.screen_transition.busy
 		size.y = _visual.size.y / display_scale
 
 	func _rebuild_text() -> void:

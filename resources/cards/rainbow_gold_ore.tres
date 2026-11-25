@@ -13,4 +13,4 @@ max_health = 7
 rarity = 2
 art_texture = ExtResource("2_art")
 art_offset = Vector2i(-1, 5)
-effect_text = "收获：1金币，投掷2d10；>15获得5金币，>18获得10金币，=20获得20金币。"
+effect_text = "收获：基础1金币。掷2d10，按最高档追加：16–18加5金币，19加10金币，20加20金币。合并入账。"

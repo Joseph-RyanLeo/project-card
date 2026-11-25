@@ -6,7 +6,7 @@ signal card_requested(owned: OwnedCard)
 signal finished
 signal wrapper_opened
 
-enum Phase { ENLARGING, POSITIONING, SEALED, TEARING, BURST, REVEALING, INSPECTING, COLLECTING, FINISHED }
+enum Phase { ENLARGING, POSITIONING, SEALED, TEARING, BURST, REVEALING, INSPECTING, FINISHED }
 const TearArt = preload("res://scripts/ui/pack_tear_art.gd")
 const Glow = preload("res://scripts/ui/pack_opening_glow.gd")
 const CARD_SCENE = preload("res://scenes/ui/CardView.tscn")
@@ -18,6 +18,7 @@ const SEAL_HINT_DELAY: float = 3.0 # 点击进入开包后，尚未撕开多久�
 
 var effects: Dictionary = Settings.get_values()
 var cards: Array[OwnedCard] = []
+var additional_awards: Array[Dictionary] = []
 var current_index := 0
 var phase := Phase.ENLARGING
 var has_rare := false
@@ -32,6 +33,12 @@ var _drag_progress := 0.0
 var _dragging := false
 var _drag_moved := false
 var _auto_tearing := false
+const GAMEPAD_SWEEP_END := 0.85 # 左摇杆推到此行程后视为抵达封口一端
+const GAMEPAD_SHAKE_TAIL_MS := 90 # 摇杆暂停后继续显示撕封口抖动的毫秒数
+var _gamepad_tear_start := 0.0
+var _gamepad_tear_progress := 0.0
+var _gamepad_last_axis := 0.0
+var _gamepad_shake_until := 0
 var _host: Control
 var _host_origin := Vector2.ZERO
 var _shake_elapsed := -1.0
@@ -93,12 +100,16 @@ func _prepare_next_card() -> void:
 	view.set_card_data(owned.card_data)
 	view.set_owned_card(owned)
 	view.set_squad_attribute_preview_from_squad(SquadData.from_owned_card(owned))
+	if owned.card_data.card_type == CardData.CardType.MINION:
+		view.set_inspection_stat_breakdown(true)
+		view.inspection_stat_progress = 0.0
 	view.configure_drag_source(false)
 	overlay.add_child(view)
 	var back := InspectionCardSurface.new()
 	back.visible = false
 	overlay.add_child(back)
-	back.setup(view, Callable(), Callable())
+	# 整叠共用随从检视边距，所有前后层的可见卡框和透视坐标因此一致。
+	back.setup(view, Callable(), Callable(), InspectionCardSurface.STAT_BREAKDOWN_PADDING)
 	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	back.tilt_locked = true
 	back.set_process(false)
@@ -122,7 +133,7 @@ func handle_input(event: InputEvent) -> bool:
 		return event is InputEventMouseButton or event is InputEventKey
 	if event is InputEventMouseButton:
 		var mouse := event as InputEventMouseButton
-		if mouse.button_index == MOUSE_BUTTON_LEFT and phase in [Phase.ENLARGING, Phase.POSITIONING, Phase.BURST, Phase.REVEALING, Phase.COLLECTING]:
+		if mouse.button_index == MOUSE_BUTTON_LEFT and phase in [Phase.ENLARGING, Phase.POSITIONING, Phase.BURST, Phase.REVEALING]:
 			return true
 		if mouse.button_index == MOUSE_BUTTON_RIGHT and mouse.pressed:
 			if phase in [Phase.SEALED, Phase.TEARING] and not _auto_tearing:
@@ -166,6 +177,32 @@ func _advance_tear() -> void:
 	var remaining_distance: float = tear_art.size.x - _drag_start if tear_art.from_left else _drag_start
 	tear_art.progress = _drag_progress + (1.0 - _drag_progress) * distance / maxf(1.0, remaining_distance * DRAG_FRACTION)
 	if tear_art.progress >= 1.0: _burst()
+
+
+func sweep_gamepad_seal(axis: float) -> void:
+	if cards.is_empty() or phase not in [Phase.SEALED, Phase.TEARING] or _auto_tearing or _dragging or _background_cards.size() < cards.size():
+		return
+	if is_zero_approx(_gamepad_tear_start):
+		if absf(axis) < GAMEPAD_SWEEP_END: return
+		if tear_art.progress > 0.0 and (axis < 0.0) != tear_art.from_left: return
+		_gamepad_tear_start = signf(axis)
+		_gamepad_tear_progress = tear_art.progress
+		tear_art.from_left = axis < 0.0
+		phase = Phase.TEARING
+		tear_art.seal_hint_seconds = -1.0
+	if not is_equal_approx(axis, _gamepad_last_axis):
+		_gamepad_last_axis = axis
+		_gamepad_shake_until = Time.get_ticks_msec() + GAMEPAD_SHAKE_TAIL_MS
+	var distance := clampf((GAMEPAD_SWEEP_END - axis * _gamepad_tear_start) / (2.0 * GAMEPAD_SWEEP_END), 0.0, 1.0)
+	tear_art.progress = lerpf(_gamepad_tear_progress, 1.0, distance)
+	if tear_art.progress >= 1.0:
+		_gamepad_tear_start = 0.0
+		_burst()
+
+
+func release_gamepad_seal() -> void:
+	_gamepad_tear_start = 0.0
+	_gamepad_shake_until = 0
 
 
 func auto_tear() -> void:
@@ -274,6 +311,7 @@ func _extract_stack(toolbox_expanded: bool) -> void:
 
 func _reveal_card(toolbox_expanded: bool) -> void:
 	phase = Phase.INSPECTING
+	if surface.card.has_inspection_stat_breakdown(): surface.card.animate_inspection_stats(true)
 	glow.card_reveal = true
 	var rare: bool = cards[current_index].card_data.rarity == CardData.Rarity.IV
 	glow.rare = rare
@@ -296,28 +334,27 @@ func collect_current() -> void:
 	if phase != Phase.INSPECTING:
 		return
 	if is_instance_valid(animation): animation.kill()
+	if current_index == cards.size() - 1:
+		current_index += 1
+		phase = Phase.FINISHED
+		finished.emit()
+		return
 	_stack_origin = surface.position
 	_stack_scale = surface.scale
 	_stack_force = surface.force
 	var outgoing := surface
 	outgoing.set_process(false)
 	outgoing.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if outgoing.card.has_inspection_stat_breakdown():
+		outgoing.card.animate_inspection_stats(false, effects.collect_seconds)
 	# Tween 绑定离场卡本身，多张收卡动画可以重叠；强制关闭会随卡节点一起停止。
 	var collect := outgoing.create_tween().set_parallel(true)
 	collect.tween_property(outgoing, "position", outgoing.position + Vector2(0, effects.collect_drop), effects.collect_seconds).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	collect.tween_property(outgoing, "scale", outgoing.scale * effects.collect_scale, effects.collect_seconds)
 	collect.tween_property(outgoing, "modulate:a", 0.0, effects.collect_seconds)
 	current_index += 1
-	if current_index < cards.size():
-		collect.chain().tween_callback(outgoing.queue_free)
-		card_requested.emit(cards[current_index])
-	else:
-		phase = Phase.COLLECTING
-		_set_help("收进收藏…")
-		collect.chain().tween_callback(func():
-			phase = Phase.FINISHED
-			finished.emit()
-		)
+	collect.chain().tween_callback(outgoing.queue_free)
+	card_requested.emit(cards[current_index])
 
 
 func _make_glow() -> Glow:
@@ -355,7 +392,7 @@ func _process(delta: float) -> void:
 	if phase == Phase.TEARING and _dragging:
 		_advance_tear()
 	if phase in [Phase.SEALED, Phase.TEARING] and is_instance_valid(glow):
-		if phase == Phase.TEARING and (_dragging or _auto_tearing):
+		if phase == Phase.TEARING and (_dragging or _auto_tearing or Time.get_ticks_msec() < _gamepad_shake_until):
 			var elapsed := Time.get_ticks_msec() * 0.001
 			var shake: Vector2 = Vector2(sin(elapsed * effects.tear_frequency_x), sin(elapsed * effects.tear_frequency_y)) * effects.tear_shake_pixels
 			# 顶点位移发生在合成后；除以包装倍率，显示时得到指定的逻辑像素幅度。
@@ -370,12 +407,11 @@ func _process(delta: float) -> void:
 		surface.scale = _stack_scale
 		glow.origin = _pack_surface.position + (_pack_surface.PADDING + Vector2(tear_art.size.x * 0.5, TearArt.SEAL_HEIGHT)) * _pack_surface.scale
 		_update_stack_layout()
-	if phase in [Phase.REVEALING, Phase.INSPECTING, Phase.COLLECTING]:
+	if phase in [Phase.REVEALING, Phase.INSPECTING]:
 		glow.origin = surface.position + surface.size * surface.scale * 0.5
-		if phase != Phase.COLLECTING:
-			_stack_origin = surface.position
-			_stack_scale = surface.scale
-			_stack_force = surface.force
+		_stack_origin = surface.position
+		_stack_scale = surface.scale
+		_stack_force = surface.force
 		_update_stack_layout()
 
 

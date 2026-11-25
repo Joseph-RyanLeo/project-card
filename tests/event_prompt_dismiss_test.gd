@@ -44,6 +44,7 @@ func _run() -> void:
 	await create_timer(0.4).timeout
 	while not maze.hero.pending_talent_levels.is_empty(): maze.choose_talent(String(maze.hero.get_pending_choices()[0]))
 	check(main.get_node_or_null("TaskHint") == null, "首个事件牌堆旁不再弹教学")
+	while is_instance_valid(maze._event_table._deck_arrival): await process_frame
 	await click_control(maze._event_table._deck)
 	var table: Control = maze._event_table
 	if table.busy: await table.choices_ready
@@ -53,6 +54,7 @@ func _run() -> void:
 	while maze.run.step == maze.RunState.Step.CHOOSING: await process_frame
 	check(maze.choose_story_option(0), "打开钱袋")
 	if is_instance_valid(maze._story_roll): await maze._story_roll.finished
+	if is_instance_valid(maze._event_gold_flight): await maze._event_gold_flight.finished
 	check(maze.complete_event(true, true), "读取骰子结果后继续旅程")
 	var hint := await expected_hint("event_reward")
 	check(TaskCatalog.tutorial_hint("event_reward").instruction.is_empty() and hint.speech_only and not hint.panel.visible, "补给已收下不再出现浅色提示框")

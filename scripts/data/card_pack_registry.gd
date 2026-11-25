@@ -30,6 +30,10 @@ const CARD_GROUP_NAMES := {
 	&"development_test": "开发测试",
 }
 
+const DEFAULT_CARD_BACKGROUNDS := {
+	&"twisted_vein": preload("res://assets/card_backgrounds/twisted_vein_common.png"),
+}
+
 
 static func get_faction(pack_id: StringName) -> CardFaction.Id:
 	var pack_data := PACKS.get(pack_id, {}) as Dictionary
@@ -43,3 +47,10 @@ static func get_display_name(pack_id: StringName) -> String:
 
 static func belongs_to_pack(card: CardData, pack_id: StringName) -> bool:
 	return card != null and (card.pack_id == pack_id or (pack_id == &"twisted_vein" and card.id in [&"rainbow_gold_ore", &"crystallized_remains", &"stone_of_greed", &"abandoned_toolbox", &"mining_pick"]))
+
+
+static func get_default_background(card: CardData) -> Texture2D:
+	for pack_id: StringName in DEFAULT_CARD_BACKGROUNDS:
+		if belongs_to_pack(card, pack_id):
+			return DEFAULT_CARD_BACKGROUNDS[pack_id]
+	return null

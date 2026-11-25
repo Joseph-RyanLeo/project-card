@@ -7,6 +7,7 @@ signal story_completed
 signal target_activated(event: InputEventMouseButton)
 
 const SpotlightShader = preload("res://shaders/hero_speech_spotlight.gdshader")
+const FocusOutline = preload("res://scripts/ui/focus_outline.gd")
 const SPOTLIGHT_PADDING := Vector2(22, 18) # 亮圈比英雄和气泡联合边界多出的柔和留白
 const Portrait = preload("res://scripts/ui/character_portrait.gd")
 const Speech = preload("res://scripts/ui/hero_speech_bubble.gd")
@@ -17,12 +18,14 @@ const PANEL_WIDTH: float = 348.0 # 浅色操作提示框宽度
 const PANEL_GAP: float = 14.0 # 提示框与被提示区域之间的间距
 const SCREEN_MARGIN: float = 12.0 # 提示框距画布边缘的留白
 const DIM_ALPHA: float = 0.28 # 教学时背景轻微压暗，目标区域保留亮度
+const SOLO_GLOW_GAIN := 1.6 # 取消暗幕时增强目标轮廓对比
 const PANEL_FILL := Color("f2e2c4") # 操作说明的浅色底板
 const TEXT_COLOR := Color("49382a") # 浅色提示框内的深色文字
 const BORDER_COLOR := Color("b68c56") # 文字提示框的边缘颜色
 const FADE_SECONDS: float = 0.20 # 提示框与暗幕淡入淡出的时长
 const FOCUS_BREATH_SECONDS := 1.8 # 被提示目标的呼吸光周期
 const STORY_READ_SECONDS: float = 3.0 # 每句英雄对白全部显示后保留的阅读时间
+const MAX_FOCUS_REGIONS := 12 # 一次可照亮的符文、纹章及属性区域数，须与shader一致
 
 var title: String
 var content: Dictionary
@@ -47,6 +50,7 @@ var _hero_lines: Array[Dictionary] = []
 var _hero_line_index := 0
 var _teaching_done := false
 var _hero_done := true
+var _hero_line_transitioning := false
 var _narrative_done := true
 var _closing := false
 var _save_failed := false
@@ -56,7 +60,11 @@ var _narrative_timing: Tween
 var _portrait_layer: CanvasLayer
 var complete_on_click := false
 var follow_target: Control
-var silhouette_target: TextureButton
+var activate_follow_target := false
+var silhouette_target: Control
+var resolve_silhouette: Callable
+var resolve_focus: Callable
+var _focus_regions: Array[Rect2] = []
 
 
 func _ready() -> void:
@@ -103,7 +111,7 @@ func _ready() -> void:
 	_teaching_done = instruction_label.text.is_empty()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.visible = not speech_only
+	panel.visible = not speech_only and not content.get("highlight_only", false)
 	if not hero_lines.is_empty():
 		_hero_done = false
 		_hero_lines = hero_lines
@@ -153,7 +161,7 @@ func save_recovered() -> void:
 	_save_failed = false
 	instruction_label.text = String(content.get("instruction", ""))
 	instruction_label.visible = not instruction_label.text.is_empty()
-	panel.visible = not speech_only
+	panel.visible = not speech_only and not content.get("highlight_only", false)
 	if _teaching_done:
 		_transition = create_tween()
 		_transition.tween_property(_surface, "modulate:a", 0.0, FADE_SECONDS)
@@ -192,6 +200,7 @@ func _show_hero_line() -> void:
 		target = portrait
 	speech.speaker_head_inset = 0.0 if target == portrait else Speech.HEAD_INSET
 	speech.say(String(line.text), target, 0.0, null, true)
+	_hero_line_transitioning = false
 	speech._text_reveal.finished.connect(_advance_hero_line_after_pause, CONNECT_ONE_SHOT)
 	_layout_hint.call_deferred()
 
@@ -203,7 +212,9 @@ func _advance_hero_line_after_pause() -> void:
 
 
 func _finish_hero_line() -> void:
-	if _closing: return
+	if _closing or _hero_line_transitioning: return
+	_hero_line_transitioning = true
+	if is_instance_valid(_line_timing): _line_timing.kill()
 	speech.dismiss()
 	var next := _hero_line_index + 1
 	var keep_portrait: bool = next < _hero_lines.size() and _hero_lines[next].speaker == _hero_lines[_hero_line_index].speaker and _resolve_scene_speaker(String(_hero_lines[next].speaker)) == null
@@ -252,7 +263,9 @@ func _build_focus() -> void:
 		dim.name = "HintSpotlight"
 		dim.size = CANVAS_SIZE
 		dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_focus_material.set_shader_parameter("dim_opacity", DIM_ALPHA)
+		_focus_material.set_shader_parameter("dim_opacity", 0.0 if content.get("highlight_only", false) else DIM_ALPHA)
+		if content.get("highlight_only", false):
+			_focus_material.set_shader_parameter("focus_glow_gain", SOLO_GLOW_GAIN)
 		dim.material = _focus_material
 		_surface.add_child(dim)
 	_update_target_focus()
@@ -266,6 +279,32 @@ func _uses_inspection_dim() -> bool:
 	return _focus_material != null and is_instance_valid(inspection_dim) and inspection_dim.material == _focus_material
 
 
+func set_live_instruction(text: String, regions: Array[Rect2]) -> void:
+	if text != instruction_label.text:
+		instruction_label.text = text
+		_layout_hint.call_deferred()
+	_set_focus_regions(regions)
+
+
+func _set_focus_regions(regions: Array[Rect2]) -> void:
+	regions = regions.filter(func(rect: Rect2) -> bool: return rect.has_area())
+	if _focus_regions == regions: return
+	_focus_regions = regions
+	focus_rect = Rect2()
+	for rect: Rect2 in regions:
+		focus_rect = focus_rect.merge(rect) if focus_rect.has_area() else rect
+	if _focus_material != null:
+		var packed := PackedVector4Array()
+		packed.resize(MAX_FOCUS_REGIONS)
+		var count := mini(regions.size(), MAX_FOCUS_REGIONS)
+		for index: int in count:
+			var rect := regions[index]
+			packed[index] = Vector4(rect.position.x, rect.position.y, rect.size.x, rect.size.y)
+		_focus_material.set_shader_parameter("focus_regions", packed)
+		_focus_material.set_shader_parameter("focus_region_count", count)
+	_layout_hint()
+
+
 func _update_target_focus() -> void:
 	if _focus_material == null: return
 	var active := not String(content.get("instruction", "")).is_empty() and focus_rect.has_area()
@@ -273,22 +312,20 @@ func _update_target_focus() -> void:
 	if not active: return
 	_focus_material.set_shader_parameter("focus_rect", Vector4(focus_rect.position.x, focus_rect.position.y, focus_rect.size.x, focus_rect.size.y))
 	_focus_material.set_shader_parameter("focus_breath", 0.5 - 0.5 * cos(_focus_time * TAU / FOCUS_BREATH_SECONDS))
-	if not is_instance_valid(silhouette_target):
+	if not is_instance_valid(silhouette_target) or not silhouette_target.is_visible_in_tree() or silhouette_target.size.x <= 0.0 or silhouette_target.size.y <= 0.0:
 		_focus_material.set_shader_parameter("use_silhouette", false)
 		return
-	var texture := silhouette_target.texture_normal
-	if texture == _focus_texture: return
-	_focus_texture = texture
+	var texture: Texture2D
+	if silhouette_target is TextureButton:
+		texture = silhouette_target.texture_normal
+	elif silhouette_target is TextureRect:
+		texture = FocusOutline.frame_mask(silhouette_target.texture)
 	_focus_material.set_shader_parameter("use_silhouette", texture != null)
-	if texture is AtlasTexture:
-		var atlas := texture as AtlasTexture
-		var atlas_size := atlas.atlas.get_size()
-		var region := atlas.region
-		_focus_material.set_shader_parameter("focus_texture", atlas.atlas)
-		_focus_material.set_shader_parameter("focus_region", Vector4(region.position.x / atlas_size.x, region.position.y / atlas_size.y, region.size.x / atlas_size.x, region.size.y / atlas_size.y))
-	else:
-		_focus_material.set_shader_parameter("focus_texture", texture)
-		_focus_material.set_shader_parameter("focus_region", Vector4(0.0, 0.0, 1.0, 1.0))
+	if texture == null: return
+	FocusOutline.set_transform(_focus_material, silhouette_target)
+	if texture != _focus_texture:
+		_focus_texture = texture
+		FocusOutline.set_texture(_focus_material, texture)
 
 
 func _layout_hint() -> void:
@@ -354,7 +391,7 @@ func _update_speaker_spotlight(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	var menu := get_tree().get_first_node_in_group(&"escape_pause_menus")
-	var menu_open: bool = menu != null and menu.is_menu_open()
+	var menu_open: bool = menu != null and menu.blocks_gameplay()
 	_portrait_layer.visible = is_visible_in_tree() and not menu_open
 	# 教学战斗暂停时对白仍播放；只有玩家打开Esc时冻结对白自己的时间。
 	var timelines: Array = [_line_timing, _narrative_timing, portrait._motion]
@@ -367,19 +404,35 @@ func _process(delta: float) -> void:
 		var active_speaker := portrait if portrait.visible else _resolve_scene_speaker(String(_hero_lines[_hero_line_index].speaker))
 		if is_instance_valid(active_speaker): speech._speaker = active_speaker
 	_update_speaker_spotlight(delta)
-	if is_instance_valid(follow_target):
-		var rect := follow_target.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, follow_target.size)
-		if rect != focus_rect:
-			focus_rect = rect
-			_layout_hint()
+	if resolve_silhouette.is_valid(): silhouette_target = resolve_silhouette.call()
+	var rect := focus_rect
+	if resolve_focus.is_valid():
+		_set_focus_regions(resolve_focus.call())
+		rect = focus_rect
+	elif is_instance_valid(follow_target): rect = follow_target.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, follow_target.size)
+	if activate_follow_target and follow_target is BaseButton:
+		action_rect = rect if follow_target.is_visible_in_tree() and not follow_target.disabled and not _teaching_done else Rect2()
+	if rect != focus_rect:
+		focus_rect = rect
+		_layout_hint()
 	_focus_time = fmod(_focus_time + delta, FOCUS_BREATH_SECONDS)
 	_update_target_focus()
+
+
+func blocks_gameplay() -> bool:
+	return not _closing and not _hero_done and content.get("lock_dialogue", false)
 
 
 func _input(event: InputEvent) -> void:
 	if _closing: return
 	var pause_menu := get_tree().get_first_node_in_group(&"escape_pause_menus")
-	if pause_menu != null and pause_menu.is_menu_open(): return
+	if pause_menu != null and pause_menu.blocks_gameplay(): return
+	if blocks_gameplay():
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and is_instance_valid(speech) and speech.visible and not _hero_line_transitioning:
+			if speech.finish_reveal(): _advance_hero_line_after_pause()
+			else: _finish_hero_line()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if action_rect.has_area() and action_rect.has_point(event.position):
 			target_activated.emit(event)

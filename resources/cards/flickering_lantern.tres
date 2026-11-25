@@ -16,4 +16,4 @@ equipment_armor_delta = 2
 content_effect = &"flickering_lantern"
 effect_ids = Array[StringName]([&"flickering_lantern.effect.echo", &"flickering_lantern.effect.last_wish"])
 keywords = Array[StringName]([&"dazzling"])
-effect_text = "耀眼。遗愿：左右相邻友军永久+2生命。触发4次后转换为炽烈青灯。"
+effect_text = "耀眼。遗愿：左右相邻友军永久最大生命+2。触发4次后转换为炽烈青灯。"

@@ -2,6 +2,8 @@ class_name CelestialIndicatorController
 extends Control
 
 ## 指示物共用点按与原生拖动的投放入口；日月星归属小队，哨位归属区域。
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
+const FreeItemPlacement = preload("res://scripts/ui/free_item_placement.gd")
 const BOARD_TEXTURE: Texture2D = preload("res://assets/ui/board_revision_20261019/indicator_tray.png")
 const TRAY_SIZE := Vector2(195, 189) # 指示物板按用户原图195×189像素显示
 const TRAY_PADDING := Vector2(20, 42) # 指示物在新卡板内的首格左上角
@@ -9,7 +11,6 @@ const TRAY_ITEM_GAP: float = 52.0 # 指示物库存格横向中心间距
 const TRAY_ROW_GAP: float = 48.0 # 指示物库存格纵向中心间距
 const INDICATOR_START_POSITIONS: Array[Vector2] = [Vector2(47, 81), Vector2(83, 78), Vector2(121, 72)] # 月亮、星星、太阳初始位置对齐原稿，玩家手动摆放仍随实例保存
 const DROP_TRAVEL := Vector2(0, 6) # 放置时从手持图像中心向下落到卡面的距离
-const INVENTORY_GAP: float = 2.0 # 库存内指示物与哨位之间的最小留白
 var main: Node
 var items: Array[CelestialIndicator] = []
 var next_attachment_order: int = 1
@@ -167,6 +168,14 @@ func begin_click_carry(data: Dictionary, pointer: Vector2) -> void:
 	_preview.continue_pickup()
 	(data["source_view"] as Control).visible = false
 
+
+func is_click_carrying() -> bool:
+	return not _native and not _data.is_empty()
+
+
+func move_click_carry(pointer: Vector2) -> void:
+	if is_click_carrying() and is_instance_valid(_preview): _preview.global_position = pointer
+
 func _notification(what: int) -> void:
 	if main == null:
 		return
@@ -175,7 +184,7 @@ func _notification(what: int) -> void:
 		if value is Dictionary and value.get("kind") in [&"celestial_indicator", &"sentry_indicator"]:
 			_data = value
 			_native = true
-			_native_pointer = get_viewport().get_mouse_position()
+			_native_pointer = CrtProjection.viewport_mouse(get_viewport())
 			_preview = _data["preview"] as CelestialDragPreview
 			get_parent().move_child(self, get_parent().get_child_count() - 1)
 			mouse_filter = Control.MOUSE_FILTER_STOP
@@ -199,7 +208,7 @@ func _input(event: InputEvent) -> void:
 		if _native:
 			_native_pointer = event.position
 			return
-		_preview.global_position = event.position
+		move_click_carry(event.position)
 	elif _native and event is InputEventMouseButton:
 		_native_pointer = event.position
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -302,34 +311,12 @@ func find_inventory_position(item_size: Vector2, requested: Vector2, exclude_id:
 	for id: StringName in _tray_views:
 		var view := _tray_views[id] as Control
 		if id != exclude_id and is_instance_valid(view) and not view.is_queued_for_deletion():
-			obstacles.append(Rect2(_tray_positions.get(id, view.position), view.size).grow(INVENTORY_GAP))
+			obstacles.append(Rect2(_tray_positions.get(id, view.position), view.size))
 	if main.maze_controller != null and is_instance_valid(main.maze_controller._sentry_bar):
 		for child: Node in main.maze_controller._sentry_bar.get_children():
 			if child is EquipmentIndicator and StringName(child.sentry_data.get("instance_id", "")) != exclude_id:
-				obstacles.append(Rect2(child.position, child.size).grow(INVENTORY_GAP))
-	var maximum := TRAY_SIZE - item_size
-	var wanted := requested.clamp(Vector2.ZERO, maximum)
-	var xs: Array[float] = [wanted.x, 0.0, maximum.x]
-	var ys: Array[float] = [wanted.y, 0.0, maximum.y]
-	for bounds: Rect2 in obstacles:
-		xs.append(clampf(bounds.position.x - item_size.x, 0, maximum.x))
-		xs.append(clampf(bounds.end.x, 0, maximum.x))
-		ys.append(clampf(bounds.position.y - item_size.y, 0, maximum.y))
-		ys.append(clampf(bounds.end.y, 0, maximum.y))
-	var best := Vector2.INF
-	var distance := INF
-	for x: float in xs:
-		for y: float in ys:
-			var candidate := Rect2(Vector2(x, y), item_size)
-			var blocked := false
-			for bounds: Rect2 in obstacles:
-				if candidate.intersects(bounds):
-					blocked = true
-					break
-			if not blocked and wanted.distance_squared_to(candidate.position) < distance:
-				best = candidate.position
-				distance = wanted.distance_squared_to(best)
-	return best
+				obstacles.append(Rect2(child.position, child.size))
+	return FreeItemPlacement.nearest_clear_origin(Rect2(Vector2.ZERO, TRAY_SIZE), item_size, requested, obstacles)
 
 
 func _clamp_tray_position(item: CelestialIndicator, point: Vector2) -> Vector2:

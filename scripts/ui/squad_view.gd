@@ -64,6 +64,12 @@ const TARGET_PRIORITY_BADGE_INSET: float = 3.0 # 标签距小队可见右边缘�
 const BATTLE_ACTION_FEEDBACK_SECONDS: float = 0.7 # 单次行动文字保持可读的时长（秒）
 const BATTLE_ACTION_LIFT_PIXELS: float = 6.0 # 小队行动时全部卡牌向上抬起的距离
 const BATTLE_ACTION_LIFT_SECONDS: float = 0.18 # 小队完成抬起并回到原位的总时长（秒）
+const BattleCardFlash = preload("res://scripts/battle/battle_card_flash.gd")
+const BATTLE_HIT_SECONDS := 0.11 # 一倍速时闪白与轻抖的总时长
+const BATTLE_HIT_MIN_SECONDS := 0.065 # 高倍速时留给反馈的最短时间
+const BATTLE_HIT_SHAKE := 2.0 # 小队受击时水平轻抖的峰值逻辑像素
+const BATTLE_HIT_FLASH_ALPHA := 0.83 # 瞬间白色覆盖的最高不透明度
+const BATTLE_HIT_FLASH_Z := 520 # 瞬白盖住小队叠卡，弹道和其他战斗层仍可盖住瞬白
 const DEATH_DISSOLVE_BODY_SECONDS: float = 0.5 # 阵亡卡牌主体按噪声阈值完全溶解所需时间（秒）
 const DEATH_DISSOLVE_EDGE_SECONDS: float = 0.56 # 蓝色侵蚀区域仅比主体稍慢退场的总时长（秒）
 const DEATH_DISSOLVE_FILL_COLOR := Color(0.52549, 0.905882, 1.0, 0.42) # #86e7ff 半透明侵蚀填色
@@ -105,6 +111,8 @@ var _battle_pattern_result: RunePatternResult
 var _battle_active_rune_slots: Array[Dictionary] = [] # 战斗临时遮蔽后的生效符文顺序
 var _battle_action_tween: Tween
 var _battle_action_lift_tween: Tween
+var _battle_hit_tween: Tween
+var _battle_hit_flash: BattleCardFlash
 var _death_dissolve_tween: Tween
 var _death_dissolving: bool = false
 var _death_dissolve_material: ShaderMaterial
@@ -221,7 +229,8 @@ func set_battle_status(
 	spent_emblem_slots_by_card: Dictionary = {},
 	rune_element_overrides_by_card: Dictionary = {},
 	target_weight: int = -1,
-	masked_wounds_by_card: Dictionary = {}
+	masked_wounds_by_card: Dictionary = {},
+	stat_baselines: Vector3i = CardView.NO_STAT_BASELINES
 ) -> void:
 	if not is_node_ready():
 		return
@@ -238,6 +247,7 @@ func set_battle_status(
 	var vitals_source := display_data.get_vitals_source()
 	_target_priority_weight = target_weight
 	for card_view: CardView in get_card_views():
+		card_view.set_battle_stat_baselines(stat_baselines)
 		if not card_view.card_data.front_effect_text.is_empty() or not card_view.card_data.back_effect_text.is_empty():
 			card_view.refresh_effect_text()
 		card_view.set_battle_target_weight_display_enabled(_show_target_priority)
@@ -320,6 +330,7 @@ func clear_battle_status(clear_result_statistics: bool = false) -> void:
 	target_priority_badge.visible = false
 	for card_view: CardView in get_card_views():
 		card_view.clear_battle_masked_runes()
+		card_view.set_battle_stat_baselines(CardView.NO_STAT_BASELINES)
 		card_view.clear_battle_rune_element_overrides()
 		card_view.set_battle_status_slot_states([], [])
 		card_view.clear_battle_vitals()
@@ -332,6 +343,7 @@ func clear_battle_status(clear_result_statistics: bool = false) -> void:
 		_battle_action_tween.kill()
 	if _battle_action_lift_tween != null and _battle_action_lift_tween.is_valid():
 		_battle_action_lift_tween.kill()
+	_clear_battle_hit()
 	_refresh()
 	if is_instance_valid(squad_lift_layer):
 		squad_lift_layer.position = Vector2.ZERO
@@ -434,6 +446,39 @@ func play_battle_action_lift(speed_multiplier: float = 1.0) -> void:
 		0.0,
 		duration * 0.55
 	)
+
+
+func play_battle_hit(speed_multiplier: float) -> void:
+	if not is_node_ready() or _death_dissolving: return
+	if is_instance_valid(_battle_hit_tween): _battle_hit_tween.kill()
+	if _battle_hit_flash == null:
+		_battle_hit_flash = BattleCardFlash.new()
+		_battle_hit_flash.name = "BattleHitFlash"
+		_battle_hit_flash.z_index = BATTLE_HIT_FLASH_Z
+		card_visual_layer.add_child(_battle_hit_flash)
+	_set_battle_hit_progress(0.0)
+	var duration := maxf(BATTLE_HIT_SECONDS / clampf(speed_multiplier, 0.5, 3.0), BATTLE_HIT_MIN_SECONDS)
+	_battle_hit_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_STOP)
+	_battle_hit_tween.tween_method(_set_battle_hit_progress, 0.0, 1.0, duration)
+
+
+func _set_battle_hit_progress(progress: float) -> void:
+	var remaining := 1.0 - progress
+	# 受击沿 X，行动抬起沿 Y。两个反馈同时发生时可独立归位。
+	squad_lift_layer.position.x = cos(progress * TAU) * remaining * BATTLE_HIT_SHAKE
+	if remaining <= 0.0:
+		_battle_hit_flash.hide()
+		return
+	var bounds: Array[Rect2] = []
+	for card: CardView in get_card_views():
+		if card.visible: bounds.append(card.get_transform() * Rect2(Vector2.ZERO, card.size))
+	_battle_hit_flash.show_pulse(bounds, remaining, BATTLE_HIT_FLASH_ALPHA)
+
+
+func _clear_battle_hit() -> void:
+	if is_instance_valid(_battle_hit_tween): _battle_hit_tween.kill()
+	if is_instance_valid(_battle_hit_flash): _battle_hit_flash.hide()
+	squad_lift_layer.position.x = 0.0
 
 
 func play_death_dissolve(noise_seed: float = 0.0) -> void:
@@ -1553,8 +1598,11 @@ func _apply_squad_lift_position() -> void:
 	if not is_instance_valid(squad_lift_layer):
 		return
 	# 命中节点本身记录抽出距离，整队反馈也复用同一套稳定命中逻辑。
-	# 外层只负责快照容器，不再整体平移所有可交互 CardView。
-	squad_lift_layer.position = Vector2.ZERO
+	# 布局刷新只重置空闲的轴，保留正在播放的受击横抖和行动抬升。
+	if not is_instance_valid(_battle_hit_tween) or not _battle_hit_tween.is_running():
+		squad_lift_layer.position.x = 0.0
+	if not is_instance_valid(_battle_action_lift_tween) or not _battle_action_lift_tween.is_running():
+		squad_lift_layer.position.y = 0.0
 	var lift := SQUAD_LIFT_OFFSET if _squad_feedback_active else 0.0
 	for card_view: CardView in get_card_views():
 		card_view.set_external_lift(lift)

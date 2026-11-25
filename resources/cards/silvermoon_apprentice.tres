@@ -28,4 +28,4 @@ art_offset = Vector2i(11, 28)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
 &"overframe": Vector2i(11, 20)
 })
-effect_text = "突击：全队每有1光符文永久+1生命，每有1暗符文获得强化2。"
+effect_text = "突击：全队每有1光符文永久基础生命+1，每有1暗符文获得强化2。"

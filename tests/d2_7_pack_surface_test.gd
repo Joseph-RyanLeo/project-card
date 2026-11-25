@@ -38,9 +38,9 @@ func _run() -> void:
 	var front := stack._offers[1]
 	var selected := back.get_global_rect().position + Vector2(7, 70)
 	await move(selected)
-	await create_timer(0.18).timeout
+	await create_timer(0.22).timeout
 	await move(back.get_global_rect().get_center())
-	check(stack._hover_offer == back and back.z_index > front.z_index, "贴纸包露出部位抬起置顶，重叠部位不抢选")
+	check(stack._hover_offer == back and not back.get_global_rect().intersects(front.get_global_rect()), "贴纸包露出部位保持悬停，右包横移并让出整包")
 	var rng_before: int = main.ordinary_shop_service.rng.state
 	await click(back.get_global_rect().get_center(), MOUSE_BUTTON_RIGHT)
 	await create_timer(0.3).timeout

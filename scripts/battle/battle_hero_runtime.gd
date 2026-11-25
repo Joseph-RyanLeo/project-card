@@ -17,6 +17,7 @@ var _next_modifier_id: int = -40000000
 var _lone_star_used := false
 var _lone_star_target: BattleSquadState
 var _lone_star_until := -1.0
+var _supernova_until := INF
 const LONE_STAR_SECONDS := 5.0 # 孤星耀提供全伤害免疫的时长
 const LONE_STAR_ACTIONS := 2 # 孤星耀触发时立刻执行的行动次数
 
@@ -42,13 +43,16 @@ func has(id: String) -> bool:
 
 
 func opening_passives() -> void:
-	if not has("sentry_guard"):
-		return
 	var c = _controller.get_ref()
-	for sentry: Dictionary in sentries:
-		for target: BattleSquadState in c.get_living_states(BattleSquadState.Side.PLAYER):
-			if target.row_key == &"player_front":
-				_emit(target, float(level) * float(_talent("sentry_guard").armor_per_hero_level), CardData.ActionType.DEFENSE, BattleEffectEvent.EffectKind.ARMOR, "哨位：护", false)
+	if has("sentry_guard"):
+		for sentry: Dictionary in sentries:
+			for target: BattleSquadState in c.get_living_states(BattleSquadState.Side.PLAYER):
+				if target.row_key == &"player_front":
+					_emit(target, float(level) * float(_talent("sentry_guard").armor_per_hero_level), CardData.ActionType.DEFENSE, BattleEffectEvent.EffectKind.ARMOR, "哨位：护", false)
+	if has("supernova"):
+		_supernova_until = float(_talent("supernova").duration_seconds)
+		for state: BattleSquadState in c.player_states:
+			state.begin_supernova()
 
 
 func opening_rush() -> void:
@@ -76,11 +80,13 @@ func opening_rush() -> void:
 
 
 func next_delay(now: float) -> float:
-	return maxf(_next_break_time - now, 0.0) if has("sentry_break") and not sentries.is_empty() else INF
+	var sentry_break := _next_break_time if has("sentry_break") and not sentries.is_empty() else INF
+	return maxf(minf(sentry_break, _supernova_until) - now, 0.0)
 
 
 func process_due(now: float) -> void:
-	if next_delay(now) > 0.0001:
+	if _supernova_until <= now + 0.0001: end_supernova()
+	if not has("sentry_break") or sentries.is_empty() or _next_break_time > now + 0.0001:
 		return
 	_next_break_time += float(_talent("sentry_break").interval_seconds)
 	# 每次重新取存活候选；前一枚造成死亡后，下一枚不能继续命中尸体。
@@ -91,6 +97,22 @@ func process_due(now: float) -> void:
 		_emit(target, float(level) * float(_talent("sentry_break").damage_per_hero_level), CardData.ActionType.RANGED, BattleEffectEvent.EffectKind.DAMAGE, "哨位：破", true)
 		var c = _controller.get_ref()
 		c._finalize_batch()
+
+
+func apply_supernova_on_join(state: BattleSquadState, now: float) -> void:
+	if is_finite(_supernova_until) and now < _supernova_until and state.side == BattleSquadState.Side.PLAYER:
+		state.begin_supernova()
+
+
+func end_supernova() -> void:
+	if not is_finite(_supernova_until): return
+	_supernova_until = INF
+	for state: BattleSquadState in _controller.get_ref().player_states:
+		state.end_supernova()
+
+
+func get_friendly_fatigue_delay() -> float:
+	return float(_talent("supernova").get("friendly_fatigue_delay_seconds", 5.0)) if has("supernova") else 0.0
 
 
 func share_damage(event: BattleEffectEvent) -> void:
@@ -161,7 +183,8 @@ func _destroy(sentry: Dictionary) -> void:
 	var target := _random_living(BattleSquadState.Side.PLAYER)
 	if target == null:
 		return
-	for entry: Array in [[BattleModifier.Stat.ACTION_VALUE, float(level) * float(_talent("sentry_sharp").action_per_hero_level)], [BattleModifier.Stat.MAX_HEALTH, float(level) * float(_talent("sentry_sharp").health_per_hero_level)]]:
+	var health_bonus := float(level) * float(_talent("sentry_sharp").health_per_hero_level)
+	for entry: Array in [[BattleModifier.Stat.ACTION_VALUE, float(level) * float(_talent("sentry_sharp").action_per_hero_level)], [BattleModifier.Stat.MAX_HEALTH, health_bonus]]:
 		var modifier := BattleModifier.new()
 		modifier.stat = entry[0]
 		modifier.value = entry[1]
@@ -171,11 +194,14 @@ func _destroy(sentry: Dictionary) -> void:
 		target.modifiers.add_modifier(modifier)
 		_next_modifier_id -= 1
 	# 增加生命是上限提升的同时加值，不是治疗，不消费乡邻与暗蚀。
-	var gain := minf(level * float(_talent("sentry_sharp").health_per_hero_level), maxf(float(target.get_max_health()) - target.current_health, 0.0))
-	target.current_health += gain
-	if gain > 0.0:
-		# 增加生命不清算之前尚未跨整数的承伤小数；已有超上限生命也不能倒扣。
-		target.displayed_health = mini(target.displayed_health + floori(gain), target.get_max_health())
+	if target.converts_life_bonus():
+		target.adjust_converted_armor(health_bonus)
+	else:
+		var gain := minf(health_bonus, maxf(float(target.get_max_health()) - target.current_health, 0.0))
+		target.current_health += gain
+		if gain > 0.0:
+			# 已有超上限生命保留，承伤小数继续累计到下一次整数变化。
+			target.displayed_health = mini(target.displayed_health + floori(gain), target.get_max_health())
 
 
 func _random_living(side: int) -> BattleSquadState:

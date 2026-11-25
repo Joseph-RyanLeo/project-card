@@ -21,4 +21,4 @@ art_offset = Vector2i(2, 46)
 art_finish_offsets = Dictionary[StringName, Vector2i]({
 &"overframe": Vector2i(2, 29)
 })
-effect_text = "每有一个相邻友军被消灭，本卡永久基础生命+1。基础生命高于25时获得遗愿：随机相邻友军本场获得等量生命上限。"
+effect_text = "每有一个相邻友军被消灭，本卡永久基础生命+1。基础生命高于25时获得遗愿：随机相邻友军本场获得等量最大生命。"

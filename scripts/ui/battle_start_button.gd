@@ -25,6 +25,7 @@ var _face: TextureRect
 var _caption: Label
 var _hover_time: float = 0.0
 var _press_tween: Tween
+var _gamepad_charging := false
 
 
 func _ready() -> void:
@@ -62,8 +63,10 @@ func _ready() -> void:
 	_caption.add_theme_color_override("font_color", text_color)
 	_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_visual.add_child(_caption)
-	mouse_entered.connect(_on_hover_started)
-	mouse_exited.connect(_reset_hover)
+	mouse_entered.connect(func():
+		if Input.mouse_mode != Input.MOUSE_MODE_HIDDEN: _on_hover_started())
+	mouse_exited.connect(func():
+		if Input.mouse_mode != Input.MOUSE_MODE_HIDDEN and not _gamepad_charging: _reset_hover())
 	button_down.connect(_animate_press.bind(float(PRESS_PIXELS), PRESS_SECONDS))
 	button_up.connect(_animate_press.bind(0.0, RELEASE_SECONDS))
 	visibility_changed.connect(_on_visibility_changed)
@@ -92,6 +95,27 @@ func _on_hover_started() -> void:
 	set_process(not disabled)
 
 
+func set_gamepad_hover(hovered: bool) -> void:
+	if _gamepad_charging: return
+	if hovered: _on_hover_started()
+	else: _reset_hover()
+
+
+func set_gamepad_charging(charging: bool) -> void:
+	_gamepad_charging = charging
+	if charging: _on_hover_started()
+	else: _reset_hover()
+
+
+func activate_with_press() -> void:
+	if disabled or _gamepad_charging or not is_visible_in_tree() or (is_instance_valid(_press_tween) and _press_tween.is_running()): return
+	var motion := _animate_press(PRESS_PIXELS, PRESS_SECONDS)
+	motion.tween_property(self, "press_depth", 0.0, RELEASE_SECONDS)
+	# 准备阶段一结束就隐藏按钮，因此等一次按下与回弹完成再发出原生确认信号。
+	motion.tween_callback(func():
+		if is_visible_in_tree() and not disabled: pressed.emit())
+
+
 func _reset_hover() -> void:
 	set_process(false)
 	_hover_time = 0.0
@@ -103,22 +127,23 @@ func _process(delta: float) -> void:
 		_reset_hover()
 		return
 	_hover_time += delta
-	if _hover_time >= SHAKE_SECONDS:
+	if not _gamepad_charging and _hover_time >= SHAKE_SECONDS:
 		_reset_hover()
 		return
-	var amplitude := SHAKE_PIXELS * (1.0 - _hover_time / SHAKE_SECONDS)
+	var amplitude := SHAKE_PIXELS if _gamepad_charging else SHAKE_PIXELS * (1.0 - _hover_time / SHAKE_SECONDS)
 	_visual.position = Vector2(
 		roundf(sin(_hover_time * SHAKE_FREQUENCY) * amplitude),
 		roundf(sin(_hover_time * SHAKE_FREQUENCY * 1.7) * amplitude)
 	)
 
 
-func _animate_press(target: float, duration: float) -> void:
+func _animate_press(target: float, duration: float) -> Tween:
 	_reset_hover()
 	if is_instance_valid(_press_tween):
 		_press_tween.kill()
 	_press_tween = create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_press_tween.tween_property(self, "press_depth", target, duration)
+	return _press_tween
 
 
 func _on_visibility_changed() -> void:

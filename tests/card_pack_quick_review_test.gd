@@ -88,14 +88,21 @@ func _quick_collect(sequence: CardPackOpening) -> void:
 	await create_timer(0.4).timeout
 	check(main._inspection_surface.force.length() > 0.1, "固定鼠标的收卡测试开始于实际倾斜状态")
 	var began := Time.get_ticks_msec()
+	var final_owned := expected.back() as OwnedCard
 	for card_index: int in expected.size():
 		check(main._inspection_owned_card == expected[card_index], "快速阅览第%d张保留抽取顺序与原实例" % (card_index + 1))
 		if expected[card_index].card_data.rarity == CardData.Rarity.IV:
 			check(sequence.glow.rare and sequence.phase == CardPackOpening.Phase.INSPECTING, "IV聚光展示期间仍允许立即收卡")
 		var previous_force: Vector2 = main._inspection_surface.force
+		var outgoing: InspectionCardSurface = main._inspection_surface
 		var next: InspectionCardSurface = sequence._background_cards[0] if not sequence._background_cards.is_empty() else null
 		var next_texture: Texture2D = next.texture if next != null else null
 		await click(point)
+		if card_index == expected.size() - 1:
+			var intake: Control = main._card_acquisition
+			check(is_instance_valid(intake) and intake._card == outgoing and intake._entries[0].owned == expected.back() and intake._entries.slice(1).all(func(entry: Dictionary) -> bool: return entry.owned not in expected), "只将最后一张包内检视卡交给入藏演出，附赠卡单独处理")
+			if is_instance_valid(intake): final_owned = intake._entries.back().owned
+			break
 		check(sequence.current_index == card_index + 1, "每次点击立即推进一张，无需等待离场动画")
 		var layers_preserved := true
 		for stack_index: int in original_stack.size():
@@ -108,6 +115,7 @@ func _quick_collect(sequence: CardPackOpening) -> void:
 			check(main.emblem_library.get_global_transform_with_canvas().is_equal_approx(library_transform), "快速轮换时工具箱位置不变")
 			check(main.emblem_library._drag_enabled == (expected[card_index + 1].card_data.card_type == CardData.CardType.MINION), "工具资格跟随当前前层卡大类")
 	check(Time.get_ticks_msec() - began < 300, "五张卡可在一段收起动画内连点阅览完毕")
-	await create_timer(0.6).timeout
-	check(not is_instance_valid(main._inspection_overlay) and main.ordinary_shop_open, "最后一张动画完成后返回商店")
+	if is_instance_valid(main._card_acquisition): await main._card_acquisition.finished
+	var last_slot: Control = main._find_collection_slot_for_owned_card(final_owned)
+	check(not is_instance_valid(main._inspection_overlay) and main.ordinary_shop_open and main.current_world_view == main.WorldView.COLLECTION and is_instance_valid(last_slot) and last_slot.visible, "开包结束在收藏，最后一张卡落进实际卡位")
 	check(main.run_reward_state.gold == gold and main.ordinary_shop_service.rng.state == rng and main.owned_card_collection.size() == count, "快速连点不重复入库、扣款或消耗随机流")

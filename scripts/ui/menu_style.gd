@@ -25,6 +25,30 @@ static func make_theme() -> Theme:
 	return result
 
 
+static func make_book_theme() -> Theme:
+	var result := make_theme()
+	result.default_font_size = 16 # 收藏菜单与设置页在原生书页中的字号
+	var ink := Color("382319") # 与收藏纸面相配的深褐正文
+	result.set_color("font_color", "Label", ink)
+	for control_type: String in ["Button", "OptionButton", "CheckButton"]:
+		for state: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+			result.set_color(state, control_type, ink)
+		result.set_color("font_disabled_color", control_type, Color("795644"))
+		for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
+			var surface := Color("edd1af") if state in ["hover", "focus"] else Color("d6ab80")
+			if state == "pressed": surface = Color("c49771")
+			var button := panel(surface, Color("946849"))
+			button.set_border_width_all(1)
+			button.set_content_margin_all(5)
+			button.content_margin_top = 3
+			button.content_margin_bottom = 3
+			result.set_stylebox(state, control_type, button)
+	var page := StyleBoxEmpty.new()
+	page.set_content_margin_all(10) # 给书页纹理留出内边距，由底层普通书页绘制纸色
+	result.set_stylebox("panel", "PanelContainer", page)
+	return result
+
+
 static func panel(fill: Color, border: Color) -> StyleBoxFlat:
 	var result := StyleBoxFlat.new()
 	result.bg_color = fill

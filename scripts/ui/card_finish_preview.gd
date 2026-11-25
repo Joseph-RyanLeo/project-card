@@ -12,7 +12,7 @@ const BADGE_SHADER := preload("res://shaders/card_badge_relief.gdshader")
 const REST_FLASH_SHADER := preload("res://shaders/card_rest_flash.gdshader")
 const FRAME_FOIL_SHADER := preload("res://shaders/card_frame_foil.gdshader")
 const BADGE_SHADOW_PADDING := 3.0 # 图标阴影所需的原生画布安全边
-const BACKGROUND_DEPTH_RATIO := 2.4 # 背景距卡框的深度相对人物深度的比例；大于1使背景更远
+const BACKGROUND_DEPTH_RATIO := CardData.INSPECTION_BACKGROUND_DEPTH # 无拆层覆盖时使用共用背景倍率
 const FLASH_DIRECTION_DEADZONE: float = 0.01 # 鼠标归一化方向小于此半径时保持上次光带方向，避免中心抖动
 const DEPTH_DISTANCE_SCALE := 10.0 # 每档景深对应的原生空间距离；默认2.5使人物位于卡框后25px
 const ART_OUTLINE_GAIN := 3.2 # 立绘线条反光倍率
@@ -42,6 +42,7 @@ var enabled := true
 var _card: CardView
 var _surface: ShaderMaterial
 var _art_material: ShaderMaterial
+var _art_planes: Array[TextureRect] = []
 var _background_material: ShaderMaterial
 var _frame_material: ShaderMaterial
 var _background_source: Texture2D
@@ -139,11 +140,12 @@ func refresh() -> void:
 	_surface.set_shader_parameter("mask_origin_px", _card.position)
 	_surface.set_shader_parameter("mask_size_px", _card.card_size)
 	_art_material.set_shader_parameter("embossed", face == Appearance.Surface.EMBOSSED)
+	var use_3d := bool(_surface.get_shader_parameter("use_3d"))
 	for material: ShaderMaterial in [_art_material, _background_material]:
 		material.set_shader_parameter("effect_strength", texture_parameters.x)
 		material.set_shader_parameter("texture_density", texture_parameters.z)
 		material.set_shader_parameter("card_finish", active)
-		material.set_shader_parameter("use_3d", _surface.get_shader_parameter("use_3d"))
+		material.set_shader_parameter("use_3d", use_3d)
 		material.set_shader_parameter("max_tilt_degrees", _surface.get_shader_parameter("max_tilt_degrees"))
 		material.set_shader_parameter("fov", _surface.get_shader_parameter("fov"))
 		material.set_shader_parameter("projection_size", _surface.get_shader_parameter("card_texture_size_px"))
@@ -155,8 +157,18 @@ func refresh() -> void:
 	_background_material.set_shader_parameter("layer_depth", art_depth * BACKGROUND_DEPTH_RATIO)
 	_art_material.set_shader_parameter("layer_origin", _card.art_panel.position + _card.art_texture.position)
 	_background_material.set_shader_parameter("layer_origin", _card.art_panel.position + _card.art_background.position)
+	# Control 的矩形裁切在整卡旋转时仍沿画布坐标，用卡面局部坐标补上随卡旋转的边界。
+	var art_window := _card.art_panel.get_rect()
+	var art_clip := Vector4(art_window.position.x, art_window.position.y, art_window.end.x, art_window.end.y) if overframe else Vector4.ZERO
+	_art_material.set_shader_parameter("layer_clip_rect", art_clip)
+	_background_material.set_shader_parameter("layer_clip_rect", art_clip)
 	var definition := _card.card_data
 	var background_source := definition.get_background_texture() if definition != null else CardView.DEFAULT_ART_BACKGROUND_TEXTURE
+	var layers: Array[Texture2D] = []
+	if active == Finish.HOLOGRAPHIC and use_3d and definition != null and definition.art_texture != null:
+		layers = definition.inspection_art_layers
+	if not layers.is_empty():
+		_background_material.set_shader_parameter("layer_depth", art_depth * definition.get_inspection_layer_depth(0))
 	if active == Finish.HOLOGRAPHIC:
 		if background_source != _background_source:
 			_background_source = background_source
@@ -164,14 +176,48 @@ func refresh() -> void:
 		_card.art_background.texture = _background_opaque
 	else:
 		_card.art_background.texture = background_source
+	if not layers.is_empty() and background_source == definition.background_texture:
+		# 同一套拆分原稿共用取景起点，正视时背景与各透明层对齐。
+		_card.art_background.position = _card.art_texture.position
+		_card.art_background.size = _card.art_texture.size
+	elif not _art_planes.is_empty() and definition != null:
+		_card._apply_background_offset()
+	if not layers.is_empty() or not _art_planes.is_empty():
+		_background_material.set_shader_parameter("layer_size", _card.art_background.size)
+		_background_material.set_shader_parameter("layer_origin", _card.art_panel.position + _card.art_background.position)
 	var normal_texture: Texture2D = definition.art_normal_texture if definition != null else null
 	_art_material.set_shader_parameter("has_normal_texture", normal_texture != null)
 	_art_material.set_shader_parameter("surface_normal", normal_texture)
+	_refresh_art_planes(layers, art_depth)
 	# 新法线工艺在人物层处理，避免外层再重复照亮一次。
 	_surface.set_shader_parameter("use_normal_texture", false)
 	_refresh_badges()
 	refresh_detail_outlines()
 	_refresh_rest_flash(face, face_parameters)
+
+
+func _refresh_art_planes(textures: Array[Texture2D], art_depth: float) -> void:
+	if textures.is_empty() and _art_planes.is_empty(): return
+	while _art_planes.size() > textures.size():
+		_art_planes.pop_back().free()
+	while _art_planes.size() < textures.size():
+		var plane := TextureRect.new()
+		plane.name = "HolographicArtPlane%d" % _art_planes.size()
+		plane.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		plane.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		plane.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		_card.art_texture.add_child(plane)
+		_art_planes.append(plane)
+	# self_modulate 只作用于平面原画，子层仍继承立绘的卡面染色。
+	_card.art_texture.self_modulate.a = 1.0 if _art_planes.is_empty() else 0.0
+	for index: int in _art_planes.size():
+		var plane := _art_planes[index]
+		plane.texture = textures[index]
+		plane.size = _card.art_texture.size
+		var material := _art_material.duplicate() as ShaderMaterial
+		var ratio := _card.card_data.get_inspection_layer_depth(index + 1)
+		material.set_shader_parameter("layer_depth", art_depth * ratio)
+		plane.material = material
 
 
 func _number_layers() -> Array[Control]:
@@ -180,7 +226,8 @@ func _number_layers() -> Array[Control]:
 
 func refresh_detail_outlines() -> void:
 	if not _embossed_outline:
-		for layer: Control in _detail_outlines:
+		# 复用悬停卡时符文节点可能已重建，用键的数组跳过已释放节点。
+		for layer: Variant in _detail_outlines.keys():
 			if is_instance_valid(layer): layer.material = null
 		_detail_outlines.clear()
 		return
@@ -190,6 +237,8 @@ func refresh_detail_outlines() -> void:
 	layers.append(_card.card_name_frame)
 	if is_instance_valid(_card._overframe_outline): layers.append(_card._overframe_outline)
 	for slot: Node in _card.rune_row.get_children():
+		if _card.card_frame.texture == CardView.OVERFRAME_TEXTURE and _card._rune_sticker_id(slot.get_index()).is_empty():
+			continue
 		for icon: TextureRect in slot.get_children():
 			layers.append(icon)
 	for icon: TextureRect in _card._status_slot_layer.get_children():
@@ -390,6 +439,8 @@ func update_pointer(force: Vector2, reset_direction: bool = false) -> void:
 	_surface.set_shader_parameter("flash_direction_force", _flash_direction_force)
 	for material: ShaderMaterial in [_art_material, _background_material, _frame_material]:
 		_apply_pointer(material, force)
+	for plane: TextureRect in _art_planes:
+		_apply_pointer(plane.material, force)
 	if is_instance_valid(_rest_flash):
 		_apply_pointer(_rest_flash.material, force)
 	for material: ShaderMaterial in _badge_materials.values():
@@ -397,6 +448,9 @@ func update_pointer(force: Vector2, reset_direction: bool = false) -> void:
 		if _embossed_outline: material.set_shader_parameter("flash_direction_force", _flash_direction_force)
 	for material: ShaderMaterial in _detail_outlines.values():
 		_apply_pointer(material, force)
+	if _card.card_frame.texture == CardView.OVERFRAME_TEXTURE:
+		for cover: TextureRect in _card._rune_scrape_cover_icons.values():
+			(cover.material as ShaderMaterial).set_shader_parameter("pointer_force", force)
 
 
 func _apply_pointer(material: ShaderMaterial, force: Vector2) -> void:
@@ -412,7 +466,7 @@ func get_description() -> String:
 		Finish.EMBOSSED:
 			return "法线：使用专用法线贴图。" if _card.card_data != null and _card.card_data.art_normal_texture != null else "法线：当前为轮廓／亮度生成的自动浮雕，可换专用法线贴图。"
 		Finish.FRACTURED: return "碎闪：固定晶片反光叠加背景与外框白色闪纹，移动鼠标观察。"
-		Finish.FROSTED: return "磨砂闪（实验）：固定细闪膜层随鼠标反光，人物保留原画明暗，背景与外框带白色细闪。"
+		Finish.FROSTED: return "磨砂闪：固定细闪膜层随鼠标反光，人物保留原画明暗，背景与外框带白色细闪。"
 		Finish.FINGERPRINT: return "指纹闪（实验）：人物统一连续弧纹、背景独立放射交织纹，共用鼠标反光。"
 		Finish.OVERFRAME: return "超框：立绘扩至半透明细框，隐藏卡名与随从种族图标。"
 		Finish.FOIL: return "闪卡：背景与外框反光，人物参与鼠标柔光；鼠标控制光带方向。"

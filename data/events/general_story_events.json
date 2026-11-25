@@ -1214,9 +1214,8 @@
           "outcomes": [
             {
               "text": "你清了清嗓子，掏出本子，用极其傲慢的纯正贵族腔调宣布：“以暗影城与王国的协议，你们涉嫌非法盗窃。我宣布，这些物资由我们‘合法征用’。”小恶魔们被你的气场唬住了，甚至为了表现得“体面”，主动帮忙把物资打包好，还歪歪扭扭的鞠了个躬。",
-              "source_probability": "60%",
+              "source_probability": "1d8≥6",
               "effect_text": "获得一个面包，火腿纹章，一张啤酒杯",
-              "weight": 0.6,
               "effects": [
                 {
                   "kind": "stickers",
@@ -1236,13 +1235,17 @@
                   "kind": "card",
                   "card": "beer_mug"
                 }
+              ],
+              "roll_values": [
+                6,
+                7,
+                8
               ]
             },
             {
               "text": "你清了清嗓子，正准备用纯正贵族腔调宣布：“以暗影城与王国的名义……嗝——！”一个极其响亮且带着劣质麦酒味的饱嗝，直接喷在了领头小恶魔的脸上。小恶魔们愣住了。领头的小恶魔捏着鼻子退后两步，一脸嫌弃地挥了挥手：“一点都不体面，粗鄙！太粗鄙了！走走走，别理这些乡巴佬，真扫兴。”说完，他们物资也不拿，一溜烟钻进了旁边的地洞里。",
-              "source_probability": "40%",
+              "source_probability": "1d8≤5",
               "effect_text": "获得烂面包，烂火腿纹章，酸啤酒杯一张。",
-              "weight": 0.4,
               "effects": [
                 {
                   "kind": "stickers",
@@ -1263,9 +1266,17 @@
                   "card": "sour_beer_mug",
                   "unlocked_by": "ironwall_inscription"
                 }
+              ],
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5
               ]
             }
-          ]
+          ],
+          "roll_sides": 8
         },
         {
           "label": "让驮夫运送出迷宫物归原主",
@@ -1292,24 +1303,27 @@
           "outcomes": [
             {
               "text": "你们拉过几个木桩坐下，用比他们还夸张的做作姿态开始共进晚餐。小恶魔们感动得热泪盈眶，觉得终于遇到了懂他们的上流社会。",
-              "source_probability": "60%",
-              "effect_text": "战场上的随机4名随从获得+1/+2",
-              "weight": 0.6,
+              "source_probability": "1d8≥6",
+              "effect_text": "战场上的随机最多4名随从本局永久获得绿字数值+1、绿字最大生命+2。",
               "effects": [
                 {
                   "kind": "growth",
                   "target": "deployed",
                   "count": 4,
-                  "base_value": 1,
-                  "max_health": 2
+                  "bonus_value": 1,
+                  "bonus_max_health": 2
                 }
+              ],
+              "roll_values": [
+                6,
+                7,
+                8
               ]
             },
             {
               "text": "你们拉过几个木桩坐下，用比他们还夸张的做作姿态开始共进晚餐。小恶魔们感动得热泪盈眶，觉得终于遇到了懂他们的上流社会。不过可能物资都放太久了，用餐之后你们总觉得肠胃不太舒适。",
-              "source_probability": "40%",
+              "source_probability": "1d8≤5",
               "effect_text": "战场上的随机4名随从获得-2基础生命值（该次减除不会使其低于1）。",
-              "weight": 0.4,
               "effects": [
                 {
                   "kind": "growth",
@@ -1317,9 +1331,17 @@
                   "count": 4,
                   "max_health": -2
                 }
+              ],
+              "roll_values": [
+                1,
+                2,
+                3,
+                4,
+                5
               ]
             }
-          ]
+          ],
+          "roll_sides": 8
         },
         {
           "label": "合法征用",
@@ -1586,7 +1608,7 @@
             {
               "text": "你们试图劝说两人冷静下来，没想到双方越说越激动，最后竟当着众人的面大打出手。等你们终于将两人拉开时，他们已经鼻青脸肿，谁也没占到便宜。",
               "source_probability": "1d6<4",
-              "effect_text": "两个随从获得-2最大生命值（最低到1）",
+              "effect_text": "两个随从永久基础生命−2（最低1）",
               "roll_values": [
                 1,
                 2,
@@ -2013,11 +2035,11 @@
         },
         {
           "label": "重新雕刻一下神像",
-          "condition": "拥有随从“铁砧-玛格丽特”",
+          "condition": "持有铁砧-玛格丽特、巴林·灰渣或铁手阿诺",
           "cost": 0,
           "outcomes": [
             {
-              "text": "玛格丽特盯着残破的神像看了许久，突然掏出工具，自顾自地敲打起来。石屑纷飞间，原本模糊的神像逐渐变成了「铁火匠神·法罗斯」的模样。当她完成最后一锤时，神像竟迸发出炽热的火星。玛格丽特满意地拍了拍手，看来匠神很欣赏她的手艺。",
+              "text": "{sculptor}盯着残破的神像看了许久，突然掏出工具，自顾自地敲打起来。石屑纷飞间，原本模糊的神像逐渐变成了「铁火匠神·法罗斯」的模样。最后一锤落下时，神像迸发出炽热的火星。看来匠神很欣赏这份手艺。",
               "source_probability": "-",
               "effect_text": "本局游戏中你的所有装备获得+1/+2（包括后续的）",
               "weight": 1,
@@ -2032,7 +2054,11 @@
               ]
             }
           ],
-          "requires_card": "anvil_margaret"
+          "sculptors": [
+            "anvil_margaret",
+            "balin_ashslag",
+            "ironhand_arno"
+          ]
         },
         {
           "label": "砸开看看神像里有啥",

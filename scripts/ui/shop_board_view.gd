@@ -7,6 +7,8 @@ const Slot = preload("res://scripts/ui/card_service_slot.gd")
 const StatusStyle = preload("res://scripts/ui/status_indicator_style.gd")
 const RuneStyle = preload("res://scripts/ui/rune_sticker_style.gd")
 const RuneNumber = preload("res://scripts/ui/rune_number_display.gd")
+const SCRAPER_POSITION := Vector2(738, 79) # 刮刀独立占据商品区最右侧，和绸缎上边对齐
+const OFFER_LANE_GAP := 10.0 # 移动商品离刮刀栏的最小空隙
 const STICKER_FLIGHT_SECONDS: float = 0.30 # 贴纸从卡面飞往环绕点的时长
 const SALE_REGION := Rect2(626, 40, 246, 267) # 工具箱打开时保持原亮度的右侧出售区域
 const SALE_STICKER_SCALE: float = 4.0 # 待售纹章与元素贴纸使用原生图案4倍显示
@@ -29,6 +31,11 @@ var _shown_stickers: Array[Dictionary] = []
 var _sale_root: Control
 var _sale_background: TextureRect
 var _sale_sticker: EmblemLibraryEntry
+var _offer_groups: Array[Control] = []
+var _offer_positions: Array[float] = []
+var _opening_stack: ShopPackStackView
+var _opening_distance := 0.0
+var _offer_opening: Tween
 
 func initialize(owner_main: Control) -> void:
 	main = owner_main
@@ -149,6 +156,45 @@ func sync_page() -> void:
 	_background.texture = load(Art.DIR + ("service_board.png" if serving else "shop_board.png"))
 	_refresh.set_caption("刷新%d" % main.ordinary_shop_service.refresh_price())
 	main.ordinary_shop_status.tooltip_text = main.ordinary_shop_status.text
+
+
+func layout_offer_groups(grid: HBoxContainer, groups: Array[Control]) -> void:
+	if is_instance_valid(_offer_opening): _offer_opening.kill()
+	_offer_groups.assign(groups)
+	_offer_positions.clear()
+	var width := 0.0
+	var reserve := 0.0
+	for group: Control in groups:
+		_offer_positions.append(group.position.x)
+		width = maxf(width, group.position.x + group.size.x)
+		if group is ShopPackStackView: reserve = maxf(reserve, group.maximum_opening())
+	var display := grid.get_parent() as Control
+	var space := SCRAPER_POSITION.x - display.position.x - OFFER_LANE_GAP
+	grid.scale = Vector2.ONE * minf(1.0, space / maxf(1.0, width + reserve))
+	if _offer_groups.has(_opening_stack): _slide_right_offers()
+	else:
+		_opening_stack = null
+		_opening_distance = 0.0
+
+
+func set_offer_opening(stack: ShopPackStackView, distance: float) -> void:
+	if not _offer_groups.has(stack) or (is_zero_approx(distance) and _opening_stack != stack): return
+	if _opening_stack == stack and is_equal_approx(_opening_distance, distance): return
+	_opening_stack = stack
+	_opening_distance = distance
+	_slide_right_offers()
+
+
+func _slide_right_offers() -> void:
+	if is_instance_valid(_offer_opening): _offer_opening.kill()
+	if _offer_groups.is_empty(): return
+	var active := _offer_groups.find(_opening_stack)
+	_offer_opening = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	for index: int in _offer_groups.size():
+		var group := _offer_groups[index]
+		if not is_instance_valid(group): continue
+		var destination := _offer_positions[index] + (_opening_distance if index > active else 0.0)
+		_offer_opening.tween_property(group, "position:x", destination, ShopPackStackView.OPEN_SECONDS)
 
 func _bead(rarity: int) -> AtlasTexture:
 	var atlas := AtlasTexture.new()

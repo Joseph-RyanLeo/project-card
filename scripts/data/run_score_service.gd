@@ -6,7 +6,13 @@ const Library = preload("res://scripts/data/emblem_library_data.gd")
 const Inventory = preload("res://scripts/data/emblem_sticker_inventory.gd")
 const Save = preload("res://scripts/data/run_save_service.gd")
 const GRADE := [10, 20, 40, 80, 160]
-const SURFACE := [0, 5, 10, 20, 30, 40]
+const SURFACE_POINTS := {
+	CardAppearance.Surface.SILVER: 5,
+	CardAppearance.Surface.GOLD: 10,
+	CardAppearance.Surface.RAINBOW: 20,
+	CardAppearance.Surface.EMBOSSED: 30,
+	CardAppearance.Surface.FRACTURED: 40,
+}
 const ART := [0, 40, 40]
 const EMBLEM := {0: 5, 1: 10, 2: 20, 4: 15}
 
@@ -22,7 +28,7 @@ static func sticker_score(sticker: Dictionary) -> int:
 
 
 static func card_score(card: OwnedCard) -> Dictionary:
-	var parts := {"grade": GRADE[int(card.card_data.rarity)], "surface": SURFACE[int(card.surface_finish)], "art": ART[int(card.art_finish)], "stickers": 0, "runes": 0, "pattern": 0}
+	var parts := {"grade": GRADE[int(card.card_data.rarity)], "surface": int(SURFACE_POINTS.get(card.surface_finish, 0)), "art": ART[int(card.art_finish)], "stickers": 0, "runes": 0, "pattern": 0}
 	for slots: Array in [card.emblem_slots, card.wound_slots, card.rune_stickers]:
 		for sticker: Dictionary in slots: parts.stickers += sticker_score(sticker)
 	# 单张小队复用既有覆盖后元素及万能贴纸判型；不会引入其他卡的遮挡。

@@ -11,6 +11,14 @@ var mining_events: int = 0
 var stolen_from_player: int = 0
 const TONGUE_SLEEP_SECONDS: float = 3.0 # 舌蜥攻击命中后双方休眠时长
 const FIRE_CONVERSION_COUNT: int = 2 # 余火精灵突击最多转换的有效非火符文数量
+const DEATH_WOUND_BY_KILLER: Dictionary[StringName, StringName] = {
+	&"greed_demon": &"贪婪",
+	&"miser": &"贪婪",
+	&"crystal_shell_broodmother": &"晶体化",
+	&"crystal_skin_sentry": &"晶体化",
+	&"crystal_shard_beetle": &"晶体化",
+	&"crystal_shell_beetle": &"晶体化",
+}
 var helmet_used: Dictionary = {}
 var fatigue_next: Dictionary = {}
 
@@ -122,8 +130,9 @@ func add_modifier(state: BattleSquadState, stat: int, amount: float, effect: Str
 	state.modifiers.add_modifier(modifier)
 
 func gain_health(state: BattleSquadState, amount: float, effect: StringName) -> void:
+	var before := state.get_max_health()
 	add_modifier(state, BattleModifier.Stat.MAX_HEALTH, amount, effect)
-	state.apply_healing_exact(amount, state)
+	state.apply_max_health_increase(before, amount)
 
 func make_event(source: BattleSquadState, target: BattleSquadState, amount: float, action_type: CardData.ActionType, typed_damage: bool, label: String) -> BattleEffectEvent:
 	var event := BattleEffectEvent.new()
@@ -186,7 +195,7 @@ func on_gold(actor: BattleSquadState, amount: int) -> void:
 	if actor == null or amount <= 0: return
 	wallets[actor.side] += amount
 	for state: BattleSquadState in controller.get_all_states():
-		if active(state, &"greed_demon"): add_modifier(state, BattleModifier.Stat.ACTION_VALUE, amount, &"greed_demon")
+		if active(state, &"greed_demon"): add_modifier(state, BattleModifier.Stat.ACTION_VALUE, 1, &"greed_demon")
 		if active(state, &"greedy_acolyte") and actor.alive and actor.current_health > 0.0 and not actor.has_effective_shadow():
 			# 明确治疗赚金币者，允许敌人和休眠响应；沿用治疗的牌型、强化、元素和事件结算。
 			controller.execute_targeted_healing(state, actor)
@@ -265,14 +274,11 @@ func on_hit(event: BattleEffectEvent) -> void:
 	if active(actor, &"subterranean_blindfish"):
 		add_modifier(target, BattleModifier.Stat.TARGET_PRIORITY, 2, &"subterranean_blindfish")
 	if active(actor, &"rusted_pickhand"):
-		var owned := target.squad_data.get_vitals_source_instance()
-		if owned != null:
-			var amount := minf(1.0, maxf(owned.get_base_stat_with_permanent_growth(OwnedCard.STAT_BASE_ARMOR), 0.0))
-			if amount > 0.0: controller._record_resource_permanent_growth(target, BattlePermanentGrowthLedger.STAT_BASE_ARMOR, -amount, &"rusted_pickhand", roundi(controller.elapsed_seconds * 1000000.0), false)
-			target.destroy_armor_exact(1.0, actor, event)
-		elif target.get_vitals_source() != null:
-			target.runtime_permanent_armor_growth = maxf(target.runtime_permanent_armor_growth - 1.0, -float(target.get_vitals_source().armor))
-			target.destroy_armor_exact(1.0, actor, event)
+		if target.get_display_base_stats(target.get_active_rune_slots()).z > 0:
+			if target.squad_data.get_vitals_source_instance() != null:
+				controller._record_resource_permanent_growth(target, BattlePermanentGrowthLedger.STAT_BASE_ARMOR, -1.0, &"rusted_pickhand", roundi(controller.elapsed_seconds * 1000000.0), false)
+			else:
+				target.runtime_permanent_armor_growth -= 1.0
 	if active(actor, &"rockwall_tongue_lizard") and target.alive and target.current_health > 0.0:
 		var key := StringName("tongue_sleep:%d" % actor.runtime_id)
 		var until_time: float = controller.elapsed_seconds + TONGUE_SLEEP_SECONDS

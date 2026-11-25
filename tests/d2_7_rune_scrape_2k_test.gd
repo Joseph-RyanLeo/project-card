@@ -66,17 +66,21 @@ func pointer_for_blade_center(surface: InspectionCardSurface, data: Dictionary, 
 func _run() -> void:
 	root.size = Vector2i(2560, 1440)
 	var display := DISPLAY_SCENE.instantiate()
+	display.run_slots.directory = "/private/tmp/project-card-rune-scrape-display"
+	DirAccess.make_dir_recursive_absolute(display.run_slots.directory)
+	var main = display.get_node("RenderContainer/InternalViewport/DesignCanvas/Main")
+	main.run_save_path = "/private/tmp/project-card-batch5-scraper.json"
 	root.add_child(display)
 	display.apply_display_mode(GameDisplay.DisplayMode.WINDOW_2K)
-	for _frame: int in 4:
+	var resize_deadline := create_timer(1.0)
+	while not display.render_container.scale.is_equal_approx(Vector2(2, 2)) and resize_deadline.time_left > 0.0:
 		await process_frame
-	var main = display.main_screen
 	main.scraper_count = 2
 	main.emblem_library.set_scraper_count(2)
 	input_viewport = display.internal_viewport
 	input_viewport.notify_mouse_entered()
 	input_transform = display.render_container.get_global_transform_with_canvas()
-	check(input_transform.get_scale().is_equal_approx(Vector2(2, 2)), "2K输入落回1280×720游戏逻辑坐标")
+	check(input_transform.get_scale().is_equal_approx(Vector2(2, 2)), "2K输入落回1280×720游戏逻辑坐标（窗口 %s，输入倍率 %s）" % [root.size, input_transform.get_scale()])
 	var owned: OwnedCard
 	var source: CardView
 	for slot: Control in main._get_collection_card_slots():
@@ -106,6 +110,8 @@ func _run() -> void:
 			hidden_index = index
 			break
 	var scraper: TextureRect = main.emblem_library._scraper
+	var head := PackedVector2Array(preload("res://scripts/ui/rune_sticker_style.gd").SCRAPER_HEAD)
+	check(Geometry2D.is_point_in_polygon(Vector2(20, 21), head) and not Geometry2D.is_point_in_polygon(Vector2(26, 25), head) and not Geometry2D.is_point_in_polygon(Vector2(34, 33), head), "斜刃命中，刀背和接柄都排除")
 	var scraper_data: Dictionary = scraper._build_drag_data(scraper.blade_point, false)
 	var unused_preview := scraper_data.get("drag_visual") as Control
 	if is_instance_valid(unused_preview): unused_preview.free()
@@ -130,6 +136,8 @@ func _run() -> void:
 	await button(false)
 	var first_sample_count := owned.get_rune_scraped_pixel_count(hidden_index)
 	check(first_sample_count > 0 and main.scraper_count == scraper_count_before - 1 and not owned.rune_revealed[hidden_index], "2K首次真实擦除像素时立即只扣一把刀")
+	var dust := main._inspection_overlay.get_node_or_null("RuneScrapeDust") as Node2D
+	check(dust != null and not dust._chips.is_empty() and dust._chips[0].size.x >= 3.0, "实际刮掉涂层时在刀头附近散出较大的碎屑")
 	var finished := false
 	await button(true)
 	for row: int in range(1, 23, 2):

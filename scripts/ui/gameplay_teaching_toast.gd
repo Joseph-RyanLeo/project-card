@@ -114,7 +114,7 @@ func _next() -> void:
 func _process(delta: float) -> void:
 	if current_key.is_empty(): return
 	var menu := get_tree().get_first_node_in_group(&"escape_pause_menus")
-	var menu_open: bool = menu != null and menu.is_menu_open()
+	var menu_open: bool = menu != null and menu.blocks_gameplay()
 	visible = not menu_open
 	var suspended := (get_tree().paused and not _run_while_paused) or not is_visible_in_tree()
 	if _motion != null and _motion.is_valid():

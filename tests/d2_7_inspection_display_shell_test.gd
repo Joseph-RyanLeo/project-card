@@ -124,12 +124,13 @@ func _run() -> void:
 	)
 	await _send_key(KEY_ESCAPE)
 	check(not main.get_tree().paused, "再次按 Esc 关闭菜单并恢复战斗")
-	var escape_button := main._escape_pause_menu.get_node("EscapeMenuButton") as Button
+	main.set_world_view(main.WorldView.COLLECTION, false)
+	var escape_button: TextureButton = main.menu_bookmark_button
 	var escape_button_position := (
 		escape_button.get_global_transform_with_canvas() * (escape_button.size * 0.5)
 	)
 	await _send_mouse(display, MOUSE_BUTTON_LEFT, escape_button_position)
-	check(main.get_tree().paused and main._escape_pause_menu.is_menu_open(), "点击画面 Esc 按钮打开暂停菜单")
+	check(main.get_tree().paused and main._escape_pause_menu.is_menu_open(), "点击收藏红色书签打开暂停菜单")
 	await _send_key(KEY_ESCAPE)
 	check(not main.get_tree().paused, "Esc 按键可关闭由画面按钮打开的菜单")
 	await _send_key(KEY_F2)

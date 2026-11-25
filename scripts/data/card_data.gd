@@ -153,11 +153,14 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export var slot_layout: Array[int] = [] # 特殊卡可固定8项槽位类别；留空时OwnedCard获得时随机抽合法布局
 
 ## 卡面美术字段：人物偏移只改变取景，不改变 99×136 卡牌逻辑尺寸。
-@export var background_texture: Texture2D # 卡牌专用的原始背景；空值使用默认原背景
+@export var background_texture: Texture2D # 卡牌专用的原始背景；空值沿用所属包或通用背景
 @export var background_style: BackgroundStyle = BackgroundStyle.ORIGINAL # 立绘下方选用的背景
 @export var background_offsets: Dictionary[int, Vector2i] = {} # 非超框随从按背景保存的像素偏移
 @export var background_overframe_offsets: Dictionary[int, Vector2i] = {} # 超框卡及装备、法术、资源全部外观按背景保存的像素偏移
 @export var art_texture: Texture2D # 卡牌人物立绘
+@export var inspection_art_layers: Array[Texture2D] = [] # 检视时从后到前叠放的透明立绘图层，和原图共用取景尺寸
+@export var inspection_art_layer_names: PackedStringArray = [] # 按拆层素材顺序填写调整器中的名称
+@export var inspection_art_depths: Dictionary[StringName, float] = {} # 各图层相对全局全息景深的倍率，按素材路径保存
 @export var art_normal_texture: Texture2D # 可选立绘法线贴图；为空时预览仍保留 3D 与整卡扫光
 @export var art_offset: Vector2i = Vector2i.ZERO # 立绘在裁切窗口内的像素偏移
 @export var art_finish_offsets: Dictionary[StringName, Vector2i] = {} # 各特殊工艺的独立取景；未调整时沿用普通卡art_offset
@@ -165,9 +168,38 @@ const MAXIMUM_ARMOR: int = 999 # 初始护甲与战斗临时护甲的统一上�
 @export_multiline var front_effect_text: String = "" # 前排效果说明；空文本沿用通用说明
 @export_multiline var back_effect_text: String = "" # 后排效果说明；空文本沿用通用说明
 
+const INSPECTION_BACKGROUND_DEPTH := 2.4 # 背景相对主体的默认景深倍率
+const INSPECTION_REAR_DEPTH := 1.62 # 最后侧透明层相对主体的默认景深倍率
+const INSPECTION_FRONT_DEPTH := 0.42 # 最前侧透明层相对主体的默认景深倍率
+const INSPECTION_MAX_DEPTH := 4.0 # 卡面调整器允许的最远景深倍率
+
+
+func get_inspection_layer_key(index: int) -> StringName:
+	if index == 0: return &"background"
+	var texture := inspection_art_layers[index - 1]
+	if texture != null and not texture.resource_path.is_empty(): return StringName(texture.resource_path)
+	return StringName("art_layer_%d" % index)
+
+
+func get_default_inspection_layer_depth(index: int) -> float:
+	if index == 0: return INSPECTION_BACKGROUND_DEPTH
+	if inspection_art_layers.size() <= 1: return 1.0
+	return lerpf(INSPECTION_REAR_DEPTH, INSPECTION_FRONT_DEPTH, float(index - 1) / (inspection_art_layers.size() - 1))
+
+
+func get_inspection_layer_depth(index: int) -> float:
+	var fallback := get_default_inspection_layer_depth(index)
+	var depth := float(inspection_art_depths.get(get_inspection_layer_key(index), fallback))
+	return clampf(depth, 0.0, INSPECTION_MAX_DEPTH) if is_finite(depth) else fallback
+
 
 func get_background_texture() -> Texture2D:
-	if background_style == BackgroundStyle.ORIGINAL and background_texture != null: return background_texture
+	if background_style == BackgroundStyle.ORIGINAL:
+		if background_texture != null:
+			return background_texture
+		var pack_background := CardPackRegistryScript.get_default_background(self)
+		if pack_background != null:
+			return pack_background
 	return BACKGROUND_TEXTURES[background_style]
 
 

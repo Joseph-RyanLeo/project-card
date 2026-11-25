@@ -21,7 +21,9 @@ func _run() -> void:
 	var previous_process: int = original.process_mode
 	var previous_escape: bool = original._escape_pause_menu.is_processing_input()
 	await key(KEY_F2)
-	check(original._developer_console.visible and original._developer_console._command_input.has_focus(), "真实F2打开并聚焦控制台")
+	check(original._developer_console.visible and original._developer_console._event_query.has_focus(), "真实F2打开开发面板并聚焦事件搜索")
+	original._developer_console._tabs.current_tab = 2
+	await process_frame
 	for character: String in "rare shop":
 		var event := InputEventKey.new()
 		event.keycode = KEY_NONE

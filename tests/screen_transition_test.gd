@@ -51,7 +51,9 @@ func _run() -> void:
 	await create_timer(main.VIEW_TWEEN_DURATION + main.VIEW_SETTLE_DURATION + 0.05).timeout
 	main._on_escape_pause_menu_requested()
 	check(paused and not transition.busy, "暂停弹窗保留原行为，不触发黑场")
+	while main._escape_pause_menu.is_transitioning(): await process_frame
 	main._on_escape_pause_menu_requested()
+	while main._escape_pause_menu.is_transitioning(): await process_frame
 	main._on_card_art_tuner_button_pressed()
 	check(main.visible and transition.busy, "打开工具前保持旧界面，先淡出")
 	await transition.finished
@@ -79,6 +81,7 @@ func _run() -> void:
 		check(not transition.busy and maze.run.selected_path.get("path_id", "") == path_id, "游戏内选择事件保留原演出，不触发黑场")
 	await _test_battle_flow(shell)
 	main._on_escape_pause_menu_requested()
+	while main._escape_pause_menu.is_transitioning(): await process_frame
 	main._escape_pause_menu.main_menu_requested.emit()
 	await process_frame
 	check(transition.busy and paused, "暂停中返回菜单仍能启动淡出")

@@ -54,8 +54,9 @@ func configure_hidden(public_card: CardData, offer: Dictionary) -> void:
 	if is_instance_valid(_identity_tween): _identity_tween.kill()
 	# 只保留提示种类和公开行动方式；不会保留带真实 card_id 的商品字典。
 	_public_hint = {"hint": offer.get("hint", ""), "resolved_action_type": int(public_card.action_type)}
-	set_card_data(public_card)
+	# 先更新实例引用，最后由卡面刷新把装备箭头放回轮播画布。
 	set_owned_card(null)
+	set_card_data(public_card)
 	if is_node_ready():
 		_start_carousel()
 
@@ -90,47 +91,54 @@ func _refresh() -> void:
 	for icon: Control in [race_icon, action_icon, cooldown_icon, health_icon, armor_icon]:
 		icon.tooltip_text = ""
 	rune_row.visible = false
-	var action_bounds := ACTION_CAROUSEL_RECT
-	if card_data.card_type == CardData.CardType.EQUIPMENT:
-		action_bounds.position = EQUIPMENT_ACTION_POSITION - (action_bounds.size - EQUIPMENT_ACTION_SIZE) * 0.5
-	_normalize_carousel_icon(action_icon, action_bounds)
-	var identity_size := Vector2(IDENTITY_CAROUSEL_SIZE)
-	var bottom_aligned := card_data.card_type != CardData.CardType.MINION
-	var identity_position := _get_non_minion_identity_position(identity_size) if bottom_aligned else Vector2(race_center_pixel) - identity_size * 0.5
-	_normalize_carousel_icon(race_icon, Rect2(identity_position, identity_size), bottom_aligned)
+	# 轮播放进同一张透明画布，图标仍沿用 CardView 在裸卡上的原生位置。
+	var action_origin := Vector2i(action_icon.position - ACTION_CAROUSEL_RECT.position)
+	_normalize_carousel_icon(action_icon, ACTION_CAROUSEL_RECT, action_origin)
+	if race_icon.texture != null:
+		var identity_size := Vector2(IDENTITY_CAROUSEL_SIZE)
+		var bottom_aligned := card_data.card_type != CardData.CardType.MINION
+		var identity_position := _get_non_minion_identity_position(identity_size) if bottom_aligned else Vector2(race_center_pixel) - identity_size * 0.5
+		var origin := _identity_icon_origin(race_icon.texture.get_size(), bottom_aligned)
+		_normalize_carousel_icon(race_icon, Rect2(identity_position, identity_size), origin)
 	_update_identity_material()
 
 
-func _normalize_carousel_icon(icon: TextureRect, bounds: Rect2, bottom_aligned: bool = false) -> void:
+func _normalize_carousel_icon(icon: TextureRect, bounds: Rect2, origin: Vector2i) -> void:
 	if icon.texture == null: return
-	icon.texture = _icon_canvas(icon.texture, Vector2i(bounds.size), bottom_aligned)
+	icon.texture = _icon_canvas(icon.texture, Vector2i(bounds.size), origin)
 	_set_control_rect(icon, bounds.position, bounds.size)
 	icon.stretch_mode = TextureRect.STRETCH_SCALE
 
 
-func _icon_canvas(source: Texture2D, canvas_size: Vector2i, bottom_aligned: bool = false) -> Texture2D:
+func _icon_canvas(source: Texture2D, canvas_size: Vector2i, origin: Vector2i) -> Texture2D:
 	var key := source.resource_path
 	if source is AtlasTexture:
 		key = source.atlas.resource_path + str(source.region)
 	elif key.is_empty():
 		key = str(source.get_rid())
-	key += str(canvas_size) + (":bottom:%d" % (int(card_size.x) % 2) if bottom_aligned else ":center")
+	key += str(canvas_size) + ":" + str(origin)
 	if not _icon_canvases.has(key):
 		var image := source.get_image()
 		image.convert(Image.FORMAT_RGBA8)
 		var canvas := Image.create(canvas_size.x, canvas_size.y, false, Image.FORMAT_RGBA8)
-		var origin := (canvas_size - image.get_size()) / 2
-		if bottom_aligned:
-			origin = Vector2i(_get_non_minion_identity_position(Vector2(image.get_size())) - _get_non_minion_identity_position(Vector2(canvas_size)))
 		canvas.blit_rect(image, Rect2i(Vector2i.ZERO, image.get_size()), origin)
 		_icon_canvases[key] = ImageTexture.create_from_image(canvas)
 	return _icon_canvases[key]
 
 
+func _identity_icon_origin(icon_size: Vector2, bottom_aligned: bool) -> Vector2i:
+	var canvas_size := Vector2(IDENTITY_CAROUSEL_SIZE)
+	if bottom_aligned:
+		return Vector2i(_get_non_minion_identity_position(icon_size) - _get_non_minion_identity_position(canvas_size))
+	return (IDENTITY_CAROUSEL_SIZE - Vector2i(icon_size)) / 2
+
+
 func _identity_texture(definition: CardData, rarity: int) -> Texture2D:
 	var public_card: CardData = definition.duplicate(true)
 	public_card.rarity = rarity as CardData.Rarity
-	return _icon_canvas(_get_identity_texture(public_card), IDENTITY_CAROUSEL_SIZE, definition.card_type != CardData.CardType.MINION)
+	var texture := _get_identity_texture(public_card)
+	var origin := _identity_icon_origin(texture.get_size(), definition.card_type != CardData.CardType.MINION)
+	return _icon_canvas(texture, IDENTITY_CAROUSEL_SIZE, origin)
 
 
 func _update_identity_material() -> void:

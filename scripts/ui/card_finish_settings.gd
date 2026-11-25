@@ -24,7 +24,8 @@ const FIELDS: Array[Dictionary] = [
 	{"key": "fractured_density", "group": "碎闪", "label": "晶片密度", "min": 5.0, "max": 90.0, "step": 1.0, "help": "越大晶片越细，越小显示更大块的镜碎。"},
 	{"key": "frosted_strength", "group": "磨砂闪", "label": "膜层反光强度", "min": 0.0, "max": 1.5, "step": 0.05, "help": "新工艺的珠光膜反射，独立于停用的旧磨砂。"},
 	{"key": "frosted_density", "group": "磨砂闪", "label": "细闪颗粒密度", "min": 40.0, "max": 240.0, "step": 2, "help": "越大颗粒越细；颗粒固定在卡面，不随时间跳动。"},
-	{"key": "frosted_detail", "group": "磨砂闪", "label": "细闪颗粒起伏", "min": 0.0, "max": 1.0, "step": 0.05, "help": "控制微小亮点的明暗起伏，不向原图直接添加灰色噪声。"},
+	{"key": "frosted_detail", "group": "磨砂闪", "label": "细闪颗粒强度", "min": 0.0, "max": 1.0, "step": 0.05, "help": "控制磨砂颗粒的整体反光强度，不改变形状和密度。"},
+	{"key": "frosted_shadow_visibility", "group": "磨砂闪", "label": "暗处颗粒可见度", "min": 0.0, "max": 1.0, "step": 0.05, "help": "0＝暗处不显示颗粒，1＝暗处和亮处同样明显。只影响颗粒，不调暗卡图或光带。"},
 	{"key": "fingerprint_strength", "group": "指纹闪", "label": "刻纹反光强度", "min": 0.0, "max": 1.5, "step": 0.05, "help": ""},
 	{"key": "fingerprint_density", "group": "指纹闪", "label": "曲纹密度", "min": 20.0, "max": 180.0, "step": 2, "help": "越大曲纹越细密。"},
 	{"key": "fingerprint_detail", "group": "指纹闪", "label": "曲纹弯曲程度", "min": 0.0, "max": 2.0, "step": 0.05, "help": "人物统一使用连续弧纹，背景使用独立的放射交织纹。"},
@@ -53,7 +54,8 @@ const FIELDS: Array[Dictionary] = [
 
 @export_range(0.0, 1.5, 0.05) var frosted_strength := 0.8 # 磨砂闪：膜层反光强度
 @export_range(40.0, 240.0, 2) var frosted_density := 140.0 # 磨砂闪：细闪颗粒密度
-@export_range(0.0, 1.0, 0.05) var frosted_detail := 0.65 # 磨砂闪：细闪颗粒起伏
+@export_range(0.0, 1.0, 0.05) var frosted_detail := 0.65 # 磨砂闪：细闪颗粒的整体强度
+@export_range(0.0, 1.0, 0.05) var frosted_shadow_visibility := 0.20 # 磨砂闪：未受光处保留的颗粒强度比例
 @export_range(0.0, 1.5, 0.05) var fingerprint_strength := 0.85 # 指纹闪：刻纹反光强度
 @export_range(20.0, 180.0, 2) var fingerprint_density := 100.0 # 指纹闪：曲纹密度
 @export_range(0.0, 2.0, 0.05) var fingerprint_detail := 0.85 # 指纹闪：曲纹弯曲程度
@@ -116,4 +118,5 @@ func apply_film(material: ShaderMaterial, key: StringName) -> void:
 	for suffix: String in ["strength", "density", "detail"]:
 		material.set_shader_parameter("film_" + suffix, get(String(key) + "_" + suffix))
 	material.set_shader_parameter("film_angle", fingerprint_angle if kind == 2 else 0.0)
+	if kind == 1: material.set_shader_parameter("frosted_shadow_visibility", frosted_shadow_visibility)
 	if kind == 2: material.set_shader_parameter("film_iridescence", fingerprint_iridescence)

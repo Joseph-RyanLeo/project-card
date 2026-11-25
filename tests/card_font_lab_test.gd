@@ -30,6 +30,17 @@ func shot() -> Image:
 	return root.get_texture().get_image()
 
 
+func open_font_lab_from_pause() -> void:
+	await key_escape()
+	while main._escape_pause_menu.is_transitioning(): await process_frame
+	check(main._escape_pause_menu.is_menu_open(), "真实Esc打开暂停菜单")
+	await _click(main._escape_pause_menu.find_child("DeveloperToolsButton", true, false))
+	var entry := main._escape_pause_menu.find_child("CardFontLabButton", true, false) as Button
+	check(entry != null and entry.is_visible_in_tree() and Rect2(Vector2.ZERO, Vector2(1280, 720)).encloses(entry.get_global_rect()), "开发工具页内的卡名字体入口可点击")
+	if entry != null: await _click(entry)
+	while shell.screen_transition.busy: await process_frame
+
+
 func _run() -> void:
 	create_timer(90).timeout.connect(func(): push_error("卡名字体调试专项超时"); quit(1))
 	shell = DISPLAY.instantiate()
@@ -45,13 +56,8 @@ func _run() -> void:
 	var original_sampling: float = original_font.base_font.oversampling
 	var original_canvas: Transform2D = shell.internal_viewport.canvas_transform
 	var original_filter: int = shell.render_container.texture_filter
-	await key_escape()
-	check(main._escape_pause_menu.is_menu_open(), "真实Esc打开暂停菜单")
-	var entry := main._escape_pause_menu.find_child("CardFontLabButton", true, false) as Button
-	check(entry != null and Rect2(Vector2.ZERO, Vector2(1280, 720)).encloses(entry.get_global_rect()), "字体调试入口完整位于720p菜单内")
+	await open_font_lab_from_pause()
 	check(Rect2(Vector2.ZERO, Vector2(1280, 720)).encloses(main._escape_pause_menu.find_child("PauseMenuPanel", true, false).get_global_rect()), "新增按钮后暂停菜单没有超出画布")
-	await _click(entry)
-	await create_timer(0.7).timeout
 	var lab: Control = shell._card_font_lab
 	check(is_instance_valid(lab) and not main.visible and not main._escape_pause_menu.is_processing_input(), "真实菜单进入调试器，隔离原游戏输入")
 	if not is_instance_valid(lab): quit(1); return

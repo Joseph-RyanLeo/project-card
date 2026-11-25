@@ -1,6 +1,6 @@
 extends Control
 
-## 复用事件已保存的实例。这里只生成预览与飞行动画，入库仍由原事件事务负责。
+## 复用事件已保存的实例，绘制奖励预览和纹章／指示物的飞行。
 signal landed(item: Dictionary)
 signal finished
 
@@ -49,29 +49,11 @@ static func valid_items(value: Variant) -> bool:
 
 
 static func make_tile(main_view: Control, item: Dictionary) -> Control:
-	var tile := Control.new()
-	tile.name = "EventReward"
-	tile.custom_minimum_size = TILE_SIZE
-	tile.size = TILE_SIZE
-	tile.mouse_filter = Control.MOUSE_FILTER_PASS
-	tile.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	var id := StringName(item.id)
 	if item.kind == "card":
 		var owned: OwnedCard = main_view.owned_card_collection.get_by_instance_id(id)
-		if owned == null:
-			tile.free()
-			return null
-		var card: CardView = main_view.CARD_VIEW_SCENE.instantiate()
-		card.set_snapshot_mode(true)
-		card.set_card_data(owned.card_data)
-		card.set_owned_card(owned)
-		card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		tile.add_child(card)
-		card.position = card.get_visual_capture_padding_top_left()
-		tile.custom_minimum_size = card.position + card.card_size + card.get_visual_capture_padding_bottom_right()
-		tile.size = tile.custom_minimum_size
-		tile.tooltip_text = owned.card_data.display_name
-		return tile
+		return make_card_tile(main_view, owned.card_data, owned) if owned != null else null
+	var tile := _make_tile()
 	var icon := TextureRect.new()
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -101,6 +83,31 @@ static func make_tile(main_view: Control, item: Dictionary) -> Control:
 	return tile
 
 
+static func make_card_tile(main_view: Control, definition: CardData, owned: OwnedCard = null) -> Control:
+	var tile := _make_tile()
+	var card: CardView = main_view.CARD_VIEW_SCENE.instantiate()
+	card.set_snapshot_mode(true)
+	card.set_card_data(definition)
+	card.set_owned_card(owned)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tile.add_child(card)
+	card.position = card.get_visual_capture_padding_top_left()
+	tile.custom_minimum_size = card.position + card.card_size + card.get_visual_capture_padding_bottom_right()
+	tile.size = tile.custom_minimum_size
+	tile.tooltip_text = definition.display_name
+	return tile
+
+
+static func _make_tile() -> Control:
+	var tile := Control.new()
+	tile.name = "EventReward"
+	tile.custom_minimum_size = TILE_SIZE
+	tile.size = TILE_SIZE
+	tile.mouse_filter = Control.MOUSE_FILTER_PASS
+	tile.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	return tile
+
+
 static func preview_rect(tile: Control) -> Rect2:
 	var visual := tile.get_child(0) as CardView
 	return visual.get_global_rect() if visual != null else tile.get_global_rect()
@@ -119,8 +126,7 @@ func play(items: Array[Dictionary], origins: Dictionary) -> void:
 		if tile == null: continue
 		tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(tile)
-		var card := tile.get_child(0) as CardView
-		tile.pivot_offset = card.position + card.card_size * 0.5 if card != null else tile.size * 0.5
+		tile.pivot_offset = tile.size * 0.5
 		var source: Vector2 = origins.get(String(item.id), get_viewport_rect().get_center())
 		tile.position = source - tile.pivot_offset
 		var start := START_PAUSE + index * FLIGHT_INTERVAL
@@ -149,9 +155,7 @@ func _exit_tree() -> void:
 func _move_tile(progress: float, tile: Control, item: Dictionary, source: Vector2) -> void:
 	var destination := _target(item)
 	var easing := smoothstep(0.0, 1.0, progress)
-	var card := tile.get_child(0) as CardView
-	var source_size := card.card_size if card != null else tile.size
-	var target_size := minf(destination.size.x / source_size.x, destination.size.y / source_size.y)
+	var target_size := minf(destination.size.x / tile.size.x, destination.size.y / tile.size.y)
 	tile.position = source.lerp(destination.get_center(), easing) - tile.pivot_offset - Vector2(0, sin(PI * progress) * FLIGHT_ARC)
 	tile.scale = Vector2.ONE * lerpf(1.0, clampf(target_size, 0.25, 2.0), easing)
 
@@ -164,13 +168,4 @@ func _target(item: Dictionary) -> Rect2:
 			rect = main.emblem_library.get_item_canvas_rect(id)
 		"indicator":
 			rect = main.celestial_indicators.get_item_canvas_rect(id)
-		"card":
-			var owned: OwnedCard = main.owned_card_collection.get_by_instance_id(id)
-			var slot: Control = main._find_collection_slot_for_owned_card(owned)
-			if is_instance_valid(slot) and slot.get_child_count() > 0:
-				var card := slot.get_child(0) as CardView
-				rect = card.get_global_rect()
-			else:
-				var book := main.get_node("%BookPanel") as Control
-				rect = Rect2(book.get_global_rect().get_center() - TILE_SIZE * 0.5, TILE_SIZE)
 	return rect if rect.has_area() else Rect2(get_viewport_rect().get_center() - TILE_SIZE * 0.5, TILE_SIZE)

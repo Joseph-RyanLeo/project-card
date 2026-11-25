@@ -46,8 +46,9 @@ const RUNE_FRAME_ROOT: String = "res://assets/card_ui/stickers/runes/frames/"
 const SCRAPER_TEXTURE: Texture2D = preload("res://assets/card_ui/stickers/scraper.png")
 
 # 刮刀素材画布保持原生59×59；只有左上方刀头区域参与命中，不把刀柄误算为贴纸目标。
-const SCRAPER_HIT_POINT: Vector2 = Vector2(16, 17)
-const SCRAPER_HIT_RECT: Rect2 = Rect2(14, 15, 16, 16)
+const SCRAPER_HIT_POINT: Vector2 = Vector2(20, 21) # 鼠标对齐图中白色斜刃的中段
+const SCRAPER_HIT_RECT: Rect2 = Rect2(14, 15, 12, 12) # 原图斜刃轮廓的外接矩形
+const SCRAPER_HEAD: Array[Vector2] = [Vector2(14, 25), Vector2(23, 15), Vector2(26, 15), Vector2(25, 18), Vector2(18, 26), Vector2(14, 27)] # 只覆盖刀头前沿的白色斜刃
 
 static var _textures: Dictionary = {}
 static var _animations: Dictionary = {}

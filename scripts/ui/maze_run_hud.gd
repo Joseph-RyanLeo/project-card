@@ -107,8 +107,7 @@ func sync(maze: Node, animate: bool = true) -> void:
 	floor_number = maze.floor_number()
 	protection = maze.run.failure_protection
 	alive = maze.run.battle_results.is_empty() or String(maze.run.battle_results.back().ending) not in ["ordinary_loss", "boss_loss"]
-	_gold.text = str(maze._main.run_reward_state.gold)
-	_gold.position = Vector2(roundf(944 - _gold.size.x * 0.5), 12) # 金币槽内按字形实际宽度居中，原生14像素高
+	set_displayed_gold(maze.displayed_event_gold())
 	_hero_label.text = "伊奥恩·沃登"
 	_hero_progress_lamps.sync(maze.hero)
 	_hero_panel.tooltip_text = maze.hero_description()
@@ -169,6 +168,11 @@ func _finish_roll() -> void:
 
 func life_track_rect() -> Rect2:
 	return get_global_transform_with_canvas() * Rect2(LIFE_TRACK_POSITION, _art.life_track.get_size()).grow(2.0)
+
+
+func set_displayed_gold(amount: int) -> void:
+	_gold.text = str(amount)
+	_gold.position = Vector2(roundf(944 - _gold.size.x * 0.5), 12) # 金币槽内按字形的实际宽度居中
 
 
 func _draw() -> void:

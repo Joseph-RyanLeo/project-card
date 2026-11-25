@@ -234,15 +234,15 @@
     "supernova": {
       "level": 10,
       "display_name": "超星燃爆",
-      "source_text": "战斗开始5秒内所有友方卡牌属性值翻倍，友方卡牌延迟5秒进入疲劳阶段。",
-      "boundary_status": "已确认；第一层不实现，保留定义供后续层接入",
+      "source_text": "开战5秒内，友方总数值、当前生命、最大生命与当前护甲翻倍。翻倍增加的护甲优先消耗，到期移除剩余部分。友军延迟5秒进入疲劳。",
+      "boundary_status": "已确认，10级天赋",
       "confirmed_rules": {
         "duration_seconds": 5,
-        "double_base_action": true,
-        "double_base_health": true,
-        "double_armor": false,
+        "double_total_action": true,
+        "double_current_and_maximum_health": true,
+        "double_current_armor": true,
         "health_on_expiry": "min(current_health, health_before_effect)",
-        "maximum_health_on_expiry": "maximum_health_before_effect",
+        "maximum_health_on_expiry": "remove_supernova_bonus",
         "friendly_fatigue_delay_seconds": 5
       }
     }

@@ -3,7 +3,7 @@ extends SceneTree
 ## 正式卖价入口的unit检查，并用真实卡池、保底和实例生成抽样核算大包经济。
 const MAIN = preload("res://scenes/Main.tscn")
 const Appearance = preload("res://scripts/data/card_appearance.gd")
-const SURFACE_EXPECTED := [0, 1, 2, 4, 8, 8]
+const SURFACE_EXPECTED := [0, 1, 2, 4, 8, 8, 0, 0]
 const ART_EXPECTED := [0, 8, 8]
 var assertions := 0
 var failures := 0
@@ -68,10 +68,13 @@ func _run() -> void:
 	normal.surface_finish = Appearance.Surface.SILVER
 	check(main._shop_card_sale_price(normal) == 4, "改集中配置即可改变正式报价")
 	main.ordinary_shop_service.load_config()
-	var expected_bonus := 0.0
-	for index: int in SURFACE_EXPECTED.size(): expected_bonus += Appearance.SURFACE_WEIGHTS[index] * SURFACE_EXPECTED[index] / 100.0
-	for index: int in ART_EXPECTED.size(): expected_bonus += Appearance.ART_WEIGHTS[index] * ART_EXPECTED[index] / 100.0
-	check(is_equal_approx(expected_bonus, 2.55), "单张外观平均加价2.55金币，大包共12.75")
+	var expected_by_rarity := [1.48, 1.83, 2.16, 2.50, 2.50]
+	for rarity: int in CardData.Rarity.size():
+		var surface_weights := Appearance.get_surface_weights(rarity as CardData.Rarity)
+		var expected_bonus := 0.0
+		for index: int in SURFACE_EXPECTED.size(): expected_bonus += surface_weights[index] * SURFACE_EXPECTED[index] / 100.0
+		for index: int in ART_EXPECTED.size(): expected_bonus += Appearance.ART_WEIGHTS[index] * ART_EXPECTED[index] / 100.0
+		check(is_equal_approx(expected_bonus, expected_by_rarity[rarity]), "按品级计算当前外观平均加价")
 	check(main.ordinary_shop_service.config.card_pack_prices.large == 18 and main.ordinary_shop_service.config.card_pack_sizes.large == 5, "大包仍为18金币5张，不调整经济配置")
 	verify_pack_economy(main, rng)
 	main.queue_free()

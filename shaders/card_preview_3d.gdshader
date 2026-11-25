@@ -32,6 +32,10 @@ uniform float flash_offset = 0.0; // 闪纹平移相位，1为一个重复周期
 uniform float flash_angle_degrees : hint_range(0.0, 360.0, 1.0) = 50.0; // 尚无有效鼠标方向时的默认光带角度
 
 uniform vec2 card_texture_size_px = vec2(1.0);
+uniform bool gamepad_light_on = false;
+uniform vec2 gamepad_light_center = vec2(0.0);
+uniform float gamepad_light_radius = 19.0; // 手柄检视柔光的卡面像素半径
+uniform float gamepad_light_strength = 0.22; // 手柄检视柔光的最高亮度
 uniform float texture_render_scale = 1.0; // 合成纹理的采样倍率，用于还原透视四边形的原生尺寸
 uniform vec2 mask_origin_px = vec2(0.0);
 uniform vec2 mask_size_px = vec2(1.0);
@@ -103,6 +107,10 @@ void fragment() {
 
 	if (use_fractured) {
 		output_color = fractured_finish(output_color, mask_uv, pointer_force, finish_strength, finish_density, fractured_brightness, fractured_saturation, fractured_hue_degrees);
+	}
+	if (gamepad_light_on) {
+		float light = 1.0 - smoothstep(1.0, gamepad_light_radius, distance(card_pixel, gamepad_light_center));
+		output_color = mix(output_color, vec3(1.0, 0.94, 0.79), light * gamepad_light_strength);
 	}
 	COLOR = vec4(output_color, source.a) * item_modulate;
 }

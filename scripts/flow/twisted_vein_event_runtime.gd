@@ -28,14 +28,16 @@ static func option_is_visible(event: Dictionary, option: Dictionary) -> bool:
 	return true
 
 
-static func blocked_reason(maze: Node, option: Dictionary) -> String:
+static func blocked_reason(maze: Node, option: Dictionary, before_selection: bool = false) -> String:
 	var event: Dictionary = maze.run.selected_path
 	if not option_is_visible(event, option): return "当前不能选择此步骤"
 	if option.has("minimum_armor") and _armor(maze).size() < int(option.minimum_armor): return "需要至少 3 张防具"
 	if option.get("mine_prayer", false) and maze._story_owned("ember_empty_bottle").is_empty():
 		if not CLOVERS.any(func(id: String) -> bool: return not maze._story_stickers(id).is_empty()):
 			return "需要余烬空瓶或四叶草纹章"
-	if option.get("camp_donation", false) and _selected_donation(maze).is_empty(): return "请选择一枚未使用的纹章"
+	if option.get("camp_donation", false):
+		if before_selection and donations(maze).is_empty(): return "缺少可捐赠的纹章"
+		if not before_selection and _selected_donation(maze).is_empty(): return "请选择一枚未使用的纹章"
 	return ""
 
 
@@ -136,6 +138,7 @@ static func apply(maze: Node, event: Dictionary, effect: Dictionary, target: Own
 				var card: OwnedCard = candidates.pop_at(maze.run.rng.randi_range(0, candidates.size() - 1))
 				var targets: Array[OwnedCard] = [card]
 				maze._apply_story_wounds({"kind": "wound", "wound": "光血"}, targets, "%s:%d" % [receipt, index])
+				maze._record_story_card_reference(result, card)
 				names.append(card.card_data.display_name)
 			result["effect_text"] = "光血未能附着。" if names.is_empty() else "%s获得光血伤势。" % "、".join(names)
 		"underground_river": _apply_river(maze, event, target, result)

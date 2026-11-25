@@ -147,13 +147,22 @@ func _reveal_message(message: String) -> void:
 		start = index + 1
 
 
+func finish_reveal() -> bool:
+	if not is_instance_valid(_text_reveal) or not _text_reveal.is_running():
+		return false
+	var incomplete := text_label.visible_ratio < 1.0
+	_text_reveal.kill()
+	text_label.visible_characters = -1
+	return incomplete
+
+
 func is_confirming(button: BaseButton) -> bool:
 	return is_instance_valid(button) and is_visible_in_tree() and _remaining_seconds > 0.0 and confirmation_button == button and not get_tree().paused
 
 
 func _process(delta: float) -> void:
 	var menu := get_tree().get_first_node_in_group(&"escape_pause_menus")
-	if menu != null and menu.is_menu_open():
+	if menu != null and menu.blocks_gameplay():
 		_sync_visual_visibility()
 		if _pinned: return
 	_remaining_seconds -= delta
@@ -194,12 +203,14 @@ func _sync_visual_visibility() -> void:
 	var visible_here := is_visible_in_tree()
 	if is_instance_valid(_display) and is_instance_valid(_display.screen_transition) and _display.screen_transition.busy: visible_here = false
 	var menu := get_tree().get_first_node_in_group(&"escape_pause_menus") if is_inside_tree() else null
-	if menu != null and menu.is_menu_open(): visible_here = false
+	if menu != null and menu.blocks_gameplay(): visible_here = false
 	_visual.visible = visible_here
 
 
 func _input(event: InputEvent) -> void:
 	if _pinned: return
+	var menu := get_tree().get_first_node_in_group(&"escape_pause_menus")
+	if menu != null and menu.blocks_gameplay(): return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT and is_instance_valid(confirmation_button):
 			var point: Vector2 = confirmation_button.get_global_transform_with_canvas().affine_inverse() * event.position

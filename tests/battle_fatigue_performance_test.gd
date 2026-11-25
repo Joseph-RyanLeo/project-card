@@ -59,7 +59,7 @@ func _test_boundaries() -> void:
 		var expected := 1 + (tick - 30) / 2
 		check(events.size() == 2 and events[0].exact_amount == expected and events[1].exact_amount == expected, "%d秒前浮点误差仍按计划时刻结算%d点" % [tick, expected])
 		check(battle._next_fatigue_damage_seconds == tick + 1, "每轮只消耗一次风暴时刻")
-	battle.player_states[0].moon_shadowed = true
+	battle.player_states[0].is_banished = true
 	battle.elapsed_seconds = 37.0
 	battle._next_fatigue_damage_seconds = 37.0
 	check(battle._prepare_fatigue_events(battle.get_all_states()).size() == 1, "放逐单位仍免疫风暴")

@@ -31,8 +31,12 @@ const SLOT_HUB_SCRIPT = preload("res://scripts/ui/slot_hub.gd")
 const SETTINGS_SCRIPT = preload("res://scripts/ui/game_settings_panel.gd")
 const PREFERENCES_SCRIPT = preload("res://scripts/data/game_preferences.gd")
 const PIXEL_EDGE_AA_SHADER = preload("res://shaders/pixel_edge_aa.gdshader")
+const CRT_SHADER = preload("res://shaders/crt_display.gdshader")
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
+const CRT_LAYER := 1025 # Godot 内嵌窗口使用 1024，CRT 需要在整帧合成之后绘制
 const SAVE_SERVICE = preload("res://scripts/data/run_save_service.gd")
 const START_MENU_SCRIPT = preload("res://scripts/ui/start_menu.gd")
+const GAMEPAD_POINTER_SCRIPT := preload("res://scripts/ui/gamepad_pointer.gd")
 const SLOT_SERVICE = preload("res://scripts/data/run_slot_service.gd")
 const TRANSITION_SCRIPT = preload("res://scripts/ui/screen_transition.gd")
 const WINDOW_MODE_TRANSITION_MAX_FRAMES: int = 60 # 等待 macOS 退出全屏的最长帧数
@@ -84,12 +88,17 @@ var _slot_checkpoint: Dictionary = {}
 var _entering_slot := false
 var _preferences := PREFERENCES_SCRIPT.new()
 var _pixel_edge_aa_material := ShaderMaterial.new()
+var _crt_layer: CanvasLayer
+var _crt_material: ShaderMaterial
+var _crt_curvature := Vector2.ZERO
 var _settings_panel: Control
 var _return_to_tool_settings := false
 var _paused_hover_card: CardView
+var _paused_spell_tray: Control
 var _paused_hover_time := 0.0
 var _paused_hover_popup: CanvasLayer
 var _pointer_in_window := Vector2.INF
+var _gamepad_pointer: Node
 
 
 func _enter_tree() -> void:
@@ -105,9 +114,11 @@ func _ready() -> void:
 	add_child(screen_transition)
 	design_canvas.size = Vector2(DESIGN_SIZE)
 	design_canvas.scale = Vector2.ONE
+	preload("res://scripts/ui/event_landing_dust.gd").warm_shader(design_canvas)
 	_preferences.path = run_slots.directory.path_join("game_preferences.cfg")
 	_preferences.load_settings()
 	_pixel_edge_aa_material.shader = PIXEL_EDGE_AA_SHADER
+	_setup_crt_overlay()
 	_layout_render_container()
 	if not resized.is_connected(_on_root_control_resized):
 		resized.connect(_on_root_control_resized)
@@ -128,18 +139,51 @@ func _ready() -> void:
 	else:
 		_connect_main_screen()
 	var window := get_window()
+	window.window_input.connect(_remap_crt_window_input)
 	window.mouse_exited.connect(func(): _pointer_in_window = Vector2.INF)
 	get_tree().auto_accept_quit = false
 	window.close_requested.connect(_request_quit)
 	if not window.size_changed.is_connected(_on_root_window_size_changed):
 		window.size_changed.connect(_on_root_window_size_changed)
+	_gamepad_pointer = GAMEPAD_POINTER_SCRIPT.new()
+	_gamepad_pointer.name = "GamepadPointer"
+	_gamepad_pointer.setup(internal_viewport, _get_gamepad_gameplay_screen, _get_gamepad_menu)
+	add_child(_gamepad_pointer)
 	apply_display_mode(_preferences.display_mode as DisplayMode)
 	display_mode_option.get_parent().visible = is_instance_valid(main_screen)
+
+
+func _get_gamepad_gameplay_screen() -> Control:
+	if not is_instance_valid(main_screen) or not main_screen.is_visible_in_tree():
+		return null
+	if main_screen._escape_pause_menu.blocks_gameplay():
+		return null
+	if main_screen._task_dialogue_blocks_input():
+		return null
+	if is_instance_valid(main_screen._developer_console) and main_screen._developer_console.visible:
+		return null
+	if screen_transition.busy or is_developer_tool_open() or not get_window().get_embedded_subwindows().is_empty():
+		return null
+	if is_instance_valid(_settings_panel) and _settings_panel.visible:
+		return null
+	return main_screen
+
+
+func _get_gamepad_menu() -> Control:
+	if screen_transition.busy: return null
+	if is_instance_valid(main_screen) and main_screen._escape_pause_menu.blocks_gameplay():
+		return main_screen._escape_pause_menu.active_overlay()
+	for menu: Control in [_card_art_tuner, _card_texture_tuner, _battle_lab, _attack_effect_lab, _pack_effect_tuner, _card_font_lab, _dice_model_viewer, _rare_shop, _settings_panel, _task_panel, _gallery_panel, _slot_progress_panel]:
+		if is_instance_valid(menu) and menu.is_visible_in_tree(): return menu
+	if is_instance_valid(start_menu) and start_menu.is_visible_in_tree():
+		return start_menu._slot_overlay if start_menu._slot_overlay.visible else start_menu
+	return null
 
 
 func _connect_main_screen() -> void:
 	main_screen.profile_stage_changed.connect(_refresh_slot_progress_panel, CONNECT_DEFERRED)
 	main_screen.card_pack_presentation_changed.connect(_on_card_pack_presentation_changed)
+	main_screen._escape_pause_menu.modal_visibility_changed.connect(_on_card_pack_presentation_changed.bind(false))
 	main_screen._escape_pause_menu.main_menu_requested.connect(change_screen.bind(return_to_start_menu), CONNECT_DEFERRED)
 	main_screen._escape_pause_menu.abandon_requested.connect(_abandon_slot_run, CONNECT_DEFERRED)
 	main_screen._escape_pause_menu.find_child("ReturnToMainMenuButton", true, false).visible = start_menu != null
@@ -292,6 +336,12 @@ func _save_active_run() -> bool:
 	if slot_progress == null and not is_instance_valid(main_screen): return true
 	var error: int
 	if is_instance_valid(main_screen):
+		if main_screen._developer_event_test.is_active():
+			var restore_error: String = main_screen._developer_event_test.stop()
+			if not restore_error.is_empty():
+				_show_persistence_error(restore_error)
+				return false
+			slot_progress = main_screen.profile_progress
 		error = main_screen.save_run_to_path(main_screen.run_save_path)
 	else:
 		var next := _slot_checkpoint.duplicate(true)
@@ -321,16 +371,26 @@ func _request_quit() -> void:
 
 func _on_card_pack_presentation_changed(active: bool) -> void:
 	# 完整4倍包装的封口靠近窗口顶部，外层倍率菜单不能挡住撕包输入。
-	display_mode_option.get_parent().visible = not active and is_instance_valid(main_screen) and main_screen.visible
+	display_mode_option.get_parent().visible = (
+		not active and is_instance_valid(main_screen) and main_screen.visible
+		and not main_screen._escape_pause_menu.blocks_gameplay()
+		and not is_instance_valid(main_screen._card_pack_opening)
+		and not is_instance_valid(main_screen._sticker_pack_opening)
+	)
 
 
 func _process(delta: float) -> void:
 	var card: CardView
-	if _pointer_in_window.is_finite() and is_instance_valid(main_screen) and main_screen.can_hover_paused_battle() and not screen_transition.busy and not is_developer_tool_open():
+	var spell_tray: Control
+	if _pointer_in_window.is_finite() and not _gamepad_pointer._active and is_instance_valid(main_screen) and main_screen.can_hover_paused_battle() and not screen_transition.busy and not is_developer_tool_open():
 		var pointer := render_container.get_global_transform_with_canvas().affine_inverse() * _pointer_in_window
 		var display_controls := display_mode_option.get_parent() as Control
 		if Rect2(Vector2.ZERO, render_container.size).has_point(pointer) and not (display_controls.visible and display_controls.get_global_rect().has_point(_pointer_in_window)):
-			card = main_screen.find_battle_card_at(pointer)
+			spell_tray = main_screen.find_paused_spell_tray_at(pointer)
+			card = spell_tray.hover_at(pointer) if spell_tray != null else main_screen.find_battle_card_at(pointer)
+	if spell_tray != _paused_spell_tray:
+		if is_instance_valid(_paused_spell_tray): _paused_spell_tray.clear_hover_card()
+		_paused_spell_tray = spell_tray
 	if card != _paused_hover_card or card == null:
 		if is_instance_valid(_paused_hover_popup): _paused_hover_popup.hide_card(null, &"paused_battle")
 		_paused_hover_card = card
@@ -353,6 +413,9 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if is_developer_tool_open():
+			if is_battle_lab_open() and _battle_lab.close_lineup_layer():
+				get_viewport().set_input_as_handled()
+				return
 			if is_card_art_tuner_open(): change_screen(close_card_art_tuner)
 			elif is_battle_lab_open(): change_screen(close_battle_lab)
 			elif is_attack_effect_lab_open(): change_screen(close_attack_effect_lab)
@@ -383,6 +446,24 @@ func _input(event: InputEvent) -> void:
 	)
 	if main_screen.open_paused_card_inspection_at(internal_position):
 		get_viewport().set_input_as_handled()
+
+
+func _remap_crt_window_input(event: InputEvent) -> void:
+	if _crt_curvature == Vector2.ZERO or not is_visible_in_tree(): return
+	if not (event is InputEventMouse or event is InputEventScreenTouch or event is InputEventScreenDrag or event is InputEventGesture): return
+	# window_input 在 Godot 的悬停、控件命中和 SubViewport 转发之前发出。
+	var window := get_window()
+	var to_window := window.get_final_transform()
+	var to_viewport := to_window.affine_inverse()
+	var frame_size := window.get_visible_rect().size
+	if frame_size.x <= 0.0 or frame_size.y <= 0.0: return
+	var point: Vector2 = event.position
+	var source := to_window * CrtProjection.to_source(to_viewport * point, frame_size, _crt_curvature)
+	if event is InputEventMouseMotion or event is InputEventScreenDrag:
+		var previous: Vector2 = to_viewport * (point - event.relative)
+		event.relative = source - to_window * CrtProjection.to_source(previous, frame_size, _crt_curvature)
+	event.position = source
+	if event is InputEventMouse: event.global_position = source
 
 
 func apply_display_mode(mode: DisplayMode) -> void:
@@ -516,6 +597,30 @@ func _layout_render_container() -> void:
 	)
 	var use_edge_aa := _preferences.pixel_edge_aa and not render_scale.is_equal_approx(render_scale.round())
 	render_container.material = _pixel_edge_aa_material if use_edge_aa else null
+	_crt_material.set_shader_parameter("output_scale", render_scale.y)
+
+
+func _setup_crt_overlay() -> void:
+	_crt_layer = CanvasLayer.new()
+	_crt_layer.name = "CRTOverlay"
+	_crt_layer.layer = CRT_LAYER
+	add_child(_crt_layer)
+	var surface := ColorRect.new()
+	surface.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_crt_material = ShaderMaterial.new()
+	_crt_material.shader = CRT_SHADER
+	surface.material = _crt_material
+	_crt_layer.add_child(surface)
+	surface.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_apply_crt_preference()
+
+
+func _apply_crt_preference() -> void:
+	var strength: float = _preferences.crt_strength * 0.01 if _preferences.crt_enabled else 0.0
+	_crt_curvature = CrtProjection.MAX_CURVATURE * strength
+	_crt_layer.visible = strength > 0.0
+	_crt_material.set_shader_parameter("scanline_strength", strength)
+	_crt_material.set_shader_parameter("curvature", _crt_curvature)
 
 
 static func _is_uniform_integer_scale(render_scale: Vector2) -> bool:
@@ -959,8 +1064,11 @@ func open_settings() -> void:
 		_settings_panel.display_changed.connect(func(mode: int): _settings_panel.show_save_result(change_display_preference(mode)))
 		_settings_panel.pixel_edge_aa_changed.connect(func(enabled: bool):
 			_settings_panel.show_save_result(set_pixel_edge_aa_preference(enabled)))
+		_settings_panel.crt_changed.connect(func(enabled: bool, strength: float):
+			_settings_panel.show_save_result(set_crt_preference(enabled, strength)))
 		design_canvas.add_child(_settings_panel)
 	_settings_panel.sync_values(_preferences.volume, current_display_mode, _preferences.pixel_edge_aa)
+	_settings_panel.sync_crt(_preferences.crt_enabled, _preferences.crt_strength)
 	_settings_panel.show()
 	_settings_panel.move_to_front()
 
@@ -983,4 +1091,11 @@ func change_display_preference(mode: int) -> Error:
 func set_pixel_edge_aa_preference(enabled: bool) -> Error:
 	_preferences.pixel_edge_aa = enabled
 	_layout_render_container()
+	return _preferences.save_settings()
+
+
+func set_crt_preference(enabled: bool, strength: float) -> Error:
+	_preferences.crt_enabled = enabled
+	_preferences.crt_strength = clampf(strength, 0.0, 100.0)
+	_apply_crt_preference()
 	return _preferences.save_settings()

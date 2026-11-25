@@ -7,6 +7,7 @@ const CORNER_MARK_HEIGHT := 10.0 # 基准 D4 顶角点数高度
 const FACE_MARK_DIAMETER := 1.9 # 数字对角线最多占骰面内切圆半径的倍数
 const DIGIT_MARK_WIDTH := 0.72 # 6 和 9 的下划线占数字宽度的比例
 const LIGHT_DIRECTION := Vector3(-0.42, -0.63, 0.65) # 控制骰面明暗的入射方向
+const SHADOW_LIGHT_HEIGHT := 1.10 # 抬高投影光线的角度，让骰子在纸面上的投影更短
 const GOLD := Color("dcb77d") # 骰体边线色
 const INK := Color("221829") # 投掷说明文字色
 const SHADE := Color("68485f") # 背光面的底色
@@ -62,6 +63,21 @@ func support_height(rotation: Basis, direction: Vector3) -> float:
 		lowest = minf(lowest, (rotation * vertex).dot(direction))
 	# 圆角骰体是缩小的原骰体加一层圆边，支撑点也按同一尺寸计算。
 	return lowest * (1.0 - ROUND_RADIUS) - ROUND_RADIUS
+
+
+func shadow_outline(rotation: Basis, table_up: Vector3, radius: float, lift: float) -> PackedVector2Array:
+	var projected := PackedVector2Array()
+	var center := -table_up * (support_height(rotation, table_up) * radius) - Vector3(0.0, lift, 0.0)
+	var light_direction := LIGHT_DIRECTION + table_up * SHADOW_LIGHT_HEIGHT
+	var light_ray := light_direction / light_direction.dot(table_up)
+	for vertex: Vector3 in vertices:
+		var point := center + rotation * vertex * radius
+		# 沿光线反方向找到该顶点在桌面上的落点，再转成屏幕坐标。
+		projected.append(_xy(point - light_ray * point.dot(table_up)))
+	# 投影的外边界是这些点的凸包，随每帧的骰子姿态变化。
+	var outline := Geometry2D.convex_hull(projected)
+	outline.remove_at(outline.size() - 1) # convex_hull 末尾重复了起点，填充多边形时去掉
+	return outline
 
 
 func draw_on(canvas: Control, center: Vector2, rotation: Basis, radius: float, highlighted_face: int = 0) -> void:

@@ -6,6 +6,9 @@ extends Node
 const VOICE_COUNT: int = 3 # 每类音效允许同时播放的声部数，避免连击被单个播放器截断
 const PLAYER_VOLUME_DB: float = -8.0 # 单条音效的保守播放音量，主音量仍由全局滑条控制
 const BGM_VOLUME_DB: float = -12.0 # 背景音乐相对总线的音量，主音量仍由全局滑条控制
+const BGM_OPEN_CUTOFF := 20500.0 # 淡出遮挡时恢复至近全频段，再旁通滤波器
+const BGM_MENU_CUTOFF := 1280.0 # 设置期间削弱此频率以上的背景音乐
+const BGM_FILTER_FADE := 0.28 # 进出设置时滤波器过渡的秒数
 const BGM_TRACKS: Array[String] = [
 	"res://assets/audio/bgm/bgm1.mp3",
 	"res://assets/audio/bgm/bgm2.mp3",
@@ -27,6 +30,10 @@ var _pools: Dictionary = {}
 var _next_voice: Dictionary = {}
 var _play_counts: Dictionary = {}
 var _bgm_player: AudioStreamPlayer
+var _bgm_bus: StringName
+var _bgm_filter: AudioEffectLowPassFilter
+var _bgm_filter_tween: Tween
+var _bgm_muffled := false
 var _last_bgm_index: int = -1
 
 
@@ -47,11 +54,43 @@ func _ready() -> void:
 		_play_counts[pool_id] = 0
 	_bgm_player = AudioStreamPlayer.new()
 	_bgm_player.name = "BackgroundMusicPlayer"
-	_bgm_player.bus = "Master"
+	var bus := AudioServer.bus_count
+	AudioServer.add_bus()
+	_bgm_bus = StringName("MazeMusic_%d" % get_instance_id())
+	AudioServer.set_bus_name(bus, _bgm_bus)
+	AudioServer.set_bus_send(bus, &"Master")
+	_bgm_filter = AudioEffectLowPassFilter.new()
+	_bgm_filter.cutoff_hz = BGM_OPEN_CUTOFF
+	AudioServer.add_bus_effect(bus, _bgm_filter)
+	AudioServer.set_bus_effect_enabled(bus, 0, false)
+	_bgm_player.bus = _bgm_bus
 	_bgm_player.volume_db = BGM_VOLUME_DB
 	add_child(_bgm_player)
 	_bgm_player.finished.connect(_play_random_bgm)
 	_play_random_bgm()
+
+
+func _exit_tree() -> void:
+	var bus := AudioServer.get_bus_index(_bgm_bus)
+	if bus > 0: AudioServer.remove_bus(bus)
+
+
+func set_settings_music_muffled(muffled: bool) -> void:
+	if _bgm_player == null or _bgm_muffled == muffled: return
+	_bgm_muffled = muffled
+	# 只有音乐播放器在设置期间继续处理，战斗计时和音效仍沿用原暂停逻辑。
+	_bgm_player.process_mode = Node.PROCESS_MODE_ALWAYS if muffled else Node.PROCESS_MODE_INHERIT
+	if is_instance_valid(_bgm_filter_tween): _bgm_filter_tween.kill()
+	_set_bgm_filter_enabled(true)
+	_bgm_filter_tween = create_tween().set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_bgm_filter_tween.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	_bgm_filter_tween.tween_property(_bgm_filter, "cutoff_hz", BGM_MENU_CUTOFF if muffled else BGM_OPEN_CUTOFF, BGM_FILTER_FADE)
+	if not muffled: _bgm_filter_tween.tween_callback(_set_bgm_filter_enabled.bind(false))
+
+
+func _set_bgm_filter_enabled(enabled: bool) -> void:
+	var bus := AudioServer.get_bus_index(_bgm_bus)
+	if bus > 0: AudioServer.set_bus_effect_enabled(bus, 0, enabled)
 
 
 func play_action_launch(action_type: CardData.ActionType) -> void:

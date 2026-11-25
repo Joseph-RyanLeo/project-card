@@ -41,12 +41,12 @@ func _run() -> void:
 	var middle := stack._offers[1]
 	var right := stack._offers[2]
 	await move(middle.get_global_rect().position + Vector2(6, 70))
-	await create_timer(0.18).timeout
-	check(stack._hover_offer == middle, "指向中间包露出部分使它置顶")
+	await create_timer(0.24).timeout
+	check(stack._hover_offer == middle, "指向露出的中间包，右侧包横移让位")
 	var center := middle.get_global_rect().get_center()
-	check(right.get_global_rect().has_point(center), "中心点同时位于被遮挡右包的原始矩形内")
+	check(not right.get_global_rect().has_point(center), "移动后的右包让出目标包中心")
 	await move(center)
-	check(stack._hover_offer == middle, "已抬起的中间包中心不会误选背后的右包")
+	check(stack._hover_offer == middle, "已露出的中间包中心仍命中中间包")
 	await capture("polish-middle-hover")
 	var gold_before: int = main.run_reward_state.gold
 	var cards_before: int = main.owned_card_collection.get_cards().size()
@@ -66,7 +66,7 @@ func _run() -> void:
 	await move(middle.get_global_rect().position + Vector2(6, 70))
 	await move(center)
 	await move(right.get_global_rect().position + Vector2(right.size.x - 8, 70))
-	check(stack._hover_offer == right, "真实进入右包露出区域才将右包提到最前")
+	check(stack._hover_offer == right, "移至右包的新位置后切换悬停目标")
 	await click(right.get_global_rect().get_center(), MOUSE_BUTTON_RIGHT)
 	await process_frame
 	await click(Vector2(40, 450))

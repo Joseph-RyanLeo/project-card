@@ -4,6 +4,7 @@ extends Button
 signal refresh_requested
 
 enum Motion { IDLE, PRESS, HOLD, RELEASE, CANCEL }
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const RuneNumber = preload("res://scripts/ui/rune_number_display.gd")
 const SHEET = preload("res://assets/ui/shop_event_20261020/refresh_press.png")
 const FRAME_SIZE := Vector2(83, 33) # GIF单帧原生大小，同时作为固定点击范围
@@ -86,7 +87,7 @@ func _input(event: InputEvent) -> void:
 	if not _held or not event is InputEventMouseButton or event.button_index != MOUSE_BUTTON_LEFT or event.pressed:
 		return
 	_held = false
-	if not Rect2(Vector2.ZERO, size).has_point(get_local_mouse_position()):
+	if not Rect2(Vector2.ZERO, size).has_point(CrtProjection.local_mouse(self)):
 		if not _cancelled: _cancel_press()
 	elif not _cancelled and _motion == Motion.HOLD:
 		_motion = Motion.RELEASE
@@ -106,6 +107,10 @@ func _hover() -> void:
 	_shake = create_tween()
 	for angle: float in [SHAKE_DEGREES, -SHAKE_DEGREES, SHAKE_DEGREES * 0.5, 0.0]:
 		_shake.tween_property(_visual, "rotation", deg_to_rad(angle), SHAKE_STEP_SECONDS)
+
+func set_gamepad_hover(hovered: bool) -> void:
+	if hovered: _hover()
+
 
 func _exit_hover() -> void:
 	if _held and not _cancelled: _cancel_press()

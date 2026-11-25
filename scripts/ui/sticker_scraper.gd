@@ -1,6 +1,7 @@
 extends TextureRect
 
 const InspectionItemDrag = preload("res://scripts/ui/inspection_item_drag.gd")
+const RuneStyle = preload("res://scripts/ui/rune_sticker_style.gd")
 
 signal action_mode_requested
 
@@ -41,6 +42,9 @@ func _get_drag_data(at_position: Vector2) -> Variant:
 
 func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictionary:
 	var source_transform := get_global_transform_with_canvas()
+	var blade_offsets := PackedVector2Array()
+	for point: Vector2 in RuneStyle.SCRAPER_HEAD:
+		blade_offsets.append(source_transform.basis_xform(point - grab_position))
 	var preview := TextureRect.new()
 	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	preview.texture = texture
@@ -54,6 +58,7 @@ func _build_drag_data(grab_position: Vector2, install_preview: bool) -> Dictiona
 		"tip_offset": source_transform.basis_xform(blade_point - grab_position),
 		"hit_rect_offset": source_transform.basis_xform(blade_rect.position - grab_position),
 		"hit_rect_size": source_transform.basis_xform(blade_rect.size),
+		"blade_offsets": blade_offsets,
 		"preview_texture": texture,
 	}
 	return InspectionItemDrag.build(self, preview, grab_position, Vector2.ZERO, data, install_preview)

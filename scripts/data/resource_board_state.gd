@@ -14,6 +14,7 @@ var disabled_by_side: Dictionary = {"player": [], "enemy": []}
 var deployments: Dictionary = {"player": {}, "enemy": {}}
 var level_resource_cards: Dictionary = {"player": {}, "enemy": {}}
 var resources_generated := false
+var authored_enemy_layout := false
 
 
 func initialize_level(new_level_id: StringName, rng: RandomNumberGenerator) -> bool:
@@ -32,6 +33,7 @@ func initialize_level(new_level_id: StringName, rng: RandomNumberGenerator) -> b
 	deployments = {"player": {}, "enemy": {}}
 	level_resource_cards = {"player": {}, "enemy": {}}
 	resources_generated = false
+	authored_enemy_layout = false
 	return true
 
 
@@ -155,6 +157,7 @@ func capture_state() -> Dictionary:
 		"deployments": deployments.duplicate(true),
 		"level_resource_cards": encoded_level_cards,
 		"resources_generated": resources_generated,
+		"authored_enemy_layout": authored_enemy_layout,
 	}
 
 
@@ -164,9 +167,12 @@ func restore_state(state: Dictionary, card_registry: Dictionary = {}) -> bool:
 	var layout_version := int(state.get("layout_version", 1))
 	if layout_version not in [1, Layout.VERSION]: return false
 	var parsed_disabled: Dictionary = {}
+	var authored: Variant = state.get("authored_enemy_layout", false)
+	if not authored is bool: return false
 	for side in ["player", "enemy"]:
 		var cells: Variant = state.disabled_by_side.get(side, null)
-		if not cells is Array or cells.size() > 3:
+		var capacity := Layout.valid_cells(layout_version).size() if authored and side == "enemy" else 3
+		if not cells is Array or cells.size() > capacity:
 			return false
 		var seen: Dictionary = {}
 		var parsed: Array[Vector2i] = []
@@ -260,6 +266,7 @@ func restore_state(state: Dictionary, card_registry: Dictionary = {}) -> bool:
 		return false
 	level_id = StringName(String(state.level_id))
 	disabled_by_side = parsed_disabled
+	authored_enemy_layout = authored
 	deployments = parsed_deployments
 	level_resource_cards = parsed_level_cards
 	# 旧版本没有生成标记。标记为已处理，确保schema4读取后不会在该关补抽资源。

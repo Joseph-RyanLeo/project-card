@@ -355,12 +355,13 @@ func harvest_scrap(event: BattleEffectEvent) -> void:
 	owned.initialize(definition, StringName("%s:ironwall_item:%d" % [controller.battle_instance_id, controller._next_reward_instance_sequence]), 0, controller._random)
 	owned.progress_by_source[OwnedCard.TEMPORARY_EQUIPMENT] = 1
 	controller._next_reward_instance_sequence += 1
+	var previous_maximum := target.get_max_health()
 	if not target.squad_data.equip_item(owned): return
 	temporary_items.append({"state": target, "item": owned})
 	controller.record_task_supply(event.source, {"owned": owned})
 	controller.record_task_buff(event.source, target, "harvest_scrap")
 	target.apply_armor_exact(definition.equipment_armor_delta)
-	target.apply_healing_exact(maxi(definition.equipment_health_delta, 0))
+	target.apply_max_health_increase(previous_maximum, definition.equipment_health_delta)
 	controller._register_card_effects(target, definition, true)
 	initialize_equipment_period(target, definition.content_effect)
 	controller.mining_actions_remaining_by_runtime_id[target.runtime_id] = int(controller.mining_actions_remaining_by_runtime_id.get(target.runtime_id, 0)) + definition.mining_uses
@@ -429,7 +430,7 @@ func _grant_emblem(state: BattleSquadState, permanent: bool, source: BattleSquad
 		controller.record_task_buff(source, state, "logistics_robot")
 	if permanent and state.side == BattleSquadState.Side.PLAYER:
 		controller.record_pending_owned_card_slot_change(BattleEffectOwnerRef.for_owned_card_in_state(state, selected.owned), BattleOwnedCardChangeLedger.KIND_SET_EMBLEM_SLOT, selected.index, sticker, &"edwin_ash", state.runtime_id, roundi(controller.elapsed_seconds * 1000000.0))
-	state.apply_healing_exact(maxi(state.get_max_health() - health_before, 0))
+	state.apply_max_health_increase(health_before, maxf(state.get_max_health() - health_before, 0.0))
 	state.apply_armor_exact(maxi(state.squad_data.get_effective_base_armor() - armor_before, 0))
 	controller._register_formation_emblems()
 

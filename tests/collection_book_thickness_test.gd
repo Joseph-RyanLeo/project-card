@@ -38,10 +38,11 @@ func verify_page_turn(forward: bool) -> void:
 		return
 	main._page_tween.pause()
 	main._page_tween.custom_step(0.07)
-	var moving: Control = main._page_turn_overlay.get_node("MovingPage")
-	var texture: Texture2D = moving.get_node("PageArt").texture
-	check(moving.size == Vector2(413, 309) and moving.scale.x > 0 and moving.scale.x < 1,
-		"实际翻动只有上层纸面，保留原生纸面尺寸")
+	var moving := main._page_turn_overlay.get_node("MovingPage") as CollectionPageCurl
+	var texture: Texture2D = moving.get_node("PageFaces/FrontFace/PageArt").texture
+	check(moving.size == Vector2(413, 309) and moving.progress > 0.0 and moving.progress < 1.0
+		and moving.position + main._page_turn_overlay.position == main.COLLECTION_RIGHT_PAGE_POSITION and moving._leaf_count == 1,
+		"活动纸面在书脊上卷动，保留原生纸面尺寸")
 	check(texture == main._get_regular_page_texture(1 if forward else 0), "动画使用新版左右纸面裁切")
 	await verify_stack_pixels("forward" if forward else "backward")
 	main._page_tween.play()
@@ -67,7 +68,8 @@ func verify_return_and_recent() -> void:
 	await create_timer(0.2).timeout
 	check(main.recently_returned_owned_cards.has(returned), "放回新版收藏书后记录实际卡牌实例")
 	await _click(main.recent_bookmark_button)
-	await create_timer(0.3).timeout
+	check_three_leaves(1, "蓝签正向翻三张")
+	await main._page_tween.finished
 	check(main.collection_bookmark_active and main.recent_left_page_art.is_visible_in_tree(), "真实书签切到最近使用页")
 	check(main.recent_left_page_art.texture == main.RECENT_CARDS_LEFT_PAGE_TEXTURE
 		and main.recent_right_page_art.texture == main.RECENT_CARDS_RIGHT_PAGE_TEXTURE,
@@ -76,8 +78,15 @@ func verify_return_and_recent() -> void:
 	await move_pointer(Vector2(100, 600))
 	await verify_stack_pixels("recent")
 	await _click(main.recent_bookmark_button)
-	await create_timer(0.3).timeout
+	check_three_leaves(-1, "蓝签返回时反向翻三张")
+	await main._page_tween.finished
 	check(not main.collection_bookmark_active, "再次点击返回普通新版纸页")
+
+
+func check_three_leaves(direction: int, label: String) -> void:
+	var overlay := main._page_turn_overlay as Control
+	var moving := overlay.get_node_or_null("MovingPage") as CollectionPageCurl if overlay != null else null
+	check(moving != null and moving._leaf_count == 3 and overlay.get_meta("direction") == direction, label)
 
 
 func _run() -> void:
@@ -110,6 +119,15 @@ func _run() -> void:
 	await verify_page_turn(true)
 	await verify_page_turn(false)
 	check(main.owned_card_collection.get_cards() == owned_before, "往返翻页不复制、丢失或重排真实拥有实例")
+	var minion_tab: Control = main.card_type_filter_tabs.get_child(0)
+	await _click(minion_tab)
+	check_three_leaves(1, "选择种类标签时翻三张")
+	var overlay := main._page_turn_overlay as Control
+	check(overlay != null and not overlay.clip_contents and main._get_canvas_draw_z(overlay) > main._get_canvas_draw_z(minion_tab), "卷页能越过纸面上缘并盖在筛选标签上方")
+	await main._page_tween.finished
+	await _click(minion_tab)
+	check_three_leaves(-1, "取消种类标签时反向翻三张")
+	await main._page_tween.finished
 	await verify_return_and_recent()
 	# 新局恢复少量可见卡，继续覆盖新版书本中的真实资源、法术拖放。
 	_deal("loose_coins")

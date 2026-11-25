@@ -3,6 +3,7 @@ extends Control
 signal close_requested
 
 ## 两张包装共用鼠标姿态。右侧复用正式包装素材和光照，可分别调节袋身与印记。
+const CrtProjection = preload("res://scripts/ui/crt_projection.gd")
 const Surface = preload("res://scripts/ui/inspection_card_surface.gd")
 const PACK = preload("res://assets/card_ui/shop/ash_ledger_large.png")
 const RELIEF = preload("res://shaders/pack_relief_sample.gdshader")
@@ -320,10 +321,10 @@ func _input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	var target := Vector2.ZERO
-	if lighting_panel.get_rect().has_point(get_local_mouse_position()):
+	if lighting_panel.get_rect().has_point(CrtProjection.local_mouse(self)):
 		target = sample.force
 	for surface: InspectionCardSurface in [original, sample]:
-		var pointer := surface.get_local_mouse_position()
+		var pointer := CrtProjection.local_mouse(surface)
 		if Rect2(Vector2.ZERO, surface.size).has_point(pointer):
 			target = (pointer / surface.size - Vector2(0.5, 0.5)) * 2.0
 	original.update_pointer_force(target, delta)

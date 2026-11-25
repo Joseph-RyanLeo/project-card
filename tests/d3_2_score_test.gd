@@ -52,17 +52,21 @@ func _initialize() -> void:
 	var spell := OwnedCard.new()
 	spell.initialize(load("res://resources/cards/damage_fireball.tres"), &"spell", 3)
 	spell.spell_durability = 0
+	spell.surface_finish = CardAppearance.Surface.FROSTED
+	spell.art_finish = CardAppearance.Art.HOLOGRAPHIC
 	check(progress.remember_exhausted_spell(spell), "保存真实耗尽法术")
 	progress.note_discovery("cards", "shop_unfinished")
 	check(progress.finish_run(held, [], 13, "abandoned", 3, results, 2), "冻结结局与完整候选并自动入账")
 	check(progress.run.stage == "summary" and progress.profile.discoveries.cards.has("shop_unfinished"), "结束阶段为总结，未完事件发现保留")
 	check(progress.run.summary.cards.size() == 3 and progress.run.candidates.size() == 2, "资源计分不入藏、衍生全排除、耗尽法术纳入")
+	check(progress.run.summary.cards.any(func(entry: Dictionary): return entry.instance_id == "spell" and entry.parts.surface == 0 and entry.parts.art == 40), "磨砂闪法术参加正常结算，按现有规则计独立的全息分")
 	var balance: int = progress.profile.points
 	check(progress.finish_run(held, [], 999, "abandoned", 3, [], 2) and progress.profile.points == balance, "重复处理同一结局不重发积分或改变明细")
 	var restored := Progress.new()
 	check(restored.restore_state(JSON.parse_string(JSON.stringify(progress.capture_state()))) and restored.run.stage == "summary", "JSON重启恢复总结与余额")
 	check(restored.show_selection() and restored.set_selection([{"candidate_id": "spell", "slot": 0}]) and restored.show_preview(), "可选择耗尽法术并集合")
 	check(restored.confirm_collection() and restored.profile.collection.damage_fireball[0].spell_durability == int(spell.card_data.rarity) + 1, "最终入藏恢复法术全新次数")
+	check(restored.profile.collection.damage_fireball[0].surface_finish == "frosted" and restored.profile.collection.damage_fireball[0].art_finish == "holographic", "结算读档后入藏仍保留磨砂闪和全息")
 	check(restored.profile.collection.damage_fireball[0].acquired_at == spell.acquired_at and restored.profile.points == balance, "原获得时间保留且入藏不重发积分")
 	check(restored.start_run(), "收藏完成可开下一局")
 	for days: int in [4, 8, 16, 24, 28]:

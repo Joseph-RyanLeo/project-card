@@ -66,13 +66,13 @@ func duplicate_scenario() -> BattleLabScenario:
 	return from_dictionary(to_dictionary())
 
 
-func validate() -> Array[String]:
+func validate(use_custom_enemy: bool = true) -> Array[String]:
 	var errors: Array[String] = []
 	_validate_side(player_squads, "我方", errors)
-	_validate_side(enemy_squads, "敌方", errors)
+	if use_custom_enemy: _validate_side(enemy_squads, "敌方", errors)
 	if not _has_enabled_squad(player_squads):
 		errors.append("我方至少需要启用一个小队")
-	if not _has_enabled_squad(enemy_squads):
+	if use_custom_enemy and not _has_enabled_squad(enemy_squads):
 		errors.append("敌方至少需要启用一个小队")
 	if max_batches <= 0:
 		errors.append("最大批次数必须大于 0")

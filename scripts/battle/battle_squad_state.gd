@@ -10,6 +10,7 @@ const EmblemLibraryData = preload("res://scripts/data/emblem_library_data.gd")
 signal integer_settlement_committed(event: Dictionary)
 signal health_lost_accumulated(event: Dictionary)
 signal armor_depleted(state: BattleSquadState)
+signal armor_broken_by_attack(state: BattleSquadState)
 signal card_destruction_requested(state: BattleSquadState)
 signal injury_mask_changed(state: BattleSquadState, injury_id: StringName, masked: bool)
 
@@ -43,12 +44,18 @@ var current_armor: float = 0.0:
 	set(value):
 		var previous := current_armor
 		current_armor = value
+		if _supernova_armor > 0.0 and previous > value:
+			_supernova_armor = maxf(_supernova_armor - (previous - value), 0.0)
 		if not _precise_write:
 			displayed_armor = clampi(roundi(value), 0, CardData.MAXIMUM_ARMOR)
 		if previous > 0.0 and value <= 0.0:
 			armor_depleted.emit(self)
 var displayed_health: int = 0
 var displayed_armor: int = 0
+var supernova_active := false
+var _supernova_armor := 0.0
+var _supernova_maximum_bonus := 0.0
+var _supernova_health_before := 0.0
 var cooldown_progress: float = 0.0 # 0表示刚重置，1表示普通行动已经就绪
 var remaining_cooldown: float = 0.0:
 	set(value):
@@ -57,6 +64,7 @@ var remaining_cooldown: float = 0.0:
 			var interval := get_action_interval()
 			cooldown_progress = clampf(1.0 - remaining_cooldown / interval, 0.0, 1.0) if interval > 0.0 else 1.0
 signal damage_taken(amount: float, source_state: BattleSquadState, event: BattleEffectEvent)
+signal damage_applied(armor: float, health: float, event: BattleEffectEvent, target: BattleSquadState)
 signal lifetime_stat_resolved(channel: StringName, amount: float, source_state: BattleSquadState, event: BattleEffectEvent, target: BattleSquadState)
 signal armor_gained(amount: float)
 signal protection_changed(before: int, after: int)
@@ -92,6 +100,8 @@ var rune_base_multiplier := 1
 var gilded_zeal_penalty := 0
 var runtime_permanent_action_growth: float = 0.0 # 本场已记账、战后才写回收藏的永久数值，结算前也属于基础层
 var runtime_permanent_armor_growth: float = 0.0 # 本场已记账的永久护甲，复活时并入基础护甲恢复
+var runtime_base_health_growth: float = 0.0 # 本场已记账的永久基础生命
+var runtime_base_action_bonus: float = 0.0 # 跨战事件提供的基础数值，不改收藏原卡
 var masked_rune_slots: Dictionary = {} # 本场被遮蔽的符文槽；键由卡牌实例与槽位组成，值保留显示所需定位
 var fire_rune_reinforcement_sources: Dictionary = {} # 可见火符文槽→未消耗强化的来源；遮蔽时暂时停用
 var battle_active_injury_ids: Array[StringName] = [] # 由后续伤势系统注入的本场生效伤势身份；D2-4不自行生成伤势
@@ -182,6 +192,12 @@ func clear_precise_runtime() -> void:
 	runtime_base_action_multiplier = 1.0
 	runtime_permanent_action_growth = 0.0
 	runtime_permanent_armor_growth = 0.0
+	runtime_base_health_growth = 0.0
+	runtime_base_action_bonus = 0.0
+	supernova_active = false
+	_supernova_armor = 0.0
+	_supernova_maximum_bonus = 0.0
+	_supernova_health_before = 0.0
 	masked_rune_slots.clear()
 	fire_rune_reinforcement_sources.clear()
 	battle_active_injury_ids.clear()
@@ -255,7 +271,7 @@ func grant_runtime_race(source_id: StringName, race_type: CardData.RaceType) -> 
 
 func has_effective_race(race_type: CardData.RaceType) -> bool:
 	var source := get_effect_source()
-	return (source != null and source.race_type == race_type) or race_type in runtime_race_sources.values()
+	return (source != null and source.race_type == race_type) or race_type in runtime_race_sources.values() or (race_type == CardData.RaceType.CONSTRUCT and has_unmasked_wound(&"结晶"))
 
 
 func set_runtime_rune_override(card: CardData, rune_index: int, element: CardData.ElementType) -> bool:
@@ -311,16 +327,22 @@ func clear_runtime_action_type() -> void:
 
 
 func get_max_health() -> int:
-	var base := float(squad_data.get_effective_max_health()) if squad_data != null else 0.0
-	if squad_data != null:
-		base += float(get_active_rune_stat_bonus(&"max_health") - squad_data.get_visible_rune_stat_bonus(&"max_health"))
+	if squad_data == null: return 0
+	if has_unmasked_wound(&"结晶"): return 1
+	var runes := get_active_rune_stat_bonus(&"max_health")
+	var health := squad_data.get_unconverted_max_health() + runes - squad_data.get_visible_rune_stat_bonus(&"max_health")
+	health += runtime_base_health_growth - get_masked_emblem_bonus(&"max_health")
 	var temporary_health := modifiers.get_additive(BattleModifier.Stat.MAX_HEALTH)
 	if has_unmasked_wound(&"晶体化"):
-		# 临时额外生命已由 BattleEffectRuntime 等量转成临时护甲，不再抬高生命上限。
-		temporary_health = minf(temporary_health, 0.0)
-	var health := base + temporary_health - get_masked_emblem_bonus(&"max_health")
+		var converted_health := squad_data.get_max_health_bonus(true) - get_masked_emblem_bonus(&"max_health", false, true)
+		health = maxf(health - converted_health, 1.0)
+		temporary_health = 0.0
+		for modifier: BattleModifier in modifiers.modifiers:
+			if modifier.active and modifier.stat == BattleModifier.Stat.MAX_HEALTH and modifier.mode == BattleModifier.Mode.ADD:
+				temporary_health += minf(modifier.value, 0.0)
+	health += temporary_health
 	if has_unmasked_wound(&"业火"): health *= 0.5
-	return clampi(roundi(health), 0, CardData.MAXIMUM_HEALTH)
+	return clampi(roundi(health + _supernova_maximum_bonus), 0, CardData.MAXIMUM_HEALTH)
 
 
 func get_target_weight() -> int:
@@ -403,7 +425,7 @@ func get_exact_action_amount() -> float:
 	)
 	var pattern := get_rune_pattern_result().pattern_type
 	var base_result := BattleRules.calculate_exact_action_amount(modified_base, pattern)
-	return (base_result + get_doorboard_toy_bonus() * BattleRules.get_pattern_multiplier(pattern)) * maxf(0.0, 1.0 + modifiers.get_additive(BattleModifier.Stat.ACTION_MULTIPLIER))
+	return (base_result + get_doorboard_toy_bonus() * BattleRules.get_pattern_multiplier(pattern)) * maxf(0.0, 1.0 + modifiers.get_additive(BattleModifier.Stat.ACTION_MULTIPLIER)) * (2.0 if supernova_active else 1.0)
 
 
 func get_active_rune_slots() -> Array[Dictionary]:
@@ -432,21 +454,10 @@ func has_active_rune_slots() -> bool:
 
 
 func get_active_rune_stat_bonus(stat: StringName) -> int:
-	var total := 0
-	for slot: Dictionary in get_active_rune_slots():
-		match int(slot.get("element", -1)):
-			CardData.ElementType.WATER:
-				if stat == &"max_health": total += 2
-			CardData.ElementType.WOOD:
-				if stat == &"base_armor": total += 3
-			CardData.ElementType.LIGHT:
-				if stat in [&"max_health", &"base_armor", &"target_priority"]: total += 1
-			CardData.ElementType.DARK:
-				if stat == &"zeal": total += 1
-				elif stat == &"target_priority": total -= 1
+	var slots := get_active_rune_slots()
 	if priority_reduction_forbidden and stat == &"target_priority":
-		total = get_active_rune_slots().filter(func(slot: Dictionary) -> bool: return int(slot.get("element", -1)) == CardData.ElementType.LIGHT).size()
-	return total * rune_base_multiplier
+		return slots.filter(func(slot: Dictionary) -> bool: return int(slot.get("element", -1)) == CardData.ElementType.LIGHT).size() * rune_base_multiplier
+	return SquadData.sum_rune_stat_bonus(slots, stat) * rune_base_multiplier
 
 
 func get_runtime_rune_overrides_by_card() -> Dictionary:
@@ -502,6 +513,7 @@ func mask_rune_slot(card: CardData, rune_index: int) -> bool:
 	for slot: Dictionary in get_active_rune_slots():
 		if not bool(slot.get("hidden", false)) and slot.get("card") == card and int(slot.get("rune_index", -1)) == rune_index:
 			var armor_before := get_active_rune_stat_bonus(&"base_armor")
+			var health_before := get_active_rune_stat_bonus(&"max_health")
 			masked_rune_slots[key] = {
 				"card": card,
 				"rune_index": rune_index,
@@ -509,18 +521,21 @@ func mask_rune_slot(card: CardData, rune_index: int) -> bool:
 			if fire_rune_reinforcement_sources.has(key):
 				modifiers.set_source_instance_active(int(fire_rune_reinforcement_sources[key]), false)
 			current_armor = maxf(0.0, current_armor - float(armor_before - get_active_rune_stat_bonus(&"base_armor")))
+			if converts_life_bonus(true): adjust_converted_armor(get_active_rune_stat_bonus(&"max_health") - health_before)
 			return true
 	return false
 
 
 func unmask_rune_slot(card: CardData, rune_index: int) -> bool:
 	var armor_before := get_active_rune_stat_bonus(&"base_armor")
+	var health_before := get_active_rune_stat_bonus(&"max_health") if converts_life_bonus(true) else 0
 	var key := _rune_slot_key(card, rune_index)
 	if not masked_rune_slots.erase(key):
 		return false
 	if fire_rune_reinforcement_sources.has(key):
 		modifiers.set_source_instance_active(int(fire_rune_reinforcement_sources[key]), true)
 	current_armor = minf(float(CardData.MAXIMUM_ARMOR), current_armor + float(get_active_rune_stat_bonus(&"base_armor") - armor_before))
+	if converts_life_bonus(true): adjust_converted_armor(maxf(get_active_rune_stat_bonus(&"max_health") - health_before, 0.0))
 	return true
 
 
@@ -685,12 +700,26 @@ func get_display_action_value() -> int:
 	if get_action_source() == null or squad_data == null:
 		return 0
 	# 卡面显示“这次普通行动的基础数值”，包含效果修正与尚未消费的强化；牌型倍率仍在结算公式中展示。
-	return clampi(roundi(
+	var total := (
 		float(get_action_base_value())
 		+ get_doorboard_toy_bonus()
 		+ modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)
 		+ modifiers.get_additive(BattleModifier.Stat.REINFORCEMENT)
-	), 0, 999)
+	)
+	return clampi(roundi(total * (2.0 if supernova_active else 1.0)), 0, 999)
+
+
+func get_display_base_stats(active_runes: Array[Dictionary]) -> Vector3i:
+	if squad_data == null:
+		return Vector3i(-1, -1, -1)
+	var vitals_source := squad_data.get_vitals_source()
+	var life_runes := SquadData.sum_rune_stat_bonus(active_runes, OwnedCard.STAT_MAX_HEALTH) * rune_base_multiplier
+	var armor_runes := SquadData.sum_rune_stat_bonus(active_runes, OwnedCard.STAT_BASE_ARMOR) * rune_base_multiplier
+	return Vector3i(
+		squad_data.get_display_base_action(get_action_source(), get_runtime_base_action_growth(), get_effective_base_action_multiplier(), get_masked_emblem_bonus(OwnedCard.STAT_BASE_VALUE, true)),
+		1 if has_unmasked_wound(&"结晶") else squad_data.get_unconverted_base_health(vitals_source, life_runes, runtime_base_health_growth),
+		squad_data.get_display_base_armor(vitals_source, armor_runes, runtime_permanent_armor_growth, get_masked_emblem_bonus(OwnedCard.STAT_BASE_ARMOR, true))
+	)
 
 
 func get_action_value_without_reinforcement() -> int:
@@ -699,7 +728,7 @@ func get_action_value_without_reinforcement() -> int:
 	return clampi(
 		roundi(
 			# 金币强化按贪婪压值前的有效数值计算；正式卡面值仍通过 get_action_base_value() 显示为1。
-			float(squad_data.get_effective_action_base_value(get_unmasked_active_injuries(), true, false, get_effective_base_action_multiplier(), runtime_permanent_action_growth))
+			float(squad_data.get_effective_action_base_value(get_unmasked_active_injuries(), true, false, get_effective_base_action_multiplier(), get_runtime_base_action_growth()))
 			+ modifiers.get_additive(BattleModifier.Stat.ACTION_VALUE)
 		),
 		0,
@@ -710,7 +739,53 @@ func get_action_value_without_reinforcement() -> int:
 func get_action_base_value() -> int:
 	if get_action_source() == null or squad_data == null:
 		return 0
-	return clampi(squad_data.get_effective_action_base_value(get_unmasked_active_injuries(), true, true, get_effective_base_action_multiplier(), runtime_permanent_action_growth) - get_masked_emblem_bonus(&"base_value"), 0, CardData.MAXIMUM_BASE_VALUE)
+	return clampi(squad_data.get_effective_action_base_value(get_unmasked_active_injuries(), true, true, get_effective_base_action_multiplier(), get_runtime_base_action_growth()) - get_masked_emblem_bonus(&"base_value"), 0, CardData.MAXIMUM_BASE_VALUE)
+
+
+func get_runtime_base_action_growth() -> float:
+	return runtime_permanent_action_growth + runtime_base_action_bonus
+
+
+func converts_life_bonus(is_base_health: bool = false) -> bool:
+	return has_unmasked_wound(&"结晶") or (not is_base_health and has_unmasked_wound(&"晶体化"))
+
+
+func adjust_converted_armor(amount: float) -> void:
+	current_armor = clampf(current_armor + amount, 0.0, CardData.MAXIMUM_ARMOR)
+
+
+func apply_max_health_increase(previous_maximum: int, amount: float, is_base_health: bool = false) -> void:
+	if amount <= 0.0: return
+	if converts_life_bonus(is_base_health):
+		adjust_converted_armor(amount)
+	else:
+		current_health = minf(current_health + maxf(get_max_health() - previous_maximum, 0.0), CardData.MAXIMUM_HEALTH)
+
+
+func begin_supernova() -> void:
+	if supernova_active or not alive or current_health <= 0.0: return
+	var previous_armor := current_armor
+	var maximum := float(get_max_health())
+	var armor_bonus := previous_armor
+	_supernova_health_before = current_health
+	supernova_active = true
+	if converts_life_bonus():
+		armor_bonus += maximum
+	else:
+		_supernova_maximum_bonus = maximum
+		current_health = minf(current_health * 2.0, CardData.MAXIMUM_HEALTH)
+	adjust_converted_armor(armor_bonus)
+	_supernova_armor = current_armor - previous_armor
+
+
+func end_supernova() -> void:
+	if not supernova_active: return
+	supernova_active = false
+	_supernova_maximum_bonus = 0.0
+	var remaining_armor := _supernova_armor
+	_supernova_armor = 0.0
+	current_health = minf(current_health, _supernova_health_before)
+	adjust_converted_armor(-remaining_armor)
 
 
 func get_effective_base_action_multiplier() -> float:
@@ -828,6 +903,7 @@ func apply_damage_exact(amount: float, source_state: BattleSquadState = null, ev
 		damage = minf(damage, 1.0)
 		if crystal_pierced: damage = maxf(current_health, damage)
 	var armor_damage := 0.0 if pierces_armor else minf(current_armor, damage)
+	var breaks_armor := armor_damage > 0.0 and armor_damage >= current_armor
 	var health_damage := damage - armor_damage
 	var lethal := health_damage >= health_before or (crystal_skin and current_armor - armor_damage <= 0.0)
 	if amount > 0.0 and health_before > 0.0 and lethal and lethal_equipment_guard.is_valid() and lethal_equipment_guard.call(self):
@@ -860,10 +936,13 @@ func apply_damage_exact(amount: float, source_state: BattleSquadState = null, ev
 		displayed_health = 0
 	else:
 		_ensure_living_health_is_visible()
+	if breaks_armor and event != null and event.is_attack_action_damage and not event.is_environment_damage:
+		armor_broken_by_attack.emit(self)
 	var total_damage := armor_damage + health_damage
 	# 所有普通攻击、疲劳直伤与效果伤害最终都经过这里。把统计放在实际
 	# 扣减入口，避免某类调用绕过 BattleController 后出现卡面承伤漏记。
 	if total_damage > 0.0:
+		damage_applied.emit(maxf(0.0, armor_damage), maxf(0.0, minf(health_before, health_damage)), event, self)
 		lifetime_stat_resolved.emit(&"damage_dealt", total_damage, source_state, event, self)
 		battle_damage_taken += total_damage
 		if source_state != null:
@@ -1061,7 +1140,7 @@ func has_effective_shadow() -> bool:
 func is_emblem_masked(instance_id: StringName) -> bool:
 	return is_banished or (not masking_forbidden and not (masked_emblem_sources.get(instance_id, {}) as Dictionary).is_empty())
 
-func get_masked_emblem_bonus(stat: StringName) -> int:
+func get_masked_emblem_bonus(stat: StringName, base_only: bool = false, positive_only: bool = false) -> int:
 	if squad_data == null or (not is_banished and masked_emblem_sources.is_empty()): return 0
 	var total := 0
 	for card: CardData in squad_data.horizontal_cards:
@@ -1070,5 +1149,5 @@ func get_masked_emblem_bonus(stat: StringName) -> int:
 		var indices: Array[int] = []
 		for index: int in squad_data.get_visible_emblem_slot_indices(card):
 			if is_emblem_masked(StringName(owned.emblem_slots[index].get("instance_id", ""))): indices.append(index)
-		total += owned.get_emblem_static_modifier(stat, indices)
+		total += owned.get_emblem_static_modifier(stat, indices, base_only, positive_only)
 	return total
